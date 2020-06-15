@@ -3,7 +3,7 @@
 Stolen entirely from IDTxL (for now...)
 """
 import numpy as np
-from . import mtsda_utils as utils
+from . import nats_utils as utils
 
 VERBOSE = False
 
@@ -14,7 +14,7 @@ class Data():
     Data takes a 1- to 3-dimensional array representing realisations of random
     variables in dimensions: processes, samples (over time), and replications.
     If necessary, data reshapes provided realisations to fit the format
-    expected by mtsda, which is a 3-dimensional array with axes representing
+    expected by _nats_, which is a 3-dimensional array with axes representing
     (process index, sample index, replication index). Indicate the actual order
     of dimensions in the provided array in a three-character string, e.g. 'spr'
     for an array with realisations over (1) samples in time, (2) processes, (3)
