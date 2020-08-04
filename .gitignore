@@ -1,2 +1,4 @@
-mtsda.egg-info
-mtsda/__pycache__
+pynats.egg-info
+pynats/__pycache__
+demos/data
+*.pkl

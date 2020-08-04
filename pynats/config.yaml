@@ -1,0 +1,114 @@
+# Simple statistics
+.stats:
+
+  # Pearson's product-moment correlation coefficient
+  pearsonr:
+
+  # Spearman's correlation coefficient
+  spearmanr:
+
+  # Kendall's rank correlation coefficient
+  kendalltau:
+
+  # Cointegration
+  coint:
+
+.neuroimaging:
+
+  # Functional connectivity
+  functional:
+
+    - kind: correlation
+      cov_estimator: ledoit_wolf
+
+    - kind: correlation
+      cov_estimator: shrunk
+
+    - kind: correlation
+      cov_estimator: oas
+
+    - kind: partial correlation
+
+    - kind: covariance
+
+    - kind: precision
+
+  # Coherence
+  coherence:
+    - tr: 1
+
+  # Spectral granger causality
+  spectralgranger:
+    - tr: 1
+
+    - tr: 1
+      order: 1
+
+    - tr: 1
+      order: 20
+
+# Information-theoretic measures
+.infotheory:
+
+  # Mutual information
+  mutual_info:
+    - estimator: gaussian
+
+    - estimator: kraskov
+      prop_k: 4
+
+    - estimator: kernel
+      kernel_width: 0.25
+
+  # Transfer entropy
+  transfer_entropy:
+
+    # Kraskov estimator with auto-embedding on source/target and DCE
+    - estimator: kraskov
+      prop_k: 4
+      auto_embed_method: MAX_CORR_AIS
+      k_search_max: 2
+      tau_search_max: 2
+      dyn_corr_excl: AUTO
+
+    # Kraskov estimator with auto-embedding on target-only, src history of 1, and DCE
+    - estimator: kraskov
+      prop_k: 4
+      k_history: 4
+      l_history: 1
+      dyn_corr_excl: AUTO
+
+    # Kraskov estimator with fixed embedding of 1 for source/target and DCE
+    - estimator: kraskov
+      prop_k: 4
+      k_history: 1
+      l_history: 1
+      dyn_corr_excl: AUTO
+    
+    # Same as above with no DCE
+    - estimator: kraskov
+      prop_k: 4
+      k_history: 1
+      l_history: 1
+
+    # Kernel estimator with auto-embedding on source/target and DCE
+    - estimator: kernel
+      auto_embed_method: MAX_CORR_AIS
+      k_search_max: 2
+      kernel_width: 0.25
+
+    # Kernel estimator with no auto-embedding on source/target and DCE
+    - estimator: kernel
+      kernel_width: 0.25
+      k_history: 1
+      l_history: 1
+
+    # Gaussian estimator doesn't have DCE (aka Bartlett corrections) yet
+    - estimator: gaussian
+      auto_embed_method: MAX_CORR_AIS
+      k_search_max: 10
+      tau_search_max: 2
+
+    - estimator: gaussian
+      k_history: 1
+      l_history: 1

@@ -1,9 +1,9 @@
 """Provide data structures for multivariate analysis.
 
-Stolen entirely from IDTxL (for now...)
+Stolen mostly from IDTxL (for now...)
 """
 import numpy as np
-from . import nats_utils as utils
+from . import pynats_utils as utils
 
 VERBOSE = False
 
@@ -162,6 +162,17 @@ class Data():
         else:
             self.data = data_ordered
         self.data_type = type(self.data[0, 0, 0])
+
+    def remove_process(self, procs):
+
+        try:
+            self._data = np.delete(self.data,procs,axis=0)
+        except IndexError:
+            print('Process {} is out of bounds of multivariate'
+                    ' time-series data with size {}'.format(proc,self.data.n_processes))
+        
+        self._set_data_size(self._data)
+
 
     def _normalise_data(self, d):
         """Z-standardise data separately for each process."""

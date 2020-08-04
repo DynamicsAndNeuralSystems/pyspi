@@ -9,10 +9,18 @@ import statsmodels.tsa.arima_process as arma
 # a) Setup time-series configuration
 T = 5000
 R = 1
+M = 5
+
+clm_adj = np.triu(np.random.rand(M,M)).reshape((1,M,M))
+clm_adj[np.nonzero(clm_adj < 0.5)] = 0
+
+print('CLM:', clm_adj)
 
 # c) Load the data
 data = Data()
-data.generate_mute_data(n_samples=T, n_replications=R)
+data.generate_logistic_maps_data(n_samples=T,
+                                    n_replications=R,
+                                    coefficient_matrices=clm_adj)
 
 calc = ptsa()
 

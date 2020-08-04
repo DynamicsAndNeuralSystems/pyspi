@@ -7,8 +7,8 @@ with open('README.md') as file:
     long_description = file.read()
 
 setup(
-    name='nats',
-    packages=['nats'],
+    name='pynats',
+    packages=['pynats'],
     #scripts=['bin/script1','bin/script2'],
     include_package_data=True,
     version='0.0.1',
