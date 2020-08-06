@@ -1,0 +1,10 @@
+export(ADCF,ADCV,kernelFun,UnivTest,ADCFplot,mADCF,mADCV,mADCFplot,mADCVtest,mADCFtest)
+import(doParallel)
+import(energy)
+
+importFrom(parallel, makeCluster, detectCores, stopCluster, clusterSetRNGStream)
+importFrom(foreach, foreach, "%dopar%")
+
+importFrom(graphics, par, plot, plot.new, points, segments)
+importFrom(stats, as.ts, dist, is.ts, p.adjust, quantile, rnorm)
+

@@ -75,7 +75,7 @@ class jidt_base():
         return True
 
 
-class mutual_info(jidt_base,base.symmeas):
+class mutual_info(jidt_base,base.undirected):
     humanname = "Mutual information"
 
     def __init__(self,**kwargs):
@@ -109,7 +109,26 @@ class mutual_info(jidt_base,base.symmeas):
         self._calc.setObservations(JArray(JDouble,1)(src.tolist()), JArray(JDouble,1)(targ.tolist()))
         return self._calc.computeAverageLocalOfObservations()
 
-class transfer_entropy(jidt_base,base.asymmeas):
+class time_lagged_mutual_info(mutual_info):
+    humanname = "Time-lagged mutual information"
+
+    def __init__(self,**kwargs):
+        super(time_lagged_mutual_info,self).__init__(**kwargs)
+
+        basename = self.name
+        self.name = 'tl_mi_{}'.format(basename)
+
+    def getpwd(self,src,targ):
+        """ Compute mutual information between Y and X
+        """
+        src = src[:-1]
+        targ = targ[1:]
+        self.preinit(src,targ)
+        self._calc.initialise(1, 1)
+        self._calc.setObservations(JArray(JDouble,1)(src.tolist()), JArray(JDouble,1)(targ.tolist()))
+        return self._calc.computeAverageLocalOfObservations()
+
+class transfer_entropy(jidt_base,base.directed):
 
     humanname = "Transfer entropy"
 

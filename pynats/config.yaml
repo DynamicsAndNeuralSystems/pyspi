@@ -1,8 +1,33 @@
-# Simple statistics
-.stats:
+# Correlation-based measures
+.correlation:
 
   # Pearson's product-moment correlation coefficient
   pearsonr:
+    - cov_estimator: empirical
+    - cov_estimator: ledoit_wolf
+    - cov_estimator: shrunk
+    - cov_estimator: oas
+
+  # Partial correlation
+  parcorr:
+    - cov_estimator: empirical
+    - cov_estimator: ledoit_wolf
+    - cov_estimator: shrunk
+    - cov_estimator: oas
+
+  # Covariance
+  covariance:
+    - cov_estimator: empirical
+    - cov_estimator: ledoit_wolf
+    - cov_estimator: shrunk
+    - cov_estimator: oas
+
+  # Precision
+  precision:
+    - cov_estimator: empirical
+    - cov_estimator: ledoit_wolf
+    - cov_estimator: shrunk
+    - cov_estimator: oas
 
   # Spearman's correlation coefficient
   spearmanr:
@@ -10,35 +35,72 @@
   # Kendall's rank correlation coefficient
   kendalltau:
 
+  # Distance-based measures
+  distance:
+    - metric: euclidean
+    - metric: minkowski
+    - metric: cityblock
+    - metric: seuclidean
+    - metric: sqeuclidean
+    - metric: cosine
+    - metric: correlation
+    - metric: hamming
+    - metric: jaccard
+    - metric: chebyshev
+    - metric: canberra
+    - metric: braycurtis
+    - metric: mahalanobis
+    - metric: yule
+    - metric: matching
+    - metric: dice
+    - metric: kulsinski
+    - metric: rogerstanimoto
+    - metric: russellrao
+    - metric: sokalmichener
+    - metric: sokalsneath
+    - metric: wminkowski
+  
+# Measures that analyse in the time-domain
+.temporal:
+
   # Cointegration
   coint:
 
-.neuroimaging:
+# Measures that analyse in the frequency-domain (see Schoegl and Supp, 2006)
+.spectral:
+  # TODO: allow for global settings as well as local settings, e.g.,
+  # - f_lb: 0.02
+  # - f_ub: 0.2
+  # Here, as well as in the subclasses
 
-  # Functional connectivity
-  functional:
+  # Cross-spectrum
+  # spectrum:
 
-    - kind: correlation
-      cov_estimator: ledoit_wolf
-
-    - kind: correlation
-      cov_estimator: shrunk
-
-    - kind: correlation
-      cov_estimator: oas
-
-    - kind: partial correlation
-
-    - kind: covariance
-
-    - kind: precision
-
-  # Coherence
+  # Coherence (ordinal or squared? real components of the coherence)
   coherence:
-    - tr: 1
+    - f_lb: 0.0
+      f_ub: 0.2
 
+    - f_lb: 0.02
+      f_ub: 10
+
+  # Coherency (ordinal or squared? imaginary components of the coherence)
+  # icoh:
+
+  # Phase difference of signals relative to one another
+  # phase:
+
+  # Partial coherence (condition out all other processes)
+  # pcoh:
+
+  # Partial directed causality
+  # pdc:
+
+  # Partial directed causality
+  # pdcf:
+    
   # Spectral granger causality
-  spectralgranger:
+  granger:
     - tr: 1
 
     - tr: 1
@@ -52,6 +114,16 @@
 
   # Mutual information
   mutual_info:
+    - estimator: gaussian
+
+    - estimator: kraskov
+      prop_k: 4
+
+    - estimator: kernel
+      kernel_width: 0.25
+
+# Mutual information
+  time_lagged_mutual_info:
     - estimator: gaussian
 
     - estimator: kraskov

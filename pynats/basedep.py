@@ -7,8 +7,8 @@ The child classes should either overload the getadj method (if it computes the f
 or the getpwd method if it computes only pairwise measurements
 """
 
-class asymmeas:
-    """ Asymmetric
+class directed:
+    """ Directed measures
     """
 
     humanname = 'Base class'
@@ -18,9 +18,6 @@ class asymmeas:
         """ Overload method for getting the pairwise dependencies
         """
         raise Exception("You must overload this method.")
-
-    def ispositive(self):
-        return False
 
     def getadj(self,z):
         """ Compute the dependency measures for the entire multivariate dataset
@@ -42,7 +39,16 @@ class asymmeas:
         
         return adjacency
 
-class symmeas(asymmeas):
+    @classmethod
+    def preprocess(self,z):
+        """ (Optional) implements any pre-processing at the class level that might be used by instances (e.g., in output parameters) or inheriting classes (e.g., in optimising input parameters)
+        """
+        pass
+
+    def ispositive(self):
+        return True
+
+class undirected(directed):
 
     humanname = 'Base class'
     name = 'base'

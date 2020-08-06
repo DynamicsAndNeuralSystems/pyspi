@@ -1,0 +1,32 @@
+EVnormal                Eigenvalues for the energy Test of Univariate
+                        Normality
+U_product               Inner product in the Hilbert space of
+                        U-centered distance matrices
+Ucenter                 Double centering and U-centering
+bcdcor                  Unbiased dcov and bias-corrected dcor
+                        statistics
+dcor                    Distance Correlation and Covariance Statistics
+dcor.ttest              Deprecated Functions
+dcorT                   Distance Correlation t-Test
+dcov.test               Distance Covariance Test and Distance
+                        Correlation test
+dcov2d                  Fast dCor and dCov for bivariate data only
+dcovU_stats             Unbiased distance covariance statistics
+disco                   distance components (DISCO)
+edist                   E-distance
+energy-package          E-statistics: Multivariate Inference via the
+                        Energy of Data
+energy.hclust           Hierarchical Clustering by Minimum (Energy)
+                        E-distance
+eqdist.etest            Multisample E-statistic (Energy) Test of Equal
+                        Distributions
+indep.etest             Energy Statistic Test of Independence
+indep.test              Energy-tests of Independence
+kgroups                 K-Groups Clustering
+mvI.test                Energy Statistic Test of Independence
+mvnorm.test             E-statistic (Energy) Test of Multivariate
+                        Normality
+normal.test             Energy Test of Univariate Normality
+pdcor                   Partial distance correlation and covariance
+poisson.mtest           Mean Distance Test for Poisson Distribution
+sortrank                Sort, order and rank a vector

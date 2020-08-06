@@ -1,0 +1,6 @@
+NEWS/ChangeLog for iterators
+--------------------------
+1.0.12  2019-07-19
+    o   Exported makeIwrapper function; request of Bill Venables.
+    o   Exported isample iterator maker function.
+	

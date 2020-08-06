@@ -13,7 +13,7 @@ sims = loadmat( os.path.dirname(__file__) + '/data/netsim/sim5.mat')
 print('Loaded netsim simulation as a {} {}'.format(np.shape(sims['ts']),type(sims['ts'])))
 
 # b) Load the data
-data = Data(sims['ts'][:10000], dim_order='sp')
+data = Data(sims['ts'][:5000], dim_order='sp')
 
 calc = ptsa()
 

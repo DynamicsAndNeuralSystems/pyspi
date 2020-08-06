@@ -1,0 +1,21 @@
+Package: polycor
+Version: 0.7-10
+Date: 2019-07-22
+Title: Polychoric and Polyserial Correlations
+Authors@R: person("John", "Fox", role = c("aut", "cre"), email = "jfox@mcmaster.ca")
+Depends: R (>= 3.3.0)
+Imports: stats, mvtnorm, Matrix
+ByteCompile: yes
+LazyLoad: yes
+Description: Computes polychoric and polyserial correlations by quick "two-step" methods or ML, 
+  optionally with standard errors; tetrachoric and biserial correlations are special cases.
+License: GPL (>= 2)
+URL: https://r-forge.r-project.org/projects/polycor/,
+        https://CRAN.R-project.org/package=polycor
+NeedsCompilation: no
+Packaged: 2019-08-05 17:37:42 UTC; jfox
+Author: John Fox [aut, cre]
+Maintainer: John Fox <jfox@mcmaster.ca>
+Repository: CRAN
+Date/Publication: 2019-08-05 18:40:02 UTC
+Built: R 4.0.2; ; 2020-08-05 07:09:51 UTC; unix

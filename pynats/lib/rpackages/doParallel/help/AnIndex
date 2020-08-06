@@ -1,0 +1,4 @@
+doParallel-package	doParallel-package
+doParallel	doParallel-package
+registerDoParallel	registerDoParallel
+stopImplicitCluster	registerDoParallel

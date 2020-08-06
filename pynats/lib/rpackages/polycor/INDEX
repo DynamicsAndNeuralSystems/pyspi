@@ -1,0 +1,4 @@
+hetcor                  Heterogeneous Correlation Matrix
+polychor                Polychoric Correlation
+polyserial              Polyserial Correlation
+print.polycor           Print Method for polycor Objects

@@ -9,8 +9,8 @@ import statsmodels.tsa.arima_process as arma
 # TODO: change to generate_var_data
 
 # a) Setup time-series configuration
-M = 20
-T = 5000
+M = 5
+T = 500
 R = 1
 
 clm_adj = np.triu(np.random.rand(M,M)).reshape((1,M,M))
@@ -31,6 +31,8 @@ calc.load(data)
 calc.compute()
 
 calc.prune()
+
+print('Size of adjacency: {}'.format(calc.adjacency.shape))
 
 calc.diagnostics()
 

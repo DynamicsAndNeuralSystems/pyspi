@@ -1,0 +1,43 @@
+NEWS/ChangeLog for doParallel
+-----------------------------
+
+1.0.14 2018-09-24
+    o  Re-enabled tests. 
+	o  Moved RUnit from Enhances to Suggests (request of Kurt Hornik)
+	
+1.0.13 2018-04-04
+    o  Changes to support enhanced exports via future (if available).
+
+1.0.12 2017-12-08
+    o  Change test report path for compliance with CRAN policies.
+	
+1.0.9  2015-09-21
+    o  Bug fixes to stopImplicitCluster functionality, courtesy of Dan Tenenbaum.
+	
+1.0.8  2014-02-25
+    o  Modified vignette to use no more than two workers.
+    
+1.0.7  2014-02-01
+    o  Modified to work better when a foreach loop is executed 
+       in a package (courtesy of Steve Weston)
+    o  Added unit tests and a minimal working example
+
+1.0.6  2013-10-25
+    o  Changed foreach, iterators, and parallel from Depends to
+	   Imports (request of Steve Weston and Stefan Schlager)
+	   
+1.0.4  2013-09-01
+    o  New attachExportEnv option for doParallelSNOW
+    o  New function stopImplicitCluster to stop the implicitly created 
+       socket cluster.
+    o  Updated inst/unitTests/runTestSuite.sh, bug report from Michael Cheng
+
+1.0.3  2013-06-06
+    o  New preschedule option for doParallelSNOW, courtesy of Steve Weston
+    o  Removed assignment into global environment to meet CRAN standards.
+
+1.0.2  2013-05-29
+    o  Efficiency improvements courtesy of Steve Weston
+
+1.0.1  2012-04-09
+    o  Updated to support RevoScaleR's rxExec function

@@ -33,9 +33,9 @@ class ptsa():
 
         self._load_yaml(configfile)
         self._nmeasures = len(self._measures)
+        self._nclasses = len(self._classes)
         self._proctimes = np.empty(self._nmeasures)
 
-        # self._cmap = 'PiYG'
         self._cmap = 'vlag'
         print("Number of pairwise measures: {}".format(self._nmeasures))
 
@@ -59,6 +59,39 @@ class ptsa():
             raise TypeError('Adjacency type must be None or numpy.ndarray. Type: {}'.format(type(value)))
         self._data = value
 
+    def _load_yaml(self,document):
+        print("Loading configuration file: {}".format(document))
+        self._classes = []
+        self._measures = []
+
+        self._class_names = []
+        self._measure_names = []
+        with open(document) as f:
+            yf = yaml.load(f,Loader=yaml.FullLoader)
+
+            # Instantiate the calc classes 
+            for module_name in yf:
+                print("*** Importing module {}".format(module_name))
+                classes = yf[module_name]
+                module = importlib.import_module(module_name,__package__)
+
+                for class_name in classes:
+                    paramlist = classes[class_name]
+
+                    self._classes.append(getattr(module, class_name))
+                    self._class_names.append(class_name)
+                    if paramlist is not None:
+                        for params in paramlist:
+                            print("[{}] Adding measure {}.{}(x,y,{})...".format(len(self._measures),module_name,class_name,params))
+                            self._measures.append(self._classes[-1](**params))
+                            self._measure_names.append(self._measures[-1].name)
+                            print('Succesfully initialised as {}'.format(self._measures[-1].name))
+                    else:
+                        print("[{}] Adding measure {}.{}(x,y)...".format(len(self._measures),module_name,class_name))
+                        self._measures.append(self._classes[-1]())
+                        self._measure_names.append(self._measures[-1].name)
+                        print('Succesfully initialised as {}'.format(self._measures[-1].name))
+
     def load(self,data):
         self.data = data
         self._adjacency = np.empty((self._data.n_processes,self._data.n_processes,
@@ -69,6 +102,12 @@ class ptsa():
         """ Compute the dependency measures for all target processes
         """
         dat = np.squeeze(self._data.data)
+
+        pbar = tqdm(range(self._nclasses))
+        for i in pbar:
+            pbar.set_description('Pre-processing [{}]'.format(self._class_names[i]))
+            self._classes[i].preprocess(dat)
+
         pbar = tqdm(range(self._nmeasures))
         for i in pbar:
             pbar.set_description('Processing [{}]'.format(self._measure_names[i]))
@@ -125,7 +164,7 @@ class ptsa():
                 rm_list.append(meas)
                 print('Removing measure "[{}] {}" with {} ({:.1f}%) '
                         'NaNs (max is {} [{}%])'.format(meas, self._measure_names[meas],
-                                                        nzs,100*nzs/M, threshold, meas_nans))
+                                                        nzs,100*nzs/M, threshold, 100*meas_nans))
 
         # Remove from the adjacency and process times matrix
         self._adjacency = np.delete(self._adjacency,rm_list,axis=2)
@@ -139,7 +178,6 @@ class ptsa():
         self._nmeasures = len(self._measures)
         print('Number of pairwise measures after pruning: {}'.format(self._nmeasures))
 
-
     def threshold(self,pvalue):
         """Threshold the pairwise matrices using the p-values
             (should a separate function return those p-values?)
@@ -147,10 +185,12 @@ class ptsa():
         pass
 
     def diagnostics(self):
+        """ TODO: print out all diagnostics, e.g., compute time, failures, etc.
+        """
         sid = np.argsort(self._proctimes)
         print('Processing times for all {} measures:'.format(len(sid)))
         for i in sid:
-            print('{}: {} s'.format(self._measure_names[i],self._proctimes[i]))
+            print('[{}] {}: {} s'.format(i,self._measure_names[i],self._proctimes[i]))
 
     # TODO: only use the top nmeasures features
     def heatmaps(self,ncols=5,nmeasures=None,split=False):
@@ -202,8 +242,8 @@ class ptsa():
                 cat_colors = cats.map(category_lut).tolist()
 
             g = sns.clustermap(adj, cmap=self._cmap,
-                            center=0.0, figsize=(7, 7),
-                            col_colors=cat_colors, row_colors=cat_colors,**kwargs )
+                                center=0.0, figsize=(7, 7),
+                                col_colors=cat_colors, row_colors=cat_colors,**kwargs )
 
             ax = g.ax_heatmap
         elif which_measure == 'all':
@@ -216,7 +256,7 @@ class ptsa():
             corrs.fillna(0,inplace=True)
             g = sns.clustermap(corrs, cmap=self._cmap,
                                 center=0.0, figsize=(7, 7),
-                                **kwargs )
+                                **kwargs, xticklabels=1, yticklabels=1 )
             ax = g.ax_heatmap
 
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
@@ -274,31 +314,3 @@ class ptsa():
                                 xticklabels=1 )
 
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-
-
-    def _load_yaml(self,document):
-        print("Loading configuration file: {}".format(document))
-        self._measures = []
-        self._measure_names = []
-        with open(document) as f:
-            yf = yaml.load(f,Loader=yaml.FullLoader)
-
-            # Instantiate the calc classes 
-            for module_name in yf:
-                print("Importing module {}".format(module_name))
-                classes = yf[module_name]
-                module = importlib.import_module(module_name,__package__)
-
-                for class_name in classes:
-                    paramlist = classes[class_name]
-
-                    class_ = getattr(module, class_name)
-                    if paramlist is not None:
-                        for params in paramlist:
-                            print("Adding measure {}.{}(x,y,{})".format(module_name,class_name,params))
-                            self._measures.append(class_(**params))
-                            self._measure_names.append(self._measures[-1].name)
-                    else:
-                        print("Adding measure {}.{}(x,y)".format(module_name,class_name))
-                        self._measures.append(class_())
-                        self._measure_names.append(self._measures[-1].name)
