@@ -13,9 +13,9 @@ setup(
     include_package_data=True,
     version='0.0.1',
     description='Multivariate time-series dependency analysis',
-    author='Oliver M. Cliff, Ben D. Fulcher',
+    author='Oliver M. Cliff',
     author_email='oliver.m.cliff@gmail.com',
-    url='https://github.com/olivercliff/mtsda',
+    url='https://github.com/olivercliff/pynats',
     long_description=long_description,
     classifiers=[
         "Programming Language :: Python",
@@ -30,5 +30,5 @@ setup(
         "Topic :: Scientific/Engineering :: Information Analysis",
         "Topic :: Scientific/Engineering :: Medical Science Apps.",
     ],
-    #install_requires=['pytest',...]
+    install_requires=['pytest','statsmodels','pyyaml','seaborn','tqdm','nilearn','skccm','nitime==0.6','hyppo','pyEDM','jpype1==0.6.3']
 )

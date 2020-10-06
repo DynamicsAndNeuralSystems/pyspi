@@ -1,12 +1,14 @@
 from nilearn import connectome as fc
 from sklearn import covariance as cov
-from scipy import stats as stats
+from scipy import stats
 from scipy import spatial
 import numpy as np
-from . import basedep as base
+from . import base
+from hyppo.independence import MGC, Dcorr, HHG, Hsic
+import warnings
 
 class connectivity(base.undirected):
-    """ (Functional) Connectivity-based measures
+    """ Base class for (functional) connectivity-based measures 
     
     Information on covariance estimators at: https://scikit-learn.org/stable/modules/covariance.html
     """
@@ -25,40 +27,34 @@ class connectivity(base.undirected):
         self._cov_estimator = eval('self._' + cov_estimator + '()')
         self._kind = kind
 
-    def getadj(self,z):
+    def adjacency(self,z):
         fc_measure = fc.ConnectivityMeasure(cov_estimator=self._cov_estimator,
                                                      kind=self._kind)
 
         z = np.transpose(z)
         fc_matrix = fc_measure.fit_transform([z])[0]
         np.fill_diagonal(fc_matrix,np.nan)
-        return fc_matrix
-
-    def ispositive(self):
-        return False
+        return np.square(fc_matrix)
 
 class pearsonr(connectivity):
 
     humanname = "Pearson's product-moment correlation"
-    name = "pearsonr"
 
     def __init__(self,cov_estimator='empirical'):
         super(pearsonr,self).__init__(kind='correlation',cov_estimator=cov_estimator)
         self.name = 'pearsonr' + '_' + cov_estimator
 
-class parcorr(connectivity):
+class pcor(connectivity):
 
     humanname = "Partial correlation"
-    name = "parcorr"
 
     def __init__(self,cov_estimator='empirical'):
-        super(parcorr,self).__init__(kind='partial correlation',cov_estimator=cov_estimator)
-        self.name = 'parcorr' + '_' + cov_estimator
+        super(pcor,self).__init__(kind='partial correlation',cov_estimator=cov_estimator)
+        self.name = 'pcor' + '_' + cov_estimator
 
 class tangent(connectivity):
 
     humanname = "Tangent"
-    name = "tangent"
 
     def __init__(self,cov_estimator='empirical'):
         super(tangent,self).__init__('tangent',cov_estimator=cov_estimator)
@@ -76,56 +72,77 @@ class covariance(connectivity):
 class precision(connectivity):
 
     humanname = "Precision"
-    name = "precision"
 
     def __init__(self,cov_estimator='empirical'):
         super(precision,self).__init__('precision',cov_estimator=cov_estimator)
-        self.name = 'precision' + '_' + cov_estimator
+        self.name = 'prec' + '_' + cov_estimator
 
 class spearmanr(base.undirected):
 
     humanname = "Spearman's correlation coefficient"
     name = "spearmanr"
     
-    def getpwd(self,x,y):
-        return stats.spearmanr(x,y).correlation
+    def bivariate(self,x,y,i,j):
+        return stats.spearmanr(x,y).correlation ** 2
 
 class kendalltau(base.undirected):
 
     humanname = "Kendall's tau"
     name = "kendalltau"
 
-    def getpwd(self,x,y):
-        return stats.kendalltau(x,y).correlation
+    def bivariate(self,x,y,i,j):
+        return stats.kendalltau(x,y).correlation ** 2
 
-class distance(base.undirected):
-    """ Correlation of distances
-    
-    Information on other covariance estimators at: https://scikit-learn.org/stable/modules/covariance.html
+""" TODO: include optional kernels in each method
+"""
+class hsic(base.undirected):
+    """ Hilbert-Schmidt Independence Criterion (Hsic)
     """
 
-    humanname = "Pairwise distance"
+    humanname = "Hilbert-Schmidt Independence Criterion"
+    name = 'hsic'
 
-    def __init__(self,metric='euclidean'):
-        self._metric = metric
-        self.name = 'cdist' + '_' + metric
+    def bivariate(self,x,y,i,j):
+        stat, _ = Hsic().test(x, y, auto=True )
+        return stat
 
-    def getadj(self,z):
-        """ TODO: this needs to be a correlation, not a distance. see:
-        https://arxiv.org/pdf/0803.4101.pdf
-        or
-        https://en.wikipedia.org/wiki/Distance_correlation#:~:text=In%20statistics%20and%20in%20probability,the%20random%20vectors%20are%20independent.
+class hhg(base.undirected):
+    """ Heller-Heller-Gorfine independence criterion
+    """
+
+    humanname = "Heller-Heller-Gorfine Independence Criterion"
+    name = 'hhc'
+
+    def bivariate(self,x,y,i,j):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            stat, _ = HHG().test(x, y, reps=0)
+        return stat
+
+class dcorr(base.undirected):
+    """ Correlation of distances
+    """
+
+    humanname = "Distance correlation"
+    name = 'dcorr'
+
+    def bivariate(self,x,y,i,j):
         """
-        m = z.shape[0]
-        try:
-            if self._metric == 'mahalanobis':
-                dist_matrix = spatial.distance.cdist(z,z,'mahalanobis',VI=None)
-            else:
-                dist_matrix = spatial.distance.cdist(z,z,metric=self._metric)
-        except ValueError as err:
-            print('cdist failed with metric={}: {}'.format(self._metric,err))
-            dist_matrix = np.empty((m,m))
-            dist_matrix[:] = np.NaN
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            stat, _ = Dcorr().test(x, y, auto=True, reps=0 )
+        return stat
 
-        np.fill_diagonal(dist_matrix,np.nan)   
-        return dist_matrix
+class mgc(base.undirected):
+    """ Multi-graph correlation
+    """
+
+    humanname = "Multi-scale graph correlation"
+    name = "mgc"
+
+    def bivariate(self,x,y,i,j):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            stat, _, _ = MGC().test(x, y, reps=0 )
+        return stat

@@ -13,8 +13,10 @@ import warnings
 # Plotting tools
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib import rcParams
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import seaborn as sns
+from scipy.cluster.hierarchy import dendrogram, linkage, leaves_list, set_link_color_palette
 from tqdm import tqdm
 from tqdm import trange
 
@@ -22,8 +24,8 @@ from tqdm import trange
 from .data import Data
 from . import pynats_utils as utils
 
-class ptsa():
-    """Pairwise time series analysis
+class btsa():
+    """Bivariate time series analysis
     """
     
     # Initializer / Instance Attributes
@@ -48,6 +50,16 @@ class ptsa():
         if not isinstance(value,Data):
             raise TypeError('Data type must be pypynats.data.Data')
         self._data = value
+
+    @data.setter
+    def cmap(self,value):
+        if not isinstance(value,str):
+            raise TypeError('Cmap must be a string.')
+        self._cmap = value
+
+    @property
+    def names(self):
+        return self._measure_names
 
     @property
     def adjacency(self):
@@ -112,7 +124,7 @@ class ptsa():
         for i in pbar:
             pbar.set_description('Processing [{}]'.format(self._measure_names[i]))
             start_time = time.time()
-            self._adjacency[:,:,i] = self._measures[i].getadj(dat)
+            self._adjacency[:,:,i] = self._measures[i].adjacency(dat)
             self._proctimes[i] = time.time() - start_time
         pbar.close()
 
@@ -178,11 +190,11 @@ class ptsa():
         self._nmeasures = len(self._measures)
         print('Number of pairwise measures after pruning: {}'.format(self._nmeasures))
 
-    def threshold(self,pvalue):
-        """Threshold the pairwise matrices using the p-values
-            (should a separate function return those p-values?)
-        """
-        pass
+    # def threshold(self,pvalue):
+    #     """Threshold the pairwise matrices using the p-values
+    #         (should a separate function return those p-values?)
+    #     """
+    #     pass
 
     def diagnostics(self):
         """ TODO: print out all diagnostics, e.g., compute time, failures, etc.
@@ -192,13 +204,28 @@ class ptsa():
         for i in sid:
             print('[{}] {}: {} s'.format(i,self._measure_names[i],self._proctimes[i]))
 
+    def truth(self,truth):
+        corrs = np.zeros((self._nmeasures))
+
+        truthflat = truth.flatten()
+        for i in range(self._nmeasures):
+            adj = np.transpose(self._adjacency[:,:,i])
+            np.fill_diagonal(adj,0)
+            measflat = adj.flatten()
+            corrs[i] = stats.pearsonr(truthflat,measflat)[0]
+
+        sid = np.argsort(corrs)
+        print('Pearson correlations for all {} measures to truth:'.format(len(sid)))
+        for i in sid:
+            print('[{}] {}: {}%'.format(i,self._measure_names[i],100*corrs[i]))
+
     # TODO: only use the top nmeasures features
     def heatmaps(self,ncols=5,nmeasures=None,split=False):
         if nmeasures is None:
             nmeasures = self._nmeasures
         nrows = int(np.ceil(nmeasures / ncols))
 
-        fig, axs = plt.subplots(nrows,ncols,sharex=True,sharey=True,squeeze=False)
+        _, axs = plt.subplots(nrows,ncols,sharex=True,sharey=True,squeeze=False)
 
         lw = 0.0
         if split is True:
@@ -225,7 +252,12 @@ class ptsa():
         for ax in axs[-1,(nmeasures % ncols):]:
             ax.axis('off')
 
-    def clustermap(self,which_measure,categories=None,**kwargs):
+    def clustermap(self,which_measure,carpet_plot=False,sort_carpet=True,categories=None,**kwargs):
+
+        if carpet_plot is True:
+            figsize = (10,5)
+        else:
+            figsize = (10,10)
 
         if isinstance(which_measure,int):
 
@@ -242,8 +274,9 @@ class ptsa():
                 cat_colors = cats.map(category_lut).tolist()
 
             g = sns.clustermap(adj, cmap=self._cmap,
-                                center=0.0, figsize=(7, 7),
-                                col_colors=cat_colors, row_colors=cat_colors,**kwargs )
+                                center=0.0, figsize=figsize,
+                                col_colors=cat_colors, row_colors=cat_colors,**kwargs,
+                                cbar_pos=(0, .2, .03, .4) )
 
             ax = g.ax_heatmap
         elif which_measure == 'all':
@@ -255,11 +288,43 @@ class ptsa():
             corrs = df.corr(method='spearman')
             corrs.fillna(0,inplace=True)
             g = sns.clustermap(corrs, cmap=self._cmap,
-                                center=0.0, figsize=(7, 7),
-                                **kwargs, xticklabels=1, yticklabels=1 )
+                                center=0.0, figsize=figsize,
+                                **kwargs, xticklabels=1, yticklabels=1,
+                                cbar_pos=(0, .2, .03, .4) )
             ax = g.ax_heatmap
 
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+        if carpet_plot is True:
+
+            g.gs.update(left=0.55, right=0.8)
+
+            dat = np.squeeze(self.data.data)
+            if sort_carpet is True:
+                Z = linkage(dat,method='average')
+                dat = dat[leaves_list(Z),:]
+                #create new gridspec for the right part
+                gs2 = gridspec.GridSpec(1,10, left=0.05, right=0.45, top=0.85)
+            else:
+                gs2 = gridspec.GridSpec(1,1, left=0.05, right=0.45, top=0.85)
+
+            # create axes within this new gridspec
+            ax2 = g.fig.add_subplot(gs2[0,:9])
+            # plot boxplot in the new axes
+            ax2.imshow(dat,aspect='auto',interpolation='none',cmap=self._cmap)
+            ax2.set_xlabel('Time')
+            ax2.set_ylabel('Process')
+            ax2.set_title('Data')
+
+            if sort_carpet is True:
+                ax3 = g.fig.add_subplot(gs2[0,9])
+                rcParams['lines.linewidth'] = 0.5
+                dendrogram(Z, ax=ax3,orientation='right',
+                                no_labels=True, color_threshold=0,
+                                above_threshold_color='k')
+                ax3.axis('off')
+                ax2.set_yticks(range(0,dat.shape[0]))
+                ax2.set_yticklabels([str(x) for x in leaves_list(Z)])
 
     # TODO: only use the top nmeasures features
     def flatten(self,nmeasures=None,split=False,normalize=True,cluster=True,row_cluster=False):
@@ -308,7 +373,7 @@ class ptsa():
                 warnings.warn('Disimilarity value returned NaN. Have you run .prune()?',RuntimeWarning)
                 return
         else:
-            fig, ax = plt.subplots(1,1)
+            _, ax = plt.subplots(1,1)
             ax = sns.heatmap(df, ax=ax, cmap=self._cmap,
                                 center=0.0,
                                 xticklabels=1 )

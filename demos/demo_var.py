@@ -1,41 +1,65 @@
 # Import our classes
 from pynats.data import Data
-from pynats.ptsa import ptsa
+from pynats.btsa import btsa
 
 import matplotlib.pyplot as plt
 import numpy as np
-import statsmodels.tsa.arima_process as arma
+
+import dill
+import os
+import random
 
 # TODO: change to generate_var_data
 
 # a) Setup time-series configuration
 M = 5
-T = 500
+T = 250
 R = 1
 
-clm_adj = np.triu(np.random.rand(M,M)).reshape((1,M,M))
-clm_adj[np.nonzero(clm_adj < 0.5)] = 0
+armat = np.zeros((M,M))
+armat[0,4] = .2
+armat[0,1] = .5
+armat[1,2] = .4
+armat[2,3] = .6
+armat[3,4] = .23
+armat[1,0] = .2
+armat[2,1] = .8
+armat = armat.reshape((1,M,M))
 
-print('CLM:', clm_adj)
+print('Autoregressive matrix:', armat)
+
+random.seed(a=None, version=2)
 
 # c) Load the data
 data = Data()
 data.generate_var_data(n_samples=T,
                         n_replications=R,
-                        coefficient_matrices=clm_adj)
+                        coefficient_matrices=armat)
 
-calc = ptsa()
+calc = btsa()
 
+# Load the VAR dataset
 calc.load(data)
 
+# Compute all adjacency matrices
 calc.compute()
 
+# Prune special values
 calc.prune()
 
-print('Size of adjacency: {}'.format(calc.adjacency.shape))
+savefile = os.path.dirname(__file__) + '/pynats_var.pkl'
+print('Saving object to dill database: "{}"'.format(savefile))
 
+with open(savefile, 'wb') as f:
+    dill.dump(calc, f)
+
+# Check speed of computations, etc.
 calc.diagnostics()
 
+# Compare to ground-truth AR params
+calc.truth(armat[0])
+
+# Plot results
 calc.clustermap('all')
 calc.heatmaps(6)
 calc.flatten(normalize=True)

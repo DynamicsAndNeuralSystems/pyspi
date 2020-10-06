@@ -4,6 +4,8 @@ Stolen mostly from IDTxL (for now...)
 """
 import numpy as np
 from . import pynats_utils as utils
+from math import sin, cos, sqrt, fabs
+from numba import jit
 
 VERBOSE = False
 

@@ -1,7 +1,7 @@
 # Import our classes
 import os
 from pynats.data import Data
-from pynats.ptsa import ptsa
+from pynats.btsa import btsa
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,7 +12,7 @@ import dill
 rsdat = loadmat( os.path.dirname(__file__) + '/data/hcp/hcp_rsfMRI.mat')
 netdat = loadmat( os.path.dirname(__file__) + '/data/hcp/networks.mat')
 
-S = 50
+S = 5
 
 tsm = rsdat['dat'][:S,:,1]
 nets = np.squeeze(netdat['id1plus'][:S])
@@ -23,7 +23,7 @@ print('Loaded network info as a {} {}'.format(nets.shape,type(nets)))
 # c) Load the data
 data = Data(tsm, dim_order='ps')
 
-calc = ptsa()
+calc = btsa()
 
 calc.load(data)
 
@@ -33,6 +33,8 @@ calc.prune()
 
 savefile = os.path.dirname(__file__) + '/pynats_hcp.pkl'
 print('Saving object to dill database: "{}"'.format(savefile))
+
+calc.diagnostics()
 
 with open(savefile, 'wb') as f:
     dill.dump(calc, f)

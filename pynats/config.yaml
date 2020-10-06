@@ -9,7 +9,7 @@
     - cov_estimator: oas
 
   # Partial correlation
-  parcorr:
+  pcor:
     - cov_estimator: empirical
     - cov_estimator: ledoit_wolf
     - cov_estimator: shrunk
@@ -18,16 +18,10 @@
   # Covariance
   covariance:
     - cov_estimator: empirical
-    - cov_estimator: ledoit_wolf
-    - cov_estimator: shrunk
-    - cov_estimator: oas
 
   # Precision
   precision:
     - cov_estimator: empirical
-    - cov_estimator: ledoit_wolf
-    - cov_estimator: shrunk
-    - cov_estimator: oas
 
   # Spearman's correlation coefficient
   spearmanr:
@@ -35,36 +29,48 @@
   # Kendall's rank correlation coefficient
   kendalltau:
 
-  # Distance-based measures
-  distance:
-    - metric: euclidean
-    - metric: minkowski
-    - metric: cityblock
-    - metric: seuclidean
-    - metric: sqeuclidean
-    - metric: cosine
-    - metric: correlation
-    - metric: hamming
-    - metric: jaccard
-    - metric: chebyshev
-    - metric: canberra
-    - metric: braycurtis
-    - metric: mahalanobis
-    - metric: yule
-    - metric: matching
-    - metric: dice
-    - metric: kulsinski
-    - metric: rogerstanimoto
-    - metric: russellrao
-    - metric: sokalmichener
-    - metric: sokalsneath
-    - metric: wminkowski
+  # Distance correlation
+  dcorr:
+
+  # Multi-scale graph correlation
+  mgc:
+
+  # Hilbert-Schmidt independence criterion
+  hsic:
+
+  # Heller-Heller-Gorfine (HHG) test  
+  hhg:
   
 # Measures that analyse in the time-domain
 .temporal:
 
   # Cointegration
   coint:
+    - method: johansen
+      statistic: max_eig_stat
+
+    - method: johansen
+      statistic: trace_stat
+
+    - method: aeg
+      statistic: tstat
+
+    - method: aeg
+      statistic: pvalue
+
+  # Convergent-cross mapping
+  ccm:
+    - statistic: mean
+    - statistic: max
+    - statistic: diff
+
+  # Multi-scale graph correlation for time series
+  mgcx:
+    - max_lag: 5
+
+  # Distance correlation for time series
+  dcorrx:
+    - max_lag: 5
 
 # Measures that analyse in the frequency-domain (see Schoegl and Supp, 2006)
 .spectral:
@@ -88,10 +94,14 @@
   # icoh:
 
   # Phase difference of signals relative to one another
-  # phase:
+  phase:
+    - f_lb: 0.0
+      f_ub: 0.2
 
   # Partial coherence (condition out all other processes)
-  # pcoh:
+  partial_coherence:
+    - f_lb: 0.0
+      f_ub: 0.2
 
   # Partial directed causality
   # pdc:
@@ -119,6 +129,10 @@
     - estimator: kraskov
       prop_k: 4
 
+    - estimator: kraskov
+      prop_k: 4
+      dyn_corr_excl: AUTO
+
     - estimator: kernel
       kernel_width: 0.25
 
@@ -128,6 +142,10 @@
 
     - estimator: kraskov
       prop_k: 4
+
+    - estimator: kraskov
+      prop_k: 4
+      dyn_corr_excl: AUTO
 
     - estimator: kernel
       kernel_width: 0.25
@@ -139,14 +157,21 @@
     - estimator: kraskov
       prop_k: 4
       auto_embed_method: MAX_CORR_AIS
-      k_search_max: 2
-      tau_search_max: 2
+      k_search_max: 10
+      tau_search_max: 4
+      dyn_corr_excl: AUTO
+
+    - estimator: kraskov
+      prop_k: 4
+      auto_embed_method: MAX_CORR_AIS
+      k_search_max: 10
+      tau_search_max: 1
       dyn_corr_excl: AUTO
 
     # Kraskov estimator with auto-embedding on target-only, src history of 1, and DCE
     - estimator: kraskov
       prop_k: 4
-      k_history: 4
+      k_history: 2
       l_history: 1
       dyn_corr_excl: AUTO
 
@@ -166,7 +191,7 @@
     # Kernel estimator with auto-embedding on source/target and DCE
     - estimator: kernel
       auto_embed_method: MAX_CORR_AIS
-      k_search_max: 2
+      k_search_max: 4
       kernel_width: 0.25
 
     # Kernel estimator with no auto-embedding on source/target and DCE

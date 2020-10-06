@@ -1,18 +1,21 @@
 # Import our classes
 from pynats.data import Data
-from pynats.ptsa import ptsa
+from pynats.btsa import btsa
 
+import dill
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import statsmodels.tsa.arima_process as arma
 
 # a) Setup time-series configuration
-T = 5000
-R = 1
 M = 5
+T = 250
+R = 1
 
-clm_adj = np.triu(np.random.rand(M,M)).reshape((1,M,M))
-clm_adj[np.nonzero(clm_adj < 0.5)] = 0
+clm_adj = np.zeros((M,M))
+clm_adj[0,1] = 1.0
+clm_adj = clm_adj.reshape((1,M,M))
 
 print('CLM:', clm_adj)
 
@@ -22,7 +25,7 @@ data.generate_logistic_maps_data(n_samples=T,
                                     n_replications=R,
                                     coefficient_matrices=clm_adj)
 
-calc = ptsa()
+calc = btsa()
 
 calc.load(data)
 
@@ -30,7 +33,17 @@ calc.compute()
 
 calc.prune()
 
-calc.heatmaps(6)
+savefile = os.path.dirname(__file__) + '/pynats_clm.pkl'
+print('Saving object to dill database: "{}"'.format(savefile))
+
+with open(savefile, 'wb') as f:
+    dill.dump(calc, f)
+
+calc.diagnostics()
+
+# calc.truth(clm_adj[0])
+
+# calc.heatmaps(6)
 calc.flatten()
-calc.clustermap('all')
+calc.clustermap('all',carpet_plot=True)
 plt.show()
