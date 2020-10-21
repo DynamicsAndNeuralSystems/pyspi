@@ -45,5 +45,5 @@ calc.diagnostics()
 
 # calc.heatmaps(6)
 calc.flatten()
-calc.clustermap('all',carpet_plot=True)
+calc.clustermap('all',sa_plot=True)
 plt.show()

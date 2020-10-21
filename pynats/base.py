@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from pynats.data import Data
 
 """
 Base class for pairwise dependency measurements.
@@ -7,50 +8,58 @@ Base class for pairwise dependency measurements.
 The child classes should either overload the adjacency method (if it computes the full adjacency)
 or the bivariate method if it computes only pairwise measurements
 """
+def parse(measure):
+    def parsed_measure(self,data,i=None,j=None):
+        # Create a data
+        if isinstance(data,np.ndarray):
+            if data.ndim != 2:
+                raise Exception('np.ndarray must be two-dimensional')
+            data = Data(data=data,dim_order='ps')
+            if data.n_processes == 2:
+                i,j = 0,1
+
+        if not isinstance(data,Data):
+            raise TypeError('Data must be either numpy.ndarray or pynats.data.Data objects.')
+
+        try:
+            return measure(self,data,i=i,j=j)
+        except TypeError:
+            return measure(self,data)
+
+    return parsed_measure
 
 class directed:
     """ Directed measures
     """
 
-    humanname = 'Base class'
-    name = 'base'
+    humanname = 'Bivariate base class'
+    name = 'bivariate_base'
 
-    def bivariate(self,x,y,i,j):
+    @parse
+    def bivariate(self,data,i=None,j=None):
         """ Overload method for getting the pairwise dependencies
         """
         raise Exception("You must overload this method.")
 
-    def adjacency(self,z):
+    def adjacency(self,data):
         """ Compute the dependency measures for the entire multivariate dataset
         """
-        nproc = z.shape[0]
-        A = np.empty((nproc,nproc))
+        if not isinstance(data,Data):
+            raise TypeError(f'Received data type {type(data)} but expected {type(Data)}.')
+
+        A = np.empty((data.n_processes,data.n_processes))
         A[:] = np.NaN
 
-        for j in range(nproc):
-            targ = z[j].flatten()
-            for i in [ii for ii in range(nproc) if ii != j and math.isnan(A[ii,j])]:
-                src = z[i].flatten()
+        for j in range(data.n_processes):
+            for i in [ii for ii in range(data.n_processes) if ii != j and math.isnan(A[ii,j])]:
+                a, data = self.bivariate(data,i,j)
                 try:
-                    a = self.bivariate(src,targ,i,j)
-                    try:
-                        A[i,j] = a
-                    except (IndexError,TypeError):
-                        A[i,j] = a[0]
-                        A[j,i] = a[1]
-                except:
-                    pass
+                    A[i,j] = a
+                except (IndexError):
+                    A[i,j] = a[0]
+                    A[j,i] = a[1]
         
-        return A
-
-    @classmethod
-    def preprocess(self,z):
-        """ (Optional) implements any pre-processing at the class level that might be used by instances (e.g., in output parameters) or inheriting classes (e.g., in optimising input parameters)
-        """
-        pass
-
-    def ispositive(self):
-        return True
+        return A, data
 
 class undirected(directed):
 
@@ -60,20 +69,26 @@ class undirected(directed):
     def ispositive(self):
         return False
 
-    def adjacency(self,z):
-        nproc = z.shape[0]
-        A = np.empty((nproc,nproc))
+    def adjacency(self,data):
+
+        if not isinstance(data,Data):
+            raise TypeError(f'Received data type {type(data)} but expected {type(Data)}.')
+
+        A = np.empty((data.n_processes,data.n_processes))
         A[:] = np.NaN
 
-        for j in range(nproc):
-            targ = z[j].flatten()
-            for i in [ii for ii in range(nproc) if ii != j]:
-                src = z[i].flatten()
-                try:
-                    A[i,j] = self.bivariate(src,targ,i,j)
-                    A[j,i] = A[i,j]
-                except:
-                    A[i,j] = np.NaN
-                    A[j,i] = np.NaN
+        for j in range(data.n_processes):
+            for i in [ii for ii in range(data.n_processes) if ii != j]:
+                A[i,j], data = self.bivariate(data,i,j)
+                A[j,i] = A[i,j]
         
-        return A
+        return A, data
+
+# Maybe this would be more pythonic as decorators or something?
+class positive:
+    def ispositive(self):
+        return True
+
+class real:
+    def ispositive(self):
+        return False

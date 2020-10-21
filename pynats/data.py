@@ -3,24 +3,25 @@
 Stolen mostly from IDTxL (for now...)
 """
 import numpy as np
-from . import pynats_utils as utils
+import pandas as pd
+from pynats import utils
 from math import sin, cos, sqrt, fabs
 from numba import jit
+from scipy.stats import zscore
 
 VERBOSE = False
-
 
 class Data():
     """Store data for dependency analysis.
 
     Data takes a 1- to 3-dimensional array representing realisations of random
-    variables in dimensions: processes, samples (over time), and replications.
+    variables in dimensions: processes, observations (over time), and realisations.
     If necessary, data reshapes provided realisations to fit the format
     expected by _nats_, which is a 3-dimensional array with axes representing
     (process index, sample index, replication index). Indicate the actual order
     of dimensions in the provided array in a three-character string, e.g. 'spr'
-    for an array with realisations over (1) samples in time, (2) processes, (3)
-    replications.
+    for an array with realisations over (1) observations in time, (2) processes, (3)
+    realisations.
 
     Example:
 
@@ -29,10 +30,10 @@ class Data():
         >>>
         >>> # Create data objects with data of various sizes
         >>> d = np.arange(10000).reshape((2, 1000, 5))  # 2 procs.,
-        >>> data_1 = Data(d, dim_order='psr')           # 1000 samples, 5 repl.
+        >>> data_1 = Data(d, dim_order='psd')           # 1000 observations, 5 repl.
         >>>
         >>> d = np.arange(3000).reshape((3, 1000))  # 3 procs.,
-        >>> data_2 = Data(d, dim_order='ps')        # 1000 samples
+        >>> data_2 = Data(d, dim_order='ps')        # 1000 observations
         >>>
         >>> # Overwrite data in existing object with random data
         >>> d = np.arange(5000)
@@ -47,89 +48,80 @@ class Data():
             1/2/3-dimensional array with raw data
         dim_order : string [optional]
             order of dimensions, accepts any combination of the characters
-            'p', 's', and 'r' for processes, samples, and replications; must
+            'd', 'p', and 's' for realisations, processes, and observations; must
             have the same length as the data dimensionality, e.g., 'ps' for a
             two-dimensional array of data from several processes over time
-            (default='psr')
+            (default='dps')
         normalise : bool [optional]
-            if True, data gets normalised per process (default=True)
+            if True, data gets normalised per time series (default=True)
 
     Attributes:
         data : numpy array
             realisations, can only be set via 'set_data' method
         n_processes : int
             number of processes
-        n_replications : int
-            number of replications
-        n_samples : int
-            number of samples in time
+        n_observations : int
+            number of observations in time
+        n_realisations : int
+            number of realisations
         normalise : bool
             if true, all data gets z-standardised per process
 
     """
 
-    def __init__(self, data=None, dim_order='psr', normalise=True):
+    def __init__(self, data=None, dim_order='psr', normalise=True, name=None):
         self.normalise = normalise
         if data is not None:
-            self.set_data(data, dim_order)
+            self.set_data(data, dim_order, name)
 
-    def n_realisations(self, current_value=None):
-        """Number of realisations over samples and replications.
+    @property
+    def name(self):
+        if hasattr(self,'_name'):
+            return self._name 
+        else:
+            return ''
+
+    def n_realisations_repl(self, current_value=None):
+        """Number of realisations over observations and realisations.
 
         Args:
             current_value : tuple [optional]
                 reference point for calculation of number of realisations
                 (e.g. when using an embedding of length k, we count
                 realisations from the k+1th sample because we loose the first k
-                samples to the embedding); if no current_value is provided, the
-                number of all samples is used
+                observations to the embedding); if no current_value is provided, the
+                number of all observations is used
         """
-        return (self.n_realisations_samples(current_value) *
-                self.n_realisations_repl())
+        return (self.n_realisations_observations(current_value) * self.n_realisations)
 
-    def n_realisations_samples(self, current_value=None):
-        """Number of realisations over samples.
+    def n_realisations_observations(self, current_value=None):
+        """Number of realisations over observations.
 
         Args:
             current_value : tuple [optional]
                 reference point for calculation of number of realisations
                 (e.g. when using an embedding of length k, the current value is
                 at sample k + 1; we thus count realisations from the k + 1st
-                sample because we loose the first k samples to the embedding)
+                sample because we loose the first k observations to the embedding)
         """
         if current_value is None:
-            return self.n_samples
+            return self.n_observations
         else:
-            if current_value[1] >= self.n_samples:
+            if current_value[1] >= self.n_observations:
                 raise RuntimeError('The sample index of the current value '
-                                   '({0}) is larger than the number of samples'
+                                   '({0}) is larger than the number of observations'
                                    ' in the data set ({1}).'.format(
-                                              current_value, self.n_samples))
-            return self.n_samples - current_value[1]
+                                              current_value, self.n_observations))
+            return self.n_observations - current_value[1]
 
-    def n_realisations_repl(self):
-        """Number of realisations over replications."""
-        return self.n_replications
-
-    @property
-    def data(self):
-        """Return data array."""
-        return self._data
-
-    @data.setter
-    def data(self, d):
-        if hasattr(self, 'data'):
-            raise AttributeError('You can not assign a value to this attribute'
-                                 ' directly, use the set_data method instead.')
+    def to_numpy(self,squeeze=False):
+        """Return the numpy array."""
+        if squeeze:
+            return np.squeeze(self._data)
         else:
-            self._data = d
+            return self._data
 
-    @data.deleter
-    def data(self):
-        print('overwriting existing data')
-        del(self._data)
-
-    def set_data(self, data, dim_order):
+    def set_data(self, data, dim_order='psr', name=None):
         """Overwrite data in an existing Data object.
 
         Args:
@@ -137,58 +129,48 @@ class Data():
                 1- to 3-dimensional array of realisations
             dim_order : string
                 order of dimensions, accepts any combination of the characters
-                'p', 's', and 'r' for processes, samples, and replications;
+                'p', 's', and 'r' for processes, observations, and realisations;
                 must have the same length as number of dimensions in data
         """
         if len(dim_order) > 3:
-            raise RuntimeError('dim_order can not have more than three '
-                               'entries')
+            raise RuntimeError('dim_order can not have more than two '
+                            'entries')
         if len(dim_order) != data.ndim:
             raise RuntimeError('Data array dimension ({0}) and length of '
-                               'dim_order ({1}) are not equal.'.format(
-                                           data.ndim, len(dim_order)))
+                            'dim_order ({1}) are not equal.'.format(
+                                        data.ndim, len(dim_order)))
 
-        # Bring data into the order processes x samples x replications and set
-        # set data.
-        data_ordered = self._reorder_data(data, dim_order)
-        self._set_data_size(data_ordered)
-        print('Adding data with properties: {0} processes, {1} samples, {2} '
-              'replications'.format(self.n_processes, self.n_samples,
-                                    self.n_replications))
-        try:
-            delattr(self, 'data')
-        except AttributeError:
-            pass
+        # Bring data into the order processes x observations in a pandas dataframe.
+        data = self._reorder_data(data, dim_order)
+        self._set_data_size(data)
+        print(f'Adding dataset "{name}" with properties: {self.n_processes} processes, {self.n_observations} observations, {self.n_realisations} '
+            'realisations')
+
         if self.normalise:
-            self.data = self._normalise_data(data_ordered)
-        else:
-            self.data = data_ordered
-        self.data_type = type(self.data[0, 0, 0])
+            data = zscore(data,axis=1,nan_policy='omit')
+
+        nans = np.isnan(data)
+        if nans.any():
+            raise ValueError(f'Dataset {name} contains non-numerics (NaNs) in processes: {np.unique(np.where(nans)[0])}.')
+
+        self._data = data
+        self.data_type = type(data[0, 00, 0])
+
+        if name is not None:
+            self._name = name
 
     def remove_process(self, procs):
 
         try:
-            self._data = np.delete(self.data,procs,axis=0)
+            self._data = np.delete(self._data,procs,axis=0)
         except IndexError:
-            print('Process {} is out of bounds of multivariate'
-                    ' time-series data with size {}'.format(proc,self.data.n_processes))
+            print(f'Process {procs} is out of bounds of multivariate'
+                    f' time-series data with size {self.data.n_processes}')
         
         self._set_data_size(self._data)
 
-
-    def _normalise_data(self, d):
-        """Z-standardise data separately for each process."""
-        d_standardised = np.empty(d.shape)
-        for process in range(self.n_processes):
-            s = utils.standardise(
-                            d[process, :, :].reshape(1, self.n_realisations()),
-                            dimension=1)
-            d_standardised[process, :, :] = s.reshape(self.n_samples,
-                                                      self.n_replications)
-        return d_standardised
-
     def _reorder_data(self, data, dim_order):
-        """Reorder data dimensions to processes x samples x replications."""
+        """Reorder data dimensions to processes x observations x realisations."""
         # add singletons for missing dimensions
         missing_dims = 'psr'
         for dim in dim_order:
@@ -204,21 +186,22 @@ class Data():
             dim_order = utils.swap_chars(dim_order, 0, ind_p)
         if dim_order[1] != 's':
             data = data.swapaxes(1, dim_order.index('s'))
+                
         return data
 
     def _set_data_size(self, data):
         """Set the data size."""
         self.n_processes = data.shape[0]
-        self.n_samples = data.shape[1]
-        self.n_replications = data.shape[2]
+        self.n_observations = data.shape[1]
+        self.n_realisations = data.shape[2]
 
     def get_realisations(self, current_value, idx_list, shuffle=False):
         """Return realisations for a list of indices.
 
         Return realisations for indices in list. Optionally, realisations can
         be shuffled to create surrogate data for statistical testing. For
-        shuffling, data blocks are permuted over replications while their
-        temporal order stays intact within replications:
+        shuffling, data blocks are permuted over realisations while their
+        temporal order stays intact within realisations:
 
         Original data:
             +--------------+---------+---------+---------+---------+---------+-----+
@@ -240,17 +223,17 @@ class Data():
             current_value : tuple
                 index of the current value in current analysis, has to have the
                 form (idx process, idx sample); if current_value == idx, all
-                samples for a process are returned
+                observations for a process are returned
             shuffle: bool
-                if true permute blocks of replications over trials
+                if true permute blocks of realisations over trials
 
         Returns:
             numpy array
-                realisations with dimensions (no. samples * no.replications) x
+                realisations with dimensions (no. observations * no.realisations) x
                 number of indices
             numpy array
                 replication index for each realisation with dimensions (no.
-                samples * no.replications) x number of indices
+                observations * no.realisations) x number of indices
         """
         if not hasattr(self, 'data'):
             raise AttributeError('No data has been added to this Data() '
@@ -266,29 +249,29 @@ class Data():
                                ' be smaller than the current value.')
 
         # Allocate memory.
-        n_real_time = self.n_realisations_samples(current_value)
+        n_real_time = self.n_realisations_observations(current_value)
         n_real_repl = self.n_realisations_repl()
         realisations = np.empty((n_real_time * n_real_repl,
                                  len(idx_list))).astype(self.data_type)
 
         # Shuffle the replication order if requested. This creates surrogate
-        # data by permuting replications while keeping the order of samples
+        # data by permuting realisations while keeping the order of observations
         # intact.
         if shuffle:
-            replications_order = np.random.permutation(self.n_replications)
+            realisations_order = np.random.permutation(self.n_realisations)
         else:
-            replications_order = np.arange(self.n_replications)
+            realisations_order = np.arange(self.n_realisations)
 
         # Retrieve data.
         i = 0
         for idx in idx_list:
             r = 0
-            # get the last sample as negative value, i.e., no. samples from the
+            # get the last sample as negative value, i.e., no. observations from the
             # end of the array
             last_sample = idx[1] - current_value[1]  # indexing is much faster
             if last_sample == 0:                     # than looping over time!
                 last_sample = None
-            for replication in replications_order:
+            for replication in realisations_order:
                 try:
                     realisations[r:r + n_real_time, i] = self.data[
                                                         idx[0],
@@ -297,8 +280,8 @@ class Data():
                 except IndexError:
                     raise IndexError('You tried to access variable {0} in a '
                                      'data set with {1} processes and {2} '
-                                     'samples.'.format(idx, self.n_processes,
-                                                       self.n_samples))
+                                     'observations.'.format(idx, self.n_processes,
+                                                       self.n_observations))
                 r += n_real_time
 
             assert(not np.isnan(realisations[:, i]).any()), ('There are nans '
@@ -307,22 +290,22 @@ class Data():
             i += 1
 
         # For each realisation keep the index of the replication it came from.
-        replications_index = np.repeat(replications_order, n_real_time)
-        assert(replications_index.shape[0] == realisations.shape[0]), (
-               'There seems to be a problem with the replications index.')
+        realisations_index = np.repeat(realisations_order, n_real_time)
+        assert(realisations_index.shape[0] == realisations.shape[0]), (
+               'There seems to be a problem with the realisations index.')
 
-        return realisations, replications_index
+        return realisations, realisations_index
 
-    def _get_data_slice(self, process, offset_samples=0, shuffle=False):
+    def _get_data_slice(self, process, offset_observations=0, shuffle=False):
         """Return data slice for a single process.
 
         Return data slice for process. Optionally, an offset can be provided
-        such that data are returnded from sample 'offset_samples' onwards.
+        such that data are returnded from sample 'offset_observations' onwards.
         Also, data
-        can be shuffled over replications to create surrogate data for
+        can be shuffled over realisations to create surrogate data for
         statistical testing. For shuffling, data blocks are permuted over
-        replications while their temporal order stays intact within
-        replications:
+        realisations while their temporal order stays intact within
+        realisations:
 
         Original data:
             +---------------+---------+---------+---------+---------+---------+-----+
@@ -344,60 +327,60 @@ class Data():
         Args:
             process: int
                 process index
-            offset_samples : int
-                offset in samples
+            offset_observations : int
+                offset in observations
             shuffle: bool
                 if true permute blocks of data over trials
 
         Returns:
             numpy array
-                data slice with dimensions no. samples - offset x no.
-                replications
+                data slice with dimensions no. observations - offset x no.
+                realisations
             numpy array
-                list of replications indices
+                list of realisations indices
         """
         # Check if requested indices are smaller than the current_value.
-        if not offset_samples <= self.n_samples:
-            print('Offset {0} must be smaller than number of samples in the '
-                  ' data ({1})'.format(offset_samples, self.n_samples))
-            raise RuntimeError('Offset must be smaller than no. samples.')
+        if not offset_observations <= self.n_observations:
+            print('Offset {0} must be smaller than number of observations in the '
+                  ' data ({1})'.format(offset_observations, self.n_observations))
+            raise RuntimeError('Offset must be smaller than no. observations.')
 
         # Shuffle the replication order if requested. This creates surrogate
-        # data by permuting replications while keeping the order of samples
+        # data by permuting realisations while keeping the order of observations
         # intact.
         if shuffle:
-            replication_index = np.random.permutation(self.n_replications)
+            replication_index = np.random.permutation(self.n_realisations)
         else:
-            replication_index = np.arange(self.n_replications)
+            replication_index = np.arange(self.n_realisations)
 
         try:
-            data_slice = self.data[process, offset_samples:, replication_index]
+            data_slice = self.data[process, offset_observations:, replication_index]
         except IndexError:
             raise IndexError('You tried to access process {0} with an offset '
                              'of {1} in a data set of {2} processes and {3} '
-                             'samples.'.format(process, offset_samples,
+                             'observations.'.format(process, offset_observations,
                                                self.n_processes,
-                                               self.n_samples))
+                                               self.n_observations))
         assert(not np.isnan(data_slice).any()), ('There are nans in the '
                                                  'retrieved data slice.')
         return data_slice.T, replication_index
 
-    def slice_permute_replications(self, process):
-        """Return data slice with permuted replications (time stays intact).
+    def slice_permute_realisations(self, process):
+        """Return data slice with permuted realisations (time stays intact).
 
-        Create surrogate data by permuting realisations over replications while
-        keeping the temporal structure (order of samples) intact. Return
+        Create surrogate data by permuting realisations over realisations while
+        keeping the temporal structure (order of observations) intact. Return
         realisations for all indices in the list, where an index is expected to
         have the form (process index, sample index). Realisations are permuted
-        block-wise by permuting the order of replications
+        block-wise by permuting the order of realisations
         """
         return self._get_data_slice(process, shuffle=True)
 
-    def slice_permute_samples(self, process, perm_settings):
-        """Return slice of data with permuted samples (repl. stays intact).
+    def slice_permute_observations(self, process, perm_settings):
+        """Return slice of data with permuted observations (repl. stays intact).
 
-        Create surrogate data by permuting data in a slice over samples (time)
-        while keeping the order of replications intact. Return slice for the
+        Create surrogate data by permuting data in a slice over observations (time)
+        while keeping the order of realisations intact. Return slice for the
         entry specified by 'process'. Realisations are permuted according to
         the settings specified in perm_settings:
 
@@ -408,21 +391,21 @@ class Data():
             | sample index | 1 2 3 4 5 6 7 8 | 1 2 3 4 5 6 7 8 | 1 2 3 4 5 6 7 8 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
 
-        Circular shift by 2, 6, and 4 samples:
+        Circular shift by 2, 6, and 4 observations:
             +--------------+-----------------+-----------------+-----------------+-----+
             | repl. ind.   | 1 1 1 1 1 1 1 1 | 2 2 2 2 2 2 2 2 | 3 3 3 3 3 3 3 3 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
             | sample index | 7 8 1 2 3 4 5 6 | 3 4 5 6 7 8 1 2 | 5 6 7 8 1 2 3 4 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
 
-        Permute blocks of 3 samples:
+        Permute blocks of 3 observations:
             +--------------+-----------------+-----------------+-----------------+-----+
             | repl. ind.   | 1 1 1 1 1 1 1 1 | 2 2 2 2 2 2 2 2 | 3 3 3 3 3 3 3 3 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
             | sample index | 4 5 6 7 8 1 2 3 | 1 2 3 7 8 4 5 6 | 7 8 4 5 6 1 2 3 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
 
-        Permute data locally within a range of 4 samples:
+        Permute data locally within a range of 4 observations:
             +--------------+-----------------+-----------------+-----------------+-----+
             | repl. ind.   | 1 1 1 1 1 1 1 1 | 2 2 2 2 2 2 2 2 | 3 3 3 3 3 3 3 3 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
@@ -436,8 +419,8 @@ class Data():
             | sample index | 4 2 5 7 1 3 2 6 | 7 5 3 4 2 1 8 5 | 1 2 4 3 6 8 7 5 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
 
-        Permuting samples is the fall-back option for surrogate creation if the
-        number of replications is too small to allow for a sufficient number of
+        Permuting observations is the fall-back option for surrogate creation if the
+        number of realisations is too small to allow for a sufficient number of
         permutations for the generation of surrogate data.
 
         Args:
@@ -450,60 +433,60 @@ class Data():
                   permutation type, can be
 
                     - 'circular': shifts time series by a random
-                      number of samples
-                    - 'block': swaps blocks of samples,
-                    - 'local': swaps samples within a given range, or
-                    - 'random': swaps samples at random,
+                      number of observations
+                    - 'block': swaps blocks of observations,
+                    - 'local': swaps observations within a given range, or
+                    - 'random': swaps observations at random,
 
                 - additional settings depending on the perm_type (n is the
-                  number of samples):
+                  number of observations):
 
                     - if perm_type == 'circular':
 
                       'max_shift' : int
-                        the maximum number of samples for shifting
+                        the maximum number of observations for shifting
                         (default=n/2)
                     - if perm_type == 'block':
 
                       'block_size' : int
-                        no. samples per block (default=n/10)
+                        no. observations per block (default=n/10)
                       'perm_range' : int
                           range in which blocks can be swapped (default=max)
 
                     - if perm_type == 'local':
 
                       'perm_range' : int
-                          range in samples over which realisations can be
+                          range in observations over which realisations can be
                           permuted (default=n/10)
 
         Returns:
             numpy array
-                data slice with data permuted over samples with dimensions
-                samples x number of replications
+                data slice with data permuted over observations with dimensions
+                observations x number of realisations
             numpy array
-                index of permutet samples
+                index of permutet observations
 
         Note:
             This permutation scheme is the fall-back option if the number of
-            replications is too small to allow a sufficient number of
+            realisations is too small to allow a sufficient number of
             permutations for the generation of surrogate data.
         """
         data_slice = self._get_data_slice(process, shuffle=True)[0]
         data_slice_perm = np.empty(data_slice.shape).astype(self.data_type)
-        perm = self._get_permutation_samples(data_slice.shape[0],
+        perm = self._get_permutation_observations(data_slice.shape[0],
                                              perm_settings)
-        for r in range(self.n_replications):
+        for r in range(self.n_realisations):
             data_slice_perm[:, r] = data_slice[perm, r]
         return data_slice_perm, perm
 
-    def permute_replications(self, current_value, idx_list):
-        """Return realisations with permuted replications (time stays intact).
+    def permute_realisations(self, current_value, idx_list):
+        """Return realisations with permuted realisations (time stays intact).
 
-        Create surrogate data by permuting realisations over replications while
-        keeping the temporal structure (order of samples) intact. Return
+        Create surrogate data by permuting realisations over realisations while
+        keeping the temporal structure (order of observations) intact. Return
         realisations for all indices in the list, where an index is expected to
         have the form (process index, sample index). Realisations are permuted
-        block-wise by permuting the order of replications:
+        block-wise by permuting the order of realisations:
 
         Original data:
             +--------------+---------+---------+---------+---------+---------+-----+
@@ -528,7 +511,7 @@ class Data():
 
         Returns:
             numpy array
-                permuted realisations with dimensions replications x number of
+                permuted realisations with dimensions realisations x number of
                 indices
             numpy array
                 replication index for each realisation
@@ -540,25 +523,25 @@ class Data():
             raise TypeError('idx needs to be a list of tuples.')
         return self.get_realisations(current_value, idx_list, shuffle=True)
 
-    def permute_samples(self, current_value, idx_list, perm_settings):
-        """Return realisations with permuted samples (repl. stays intact).
+    def permute_observations(self, current_value, idx_list, perm_settings):
+        """Return realisations with permuted observations (repl. stays intact).
 
-        Create surrogate data by permuting realisations over samples (time)
-        while keeping the order of replications intact. Surrogates can be
+        Create surrogate data by permuting realisations over observations (time)
+        while keeping the order of realisations intact. Surrogates can be
         created for multiple variables in parallel, where variables are
         provided as a list of indices. An index is expected to have the form
         (process index, sample index).
 
-        Permuting samples in time is the fall-back option for surrogate data
+        Permuting observations in time is the fall-back option for surrogate data
         creation. The default method for surrogate data creation is the
-        permutation of replications, while keeping the order of samples in time
-        intact. If the number of replications is too small to allow for a
+        permutation of realisations, while keeping the order of observations in time
+        intact. If the number of realisations is too small to allow for a
         sufficient number of permutations for the generation of surrogate data,
-        permutation of samples in time is chosen instead.
+        permutation of observations in time is chosen instead.
 
         Different permutation strategies can be chosen to permute realisations
-        in time. Note that if data consists of multiple replications, within
-        each replication, samples are shuffled following the same permutation
+        in time. Note that if data consists of multiple realisations, within
+        each replication, observations are shuffled following the same permutation
         pattern:
 
         Original data:
@@ -568,21 +551,21 @@ class Data():
             | sample index | 1 2 3 4 5 6 7 8 | 1 2 3 4 5 6 7 8 | 1 2 3 4 5 6 7 8 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
 
-        Circular shift by a random number of samples, e.g. 4 samples:
+        Circular shift by a random number of observations, e.g. 4 observations:
             +--------------+-----------------+-----------------+-----------------+-----+
             | repl. ind.   | 1 1 1 1 1 1 1 1 | 2 2 2 2 2 2 2 2 | 3 3 3 3 3 3 3 3 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
             | sample index | 5 6 7 8 1 2 3 4 | 5 6 7 8 1 2 3 4 | 5 6 7 8 1 2 3 4 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
 
-        Permute blocks of 3 samples:
+        Permute blocks of 3 observations:
             +--------------+-----------------+-----------------+-----------------+-----+
             | repl. ind.   | 1 1 1 1 1 1 1 1 | 2 2 2 2 2 2 2 2 | 3 3 3 3 3 3 3 3 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
             | sample index | 4 5 6 7 8 1 2 3 | 4 5 6 7 8 1 2 3 | 4 5 6 7 8 1 2 3 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
 
-        Permute data locally within a range of 4 samples:
+        Permute data locally within a range of 4 observations:
             +--------------+-----------------+-----------------+-----------------+-----+
             | repl. ind.   | 1 1 1 1 1 1 1 1 | 2 2 2 2 2 2 2 2 | 3 3 3 3 3 3 3 3 | ... |
             +--------------+-----------------+-----------------+-----------------+-----+
@@ -607,38 +590,38 @@ class Data():
                 - perm_type : str
                   permutation type, can be
 
-                    - 'random': swaps samples at random,
+                    - 'random': swaps observations at random,
                     - 'circular': shifts time series by a random number of
-                      samples
-                    - 'block': swaps blocks of samples,
-                    - 'local': swaps samples within a given range, or
+                      observations
+                    - 'block': swaps blocks of observations,
+                    - 'local': swaps observations within a given range, or
 
                 - additional settings depending on the perm_type (n is the
-                  number of samples):
+                  number of observations):
 
                     - if perm_type == 'circular':
 
                       'max_shift' : int
-                        the maximum number of samples for shifting
-                        (e.g., number of samples / 2)
+                        the maximum number of observations for shifting
+                        (e.g., number of observations / 2)
 
                     - if perm_type == 'block':
 
                       'block_size' : int
-                        no. samples per block (e.g., number of samples / 10)
+                        no. observations per block (e.g., number of observations / 10)
                       'perm_range' : int
                         range in which blocks can be swapped (e.g., number
-                        of samples / block_size)
+                        of observations / block_size)
 
                     - if perm_type == 'local':
 
                       'perm_range' : int
-                        range in samples over which realisations can be
-                        permuted (e.g., number of samples / 10)
+                        range in observations over which realisations can be
+                        permuted (e.g., number of observations / 10)
 
         Returns:
             numpy array
-                permuted realisations with dimensions replications x number of
+                permuted realisations with dimensions realisations x number of
                 indices
             numpy array
                 sample index for each realisation
@@ -648,14 +631,14 @@ class Data():
 
         Note:
             This permutation scheme is the fall-back option if surrogate data
-            can not be created by shuffling replications because the number of
-            replications is too small to generate the requested number of
+            can not be created by shuffling realisations because the number of
+            realisations is too small to generate the requested number of
             permutations.
         """
         [realisations, replication_idx] = self.get_realisations(current_value,
                                                                 idx_list)
-        n_samples = sum(replication_idx == 0)
-        perm = self._get_permutation_samples(n_samples, perm_settings)
+        n_observations = sum(replication_idx == 0)
+        perm = self._get_permutation_observations(n_observations, perm_settings)
         # Apply the permutation to data from each replication.
         realisations_perm = np.empty(realisations.shape).astype(self.data_type)
         perm_idx = np.empty(realisations_perm.shape[0])
@@ -666,41 +649,41 @@ class Data():
             perm_idx[mask] = perm
         return realisations_perm, perm_idx
 
-    def _get_permutation_samples(self, n_samples, perm_settings):
-        """Generate permutation of n samples.
+    def _get_permutation_observations(self, n_observations, perm_settings):
+        """Generate permutation of n observations.
 
-        Generate a permutation of n samples under various, possible
-        restrictions. Permuting samples is the fall-back option for surrogate
-        creation if the number of replications is too small to allow for a
+        Generate a permutation of n observations under various, possible
+        restrictions. Permuting observations is the fall-back option for surrogate
+        creation if the number of realisations is too small to allow for a
         sufficient number of permutations for the generation of surrogate data.
         For a detailed descriptions of permutation strategies see the
-        documentation of permute_samples().
+        documentation of permute_observations().
 
         Args:
-            n_samples : int
+            n_observations : int
                 length of the permutation
             perm_settings : dict
                 settings specifying the allowed permutations, see documentation
-                of permute_samples()
+                of permute_observations()
 
         Returns:
             numpy array
                 realisations permuted over time
             numpy Array
-                permuted indices of samples
+                permuted indices of observations
         """
         perm_type = perm_settings['perm_type']
 
         # Get the permutaion 'mask' for one replication (the same mask is then
         # applied to each replication).
         if perm_type == 'random':
-            perm = np.random.permutation(n_samples)
+            perm = np.random.permutation(n_observations)
 
         elif perm_type == 'circular':
             max_shift = perm_settings['max_shift']
             if type(max_shift) is not int or max_shift < 1:
                 raise TypeError(' ''max_shift'' has to be an int > 0.')
-            perm = self._circular_shift(n_samples, max_shift)[0]
+            perm = self._circular_shift(n_observations, max_shift)[0]
 
         elif perm_type == 'block':
             block_size = perm_settings['block_size']
@@ -709,13 +692,13 @@ class Data():
                 raise TypeError(' ''block_size'' has to be an int > 0.')
             if type(perm_range) is not int or perm_range < 1:
                 raise TypeError(' ''perm_range'' has to be an int > 0.')
-            perm = self._swap_blocks(n_samples, block_size, perm_range)
+            perm = self._swap_blocks(n_observations, block_size, perm_range)
 
         elif perm_type == 'local':
             perm_range = perm_settings['perm_range']
             if type(perm_range) is not int or perm_range < 1:
                 raise TypeError(' ''perm_range'' has to be an int > 0.')
-            perm = self._swap_local(n_samples, perm_range)
+            perm = self._swap_local(n_observations, perm_range)
 
         else:
             raise ValueError('Unknown permutation type ({0}).'.format(
@@ -723,11 +706,11 @@ class Data():
         return perm
 
     def _swap_local(self, n, perm_range):
-        """Permute n samples within blocks of length 'perm_range'.
+        """Permute n observations within blocks of length 'perm_range'.
 
         Args:
             n : int
-                number of samples
+                number of observations
             perm_range : int
                 range over which realisations are permuted
 
@@ -742,7 +725,7 @@ class Data():
                                    '"perm_range" of {1}.' .format(n,
                                                                   perm_range))
 
-        if perm_range == n:  # permute all n samples randomly
+        if perm_range == n:  # permute all n observations randomly
             perm = np.random.permutation(n)
         else:  # build a permutation that permutes only within the perm_range
             perm = np.empty(n, dtype=int)
@@ -756,15 +739,15 @@ class Data():
         return perm
 
     def _swap_blocks(self, n, block_size, perm_range):
-        """Permute blocks of samples in a time series within a given range.
+        """Permute blocks of observations in a time series within a given range.
 
-        Permute n samples by swapping blocks of samples within a given range.
+        Permute n observations by swapping blocks of observations within a given range.
 
         Args:
             n : int
-                number of samples
+                number of observations
             block_size : int
-                number of samples in a block
+                number of observations in a block
             perm_range : int
                 range over which blocks can be swapped
 
@@ -773,10 +756,10 @@ class Data():
                 permuted indices with length n
         """
         n_blocks = np.ceil(n / block_size).astype(int)
-        rem_samples = n % block_size
+        rem_observations = n % block_size
         rem_blocks = n_blocks % perm_range
-        if rem_samples == 0:
-            rem_samples = block_size
+        if rem_observations == 0:
+            rem_observations = block_size
 
         # First permute block(!) indices.
         if perm_range == n_blocks:  # permute all blocks randomly
@@ -794,33 +777,33 @@ class Data():
                                                                 rem_blocks) + i
 
         # Get the block index for each sample index, take into account that the
-        # last block may have fewer samples if n_samples % block_size isn't 0.
+        # last block may have fewer observations if n_observations % block_size isn't 0.
         idx_blocks = np.hstack((np.repeat(np.arange(n_blocks - 1), block_size),
-                                np.repeat(n_blocks - 1, rem_samples)))
+                                np.repeat(n_blocks - 1, rem_observations)))
 
-        # Permute samples indices according to permuted block indices.
+        # Permute observations indices according to permuted block indices.
         perm = np.zeros(n).astype(int)  # allocate memory
         idx_orig = np.arange(n)  # original order of sample indices
         i_0 = 0
         for b in perm_blocks:  # loop over permuted blocks
-            idx = idx_blocks == b  # indices of samples in curr. permuted block
+            idx = idx_blocks == b  # indices of observations in curr. permuted block
             i_1 = i_0 + sum(idx)
-            perm[i_0:i_1] = idx_orig[idx]  # append samples to permutation
+            perm[i_0:i_1] = idx_orig[idx]  # append observations to permutation
             i_0 = i_1
 
         return perm
 
     def _circular_shift(self, n, max_shift):
-        """Permute samples through shifting by a random number of samples.
+        """Permute observations through shifting by a random number of observations.
 
-        A time series is shifted circularly by a random number of samples. A
-        circular shift of m means, that the last m samples are included at the
+        A time series is shifted circularly by a random number of observations. A
+        circular shift of m means, that the last m observations are included at the
         beginning of the time series and all other sample indices are increased
         by mn steps. max_shift is an upper limit for m.
 
         Args:
             n : int
-                number of samples
+                number of observations
             max_shift: int
                 maximum possible shift (default=n)
 
@@ -828,18 +811,19 @@ class Data():
             numpy array
                 permuted indices with length n
             int
-                no. samples by which the time series was shifted
+                no. observations by which the time series was shifted
         """
         assert (max_shift <= n), ('Max_shift ({0}) has to be equal to or '
-                                  'smaller than the number of samples in the '
+                                  'smaller than the number of observations in the '
                                   'time series ({1}).'.format(max_shift, n))
         shift = np.random.randint(low=1, high=max_shift + 1)
         if VERBOSE:
-            print("replications are shifted by {0} samples".format(shift))
+            print("realisations are shifted by {0} observations".format(shift))
         return np.hstack((np.arange(n - shift, n),
                           np.arange(n - shift))), shift
 
-    def generate_mute_data(self, n_samples=1000, n_replications=10):
+    @staticmethod
+    def generate_mute_data(n_observations=1000, n_realisations=10):
         """Generate example data for a 5-process network.
 
         Generate example data and overwrite the instance's current data. The
@@ -865,24 +849,24 @@ class Data():
           463–474. https://doi.org/10.1007/PL00007990
 
         Args:
-            n_samples : int
-                number of samples simulated for each process and replication
-            n_replications : int
-                number of replications
+            n_observations : int
+                number of observations simulated for each process and replication
+            n_realisations : int
+                number of realisations
         """
         n_processes = 5
-        n_samples = n_samples
-        n_replications = n_replications
+        n_observations = n_observations
+        n_realisations = n_realisations
 
-        x = np.zeros((n_processes, n_samples + 3,
-                      n_replications))
+        x = np.zeros((n_processes, n_observations + 3,
+                      n_realisations))
         x[:, 0:3, :] = np.random.normal(size=(n_processes, 3,
-                                              n_replications))
+                                              n_realisations))
         term_1 = 0.95 * np.sqrt(2)
         term_2 = 0.25 * np.sqrt(2)
         term_3 = -0.25 * np.sqrt(2)
-        for r in range(n_replications):
-            for n in range(3, n_samples + 3):
+        for r in range(n_realisations):
+            for n in range(3, n_observations + 3):
                 x[0, n, r] = (term_1 * x[0, n - 1, r] -
                               0.9025 * x[0, n - 2, r] + np.random.normal())
                 x[1, n, r] = 0.5 * x[0, n - 2, r] ** 2 + np.random.normal()
@@ -894,12 +878,12 @@ class Data():
                 x[4, n, r] = (term_3 * x[3, n - 1, r] +
                               term_2 * x[4, n - 1, r] +
                               np.random.normal())
-        self.set_data(x[:, 3:, :], 'psr')
+        return x[:, 3:, :]
 
+    @staticmethod
     def generate_var_data(
-        self,
-        n_samples=1000,
-        n_replications=10,
+        n_observations=1000,
+        n_realisations=10,
         coefficient_matrices=np.array([[[0.5, 0], [0.4, 0.5]]]),
         noise_std=0.1
     ):
@@ -908,10 +892,10 @@ class Data():
         Generate data and overwrite the instance's current data.
 
         Args:
-            n_samples : int [optional]
-                number of samples simulated for each process and replication
-            n_replications : int [optional]
-                number of replications
+            n_observations : int [optional]
+                number of observations simulated for each process and replication
+            n_realisations : int [optional]
+                number of realisations
             coefficient_matrices : numpy array [optional]
                 coefficient matrices: numpy array with dimensions
                 (VAR order, number of processes, number of processes). Each
@@ -925,7 +909,7 @@ class Data():
         """
         order = np.shape(coefficient_matrices)[0]
         n_processes = np.shape(coefficient_matrices)[1]
-        samples_transient = n_processes * 10
+        observations_transient = n_processes * 10
 
         # Check stability of the VAR process, which is a sufficient condition
         # for stationarity.
@@ -948,25 +932,25 @@ class Data():
             RuntimeError('VAR process is not stable and may be nonstationary.')
 
         # Initialise time series matrix. The 3 dimensions represent
-        # (processes, samples, replications). Only the last n_samples will be
+        # (processes, observations, realisations). Only the last n_observations will be
         # kept, in order to discard transient effects.
         x = np.zeros((
             n_processes,
-            order + samples_transient + n_samples,
-            n_replications
+            order + observations_transient + n_observations,
+            n_realisations
         ))
 
         # Generate (different) initial conditions for each replication:
         # Uniformly sample from the [0,1] interval and tile as many times as
         # the VAR process order along the second dimension.
         x[:, 0:order, :] = np.tile(
-            np.random.rand(n_processes, 1, n_replications),
+            np.random.rand(n_processes, 1, n_realisations),
             (1, order, 1)
         )
 
         # Compute time series
-        for i_repl in range(0, n_replications):
-            for i_sample in range(order, order + samples_transient + n_samples):
+        for i_repl in range(0, n_realisations):
+            for i_sample in range(order, order + observations_transient + n_observations):
                 for i_delay in range(1, order + 1):
                     x[:, i_sample, i_repl] += np.dot(
                         coefficient_matrices[i_delay - 1, :, :],
@@ -980,12 +964,12 @@ class Data():
                 )
 
         # Discard transient effects (only take end of time series)
-        self.set_data(x[:, -(n_samples + 1):-1, :], 'psr')
+        return x[:, -(n_observations + 1):-1, :]
 
+    @staticmethod
     def generate_logistic_maps_data(
-        self,
-        n_samples=1000,
-        n_replications=10,
+        n_observations=1000,
+        n_realisations=10,
         coefficient_matrices=np.array([[[0.5, 0], [0.4, 0.5]]]),
         noise_std=0.1
     ):
@@ -996,10 +980,10 @@ class Data():
         The implemented logistic map function is f(x) = 4 * x * (1 - x).
 
         Args:
-            n_samples : int [optional]
-                number of samples simulated for each process and replication
-            n_replications : int [optional]
-                number of replications
+            n_observations : int [optional]
+                number of observations simulated for each process and replication
+            n_realisations : int [optional]
+                number of realisations
             coefficient_matrices : numpy array [optional]
                 coefficient matrices: numpy array with dimensions
                 (order, number of processes, number of processes). Each
@@ -1013,32 +997,32 @@ class Data():
         """
         order = np.shape(coefficient_matrices)[0]
         n_processes = np.shape(coefficient_matrices)[1]
-        samples_transient = n_processes * 10
+        observations_transient = n_processes * 10
 
         # Define activation function (logistic map)
         def f(x):
             return 4 * x * (1 - x)
 
         # Initialise time series matrix. The 3 dimensions represent
-        # (processes, samples, replications). Only the last n_samples will be
+        # (processes, observations, realisations). Only the last n_observations will be
         # kept, in order to discard transient effects.
         x = np.zeros((
             n_processes,
-            order + samples_transient + n_samples,
-            n_replications
+            order + observations_transient + n_observations,
+            n_realisations
         ))
 
         # Generate (different) initial conditions for each replication:
         # Uniformly sample from the [0,1] interval and tile as many times as
         # the stochastic process order along the second dimension.
         x[:, 0:order, :] = np.tile(
-            np.random.rand(n_processes, 1, n_replications),
+            np.random.rand(n_processes, 1, n_realisations),
             (1, order, 1)
         )
 
         # Compute time series
-        for i_repl in range(0, n_replications):
-            for i_sample in range(order, order + samples_transient + n_samples):
+        for i_repl in range(0, n_realisations):
+            for i_sample in range(order, order + observations_transient + n_observations):
                 for i_delay in range(1, order + 1):
                     x[:, i_sample, i_repl] += np.dot(
                         coefficient_matrices[i_delay - 1, :, :],
@@ -1056,4 +1040,4 @@ class Data():
                 x[:, i_sample, i_repl] = x[:, i_sample, i_repl] % 1
 
         # Discard transient effects (only take end of time series)
-        self.set_data(x[:, -(n_samples + 1):-1, :], 'psr')
+        return x[:, -(n_observations + 1):-1, :]

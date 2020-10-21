@@ -1,11 +1,12 @@
 # Import our classes
 from pynats.data import Data
-from pynats.btsa import btsa
+from pynats.container import CalculatorFrame
+from pynats.calculator import Calculator
+import pynats.plot as natplt
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-import dill
 import os
 import random
 
@@ -24,22 +25,17 @@ armat[2,3] = .6
 armat[3,4] = .23
 armat[1,0] = .2
 armat[2,1] = .8
-armat = armat.reshape((1,M,M))
 
 print('Autoregressive matrix:', armat)
 
 random.seed(a=None, version=2)
 
 # c) Load the data
-data = Data()
-data.generate_var_data(n_samples=T,
-                        n_replications=R,
-                        coefficient_matrices=armat)
+dataset = Data(Data.generate_var_data(n_observations=T,
+                                        n_realisations=1,
+                                        coefficient_matrices=np.reshape(armat,(1,M,M))))
 
-calc = btsa()
-
-# Load the VAR dataset
-calc.load(data)
+calc = Calculator(dataset=dataset)
 
 # Compute all adjacency matrices
 calc.compute()
@@ -47,20 +43,16 @@ calc.compute()
 # Prune special values
 calc.prune()
 
-savefile = os.path.dirname(__file__) + '/pynats_var.pkl'
-print('Saving object to dill database: "{}"'.format(savefile))
-
-with open(savefile, 'wb') as f:
-    dill.dump(calc, f)
+calc.save('pynats_var.pkl')
 
 # Check speed of computations, etc.
-calc.diagnostics()
+natplt.diagnostics(calc)
 
 # Compare to ground-truth AR params
-calc.truth(armat[0])
+# natplt.truth(calc,armat)
 
 # Plot results
-calc.clustermap('all')
-calc.heatmaps(6)
-calc.flatten(normalize=True)
+natplt.clustermap(calc,which_measure='all',sa_plot=True)
+# heatmaps(calc,6)
+natplt.flatten(calc,normalise=True)
 plt.show()

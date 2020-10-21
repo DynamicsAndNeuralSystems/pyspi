@@ -1,30 +1,63 @@
 import os
+from pynats.data import Data
+from pynats.container import CalculatorFrame
+import pynats.plot as natplt
 
 import dill
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import loadmat
 
-input_file = open('demos/pynats_clm.pkl', 'rb')
-# input_file = open('demos/pynats_hcp.pkl', 'rb')
-# input_file = open('demos/pynats_netsim.pkl', 'rb')
+dataset_base = '/home/oliver/Workspace/code/research/mvts-database/'
 
-calc = dill.load(input_file)
+use_oscillators = False
 
-# netdat = loadmat( os.path.dirname(__file__) + '/data/hcp/networks.mat')
-# nets = np.squeeze(netdat['id1plus'][:calc.data.n_processes])
+if use_oscillators:
+    npy_files = [dataset_base + 'oscillators/kuramoto_w1.npy',
+                    dataset_base + 'oscillators/kuramoto_w6.npy',
+                    dataset_base + 'oscillators/kuramoto_w12.npy']
 
-# calc.heatmaps(6)
-calc.clustermap('all',carpet_plot=True,sort_carpet=True)
-# calc.clustermap(4,categories=nets,linewidth=0.005) # Ledoit Wolf Corr
-# calc.clustermap(6,categories=nets,linewidth=0.005) # Partial Corr
-# calc.clustermap(14,categories=nets,linewidth=0.005) # MI Kraskov
+    names = ['Kuramoto (K=1)', 'Kuramoto (K=6)', 'Kuramoto (K=12)']
+    dim_order = 'ps'
+else:
+    npy_files = [dataset_base + 'coupled_map_lattice/frozen_random_patterns.npy',
+                    dataset_base + 'coupled_map_lattice/pattern_selection.npy',
+                    dataset_base + 'coupled_map_lattice/spatiotemporal_intermittency_i.npy',
+                    dataset_base + 'coupled_map_lattice/spatiotemporal_intermittency_ii.npy',
+                    dataset_base + 'coupled_map_lattice/travelling_wave.npy',
+                    dataset_base + 'coupled_map_lattice/chaotic_travelling_wave.npy',
+                    dataset_base + 'coupled_map_lattice/spatiotemporal_chaos.npy']
 
+    names = ['Frozen random patterns',
+            'Pattern selection',
+            'Spatiotemporal intermittency I',
+            'Spatiotemporal intermittency II',
+            'Traveling wave',
+            'Chaotic traveling wave',
+            'Spatiotemporal chaos']
 
-input_file = open('demos/pynats_var.pkl', 'rb')
+    dim_order = 'sp'
 
-calc = dill.load(input_file)
+Tmax = 250
+Mmax = -1
+datasets = []
+for i, _file in enumerate(npy_files):
+    npdat = np.load(_file)
+    if use_oscillators:
+        npdat = npdat[:Mmax,:Tmax]
+    else:
+        npdat = npdat[:Tmax,:Mmax]
+    datasets.append(Data(npdat,dim_order=dim_order,name=names[i],normalise=False))
 
-calc.clustermap('all',carpet_plot=True,sort_carpet=True)
+cf = CalculatorFrame(datasets=datasets,names=names)
+
+cf.plot_data(cluster=False)
+
+cf.compute()
+
+cf.clustermap(which_measure='all',sa_plot=True,cmap='PiYG')
+cf.clusterall(approach='mean',cmap='PiYG')
+
+natplt.statespace(cf)
 
 plt.show()

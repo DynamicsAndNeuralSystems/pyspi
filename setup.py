@@ -30,5 +30,5 @@ setup(
         "Topic :: Scientific/Engineering :: Information Analysis",
         "Topic :: Scientific/Engineering :: Medical Science Apps.",
     ],
-    install_requires=['pytest','statsmodels','pyyaml','seaborn','tqdm','nilearn','skccm','nitime==0.6','hyppo','pyEDM','jpype1==0.6.3']
+    install_requires=['pytest','statsmodels','pyyaml','seaborn','tqdm','nilearn','nitime==0.6','hyppo','pyEDM','jpype1==0.6.3','sktime','spectral_connectivity']
 )

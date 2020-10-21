@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 from pandas_datareader import data
 import matplotlib.pyplot as plt
 import pandas as pd
-import quandl
 import numpy as np
 
 tickers = ['AAPL', 'MSFT', '^GSPC']

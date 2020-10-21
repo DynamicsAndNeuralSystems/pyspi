@@ -4,15 +4,27 @@
   # Pearson's product-moment correlation coefficient
   pearsonr:
     - cov_estimator: empirical
+
+    - cov_estimator: empirical
+      squared: True
+
     - cov_estimator: ledoit_wolf
+
     - cov_estimator: shrunk
+
     - cov_estimator: oas
 
   # Partial correlation
   pcor:
     - cov_estimator: empirical
+
+    - cov_estimator: empirical
+      squared: True
+
     - cov_estimator: ledoit_wolf
+
     - cov_estimator: shrunk
+
     - cov_estimator: oas
 
   # Covariance
@@ -22,12 +34,22 @@
   # Precision
   precision:
     - cov_estimator: empirical
+      squared: False
+
+    - cov_estimator: empirical
+      squared: True
 
   # Spearman's correlation coefficient
   spearmanr:
+    - squared: True
+
+    - squared: False
 
   # Kendall's rank correlation coefficient
   kendalltau:
+    - squared: True
+
+    - squared: False
 
   # Distance correlation
   dcorr:
@@ -74,10 +96,6 @@
 
 # Measures that analyse in the frequency-domain (see Schoegl and Supp, 2006)
 .spectral:
-  # TODO: allow for global settings as well as local settings, e.g.,
-  # - f_lb: 0.02
-  # - f_ub: 0.2
-  # Here, as well as in the subclasses
 
   # Cross-spectrum
   # spectrum:
@@ -90,33 +108,36 @@
     - f_lb: 0.02
       f_ub: 10
 
-  # Coherency (ordinal or squared? imaginary components of the coherence)
-  # icoh:
+  # Coherence (ordinal or squared? imaginary components of the coherence)
+  icoherence:
 
   # Phase difference of signals relative to one another
   phase:
-    - f_lb: 0.0
-      f_ub: 0.2
+
+  # Phase lag
+  phase_lag:
+
+  # Weighted phase lag
+  weighted_phase_lag:
+
+  # De-biased squared weighted phase lag
+  debiased_squared_weighted_phase_lag:
 
   # Partial coherence (condition out all other processes)
   partial_coherence:
-    - f_lb: 0.0
-      f_ub: 0.2
 
-  # Partial directed causality
-  # pdc:
+  partial_directed_coherence:
 
-  # Partial directed causality
-  # pdcf:
+  directed_transfer_function:
     
   # Spectral granger causality
-  granger:
-    - tr: 1
+  spectral_granger:
+    - fs: 1
 
-    - tr: 1
+    - fs: 1
       order: 1
 
-    - tr: 1
+    - fs: 1
       order: 20
 
 # Information-theoretic measures
@@ -159,34 +180,34 @@
       auto_embed_method: MAX_CORR_AIS
       k_search_max: 10
       tau_search_max: 4
-      dyn_corr_excl: AUTO
+      # dyn_corr_excl: AUTO
 
     - estimator: kraskov
       prop_k: 4
       auto_embed_method: MAX_CORR_AIS
       k_search_max: 10
       tau_search_max: 1
-      dyn_corr_excl: AUTO
+      # dyn_corr_excl: AUTO
 
     # Kraskov estimator with auto-embedding on target-only, src history of 1, and DCE
     - estimator: kraskov
       prop_k: 4
       k_history: 2
       l_history: 1
-      dyn_corr_excl: AUTO
+      # dyn_corr_excl: AUTO
 
     # Kraskov estimator with fixed embedding of 1 for source/target and DCE
     - estimator: kraskov
       prop_k: 4
       k_history: 1
       l_history: 1
-      dyn_corr_excl: AUTO
+      # dyn_corr_excl: AUTO
     
     # Same as above with no DCE
-    - estimator: kraskov
-      prop_k: 4
-      k_history: 1
-      l_history: 1
+    # - estimator: kraskov
+    #   prop_k: 4
+    #   k_history: 1
+    #   l_history: 1
 
     # Kernel estimator with auto-embedding on source/target and DCE
     - estimator: kernel
