@@ -1,0 +1,52 @@
+Scientific Colour Map Categorical Palette
+tofino 50 Swatches
+222 217 255	tofino-1 #DED9FF
+208 207 249	tofino-6 #D0CFF9
+195 198 243	tofino-11 #C3C6F3
+179 187 236	tofino-17 #B3BBEC
+166 177 230	tofino-22 #A6B1E6
+152 168 225	tofino-27 #98A8E1
+139 159 219	tofino-32 #8B9FDB
+126 149 212	tofino-37 #7E95D4
+110 137 203	tofino-43 #6E89CB
+ 97 127 195	tofino-48 #617FC3
+ 85 117 184	tofino-53 #5575B8
+ 74 107 172	tofino-58 #4A6BAC
+ 66  98 160	tofino-63 #4262A0
+ 57  87 144	tofino-69 #395790
+ 51  79 131	tofino-74 #334F83
+ 46  71 118	tofino-79 #2E4776
+ 41  63 106	tofino-84 #293F6A
+ 36  56  93	tofino-89 #24385D
+ 31  48  79	tofino-95 #1F304F
+ 27  41  67	tofino-100 #1B2943
+ 23  35  56	tofino-105 #172338
+ 20  29  46	tofino-110 #141D2E
+ 17  24  36	tofino-115 #111824
+ 15  21  27	tofino-121 #0F151B
+ 13  21  22	tofino-126 #0D1516
+ 13  23  18	tofino-131 #0D1712
+ 15  27  18	tofino-136 #0F1B12
+ 17  33  19	tofino-142 #112113
+ 20  39  22	tofino-147 #142716
+ 22  47  25	tofino-152 #162F19
+ 26  54  28	tofino-157 #1A361C
+ 29  62  32	tofino-162 #1D3E20
+ 34  72  37	tofino-168 #224825
+ 38  81  42	tofino-173 #26512A
+ 42  90  46	tofino-178 #2A5A2E
+ 46  98  51	tofino-183 #2E6233
+ 51 108  56	tofino-188 #336C38
+ 57 119  62	tofino-194 #39773E
+ 63 129  68	tofino-199 #3F8144
+ 72 139  74	tofino-204 #488B4A
+ 82 149  81	tofino-209 #529551
+ 95 160  89	tofino-214 #5FA059
+112 171  99	tofino-220 #70AB63
+127 180 107	tofino-225 #7FB46B
+142 189 115	tofino-230 #8EBD73
+157 197 123	tofino-235 #9DC57B
+172 205 131	tofino-240 #ACCD83
+189 214 140	tofino-246 #BDD68C
+204 222 148	tofino-251 #CCDE94
+219 230 155	tofino-256 #DBE69B

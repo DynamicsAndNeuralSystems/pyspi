@@ -1,0 +1,44 @@
+# Correlation-based measures
+.correlation:
+
+  # Pearson's product-moment correlation coefficient
+  pearsonr:
+    - cov_estimator: empirical
+
+  # Partial correlation
+  pcor:
+    - cov_estimator: empirical
+
+# Measures that analyse in the frequency-domain (see Schoegl and Supp, 2006)
+.spectral:
+
+  # Coherence (ordinal or squared? real components of the coherence)
+  coherence:
+    - f_lb: 0.0
+      f_ub: 0.2
+    
+  # Spectral granger causality
+  spectral_granger:
+    - fs: 1
+
+# Information-theoretic measures
+.infotheory:
+
+  # Mutual information
+  mutual_info:
+    - estimator: gaussian
+
+    - estimator: kraskov
+      prop_k: 4
+      dyn_corr_excl: AUTO
+
+  # Transfer entropy
+  transfer_entropy:
+
+    # Kraskov estimator with auto-embedding on source/target and DCE
+    - estimator: kraskov
+      prop_k: 4
+      auto_embed_method: MAX_CORR_AIS
+      k_search_max: 10
+      tau_search_max: 4
+      dyn_corr_excl: AUTO

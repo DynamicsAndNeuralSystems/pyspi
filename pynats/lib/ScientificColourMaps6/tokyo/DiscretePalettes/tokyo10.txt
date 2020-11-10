@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+tokyo 10 Swatches
+ 26  14  52	tokyo-1 #1A0E34
+ 69  32  76	tokyo-29 #45204C
+110  62 103	tokyo-58 #6E3E67
+133  94 120	tokyo-86 #855E78
+141 121 130	tokyo-114 #8D7982
+146 148 137	tokyo-143 #929489
+151 174 145	tokyo-171 #97AE91
+167 206 157	tokyo-199 #A7CE9D
+213 242 188	tokyo-228 #D5F2BC
+254 254 216	tokyo-256 #FEFED8

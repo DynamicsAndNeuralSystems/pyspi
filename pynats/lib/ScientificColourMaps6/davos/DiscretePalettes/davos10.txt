@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+davos 10 Swatches
+  0   5  74	davos-1 #00054A
+ 17  44 113	davos-29 #112C71
+ 41  82 145	davos-58 #295291
+ 67 112 157	davos-86 #43709D
+ 94 133 152	davos-114 #5E8598
+121 150 141	davos-143 #79968D
+153 173 136	davos-171 #99AD88
+201 210 158	davos-199 #C9D29E
+243 243 210	davos-228 #F3F3D2
+254 254 254	davos-256 #FEFEFE

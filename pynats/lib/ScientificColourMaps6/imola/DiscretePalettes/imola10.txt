@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+imola 10 Swatches
+ 26  51 179	imola-1 #1A33B3
+ 36  70 169	imola-29 #2446A9
+ 46  89 159	imola-58 #2E599F
+ 57 107 148	imola-86 #396B94
+ 73 123 133	imola-114 #497B85
+ 96 146 123	imola-143 #60927B
+123 174 116	imola-171 #7BAE74
+152 203 109	imola-199 #98CB6D
+196 234 103	imola-228 #C4EA67
+255 255 102	imola-256 #FFFF66

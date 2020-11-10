@@ -1,0 +1,52 @@
+Scientific Colour Map Categorical Palette
+berlin 50 Swatches
+158 176 255	berlin-1 #9EB0FF
+147 175 250	berlin-6 #93AFFA
+135 173 244	berlin-11 #87ADF4
+121 171 237	berlin-17 #79ABED
+108 169 230	berlin-22 #6CA9E6
+ 96 165 223	berlin-27 #60A5DF
+ 84 160 213	berlin-32 #54A0D5
+ 72 154 202	berlin-37 #489ACA
+ 62 144 188	berlin-43 #3E90BC
+ 55 135 175	berlin-48 #3787AF
+ 50 126 163	berlin-53 #327EA3
+ 45 117 151	berlin-58 #2D7597
+ 41 107 139	berlin-63 #296B8B
+ 37  96 124	berlin-69 #25607C
+ 34  87 113	berlin-74 #225771
+ 30  78 101	berlin-79 #1E4E65
+ 27  70  90	berlin-84 #1B465A
+ 24  61  79	berlin-89 #183D4F
+ 21  51  66	berlin-95 #153342
+ 18  44  56	berlin-100 #122C38
+ 17  36  46	berlin-105 #11242E
+ 16  29  37	berlin-110 #101D25
+ 17  24  28	berlin-115 #11181C
+ 18  18  20	berlin-121 #121214
+ 22  14  13	berlin-126 #160E0D
+ 27  11   7	berlin-131 #1B0B07
+ 33  11   3	berlin-136 #210B03
+ 39  13   1	berlin-142 #270D01
+ 45  14   0	berlin-147 #2D0E00
+ 52  15   0	berlin-152 #340F00
+ 59  17   0	berlin-157 #3B1100
+ 66  19   1	berlin-162 #421301
+ 75  22   2	berlin-168 #4B1602
+ 84  25   5	berlin-173 #541905
+ 93  30   9	berlin-178 #5D1E09
+104  36  15	berlin-183 #68240F
+115  43  22	berlin-188 #732B16
+128  54  32	berlin-194 #803620
+138  63  42	berlin-199 #8A3F2A
+148  72  52	berlin-204 #944834
+158  81  63	berlin-209 #9E513F
+168  90  74	berlin-214 #A85A4A
+180 102  88	berlin-220 #B46658
+190 111  99	berlin-225 #BE6F63
+200 121 111	berlin-230 #C8796F
+210 131 122	berlin-235 #D2837A
+221 141 134	berlin-240 #DD8D86
+234 153 149	berlin-246 #EA9995
+244 163 161	berlin-251 #F4A3A1
+255 173 173	berlin-256 #FFADAD

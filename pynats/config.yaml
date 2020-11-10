@@ -126,6 +126,7 @@
   # Partial coherence (condition out all other processes)
   partial_coherence:
 
+  ## These two get seg faults sometimes?
   partial_directed_coherence:
 
   directed_transfer_function:
@@ -180,34 +181,34 @@
       auto_embed_method: MAX_CORR_AIS
       k_search_max: 10
       tau_search_max: 4
-      # dyn_corr_excl: AUTO
+      dyn_corr_excl: AUTO
 
     - estimator: kraskov
       prop_k: 4
       auto_embed_method: MAX_CORR_AIS
       k_search_max: 10
       tau_search_max: 1
-      # dyn_corr_excl: AUTO
+      dyn_corr_excl: AUTO
 
     # Kraskov estimator with auto-embedding on target-only, src history of 1, and DCE
     - estimator: kraskov
       prop_k: 4
       k_history: 2
       l_history: 1
-      # dyn_corr_excl: AUTO
+      dyn_corr_excl: AUTO
 
     # Kraskov estimator with fixed embedding of 1 for source/target and DCE
     - estimator: kraskov
       prop_k: 4
       k_history: 1
       l_history: 1
-      # dyn_corr_excl: AUTO
+      dyn_corr_excl: AUTO
     
     # Same as above with no DCE
-    # - estimator: kraskov
-    #   prop_k: 4
-    #   k_history: 1
-    #   l_history: 1
+    - estimator: kraskov
+      prop_k: 4
+      k_history: 1
+      l_history: 1
 
     # Kernel estimator with auto-embedding on source/target and DCE
     - estimator: kernel

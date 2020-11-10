@@ -1,0 +1,27 @@
+Scientific Colour Map Categorical Palette
+batlow 25 Swatches
+  1  25  89	batlow-1 #011959
+ 10  42  92	batlow-12 #0A2A5C
+ 14  55  94	batlow-22 #0E375E
+ 17  67  96	batlow-33 #114360
+ 20  78  98	batlow-44 #144E62
+ 25  87  98	batlow-54 #195762
+ 34  96  97	batlow-65 #226061
+ 45 103  93	batlow-75 #2D675D
+ 60 109  86	batlow-86 #3C6D56
+ 77 115  77	batlow-97 #4D734D
+ 93 120  68	batlow-107 #5D7844
+111 125  58	batlow-118 #6F7D3A
+130 130  49	batlow-129 #828231
+149 135  44	batlow-139 #95872C
+171 140  45	batlow-150 #AB8C2D
+190 144  53	batlow-160 #BE9035
+210 147  67	batlow-171 #D29343
+228 151  86	batlow-182 #E49756
+241 157 107	batlow-192 #F19D6B
+250 164 133	batlow-203 #FAA485
+253 172 158	batlow-214 #FDAC9E
+253 180 180	batlow-224 #FDB4B4
+253 188 203	batlow-235 #FDBCCB
+252 195 225	batlow-245 #FCC3E1
+250 204 250	batlow-256 #FACCFA

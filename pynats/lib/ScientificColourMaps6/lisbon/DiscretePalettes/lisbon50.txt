@@ -1,0 +1,52 @@
+Scientific Colour Map Categorical Palette
+lisbon 50 Swatches
+230 229 255	lisbon-1 #E6E5FF
+216 220 247	lisbon-6 #D8DCF7
+203 210 239	lisbon-11 #CBD2EF
+187 198 229	lisbon-17 #BBC6E5
+173 188 222	lisbon-22 #ADBCDE
+160 179 214	lisbon-27 #A0B3D6
+147 169 206	lisbon-32 #93A9CE
+134 160 198	lisbon-37 #86A0C6
+119 148 189	lisbon-43 #7794BD
+106 139 181	lisbon-48 #6A8BB5
+ 94 129 172	lisbon-53 #5E81AC
+ 81 119 164	lisbon-58 #5177A4
+ 69 110 155	lisbon-63 #456E9B
+ 56  98 143	lisbon-69 #38628F
+ 47  89 132	lisbon-74 #2F5984
+ 39  79 120	lisbon-79 #274F78
+ 32  71 109	lisbon-84 #20476D
+ 27  63  97	lisbon-89 #1B3F61
+ 23  54  83	lisbon-95 #173653
+ 20  46  72	lisbon-100 #142E48
+ 18  40  62	lisbon-105 #12283E
+ 17  34  51	lisbon-110 #112233
+ 17  29  42	lisbon-115 #111D2A
+ 18  25  33	lisbon-121 #121921
+ 21  24  27	lisbon-126 #15181B
+ 24  26  24	lisbon-131 #181A18
+ 30  29  23	lisbon-136 #1E1D17
+ 37  36  25	lisbon-142 #252419
+ 45  43  28	lisbon-147 #2D2B1C
+ 53  50  32	lisbon-152 #353220
+ 62  58  37	lisbon-157 #3E3A25
+ 70  66  42	lisbon-162 #46422A
+ 81  76  49	lisbon-168 #514C31
+ 90  85  54	lisbon-173 #5A5536
+100  94  60	lisbon-178 #645E3C
+109 103  65	lisbon-183 #6D6741
+119 112  71	lisbon-188 #777047
+131 123  79	lisbon-194 #837B4F
+141 133  86	lisbon-199 #8D8556
+152 143  94	lisbon-204 #988F5E
+162 154 103	lisbon-209 #A29A67
+173 164 112	lisbon-214 #ADA470
+185 177 125	lisbon-220 #B9B17D
+195 188 137	lisbon-225 #C3BC89
+205 199 149	lisbon-230 #CDC795
+215 210 162	lisbon-235 #D7D2A2
+224 220 175	lisbon-240 #E0DCAF
+236 233 190	lisbon-246 #ECE9BE
+245 244 203	lisbon-251 #F5F4CB
+255 255 217	lisbon-256 #FFFFD9

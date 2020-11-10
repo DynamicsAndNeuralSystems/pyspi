@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+devon 10 Swatches
+ 44  26  76	devon-1 #2C1A4C
+ 41  52 103	devon-29 #293467
+ 39  81 134	devon-58 #275186
+ 54 105 173	devon-86 #3669AD
+ 97 129 208	devon-114 #6181D0
+152 155 231	devon-143 #989BE7
+186 179 241	devon-171 #BAB3F1
+208 204 245	devon-199 #D0CCF5
+232 229 250	devon-228 #E8E5FA
+255 255 255	devon-256 #FFFFFF

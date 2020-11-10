@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+lisbon 10 Swatches
+230 229 255	lisbon-1 #E6E5FF
+155 175 211	lisbon-29 #9BAFD3
+ 81 119 164	lisbon-58 #5177A4
+ 30  67 104	lisbon-86 #1E4368
+ 17  30  44	lisbon-114 #111E2C
+ 39  37  26	lisbon-143 #27251A
+ 87  81  52	lisbon-171 #575134
+141 133  86	lisbon-199 #8D8556
+201 195 144	lisbon-228 #C9C390
+255 255 217	lisbon-256 #FFFFD9

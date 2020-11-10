@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+lapaz 10 Swatches
+ 26  12 100	lapaz-1 #1A0C64
+ 35  45 123	lapaz-29 #232D7B
+ 42  76 143	lapaz-58 #2A4C8F
+ 54 103 157	lapaz-86 #36679D
+ 76 128 163	lapaz-114 #4C80A3
+110 149 161	lapaz-143 #6E95A1
+148 162 152	lapaz-171 #94A298
+191 177 153	lapaz-199 #BFB199
+239 211 192	lapaz-228 #EFD3C0
+254 242 243	lapaz-256 #FEF2F3

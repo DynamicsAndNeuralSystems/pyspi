@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+buda 10 Swatches
+179   1 179	buda-1 #B301B3
+179  43 158	buda-29 #B32B9E
+185  72 146	buda-58 #B94892
+194  97 138	buda-86 #C2618A
+202 121 130	buda-114 #CA7982
+209 145 123	buda-143 #D1917B
+215 170 117	buda-171 #D7AA75
+221 195 111	buda-199 #DDC36F
+229 223 104	buda-228 #E5DF68
+255 255 102	buda-256 #FFFF66

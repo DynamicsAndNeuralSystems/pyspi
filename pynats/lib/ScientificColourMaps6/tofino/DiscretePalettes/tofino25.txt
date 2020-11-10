@@ -1,0 +1,27 @@
+Scientific Colour Map Categorical Palette
+tofino 25 Swatches
+222 217 255	tofino-1 #DED9FF
+192 196 242	tofino-12 #C0C4F2
+166 177 230	tofino-22 #A6B1E6
+136 157 217	tofino-33 #889DD9
+107 135 202	tofino-44 #6B87CA
+ 83 115 182	tofino-54 #5373B6
+ 62  94 154	tofino-65 #3E5E9A
+ 50  77 128	tofino-75 #324D80
+ 39  60 101	tofino-86 #273C65
+ 29  45  74	tofino-97 #1D2D4A
+ 22  32  52	tofino-107 #162034
+ 16  22  32	tofino-118 #101620
+ 13  22  19	tofino-129 #0D1613
+ 16  30  18	tofino-139 #101E12
+ 21  44  24	tofino-150 #152C18
+ 28  59  31	tofino-160 #1C3B1F
+ 36  77  40	tofino-171 #244D28
+ 45  97  50	tofino-182 #2D6132
+ 55 115  60	tofino-192 #37733C
+ 70 137  73	tofino-203 #468949
+ 95 160  89	tofino-214 #5FA059
+124 179 105	tofino-224 #7CB369
+157 197 123	tofino-235 #9DC57B
+186 212 138	tofino-245 #BAD48A
+219 230 155	tofino-256 #DBE69B

@@ -1,0 +1,52 @@
+Scientific Colour Map Categorical Palette
+bamako 50 Swatches
+  0  64  77	bamako-1 #00404D
+  4  66  75	bamako-6 #04424B
+  7  68  73	bamako-11 #074449
+ 11  70  71	bamako-17 #0B4647
+ 15  72  69	bamako-22 #0F4845
+ 18  74  67	bamako-27 #124A43
+ 21  76  65	bamako-32 #154C41
+ 24  78  63	bamako-37 #184E3F
+ 28  81  61	bamako-43 #1C513D
+ 31  83  59	bamako-48 #1F533B
+ 34  85  57	bamako-53 #225539
+ 38  87  55	bamako-58 #265737
+ 41  90  52	bamako-63 #295A34
+ 45  92  50	bamako-69 #2D5C32
+ 49  95  48	bamako-74 #315F30
+ 53  97  45	bamako-79 #35612D
+ 57 100  43	bamako-84 #39642B
+ 61 102  41	bamako-89 #3D6629
+ 65 105  38	bamako-95 #416926
+ 70 108  36	bamako-100 #466C24
+ 74 111  33	bamako-105 #4A6F21
+ 78 114  31	bamako-110 #4E721F
+ 83 117  28	bamako-115 #53751C
+ 89 120  25	bamako-121 #597819
+ 94 124  22	bamako-126 #5E7C16
+ 99 127  19	bamako-131 #637F13
+105 130  16	bamako-136 #698210
+112 134  12	bamako-142 #70860C
+118 137   8	bamako-147 #768908
+125 140   5	bamako-152 #7D8C05
+131 142   3	bamako-157 #838E03
+138 143   3	bamako-162 #8A8F03
+146 145   4	bamako-168 #929104
+153 147   8	bamako-173 #999308
+161 150  15	bamako-178 #A1960F
+170 155  22	bamako-183 #AA9B16
+178 160  30	bamako-188 #B2A01E
+188 168  41	bamako-194 #BCA829
+197 174  50	bamako-199 #C5AE32
+204 180  59	bamako-204 #CCB43B
+211 186  69	bamako-209 #D3BA45
+217 191  79	bamako-214 #D9BF4F
+223 197  90	bamako-220 #DFC55A
+228 202  99	bamako-225 #E4CA63
+232 207 108	bamako-230 #E8CF6C
+237 211 117	bamako-235 #EDD375
+241 216 125	bamako-240 #F1D87D
+246 221 136	bamako-246 #F6DD88
+251 225 144	bamako-251 #FBE190
+255 229 153	bamako-256 #FFE599

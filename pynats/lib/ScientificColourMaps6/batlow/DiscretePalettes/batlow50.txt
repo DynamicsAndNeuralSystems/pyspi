@@ -1,0 +1,52 @@
+Scientific Colour Map Categorical Palette
+batlow 50 Swatches
+  1  25  89	batlow-1 #011959
+  6  33  91	batlow-6 #06215B
+ 10  40  92	batlow-11 #0A285C
+ 13  49  93	batlow-17 #0D315D
+ 14  55  94	batlow-22 #0E375E
+ 16  61  95	batlow-27 #103D5F
+ 17  66  96	batlow-32 #114260
+ 18  71  97	batlow-37 #124761
+ 20  77  98	batlow-43 #144D62
+ 22  81  98	batlow-48 #165162
+ 25  86  98	batlow-53 #195662
+ 28  90  98	batlow-58 #1C5A62
+ 32  94  97	batlow-63 #205E61
+ 38  99  95	batlow-69 #26635F
+ 44 102  93	batlow-74 #2C665D
+ 51 105  90	batlow-79 #33695A
+ 58 108  87	batlow-84 #3A6C57
+ 65 111  83	batlow-89 #416F53
+ 74 114  78	batlow-95 #4A724E
+ 82 116  74	batlow-100 #52744A
+ 90 119  69	batlow-105 #5A7745
+ 98 121  65	batlow-110 #627941
+106 123  61	batlow-115 #6A7B3D
+116 126  56	batlow-121 #747E38
+125 129  52	batlow-126 #7D8134
+134 131  48	batlow-131 #868330
+143 134  45	batlow-136 #8F862D
+155 137  43	batlow-142 #9B892B
+165 139  44	batlow-147 #A58B2C
+175 141  46	batlow-152 #AF8D2E
+185 143  50	batlow-157 #B98F32
+194 144  55	batlow-162 #C29037
+205 146  63	batlow-168 #CD923F
+214 148  70	batlow-173 #D69446
+222 150  79	batlow-178 #DE964F
+230 152  88	batlow-183 #E69858
+237 154  98	batlow-188 #ED9A62
+243 158 112	batlow-194 #F39E70
+248 161 123	batlow-199 #F8A17B
+250 165 135	batlow-204 #FAA587
+252 169 147	batlow-209 #FCA993
+253 172 158	batlow-214 #FDAC9E
+253 177 171	batlow-220 #FDB1AB
+253 180 182	batlow-225 #FDB4B6
+253 184 192	batlow-230 #FDB8C0
+253 188 203	batlow-235 #FDBCCB
+252 191 214	batlow-240 #FCBFD6
+252 196 227	batlow-246 #FCC4E3
+251 200 239	batlow-251 #FBC8EF
+250 204 250	batlow-256 #FACCFA

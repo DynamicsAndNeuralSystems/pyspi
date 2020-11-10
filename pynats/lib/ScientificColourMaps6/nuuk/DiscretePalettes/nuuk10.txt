@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+nuuk 10 Swatches
+  5  89 140	nuuk-1 #05598C
+ 41  98 132	nuuk-29 #296284
+ 74 114 131	nuuk-58 #4A7283
+111 135 141	nuuk-86 #6F878D
+146 156 150	nuuk-114 #929C96
+171 173 150	nuuk-143 #ABAD96
+186 185 141	nuuk-171 #BAB98D
+199 198 132	nuuk-199 #C7C684
+224 224 142	nuuk-228 #E0E08E
+254 254 178	nuuk-256 #FEFEB2

@@ -87,7 +87,7 @@ class ccm(directed,real):
             nlibs = 5
             E = int(max(embedding))
             upperE = int(np.floor((N-E-1)/10)*10)
-            lowerE = int(np.ceil(E/10)*10)
+            lowerE = int(np.ceil(2*E/10)*10)
             inc = int((upperE-lowerE) / nlibs)
             lib_sizes = str(lowerE) + ' ' + str(upperE) + ' ' + str(inc)
 

@@ -1,0 +1,27 @@
+Scientific Colour Map Categorical Palette
+bilbao 25 Swatches
+255 255 255	bilbao-1 #FFFFFF
+241 241 240	bilbao-12 #F1F1F0
+228 228 227	bilbao-22 #E4E4E3
+215 215 211	bilbao-33 #D7D7D3
+205 203 195	bilbao-44 #CDCBC3
+199 195 181	bilbao-54 #C7C3B5
+194 188 166	bilbao-65 #C2BCA6
+190 182 153	bilbao-75 #BEB699
+185 175 139	bilbao-86 #B9AF8B
+181 165 124	bilbao-97 #B5A57C
+177 155 114	bilbao-107 #B19B72
+173 144 106	bilbao-118 #AD906A
+170 134 101	bilbao-129 #AA8665
+167 126  98	bilbao-139 #A77E62
+164 116  93	bilbao-150 #A4745D
+162 107  89	bilbao-160 #A26B59
+158  97  85	bilbao-171 #9E6155
+154  86  79	bilbao-182 #9A564F
+147  75  71	bilbao-192 #934B47
+138  63  61	bilbao-203 #8A3F3D
+126  50  49	bilbao-214 #7E3231
+115  39  38	bilbao-224 #732726
+102  26  27	bilbao-235 #661A1B
+ 90  14  17	bilbao-245 #5A0E11
+ 77   0   1	bilbao-256 #4D0001

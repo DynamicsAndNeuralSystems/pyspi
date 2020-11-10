@@ -1,0 +1,102 @@
+Scientific Colour Map Categorical Palette
+berlin 100 Swatches
+158 176 255	berlin-1 #9EB0FF
+152 175 252	berlin-4 #98AFFC
+147 175 250	berlin-6 #93AFFA
+140 174 246	berlin-9 #8CAEF6
+135 173 244	berlin-11 #87ADF4
+128 172 241	berlin-14 #80ACF1
+123 172 238	berlin-16 #7BACEE
+116 170 235	berlin-19 #74AAEB
+108 169 230	berlin-22 #6CA9E6
+103 168 227	berlin-24 #67A8E3
+ 96 165 223	berlin-27 #60A5DF
+ 91 164 219	berlin-29 #5BA4DB
+ 84 160 213	berlin-32 #54A0D5
+ 79 158 209	berlin-34 #4F9ED1
+ 72 154 202	berlin-37 #489ACA
+ 67 149 195	berlin-40 #4395C3
+ 63 146 190	berlin-42 #3F92BE
+ 59 141 183	berlin-45 #3B8DB7
+ 56 137 178	berlin-47 #3889B2
+ 53 132 170	berlin-50 #3584AA
+ 50 126 163	berlin-53 #327EA3
+ 48 122 158	berlin-55 #307A9E
+ 45 117 151	berlin-58 #2D7597
+ 44 113 146	berlin-60 #2C7192
+ 41 107 139	berlin-63 #296B8B
+ 40 104 134	berlin-65 #286886
+ 38  98 127	berlin-68 #26627F
+ 36  93 120	berlin-71 #245D78
+ 34  89 115	berlin-73 #225973
+ 32  84 108	berlin-76 #20546C
+ 31  80 104	berlin-78 #1F5068
+ 29  75  97	berlin-81 #1D4B61
+ 28  71  92	berlin-83 #1C475C
+ 26  66  86	berlin-86 #1A4256
+ 24  61  79	berlin-89 #183D4F
+ 23  58  75	berlin-91 #173A4B
+ 21  53  68	berlin-94 #153544
+ 20  50  64	berlin-96 #143240
+ 19  45  58	berlin-99 #132D3A
+ 18  42  54	berlin-101 #122A36
+ 17  38  48	berlin-104 #112630
+ 17  33  42	berlin-107 #11212A
+ 16  31  38	berlin-109 #101F26
+ 17  27  33	berlin-112 #111B21
+ 17  25  30	berlin-114 #11191E
+ 17  21  25	berlin-117 #111519
+ 17  19  23	berlin-119 #111317
+ 19  17  18	berlin-122 #131112
+ 21  14  14	berlin-125 #150E0E
+ 23  13  11	berlin-127 #170D0B
+ 26  12   8	berlin-130 #1A0C08
+ 28  11   6	berlin-132 #1C0B06
+ 32  11   4	berlin-135 #200B04
+ 35  12   2	berlin-138 #230C02
+ 37  12   1	berlin-140 #250C01
+ 40  13   1	berlin-143 #280D01
+ 43  14   1	berlin-145 #2B0E01
+ 47  14   0	berlin-148 #2F0E00
+ 49  15   0	berlin-150 #310F00
+ 53  16   0	berlin-153 #351000
+ 57  17   0	berlin-156 #391100
+ 60  17   1	berlin-158 #3C1101
+ 65  18   1	berlin-161 #411201
+ 68  19   1	berlin-163 #441301
+ 72  21   2	berlin-166 #481502
+ 75  22   2	berlin-168 #4B1602
+ 80  24   3	berlin-171 #501803
+ 86  26   5	berlin-174 #561A05
+ 89  28   7	berlin-176 #591C07
+ 95  31  10	berlin-179 #5F1F0A
+ 99  33  12	berlin-181 #63210C
+106  37  16	berlin-184 #6A2510
+110  40  19	berlin-186 #6E2813
+117  45  23	berlin-189 #752D17
+123  50  28	berlin-192 #7B321C
+128  54  32	berlin-194 #803620
+134  59  38	berlin-197 #863B26
+138  63  42	berlin-199 #8A3F2A
+144  68  48	berlin-202 #904430
+148  72  52	berlin-204 #944834
+154  77  59	berlin-207 #9A4D3B
+160  83  65	berlin-210 #A05341
+164  87  70	berlin-212 #A45746
+170  92  76	berlin-215 #AA5C4C
+174  96  81	berlin-217 #AE6051
+180 102  88	berlin-220 #B46658
+186 107  95	berlin-223 #BA6B5F
+190 111  99	berlin-225 #BE6F63
+196 117 106	berlin-228 #C4756A
+200 121 111	berlin-230 #C8796F
+206 127 118	berlin-233 #CE7F76
+210 131 122	berlin-235 #D2837A
+217 137 130	berlin-238 #D98982
+223 143 137	berlin-241 #DF8F89
+227 147 142	berlin-243 #E3938E
+234 153 149	berlin-246 #EA9995
+238 157 154	berlin-248 #EE9D9A
+244 163 161	berlin-251 #F4A3A1
+249 167 166	berlin-253 #F9A7A6
+255 173 173	berlin-256 #FFADAD

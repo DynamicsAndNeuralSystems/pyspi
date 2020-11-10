@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+tofino 10 Swatches
+222 217 255	tofino-1 #DED9FF
+147 164 222	tofino-29 #93A4DE
+ 74 107 172	tofino-58 #4A6BAC
+ 39  60 101	tofino-86 #273C65
+ 18  25  38	tofino-114 #121926
+ 18  34  20	tofino-143 #122214
+ 36  77  40	tofino-171 #244D28
+ 63 129  68	tofino-199 #3F8144
+136 185 112	tofino-228 #88B970
+219 230 155	tofino-256 #DBE69B

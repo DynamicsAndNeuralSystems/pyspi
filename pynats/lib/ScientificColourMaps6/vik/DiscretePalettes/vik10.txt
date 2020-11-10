@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+vik 10 Swatches
+  0  18  97	vik-1 #001261
+  3  62 125	vik-29 #033E7D
+ 30 111 157	vik-58 #1E6F9D
+113 168 196	vik-86 #71A8C4
+201 221 231	vik-114 #C9DDE7
+234 206 189	vik-143 #EACEBD
+211 151 116	vik-171 #D39774
+190 101  51	vik-199 #BE6533
+139  39   6	vik-228 #8B2706
+ 89   0   8	vik-256 #590008

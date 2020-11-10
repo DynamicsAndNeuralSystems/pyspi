@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+turku 10 Swatches
+  0   0   0	turku-1 #000000
+ 36  36  32	turku-29 #242420
+ 66  66  53	turku-58 #424235
+ 95  95  68	turku-86 #5F5F44
+126 124  82	turku-114 #7E7C52
+169 153 101	turku-143 #A99965
+207 166 124	turku-171 #CFA67C
+234 173 152	turku-199 #EAAD98
+252 199 195	turku-228 #FCC7C3
+255 230 230	turku-256 #FFE6E6

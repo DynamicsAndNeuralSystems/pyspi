@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+acton 10 Swatches
+ 46  33  77	acton-1 #2E214D
+ 75  59 102	acton-29 #4B3B66
+110  84 128	acton-58 #6E5480
+146  99 144	acton-86 #926390
+178 103 149	acton-114 #B26795
+209 123 165	acton-143 #D17BA5
+212 149 184	acton-171 #D495B8
+212 173 201	acton-199 #D4ADC9
+219 201 220	acton-228 #DBC9DC
+230 230 240	acton-256 #E6E6F0

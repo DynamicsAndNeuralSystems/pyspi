@@ -1,2 +1,2 @@
-# mtsda
-Multivariate time-series dependence analysis
+# PyNATS
+Python network analysis for time series

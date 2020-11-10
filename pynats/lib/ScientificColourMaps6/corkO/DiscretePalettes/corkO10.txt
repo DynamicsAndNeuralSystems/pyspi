@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+corkO 10 Swatches
+ 63  62  58	corkO-1 #3F3E3A
+ 62  68  93	corkO-29 #3E445D
+ 84 110 148	corkO-58 #546E94
+132 158 186	corkO-86 #849EBA
+173 196 200	corkO-114 #ADC4C8
+161 196 166	corkO-143 #A1C4A6
+115 163 111	corkO-171 #73A36F
+ 79 115  59	corkO-199 #4F733B
+ 67  79  44	corkO-228 #434F2C
+ 63  62  58	corkO-256 #3F3E3A

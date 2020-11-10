@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+hawaii 10 Swatches
+140   2 115	hawaii-1 #8C0273
+146  42  89	hawaii-29 #922A59
+150  71  66	hawaii-58 #964742
+153  99  48	hawaii-86 #996330
+157 131  30	hawaii-114 #9D831E
+151 169  42	hawaii-143 #97A92A
+128 197  95	hawaii-171 #80C55F
+102 216 156	hawaii-199 #66D89C
+108 235 219	hawaii-228 #6CEBDB
+179 242 253	hawaii-256 #B3F2FD

@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+berlin 10 Swatches
+158 176 255	berlin-1 #9EB0FF
+ 91 164 219	berlin-29 #5BA4DB
+ 45 117 151	berlin-58 #2D7597
+ 26  66  86	berlin-86 #1A4256
+ 17  25  30	berlin-114 #11191E
+ 40  13   1	berlin-143 #280D01
+ 80  24   3	berlin-171 #501803
+138  63  42	berlin-199 #8A3F2A
+196 117 106	berlin-228 #C4756A
+255 173 173	berlin-256 #FFADAD

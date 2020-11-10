@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+romaO 10 Swatches
+115  57  87	romaO-1 #733957
+135  64  55	romaO-29 #874037
+163 103  44	romaO-58 #A3672C
+195 163  75	romaO-86 #C3A34B
+214 216 147	romaO-114 #D6D893
+180 222 198	romaO-143 #B4DEC6
+116 187 205	romaO-171 #74BBCD
+ 79 136 185	romaO-199 #4F88B9
+ 92  83 139	romaO-228 #5C538B
+114  57  89	romaO-256 #723959

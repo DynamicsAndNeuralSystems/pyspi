@@ -1,0 +1,102 @@
+Scientific Colour Map Categorical Palette
+bamako 100 scrambled Swatches
+  0  64  77	bamako-1 #00404D
+255 229 153	bamako-256 #FFE599
+ 97 126  20	bamako-129 #617E14
+ 43  90  52	bamako-65 #2B5A34
+187 166  39	bamako-193 #BBA627
+ 67 106  37	bamako-97 #436A25
+ 21  76  65	bamako-33 #154C41
+137 143   3	bamako-161 #898F03
+227 201  97	bamako-224 #E3C961
+160 149  13	bamako-177 #A0950D
+ 54  98  45	bamako-81 #36622D
+241 216 125	bamako-240 #F1D87D
+ 32  83  58	bamako-49 #20533A
+ 81 115  29	bamako-113 #51731D
+116 136   9	bamako-145 #748809
+ 11  70  71	bamako-17 #0B4647
+209 185  67	bamako-208 #D1B943
+248 223 139	bamako-248 #F8DF8B
+ 48  94  48	bamako-73 #305E30
+126 140   5	bamako-153 #7E8C05
+ 74 111  33	bamako-105 #4A6F21
+219 193  82	bamako-216 #DBC152
+147 145   5	bamako-169 #939105
+ 17  73  68	bamako-25 #114944
+173 157  25	bamako-185 #AD9D19
+234 208 111	bamako-232 #EAD06F
+ 61 102  41	bamako-89 #3D6629
+106 131  15	bamako-137 #6A830F
+ 37  87  55	bamako-57 #255737
+  6  67  74	bamako-9 #06434A
+ 89 120  25	bamako-121 #597819
+ 26  80  62	bamako-41 #1A503E
+200 176  54	bamako-201 #C8B036
+101 128  18	bamako-133 #658012
+ 14  72  69	bamako-21 #0E4845
+ 24  78  63	bamako-37 #184E3F
+ 29  82  60	bamako-45 #1D523C
+166 153  19	bamako-181 #A69913
+ 93 123  22	bamako-125 #5D7B16
+ 40  89  53	bamako-61 #285935
+111 134  12	bamako-141 #6F860C
+ 34  85  57	bamako-53 #225539
+  9  68  72	bamako-13 #094448
+231 205 104	bamako-228 #E7CD68
+142 144   3	bamako-165 #8E9003
+245 219 132	bamako-244 #F5DB84
+180 161  32	bamako-189 #B4A120
+121 138   7	bamako-149 #798A07
+223 197  90	bamako-220 #DFC55A
+238 212 118	bamako-236 #EED476
+252 226 146	bamako-252 #FCE292
+  3  65  75	bamako-5 #03414B
+193 171  46	bamako-197 #C1AB2E
+ 77 113  31	bamako-109 #4D711F
+214 189  75	bamako-212 #D6BD4B
+ 64 104  39	bamako-93 #406827
+ 57 100  43	bamako-85 #39642B
+131 142   3	bamako-157 #838E03
+ 45  92  50	bamako-69 #2D5C32
+ 70 109  35	bamako-101 #466D23
+153 147   8	bamako-173 #999308
+ 85 118  27	bamako-117 #55761B
+ 51  96  46	bamako-77 #33602E
+ 19  75  66	bamako-29 #134B42
+205 181  61	bamako-205 #CDB53D
+134 142   3	bamako-159 #868E03
+145 144   4	bamako-167 #919004
+176 159  28	bamako-187 #B09F1C
+232 207 108	bamako-230 #E8CF6C
+250 224 143	bamako-250 #FAE08F
+183 164  35	bamako-191 #B7A423
+104 130  16	bamako-135 #688210
+236 210 115	bamako-234 #ECD273
+ 95 124  21	bamako-127 #5F7C15
+  2  65  76	bamako-3 #02414C
+ 20  76  65	bamako-31 #144C41
+217 191  79	bamako-214 #D9BF4F
+ 76 112  32	bamako-107 #4C7020
+212 187  71	bamako-210 #D4BB47
+ 33  84  58	bamako-51 #21543A
+ 91 122  23	bamako-123 #5B7A17
+118 137   8	bamako-147 #768908
+  7  68  73	bamako-11 #074449
+113 135  11	bamako-143 #71870B
+ 53  97  45	bamako-79 #35612D
+ 13  71  70	bamako-19 #0D4746
+ 79 114  30	bamako-111 #4F721E
+ 30  82  59	bamako-47 #1E523B
+ 23  77  64	bamako-35 #174D40
+ 41  90  52	bamako-63 #295A34
+ 28  81  61	bamako-43 #1C513D
+ 38  88  54	bamako-59 #265836
+ 10  69  71	bamako-15 #0A4547
+156 148  11	bamako-175 #9C940B
+ 59 101  42	bamako-87 #3B652A
+124 139   6	bamako-151 #7C8B06
+190 169  42	bamako-195 #BEA92A
+ 99 127  19	bamako-131 #637F13
+129 141   4	bamako-155 #818D04
+ 72 110  34	bamako-103 #486E22

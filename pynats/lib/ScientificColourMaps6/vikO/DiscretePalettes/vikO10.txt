@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+vikO 10 Swatches
+ 79  26  61	vikO-1 #4F1A3D
+ 58  53 103	vikO-29 #3A3567
+ 59 103 151	vikO-58 #3B6797
+117 158 188	vikO-86 #759EBC
+190 194 198	vikO-114 #BEC2C6
+217 174 151	vikO-143 #D9AE97
+197 124  86	vikO-171 #C57C56
+149  62  37	vikO-199 #953E25
+104  25  35	vikO-228 #681923
+ 80  25  60	vikO-256 #50193C

@@ -1,0 +1,27 @@
+Scientific Colour Map Categorical Palette
+oleron 25 Swatches
+ 26  38  89	oleron-1 #1A2659
+ 43  55 106	oleron-12 #2B376A
+ 58  71 122	oleron-22 #3A477A
+ 76  89 140	oleron-33 #4C598C
+ 94 107 158	oleron-44 #5E6B9E
+112 125 176	oleron-54 #707DB0
+131 144 195	oleron-65 #8390C3
+150 162 213	oleron-75 #96A2D5
+170 183 232	oleron-86 #AAB7E8
+188 201 243	oleron-97 #BCC9F3
+202 214 248	oleron-107 #CAD6F8
+216 229 252	oleron-118 #D8E5FC
+ 26  76   0	oleron-129 #1A4C00
+ 51  84   0	oleron-139 #335400
+ 75  91   1	oleron-150 #4B5B01
+ 96  99   9	oleron-160 #606309
+122 113  31	oleron-171 #7A711F
+146 128  55	oleron-182 #928037
+168 143  78	oleron-192 #A88F4E
+193 161 103	oleron-203 #C1A167
+217 181 129	oleron-214 #D9B581
+236 199 154	oleron-224 #ECC79A
+246 218 181	oleron-235 #F6DAB5
+249 234 204	oleron-245 #F9EACC
+253 253 230	oleron-256 #FDFDE6

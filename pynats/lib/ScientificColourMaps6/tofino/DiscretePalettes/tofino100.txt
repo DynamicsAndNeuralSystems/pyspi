@@ -1,0 +1,102 @@
+Scientific Colour Map Categorical Palette
+tofino 100 Swatches
+222 217 255	tofino-1 #DED9FF
+214 211 251	tofino-4 #D6D3FB
+208 207 249	tofino-6 #D0CFF9
+200 202 246	tofino-9 #C8CAF6
+195 198 243	tofino-11 #C3C6F3
+187 192 240	tofino-14 #BBC0F0
+182 188 237	tofino-16 #B6BCED
+174 183 234	tofino-19 #AEB7EA
+166 177 230	tofino-22 #A6B1E6
+160 173 228	tofino-24 #A0ADE4
+152 168 225	tofino-27 #98A8E1
+147 164 222	tofino-29 #93A4DE
+139 159 219	tofino-32 #8B9FDB
+134 155 216	tofino-34 #869BD8
+126 149 212	tofino-37 #7E95D4
+118 143 208	tofino-40 #768FD0
+113 139 205	tofino-42 #718BCD
+105 133 200	tofino-45 #6985C8
+100 129 197	tofino-47 #6481C5
+ 92 123 191	tofino-50 #5C7BBF
+ 85 117 184	tofino-53 #5575B8
+ 81 113 180	tofino-55 #5171B4
+ 74 107 172	tofino-58 #4A6BAC
+ 71 103 167	tofino-60 #4767A7
+ 66  98 160	tofino-63 #4262A0
+ 62  94 154	tofino-65 #3E5E9A
+ 58  89 147	tofino-68 #3A5993
+ 55  84 139	tofino-71 #37548B
+ 52  80 134	tofino-73 #345086
+ 49  76 126	tofino-76 #314C7E
+ 47  73 121	tofino-78 #2F4979
+ 44  68 113	tofino-81 #2C4471
+ 42  65 108	tofino-83 #2A416C
+ 39  60 101	tofino-86 #273C65
+ 36  56  93	tofino-89 #24385D
+ 34  53  89	tofino-91 #223559
+ 32  49  81	tofino-94 #203151
+ 30  46  77	tofino-96 #1E2E4D
+ 28  42  70	tofino-99 #1C2A46
+ 26  40  65	tofino-101 #1A2841
+ 24  36  59	tofino-104 #18243B
+ 22  32  52	tofino-107 #162034
+ 21  30  48	tofino-109 #151E30
+ 19  27  42	tofino-112 #131B2A
+ 18  25  38	tofino-114 #121926
+ 17  23  33	tofino-117 #111721
+ 16  22  30	tofino-119 #10161E
+ 14  21  26	tofino-122 #0E151A
+ 13  21  23	tofino-125 #0D1517
+ 13  21  21	tofino-127 #0D1515
+ 13  22  19	tofino-130 #0D1613
+ 13  23  18	tofino-132 #0D1712
+ 14  26  17	tofino-135 #0E1A11
+ 16  28  18	tofino-138 #101C12
+ 17  31  18	tofino-140 #111F12
+ 18  34  20	tofino-143 #122214
+ 19  37  21	tofino-145 #132515
+ 20  41  22	tofino-148 #142916
+ 21  44  24	tofino-150 #152C18
+ 23  48  26	tofino-153 #17301A
+ 25  53  28	tofino-156 #19351C
+ 26  56  29	tofino-158 #1A381D
+ 29  61  32	tofino-161 #1D3D20
+ 30  64  33	tofino-163 #1E4021
+ 32  69  36	tofino-166 #204524
+ 34  72  37	tofino-168 #224825
+ 36  77  40	tofino-171 #244D28
+ 39  83  43	tofino-174 #27532B
+ 40  86  44	tofino-176 #28562C
+ 43  91  47	tofino-179 #2B5B2F
+ 44  95  49	tofino-181 #2C5F31
+ 47 100  52	tofino-184 #2F6434
+ 49 104  54	tofino-186 #316836
+ 52 109  57	tofino-189 #346D39
+ 55 115  60	tofino-192 #37733C
+ 57 119  62	tofino-194 #39773E
+ 61 125  65	tofino-197 #3D7D41
+ 63 129  68	tofino-199 #3F8144
+ 68 135  71	tofino-202 #448747
+ 72 139  74	tofino-204 #488B4A
+ 78 145  78	tofino-207 #4E914E
+ 85 151  83	tofino-210 #559753
+ 90 156  86	tofino-212 #5A9C56
+ 98 162  90	tofino-215 #62A25A
+103 166  94	tofino-217 #67A65E
+112 171  99	tofino-220 #70AB63
+121 177 103	tofino-223 #79B167
+127 180 107	tofino-225 #7FB46B
+136 185 112	tofino-228 #88B970
+142 189 115	tofino-230 #8EBD73
+151 194 120	tofino-233 #97C278
+157 197 123	tofino-235 #9DC57B
+166 202 127	tofino-238 #A6CA7F
+175 206 132	tofino-241 #AFCE84
+181 209 135	tofino-243 #B5D187
+189 214 140	tofino-246 #BDD68C
+195 217 143	tofino-248 #C3D98F
+204 222 148	tofino-251 #CCDE94
+210 225 151	tofino-253 #D2E197
+219 230 155	tofino-256 #DBE69B

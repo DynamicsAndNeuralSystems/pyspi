@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+brocO 10 Swatches
+ 55  47  56	brocO-1 #372F38
+ 56  65 100	brocO-29 #384164
+ 85 114 154	brocO-58 #55729A
+138 163 191	brocO-86 #8AA3BF
+193 204 208	brocO-114 #C1CCD0
+202 203 171	brocO-143 #CACBAB
+158 158 108	brocO-171 #9E9E6C
+107 105  61	brocO-199 #6B693D
+ 68  63  41	brocO-228 #443F29
+ 55  47  55	brocO-256 #372F37

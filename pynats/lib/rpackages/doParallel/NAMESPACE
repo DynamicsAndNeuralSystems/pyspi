@@ -1,7 +1,0 @@
-export(registerDoParallel)
-export(stopImplicitCluster)
-importFrom("utils", "packageDescription", "packageName")
-import(foreach)
-import(iterators)
-import(parallel)
-

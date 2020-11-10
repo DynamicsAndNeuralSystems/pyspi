@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+oslo 10 Swatches
+  1   1   1	oslo-1 #010101
+ 13  27  41	oslo-29 #0D1B29
+ 19  50  81	oslo-58 #133251
+ 31  76 123	oslo-86 #1F4C7B
+ 56 105 168	oslo-114 #3869A8
+101 138 199	oslo-143 #658AC7
+137 160 202	oslo-171 #89A0CA
+170 182 202	oslo-199 #AAB6CA
+212 214 219	oslo-228 #D4D6DB
+255 255 255	oslo-256 #FFFFFF

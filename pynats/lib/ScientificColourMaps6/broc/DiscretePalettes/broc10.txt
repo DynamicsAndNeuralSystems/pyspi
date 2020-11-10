@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+broc 10 Swatches
+ 44  26  76	broc-1 #2C1A4C
+ 40  68 119	broc-29 #284477
+ 75 118 160	broc-58 #4B76A0
+139 167 194	broc-86 #8BA7C2
+206 217 229	broc-114 #CED9E5
+232 232 210	broc-143 #E8E8D2
+197 197 143	broc-171 #C5C58F
+141 141  86	broc-199 #8D8D56
+ 85  85  39	broc-228 #555527
+ 38  38   0	broc-256 #262600

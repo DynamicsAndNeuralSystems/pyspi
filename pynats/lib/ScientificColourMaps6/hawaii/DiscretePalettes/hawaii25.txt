@@ -1,0 +1,27 @@
+Scientific Colour Map Categorical Palette
+hawaii 25 Swatches
+140   2 115	hawaii-1 #8C0273
+143  22 104	hawaii-12 #8F1668
+145  35  95	hawaii-22 #91235F
+146  46  85	hawaii-33 #922E55
+148  57  77	hawaii-44 #94394D
+149  67  69	hawaii-54 #954345
+151  78  62	hawaii-65 #974E3E
+152  87  55	hawaii-75 #985737
+153  99  48	hawaii-86 #996330
+155 111  40	hawaii-97 #9B6F28
+156 122  34	hawaii-107 #9C7A22
+157 136  29	hawaii-118 #9D881D
+156 150  28	hawaii-129 #9C961C
+153 164  36	hawaii-139 #99A424
+146 177  53	hawaii-150 #92B135
+138 188  72	hawaii-160 #8ABC48
+128 197  95	hawaii-171 #80C55F
+117 205 118	hawaii-182 #75CD76
+108 212 140	hawaii-192 #6CD48C
+ 99 219 165	hawaii-203 #63DBA5
+ 95 226 189	hawaii-214 #5FE2BD
+102 232 211	hawaii-224 #66E8D3
+122 238 231	hawaii-235 #7AEEE7
+149 241 244	hawaii-245 #95F1F4
+179 242 253	hawaii-256 #B3F2FD

@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+bamako 10 Swatches
+  0  64  77	bamako-1 #00404D
+ 19  75  66	bamako-29 #134B42
+ 38  87  55	bamako-58 #265737
+ 58 101  42	bamako-86 #3A652A
+ 82 116  28	bamako-114 #52741C
+113 135  11	bamako-143 #71870B
+150 146   6	bamako-171 #969206
+197 174  50	bamako-199 #C5AE32
+231 205 104	bamako-228 #E7CD68
+255 229 153	bamako-256 #FFE599

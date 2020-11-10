@@ -1,0 +1,12 @@
+Scientific Colour Map Categorical Palette
+grayC 10 Swatches
+255 255 255	grayC-1 #FFFFFF
+224 224 224	grayC-29 #E0E0E0
+192 192 192	grayC-58 #C0C0C0
+162 162 162	grayC-86 #A2A2A2
+133 133 133	grayC-114 #858585
+105 105 105	grayC-143 #696969
+ 78  78  78	grayC-171 #4E4E4E
+ 53  53  53	grayC-199 #353535
+ 29  29  29	grayC-228 #1D1D1D
+  0   0   0	grayC-256 #000000

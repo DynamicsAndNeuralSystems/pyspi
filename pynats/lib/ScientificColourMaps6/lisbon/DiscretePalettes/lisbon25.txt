@@ -1,0 +1,27 @@
+Scientific Colour Map Categorical Palette
+lisbon 25 Swatches
+230 229 255	lisbon-1 #E6E5FF
+200 208 237	lisbon-12 #C8D0ED
+173 188 222	lisbon-22 #ADBCDE
+144 167 204	lisbon-33 #90A7CC
+116 146 187	lisbon-44 #7492BB
+ 91 127 171	lisbon-54 #5B7FAB
+ 65 106 151	lisbon-65 #416A97
+ 45  87 130	lisbon-75 #2D5782
+ 30  67 104	lisbon-86 #1E4368
+ 22  51  79	lisbon-97 #16334F
+ 18  37  58	lisbon-107 #12253A
+ 18  27  37	lisbon-118 #121B25
+ 23  25  25	lisbon-129 #171919
+ 33  32  24	lisbon-139 #212018
+ 50  47  31	lisbon-150 #322F1F
+ 67  63  40	lisbon-160 #433F28
+ 87  81  52	lisbon-171 #575134
+107 101  64	lisbon-182 #6B6540
+127 120  76	lisbon-192 #7F784C
+150 141  92	lisbon-203 #968D5C
+173 164 112	lisbon-214 #ADA470
+193 186 135	lisbon-224 #C1BA87
+215 210 162	lisbon-235 #D7D2A2
+234 231 188	lisbon-245 #EAE7BC
+255 255 217	lisbon-256 #FFFFD9
