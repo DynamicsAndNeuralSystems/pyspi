@@ -138,10 +138,10 @@ class Calculator():
             pbar.set_description(f'Processing [{self._name}: {self._measure_names[m]}]')
             start_time = time.time()
             try:
-                self._adjacency[m,:,:], self.dataset = self._measures[m].adjacency(self.dataset)
+                self._adjacency[m], self.dataset = self._measures[m].adjacency(self.dataset)
             except Exception as err:
                 warnings.warn(f'Caught exception for measure "{self._measure_names[m]}": {err}')
-                self._adjacency[m,:,:] = np.NaN
+                self._adjacency[m] = np.NaN
             self._proctimes[m] = time.time() - start_time
         pbar.close()
 

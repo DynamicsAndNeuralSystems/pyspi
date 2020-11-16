@@ -1,71 +1,91 @@
-# Import our classes
+import os
 from pynats.data import Data
 from pynats.container import CalculatorFrame
-from pynats.calculator import Calculator
 import pynats.plot as natplt
 
+import dill
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.io import loadmat
+from sklearn.preprocessing import RobustScaler, PowerTransformer
 
-import sys
-import os
+reduced_measure_set = False
 
-from pynats.lib.pyCML import cml, maps, couplings, evolution
+if reduced_measure_set:
+    savefile = '/home/oliver/Workspace/code/research/pynats/demos/pynats_cml_reduced.pkl'
+    configfile = '/home/oliver/Workspace/code/research/pynats/pynats/reducedconfig.yaml'
+    apx = ''
+else:
+    savefile = '/home/oliver/Workspace/code/research/pynats/demos/pynats_cml_full.pkl'
+    configfile = '/home/oliver/Workspace/code/research/pynats/pynats/config.yaml'
+    apx = '_full'
 
-import dill
+dataset_base = '/home/oliver/Workspace/code/research/mvts-database/'
 
-cmls = [None] * 7
-Ts = [100,1000,12*1500,1000,25*2000,45*5000,1000]
-td = [1,1,12,1,2000,5000,1,1]
+try:
+    with open(savefile, 'rb') as f:
+        cf = dill.load(f)
+except FileNotFoundError as err:
 
-# Frozen random patterns
-cmls[0] = cml.CML(dim=100, coupling=couplings.TwoNeighbor(strength=0.2, map_obj=maps.KanekoLogistic(alpha=1.45)))
+    npy_files = [dataset_base + 'coupled_map_lattice/frozen_random_patterns.npy',
+                    dataset_base + 'coupled_map_lattice/pattern_selection.npy',
+                    dataset_base + 'coupled_map_lattice/spatiotemporal_intermittency_i.npy',
+                    dataset_base + 'coupled_map_lattice/spatiotemporal_intermittency_ii.npy',
+                    dataset_base + 'coupled_map_lattice/travelling_wave.npy',
+                    dataset_base + 'coupled_map_lattice/chaotic_travelling_wave.npy',
+                    dataset_base + 'coupled_map_lattice/spatiotemporal_chaos.npy']
 
-# Pattern selection with suppression of chaos
-cmls[1] = cml.CML(dim=100, coupling=couplings.TwoNeighbor(strength=0.4, map_obj=maps.KanekoLogistic(alpha=1.71)))
+    dim_order = 'sp'
 
-# Spatiotemporal intermittency
-cmls[2] = cml.CML(dim=200, coupling=couplings.TwoNeighbor(strength=0.00115, map_obj=maps.KanekoLogistic(alpha=1.7522)))
-cmls[3] = cml.CML(dim=200, coupling=couplings.TwoNeighbor(strength=0.3, map_obj=maps.KanekoLogistic(alpha=1.75)))
+    datasets = []
+    names = []
+    Tmax = 1000
+    MMax = 10
+    for i, _file in enumerate(npy_files):
+        npdat = np.load(_file)
+        npdat = npdat[:Tmax,:MMax]
+        names.append(os.path.basename(_file)[:-4])
+        datasets.append(Data(npdat,dim_order=dim_order,name=names[i],normalise=False))
 
-# Traveling wave
-cmls[4] = cml.CML(dim=50, coupling=couplings.TwoNeighbor(strength=0.6, map_obj=maps.KanekoLogistic(alpha=1.47)))
+        # natplt.plot_spacetime(datasets[-1],cluster=False)
 
-# Chaotic traveling wave
-cmls[5] = cml.CML(dim=50, coupling=couplings.TwoNeighbor(strength=0.5, map_obj=maps.KanekoLogistic(alpha=1.69)))
+    cf = CalculatorFrame(datasets=datasets,names=names,configfile=configfile)
 
-# Fully developed spatiotemporal chaos
-cmls[6] = cml.CML(dim=100, coupling=couplings.TwoNeighbor(strength=0.3, map_obj=maps.KanekoLogistic(alpha=2.00)))
+    cf.compute()
 
-names = ['Frozen random patterns',
-            'Pattern selection',
-            'Spatiotemporal intermittency I',
-            'Spatiotemporal intermittency II',
-            'Traveling wave',
-            'Chaotic traveling wave',
-            'Spatiotemporal chaos']
+    cf.prune()
 
-datasets = []
-for i in range(len(cmls)):
-    ev = evolution.Evolution(cmls[i])
-    dat = ev.time_evolution(iterations=Ts[i])
-    dat = dat[::td[i],:]
-    datasets.append(Data(dat,dim_order='sp',name=names[i],normalise=False))
+    print('Saving object to dill database: "{}"'.format(savefile))
+    with open(savefile, 'wb') as f:
+        dill.dump(cf, f)
 
-cf = CalculatorFrame(datasets=datasets,names=names)
+cf.prune(meas_nans=0)
 
-cf.plot_data()
+dataset_base = dataset_base + 'plots/cml/'
 
-# Compute all adjacency matrices
-cf.compute()
+for cname in cf.calculators.index:
+    calc = cf.calculators.loc[cname][0]
 
-# Prune special values
-cf.prune()
+    _, fig = natplt.clustermap(calc,which_measure='all',plot_data=True)
+    fig.savefig(dataset_base + cname + '_clustermap' + apx + '.pdf', bbox_inches="tight")
+    fig.savefig(dataset_base + cname + '_clustermap' + apx + '.png', bbox_inches="tight")
 
-# Plot some results
-cf.clustermap(which_measure='all',sa_plot=True,cmap='PiYG')
-cf.clusterall(approach='mean',cmap='PiYG')
+    _, fig = natplt.flatten(calc,transformer=PowerTransformer())
+    fig.savefig(dataset_base + cname + '_flat' + apx + '.pdf', bbox_inches="tight")
+    fig.savefig(dataset_base + cname + '_flat' + apx + '.png', bbox_inches="tight")
 
-natplt.statespace(cf)
+    _, fig = natplt.measurespace(cf,averaged=True,flatten_kwargs={'transformer': PowerTransformer()})
+    fig.savefig(dataset_base + cname + '_measurespace' + apx + '.pdf', bbox_inches="tight")
+    fig.savefig(dataset_base + cname + '_measurespace' + apx + '.png', bbox_inches="tight")
 
-plt.show()
+_, fig = natplt.clusterall(cf,approach='mean')
+fig.savefig(dataset_base + 'cml_clustermap' + apx + '.pdf', bbox_inches="tight")
+fig.savefig(dataset_base + 'cml_clustermap' + apx + '.png', bbox_inches="tight")
+
+_, fig = natplt.measurespace(cf,averaged=False,flatten_kwargs={'transformer': PowerTransformer()})
+fig.savefig(dataset_base + 'cml_measurespace' + apx + '.pdf', bbox_inches="tight")
+fig.savefig(dataset_base + 'cml_measurespace' + apx + '.png', bbox_inches="tight")
+
+_, fig = natplt.measurespace(cf,averaged=True,flatten_kwargs={'transformer': PowerTransformer()})
+fig.savefig(dataset_base + 'cml_measurespace-avg' + apx + '.pdf', bbox_inches="tight")
+fig.savefig(dataset_base + 'cml_measurespace-avg' + apx + '.png', bbox_inches="tight")

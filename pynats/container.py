@@ -48,7 +48,7 @@ class CalculatorFrame():
         if isinstance(calc,CalculatorFrame):
             self._calculators = pd.concat([self._calculators,calc])
         elif isinstance(calc,Calculator):
-            self._calculators = self._calculators.append(pd.Series(data=calc,name=calc.name))
+            self._calculators = self._calculators.append(pd.Series(data=calc,name=calc.name),ignore_index=True)
         elif isinstance(calc,pd.DataFrame):
             if isinstance(calc.iloc[0],Calculator):
                 self._calculators = calc

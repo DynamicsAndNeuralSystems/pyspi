@@ -1,7 +1,6 @@
 from nilearn import connectome as fc
 from sklearn import covariance as cov
-from scipy import stats
-from scipy import spatial
+from scipy import stats, spatial, signal
 import numpy as np
 from pynats.base import directed, undirected, parse, positive, real
 from hyppo.independence import MGC, Dcorr, HHG, Hsic
@@ -83,6 +82,44 @@ class precision(connectivity):
         self.name = 'prec'
         super(precision,self).__init__('precision',squared=squared,cov_estimator=cov_estimator)
 
+class xcorr(undirected,real):
+
+    humanname = "Cross correlation"
+
+    def __init__(self,squared=False,statistic='max'):
+        self.name = 'xcorr'
+        self._squared = squared
+        self._statistic = statistic
+        if self._squared:
+            self.name = self.name + '-sq'
+        self.name = self.name + '_' + statistic
+    
+    @parse
+    def bivariate(self,data,i=None,j=None):
+
+        if not hasattr(data,'xcorr'):
+            data.xcorr = np.ones((data.n_processes,data.n_processes,data.n_observations*2-1)) * -np.inf
+
+        if data.xcorr[i,j,0] == -np.inf:
+            z = data.to_numpy()
+            x = z[i]
+            y = z[j]
+            data.xcorr[i,j] = np.squeeze(signal.correlate(x,y,'full'))
+
+        if self._statistic == 'max':
+            stat = np.max(data.xcorr)
+        elif self._statistic == 'maxlag':
+            stat = data.n_observations - np.argmax(data.xcorr)
+        elif self._statistic == 'mean':
+            stat = np.mean(data.xcorr[i,j])
+
+        if self._squared:
+            return stat ** 2, data
+        else:
+            return stat, data
+
+    
+
 class spearmanr(undirected,real):
 
     humanname = "Spearman's correlation coefficient"
@@ -91,13 +128,13 @@ class spearmanr(undirected,real):
     def __init__(self,squared=False):
         self._squared = squared
         if squared:
-            self.name = self.name + '-2'
+            self.name = self.name + '-sq'
     
     @parse
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
-        x = z[i,:]
-        y = z[j,:]
+        x = z[i]
+        y = z[j]
         if self._squared:
             return stats.spearmanr(x,y).correlation ** 2, data
         else:
@@ -111,13 +148,13 @@ class kendalltau(undirected,real):
     def __init__(self,squared=False):
         self._squared = squared
         if squared:
-            self.name = self.name + '-2'
+            self.name = self.name + '-sq'
 
     @parse
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
-        x = z[i,:]
-        y = z[j,:]
+        x = z[i]
+        y = z[j]
         if self._squared:
             return stats.kendalltau(x,y).correlation ** 2, data
         else:
@@ -135,8 +172,8 @@ class hsic(undirected,positive):
     @parse
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
-        x = z[i,:]
-        y = z[j,:]
+        x = z[i]
+        y = z[j]
         stat, _ = Hsic().test(x, y, auto=True )
         return stat, data
 
@@ -150,8 +187,8 @@ class hhg(undirected,positive):
     @parse
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
-        x = z[i,:]
-        y = z[j,:]
+        x = z[i]
+        y = z[j]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _ = HHG().test(x, y, reps=0)
@@ -169,8 +206,8 @@ class dcorr(undirected,positive):
         """
         """
         z = data.to_numpy()
-        x = z[i,:]
-        y = z[j,:]
+        x = z[i]
+        y = z[j]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _ = Dcorr().test(x, y, auto=True, reps=0 )
@@ -186,8 +223,8 @@ class mgc(undirected,positive):
     @parse
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
-        x = z[i,:]
-        y = z[j,:]
+        x = z[i]
+        y = z[j]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _, _ = MGC().test(x, y, reps=0 )

@@ -5,6 +5,10 @@
   pearsonr:
     - cov_estimator: empirical
 
+  xcorr:
+    - statistic: 'max'
+    - statistic: 'maxlag'
+
   # Partial correlation
   pcor:
     - cov_estimator: empirical
@@ -20,6 +24,10 @@
   # Spectral granger causality
   spectral_granger:
     - fs: 1
+
+.wavelet:
+
+  wcoh:
 
 # Information-theoretic measures
 .infotheory:

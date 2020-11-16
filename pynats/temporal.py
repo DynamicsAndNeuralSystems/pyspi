@@ -34,12 +34,12 @@ class coint(directed,real):
 
         if self._method == 'johansen':
             if isnan(data.coint.max_eig_stat[i,j]):
-                z_ij_T = np.transpose(z[[i,j],:])
+                z_ij_T = np.transpose(z[[i,j]])
                 stats = coint_johansen(z_ij_T,det_order=1,k_ar_diff=10)
                 data.coint.max_eig_stat[[i,j],[j,i]] = stats.max_eig_stat
                 data.coint.trace_stat[[i,j],[j,i]] = stats.trace_stat
         if self._method == 'aeg':
-            stats = ci(z[i,:],z[j,:])
+            stats = ci(z[i],z[j])
             data.coint.tstat[i,j] = stats[0]
             data.coint.pvalue[i,j] = stats[1]
 
@@ -77,7 +77,7 @@ class ccm(directed,real):
             # First pass: infer optimal embedding
             for j in range(M):
                 names.append('var' + str(j))
-                df[names[j]] = z[j,:]
+                df[names[j]] = z[j]
                 pred = str(10) + ' ' + str(N-10)
                 embed_df = edm.EmbedDimension(dataFrame=df,lib=pred,
                                                 pred=pred,columns=str(j),showPlot=False)
@@ -100,8 +100,8 @@ class ccm(directed,real):
                                         libSizes=lib_sizes,sample=100)
                     sc1 = ccm_df.iloc[:,1]
                     sc2 = ccm_df.iloc[:,2]
-                    score[i,j,:] = np.array(sc1)
-                    score[j,i,:] = np.array(sc2)
+                    score[i,j] = np.array(sc1)
+                    score[j,i] = np.array(sc2)
 
             data.ccm = ccm.cache(embedding=embedding, score=score)
 
@@ -110,7 +110,7 @@ class ccm(directed,real):
         elif self._statistic == 'max':
             stat = np.nanmax(data.ccm.score[i,j])
         elif self._statistic == 'diff':
-            stat = np.nanmax(data.ccm.score[i,j] - data.ccm.score[j,i])
+            stat = np.nanmean(data.ccm.score[i,j] - data.ccm.score[j,i])
 
         return stat, data
 
@@ -127,8 +127,8 @@ class dcorrx(undirected,positive):
     @parse
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
-        x = z[i,:]
-        y = z[j,:]
+        x = z[i]
+        y = z[j]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _, _ = DcorrX(max_lag=self._max_lag).test(x, y, reps=0 )
@@ -147,8 +147,8 @@ class mgcx(undirected,positive):
     @parse
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
-        x = z[i,:]
-        y = z[j,:]
+        x = z[i]
+        y = z[j]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _, _ = MGCX(max_lag=self._max_lag).test(x, y, reps=0)

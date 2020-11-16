@@ -26,6 +26,8 @@ armat[3,4] = .23
 armat[1,0] = .2
 armat[2,1] = .8
 
+
+
 print('Autoregressive matrix:', armat)
 
 random.seed(a=None, version=2)
@@ -35,15 +37,14 @@ dataset = Data(Data.generate_var_data(n_observations=T,
                                         n_realisations=1,
                                         coefficient_matrices=np.reshape(armat,(1,M,M))))
 
-calc = Calculator(dataset=dataset)
+configfile = '/home/oliver/Workspace/code/research/pynats/pynats/reducedconfig.yaml'
+calc = Calculator(dataset=dataset,configfile=configfile)
 
 # Compute all adjacency matrices
 calc.compute()
 
 # Prune special values
 calc.prune()
-
-calc.save('pynats_var.pkl')
 
 # Check speed of computations, etc.
 natplt.diagnostics(calc)
@@ -52,7 +53,8 @@ natplt.diagnostics(calc)
 # natplt.truth(calc,armat)
 
 # Plot results
-natplt.clustermap(calc,which_measure='all',sa_plot=True)
-# heatmaps(calc,6)
-natplt.flatten(calc,normalise=True)
+natplt.clustermap(calc,which_measure='all',plot_data=True)
+
+natplt.clusterall(calc,approach='reduction')
+
 plt.show()

@@ -46,7 +46,7 @@ except FileNotFoundError as err:
         dim_order = 'sp'
 
     Tmax = 250
-    Mmax = -1
+    Mmax = 10
     datasets = []
     for i, _file in enumerate(npy_files):
         npdat = np.load(_file)
@@ -68,7 +68,7 @@ except FileNotFoundError as err:
     with open(savefile, 'wb') as f:
         dill.dump(cf, f)
 
-cf.clustermap(which_measure='all',sa_plot=True,cmap='PiYG')
+cf.clustermap(which_measure='all',plot_data=True,cmap='PiYG')
 cf.clusterall(approach='mean',cmap='PiYG')
 
 natplt.statespace(cf)

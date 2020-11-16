@@ -43,5 +43,7 @@ setup(
                         'jpype1>=0.6.1',
                         'sktime>=0.4.3',
                         'dill>=0.3.2',
-                        'spectral-connectivity>=0.2.4.dev0']
+                        'spectral-connectivity>=0.2.4.dev0',
+                        'PyWavelets>=0.2.2',
+                        'umap-learn>=0.4.6']
 )

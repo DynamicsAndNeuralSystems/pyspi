@@ -20,12 +20,17 @@ from scipy.cluster.hierarchy import dendrogram, linkage, leaves_list, set_link_c
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from umap import UMAP
+from sklearn.manifold import TSNE
 
 def asframe(func):
     def convert(calcs,**kwargs):
+        if isinstance(calcs,Calculator):
+            cf = CalculatorFrame()
+            cf.add_calculator(calcs)
+            return func(cf,**kwargs)
         if isinstance(calcs,list) and isinstance(calcs[0],Calculator):
             cf = CalculatorFrame(calculators=calcs)
-            return func(calcs,**kwargs)
+            return func(cf,**kwargs)
         elif isinstance(calcs,CalculatorFrame):
             return func(calcs,**kwargs)
         else:
@@ -126,7 +131,7 @@ def heatmaps(calc,ncols=5,nmeasures=None,cmap='vik',**kwargs):
     for ax in axs[-1,(nmeasures % ncols):]:
         ax.axis('off')
 
-def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_carpet=True,categories=None,strtrunc=20,data_cmap='devon_r',**kwargs):
+def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_data=True,categories=None,strtrunc=20,data_cmap='devon_r',**kwargs):
 
     if plot_data is True:
         figsize = (15,10)
@@ -185,7 +190,7 @@ def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_carpet=Tr
             g.gs.update(left=0.33, right=0.8, top=0.9)
 
             dat = calc.dataset.to_numpy(squeeze=True)
-            if sort_carpet is True:
+            if sort_data is True:
                 Z = linkage(dat,method='average')
                 dat = dat[leaves_list(Z),:]
                 #create new gridspec for the right part
@@ -202,7 +207,7 @@ def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_carpet=Tr
             ax_saplot.set_ylabel('Time')
 
             # create axes within this new gridspec
-            if sort_carpet is True:
+            if sort_data is True:
                 ax_dend = g.fig.add_subplot(gs2[40:,0])
                 rcParams['lines.linewidth'] = 0.5
                 dendrogram(Z, ax=ax_dend, orientation='bottom', no_labels=True, color_threshold=0,
@@ -224,7 +229,7 @@ def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_carpet=Tr
         return corrs, g.fig
     return corrs
 
-def flatten(calc,nmeasures=None,split=False,transformer=StandardScaler(),cluster=True,row_cluster=False,strtrunc=20,cmap='vik',plot=True,**kwargs):
+def flatten(calc,nmeasures=None,split=False,transformer=StandardScaler(),cluster=True,row_cluster=False,strtrunc=None,cmap='vik',plot=True,**kwargs):
     if nmeasures is None:
         nmeasures = calc.n_measures 
 
@@ -294,7 +299,7 @@ def flattenall(cf,**kwargs):
     return df
 
 @asframe
-def clusterall(cf,approach='mean',plot=True,flatten_kwargs={},clustermap_kwargs={'cmap': 'vik'}):
+def clusterall(cf,approach='mean',plot=True,reducer=TSNE(n_components=1),flatten_kwargs={},clustermap_kwargs={'cmap': 'vik'}):
     if approach == 'flatten':
         df = flattenall(cf,plot=False,**flatten_kwargs)
         df.fillna(0,inplace=True)
@@ -343,7 +348,7 @@ def dataspace(cf):
     return dfs, ax.figure
 
 @asframe
-def measurespace(cf,averaged=False,pairplot=False,jointplot=False,reducer=UMAP(),flatten_kwargs={}):
+def measurespace(cf,averaged=False,pairplot=False,jointplot=False,clustermap=False,reducer=UMAP(),flatten_kwargs={},clustermap_kwargs={}):
 
     # Reducer is any dimensionality reduction algorithm that calls fit_transform, e.g.,
     # reducer = MDS(n_components=2,dissimilarity='precomputed')
@@ -356,36 +361,46 @@ def measurespace(cf,averaged=False,pairplot=False,jointplot=False,reducer=UMAP()
         embedding = reducer.fit_transform(1-df.to_numpy())
 
         if pairplot:
-            sns.pairplot(df)
+            sns.pairplot(flattenall(cf,plot=False))
     else:
         dfs = {}
         for i, _index in enumerate(cf.calculators.index):
             calc = cf.calculators.loc[_index][0]
-            dfs[calc.name] = flatten(calc,plot=False,**flatten_kwargs).dropna(axis=1)
+            dfs[calc.name] = flatten(calc,plot=False,**flatten_kwargs)
         df = pd.concat(dfs,axis=1,join='inner')
         embedding = reducer.fit_transform(np.transpose(df.to_numpy()))
         n_measures = len(set([m[1] for m in df.columns]))
-
-
-    # if n_measures <= 20:
-    #     cmap = plt.get_cmap('tab20')
-    # else:
-    #     cmap = plt.get_cmap('romaS',n_measures)
-
+        
     cmap = sns.color_palette("husl", n_measures)
 
     bad_markers = ['.', ',', '8', 'H']
     marker_list = list(plt.matplotlib.lines.Line2D.markers.keys())
     marker_list = [item for item in marker_list if item not in bad_markers] # Remove the ones that are hard to see
 
-    if not averaged and jointplot:
+    if not averaged and jointplot or clustermap:
         jointdf = pd.DataFrame()
         for i in range(embedding.shape[0]):
             dataset = df.columns[i][0]
             measure = df.columns[i][1]
             s = pd.Series([measure,embedding[i,0],embedding[i,1]],['measure','e1','e2'])
             jointdf = jointdf.append(s,ignore_index=True)
-        g = sns.jointplot(data=jointdf, x='e1', y='e2', hue='measure', palette=cmap)
+
+        if jointplot:
+            g = sns.jointplot(data=jointdf, x='e1', y='e2', hue='measure', palette=cmap)
+        elif clustermap:
+            embeddf = pd.DataFrame(data=embedding[:,1],index=df.columns).unstack().transpose()
+            embeddf.dropna(inplace=True)
+            if embeddf.shape[0] > 20:
+                sns.set(font_scale=0.7)
+            g = sns.clustermap(embeddf, center=0.0, xticklabels=1, yticklabels=1,**clustermap_kwargs)
+            ax2 = g.ax_heatmap
+            ax_hmcb = g.ax_cbar
+            # plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            sns.set(font_scale=1)
+            g.gs.update(top=0.9)
+            g.fig.suptitle(f'Clustermap for all {len(cf.calculators.index)} datasets')
+            ax_hmcb.set_position([0.05, 0.8, 0.02, 0.1])
+
         fig = g.fig
     else:
         if averaged:
@@ -444,3 +459,15 @@ def measurespace(cf,averaged=False,pairplot=False,jointplot=False,reducer=UMAP()
 
     fig.tight_layout()
     return df, fig
+
+def relate(cf,meas0,meas1,flatten_kwargs={}):
+
+    df = pd.DataFrame()
+    corr_str = f'corr({meas0}, {meas1})'
+    for i, _index in enumerate(cf.calculators.index):
+        calc = cf.calculators.loc[_index][0]
+        rho = flatten(calc,plot=False,strtrunc=None,**flatten_kwargs)[[meas0,meas1]].corr(method='spearman').to_numpy()[0,1]
+        df = df.append({corr_str: rho},ignore_index=True)
+    
+    splot = sns.displot(df,x=corr_str,kde=True)
+    plt.xlim(-1, 1)

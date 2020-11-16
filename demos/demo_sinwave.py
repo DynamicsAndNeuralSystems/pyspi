@@ -58,7 +58,9 @@ except FileNotFoundError as err:
     with open(savefile, 'wb') as f:
         dill.dump(cf, f)
 
-cf.prune(meas_nans=0)
+natplt.relate(cf,'te_kraskov_NN-4_DCE_k-max-10_tau-max-4','ccm_diff')
+
+plt.show()
 
 dataset_base = dataset_base + 'plots/sinwave/'
 
@@ -67,21 +69,7 @@ if reduced_measure_set:
     clustermap_kwargs = {'cmap': sns.color_palette("coolwarm", as_cmap=True), 'linewidth': 0.1, 'annot': True}
 else:
     clustermap_kwargs = {'cmap': sns.color_palette("coolwarm", as_cmap=True)}
-
-for cname in cf.calculators.index:
-    calc = cf.calculators.loc[cname][0]
-
-    _, fig = natplt.clustermap(calc, which_measure='all', plot_data=True, data_cmap=sns.cubehelix_palette(start=.5, rot=-.75, as_cmap=True), **clustermap_kwargs)
-    fig.savefig(dataset_base + cname + '_clustermap' + apx + '.pdf', bbox_inches="tight")
-    fig.savefig(dataset_base + cname + '_clustermap' + apx + '.png', bbox_inches="tight")
-
-    _, fig = natplt.flatten(calc, **flatten_kwargs)
-    fig.savefig(dataset_base + cname + '_flat' + apx + '.pdf', bbox_inches="tight")
-    fig.savefig(dataset_base + cname + '_flat' + apx + '.png', bbox_inches="tight")
-
-    _, fig = natplt.measurespace(cf,averaged=True, flatten_kwargs=flatten_kwargs)
-    fig.savefig(dataset_base + cname + '_measurespace' + apx + '.pdf', bbox_inches="tight")
-    fig.savefig(dataset_base + cname + '_measurespace' + apx + '.png', bbox_inches="tight")
+    
 
 _, fig = natplt.clusterall(cf,approach='mean', clustermap_kwargs=clustermap_kwargs)
 fig.savefig(dataset_base + 'sinwave_clustermap' + apx + '.pdf', bbox_inches="tight")
@@ -94,3 +82,20 @@ fig.savefig(dataset_base + 'sinwave_measurespace' + apx + '.png', bbox_inches="t
 _, fig = natplt.measurespace(cf, averaged=True, flatten_kwargs=flatten_kwargs)
 fig.savefig(dataset_base + 'sinwave_measurespace-avg' + apx + '.pdf', bbox_inches="tight")
 fig.savefig(dataset_base + 'sinwave_measurespace-avg' + apx + '.png', bbox_inches="tight")
+
+
+for cname in cf.calculators.index:
+    calc = cf.calculators.loc[cname][0]
+
+    _, fig = natplt.clustermap(calc, which_measure='all', plot_data=True, data_cmap=sns.cubehelix_palette(start=.5, rot=-.75, as_cmap=True), **clustermap_kwargs)
+    fig.savefig(dataset_base + cname + '_clustermap' + apx + '.pdf', bbox_inches="tight")
+    fig.savefig(dataset_base + cname + '_clustermap' + apx + '.png', bbox_inches="tight")
+
+    _, fig = natplt.flatten(calc, **flatten_kwargs)
+    fig.savefig(dataset_base + cname + '_flat' + apx + '.pdf', bbox_inches="tight")
+    fig.savefig(dataset_base + cname + '_flat' + apx + '.png', bbox_inches="tight")
+
+    _, fig = natplt.measurespace(cf,averaged=True,pairplot=True,flatten_kwargs=flatten_kwargs)
+    fig.savefig(dataset_base + cname + '_measurespace' + apx + '.pdf', bbox_inches="tight")
+    fig.savefig(dataset_base + cname + '_measurespace' + apx + '.png', bbox_inches="tight")
+    plt.close('all')

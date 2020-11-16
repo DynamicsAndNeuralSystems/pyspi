@@ -27,10 +27,6 @@
 
     - cov_estimator: oas
 
-  # Covariance
-  covariance:
-    - cov_estimator: empirical
-
   # Precision
   precision:
     - cov_estimator: empirical
@@ -141,8 +137,44 @@
     - fs: 1
       order: 20
 
+.wavelet:
+
+  wcoh:
+
 # Information-theoretic measures
 .infotheory:
+
+  conditional_entropy:
+
+    - estimator: gaussian
+
+    - estimator: kozachenko
+
+    - estimator: kernel
+
+  causal_entropy:
+
+    - estimator: gaussian
+
+    - estimator: kozachenko
+
+    - estimator: kernel
+
+  directed_info:
+
+    - estimator: gaussian
+
+    - estimator: kozachenko
+
+    - estimator: kernel
+
+  stochastic_interaction:
+
+    - estimator: gaussian
+
+    - estimator: kozachenko
+
+    - estimator: kernel
 
   # Mutual information
   mutual_info:

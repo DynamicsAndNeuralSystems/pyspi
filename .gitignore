@@ -2,3 +2,6 @@ pynats.egg-info
 pynats/__pycache__
 demos/data
 *.pkl
+*.log
+*.bkp
+

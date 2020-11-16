@@ -1,6 +1,6 @@
 # Import our classes
 from pynats.data import Data
-from pynats.btsa import btsa
+from pynats.calculator import Calculator
 
 import dill
 import os

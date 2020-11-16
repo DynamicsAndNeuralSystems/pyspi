@@ -10,6 +10,36 @@ import warnings
 Contains relevant dependence measures from the information theory community.
 """
 
+def _getentclass(jidt_base_class,estimator):
+    if estimator == 'kernel':
+        jidt_class = jidt_base_class.EntropyCalculatorMultiVariateKernel
+    elif estimator == 'kozachenko':
+        jidt_class = jidt_base_class.EntropyCalculatorMultiVariateKozachenko            
+    else:
+        jidt_class = jidt_base_class.EntropyCalculatorMultiVariateGaussian
+
+    return jidt_class()
+
+def _getuentclass(jidt_base_class,estimator):
+    if estimator == 'kernel':
+        jidt_class = jidt_base_class.EntropyCalculatorKernel
+    elif estimator == 'kozachenko':
+        jidt_class = jidt_base_class.EntropyCalculatorKraskov1            
+    else:
+        jidt_class = jidt_base_class.EntropyCalculatorGaussian
+
+    return jidt_class()
+
+def _getcmiclass(jidt_base_class,estimator):
+    if estimator == 'kernel':
+        jidt_class = jidt_base_class.ConditionalMutualInfoCalculatorMultiVariateKernel
+    elif estimator == 'kraskov':
+        jidt_class = jidt_base_class.ConditionalMutualInfoCalculatorMultiVariateKraskov1            
+    else:
+        jidt_class = jidt_base_class.ConditionalMutualInfoCalculatorMultiVariateGaussian
+
+    return jidt_class()
+
 def _getmiclass(jidt_base_class,estimator):
     if estimator == 'kernel':
         jidt_class = jidt_base_class.MutualInfoCalculatorMultiVariateKernel
@@ -38,8 +68,20 @@ def _getteclass(jidt_base_class,estimator):
         calc_class = jidt_base_class.TransferEntropyCalculatorGaussian
     return calc_class()
 
-def theiler(bivariate):
+def computeConditionalEntropy(ent_calc,X,Y):
+    XY = np.concatenate([X,Y],axis=1)
 
+    ent_calc.initialise(XY.shape[1])
+    ent_calc.setObservations(XY)
+    H_XY = ent_calc.computeAverageLocalOfObservations()
+
+    ent_calc.initialise(Y.shape[1])
+    ent_calc.setObservations(Y)
+    H_Y = ent_calc.computeAverageLocalOfObservations()
+
+    return H_XY - H_Y
+
+def theiler(bivariate):
     @parse
     def compute_window(self,data,i=None,j=None):
         if i is None:
@@ -147,18 +189,33 @@ class jidt_base(positive):
             jarloc = './pynats/lib/jidt/infodynamics.jar'
             jp.startJVM(jp.getDefaultJVMPath(), '-ea', '-Djava.class.path=' + jarloc)
         
-        jidt_base_class = jp.JPackage('infodynamics.measures.continuous.' + estimator)
+        self._jidt_base_class = jp.JPackage('infodynamics.measures.continuous.' + estimator)
 
-        self._calc = getclass(jidt_base_class,estimator)
-        self._calc.setProperty('NORMALISE', 'true')
-        self._calc.setProperty('BIAS_CORRECTION', 'true')
+        try:
+            self._calc = getclass(self._jidt_base_class,estimator)
+            self._calc.setProperty('NORMALISE', 'true')
+            self._calc.setProperty('BIAS_CORRECTION', 'true')
+
+            if estimator == 'kraskov':
+                self._calc.setProperty(self._NNK_PROP_NAME,str(prop_k))
+            elif estimator == 'kernel':
+                self._calc.setProperty(self._KERNEL_WIDTH_PROP_NAME,str(kernel_width))
+
+        except TypeError:
+            self._calc = []
+            for _class in getclass:
+                self._calc.append(_class(self._jidt_base_class,estimator))
+                self._calc[-1].setProperty('NORMALISE', 'true')
+                self._calc[-1].setProperty('BIAS_CORRECTION', 'true')
+                if estimator == 'kraskov':
+                    self._calc[-1].setProperty(self._NNK_PROP_NAME,str(prop_k))
+                if estimator == 'kernel':
+                    self._calc[-1].setProperty(self._KERNEL_WIDTH_PROP_NAME,str(kernel_width))
 
         self.name = self.name + '_' + estimator
         if estimator == 'kraskov':
-            self._calc.setProperty(self._NNK_PROP_NAME,str(prop_k))
             self.name = self.name + '_NN-{}'.format(prop_k)
         elif estimator == 'kernel':
-            self._calc.setProperty(self._KERNEL_WIDTH_PROP_NAME,str(kernel_width))
             self.name = self.name + '_W-{}'.format(kernel_width)
         else:
             self._dyn_corr_excl = None
@@ -217,7 +274,7 @@ class active_information_storage(jidt_base):
             self._optimal_timedelay = np.zeros((data.n_processes))
 
             for i in range(data.n_processes):
-                src = z[i,:]
+                src = z[i]
                 self._calc.initialise(1, 1)
                 self._calc.setObservations(jp.JArray(jp.JDouble,1)(src.tolist()))
                 try:
@@ -254,8 +311,8 @@ class mutual_info(jidt_base,undirected):
     @theiler
     def bivariate(self,data,i=None,j=None,verbose=False):
         z = data.to_numpy(squeeze=True)
-        src = z[i,:]
-        targ = z[j,:]
+        src = z[i]
+        targ = z[j]
         """ Compute mutual information between Y and X
         """
 
@@ -278,8 +335,8 @@ class time_lagged_mutual_info(mutual_info):
     @theiler
     def bivariate(self,data,i=None,j=None,verbose=False):
         z = data.to_numpy(squeeze=True)
-        src = z[i,:]
-        targ = z[j,:]
+        src = z[i]
+        targ = z[j]
         """ Compute mutual information between Y and X
         """
 
@@ -355,8 +412,8 @@ class transfer_entropy(jidt_base,directed):
     @takens
     def bivariate(self,data,i=None,j=None,verbose=False):
         z = data.to_numpy(squeeze=True)
-        src = z[i,:]
-        targ = z[j,:]
+        src = z[i]
+        targ = z[j]
         """ Compute transfer entropy from Y to X for all 
         """
 
@@ -369,22 +426,131 @@ class transfer_entropy(jidt_base,directed):
             te = np.NaN
         return te, data
 
+class conditional_entropy(jidt_base,directed):
+
+    humanname = 'Causally conditioned entropy'
+    name = 'ce'
+
+    def __init__(self,**kwargs):
+        super(conditional_entropy,self).__init__(**kwargs,getclass=_getentclass)
+
+    @theiler
+    def bivariate(self,data,i=None,j=None):
+        z = data.to_numpy()
+        src = z[i]
+        targ = z[j]
+
+        if not hasattr(data,'entropy'):
+            data.entropy = np.ones((data.n_processes,1)) * -np.inf
+
+        if data.entropy[j] == -np.inf:
+            self._calc.initialise(1)
+            self._calc.setObservations(targ)
+            data.entropy[j] = self._calc.computeAverageLocalOfObservations()
+
+        if not hasattr(data,'joint_entropy'):
+            data.joint_entropy = np.ones((data.n_processes,data.n_processes)) * -np.inf
+
+        if data.joint_entropy[i,j] == -np.inf:
+            self._calc.initialise(2)
+            self._calc.setObservations(np.concatenate([src,targ],axis=1))
+            data.joint_entropy[i,j] = self._calc.computeAverageLocalOfObservations()
+            data.joint_entropy[j,i] = data.joint_entropy[i,j]
+
+        return data.joint_entropy[i,j] - data.entropy[j], data
+
+class causal_entropy(jidt_base,directed):
+
+    humanname = 'Causally conditioned entropy'
+    name = 'cce'
+
+    def __init__(self,n=5,**kwargs):
+        super(causal_entropy,self).__init__(**kwargs,getclass=_getentclass)
+        self._n = n
+
+    @staticmethod
+    def computeCausalEntropy(calc,n,src,targ):
+        mUtils = jp.JPackage('infodynamics.utils').MatrixUtils
+        H = 0
+        for i in range(2,n):
+            Yp = mUtils.makeDelayEmbeddingVector(targ, i-1)
+            Yp = Yp[1:]
+
+            Yf = targ[i-1:]
+            Xp = mUtils.makeDelayEmbeddingVector(src, i)
+
+            XYp = np.concatenate([Yp,Xp],axis=1)
+            H = H + computeConditionalEntropy(calc,Yf,XYp)
+        return H
+
+    @theiler
+    def bivariate(self,data,i=None,j=None):
+        if not hasattr(data,'causal_entropy'):
+            data.causal_entropy = np.ones((data.n_processes,data.n_processes)) * -np.inf
+
+        if data.causal_entropy[i,j] == -np.inf:
+            z = data.to_numpy()
+            src = z[i]
+            targ = z[j]
+            data.causal_entropy[i,j] = self.computeCausalEntropy(self._calc,self._n,src,targ)
+
+        return data.causal_entropy[i,j], data
+
+class directed_info(jidt_base,directed):
+
+    humanname = 'Directed information'
+    name = 'di'
+
+    def __init__(self,n=5,**kwargs):
+        super(directed_info,self).__init__(**kwargs,getclass=_getentclass)
+        self._n = n
+
+    @theiler
+    def bivariate(self,data,i=None,j=None):
+        z = data.to_numpy()
+        src = z[i]
+        targ = z[j]
+        """ Compute mutual information between Y and X
+        """
+
+        if not hasattr(data,'causal_entropy'):
+            data.causal_entropy = np.ones((data.n_processes,data.n_processes)) * -np.inf
+
+        if data.causal_entropy[i,j] == -np.inf:
+            data.causal_entropy[i,j] = causal_entropy.computeCausalEntropy(self._calc,self._n,src,targ)
+
+        if not hasattr(data,'entropy'):
+            data.entropy = np.ones((data.n_processes,1)) * -np.inf
+
+        if data.entropy[i] == -np.inf:
+            self._calc.initialise(1)
+            self._calc.setObservations(targ)
+            data.entropy[i] = self._calc.computeAverageLocalOfObservations()
+
+        return data.entropy[i] - data.causal_entropy[i,j], data
+
 class stochastic_interaction(jidt_base,undirected):
 
     humanname = "Stochastic interaction"
     name = 'si'
 
-    def __init__(self,**kwargs):
-        super(stochastic_interaction,self).__init__(**kwargs)
+    def __init__(self,history=1,**kwargs):
+        super(stochastic_interaction,self).__init__(**kwargs,getclass=_getentclass)
+        self._history = history
 
-    @takens
+    @theiler
     def bivariate(self,data,i=None,j=None,verbose=False):
-        z = data.to_numpy(squeeze=True)
-        src = z[i,:]
-        targ = z[j,:]
+        z = data.to_numpy()
+        src = z[i]
+        targ = z[j]
         """ Compute mutual information between Y and X
         """
+        k = self._history
 
-        self._calc.initialise(1, 1)
-        self._calc.setObservations(jp.JArray(jp.JDouble,1)(src.tolist()), jp.JArray(jp.JDouble,1)(targ.tolist()))
-        return self._calc.computeAverageLocalOfObservations()
+        joint = np.concatenate([src,targ],axis=1)
+
+        H_joint = computeConditionalEntropy(self._calc,joint[k:],joint[:-k])
+        H_src = computeConditionalEntropy(self._calc,src[k:],src[:-k])
+        H_targ = computeConditionalEntropy(self._calc,targ[k:],targ[:-k])
+
+        return H_src + H_targ - H_joint, data
