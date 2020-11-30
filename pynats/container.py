@@ -4,13 +4,17 @@ import pandas as pd
 import scipy.cluster.hierarchy as spc
 import scipy.spatial as sp
 import matplotlib.pyplot as plt
+import copy
 
 def forall(func):
     def do(self,**kwargs):
-        for i in self._calculators.index:
-            calc_ser = self._calculators.loc[i]
-            for calc in calc_ser:
-                func(self,calc,**kwargs)
+        try:
+            for i in self._calculators.index:
+                calc_ser = self._calculators.loc[i]
+                for calc in calc_ser:
+                    func(self,calc,**kwargs)
+        except AttributeError:
+            print(f'No calculators in frame yet. Initialise before calling {func}')
     return do
 
 class CalculatorFrame():
@@ -25,8 +29,13 @@ class CalculatorFrame():
                 names = [None] * len(datasets)
             if labels is None:
                 labels = [None] * len(datasets)
+
+            base_calc = Calculator(**kwargs)
             for i, dataset in enumerate(datasets):
-                calc = Calculator(dataset=dataset,name=names[i],label=labels[i],**kwargs)
+                calc = copy.deepcopy(base_calc)
+                calc.load_dataset(dataset)
+                calc.name = names[i]
+                calc.label = labels[i]
                 self.add_calculator(calc)
 
     def set_calculator(self,calculators,names=None):

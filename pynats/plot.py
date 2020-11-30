@@ -100,7 +100,7 @@ def plot_spacetime(data,cmap='davos_r',window=7,cluster=True):
     plt.show()
 
 # TODO: only use the top nmeasures features
-def heatmaps(calc,ncols=5,nmeasures=None,cmap='vik',**kwargs):
+def heatmaps(calc,ncols=5,nmeasures=None,cmap=sns.color_palette("coolwarm", as_cmap=True),**kwargs):
     if nmeasures is None:
         nmeasures = calc.n_measures
     nrows = 1 + nmeasures // ncols
@@ -131,7 +131,7 @@ def heatmaps(calc,ncols=5,nmeasures=None,cmap='vik',**kwargs):
     for ax in axs[-1,(nmeasures % ncols):]:
         ax.axis('off')
 
-def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_data=True,categories=None,strtrunc=20,data_cmap='devon_r',**kwargs):
+def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_data=True,categories=None,strtrunc=20,data_cmap='devon_r',clustermap_kwargs={}):
 
     if plot_data is True:
         figsize = (15,10)
@@ -176,7 +176,7 @@ def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_data=True
                 sns.set(font_scale=0.7)
             g = sns.clustermap(corrs, mask=mask,
                                 center=0.0, figsize=figsize,
-                                **kwargs, xticklabels=1, yticklabels=1 )
+                                **clustermap_kwargs, xticklabels=1, yticklabels=1 )
             ax_hm = g.ax_heatmap
             ax_hmcb = g.ax_cbar
 
@@ -229,7 +229,7 @@ def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_data=True
         return corrs, g.fig
     return corrs
 
-def flatten(calc,nmeasures=None,split=False,transformer=StandardScaler(),cluster=True,row_cluster=False,strtrunc=None,cmap='vik',plot=True,**kwargs):
+def flatten(calc,nmeasures=None,split=False,transformer=StandardScaler(),cluster=True,row_cluster=False,strtrunc=None,cmap=sns.color_palette("coolwarm", as_cmap=True),plot=True,**kwargs):
     if nmeasures is None:
         nmeasures = calc.n_measures 
 
@@ -299,7 +299,7 @@ def flattenall(cf,**kwargs):
     return df
 
 @asframe
-def clusterall(cf,approach='mean',plot=True,reducer=TSNE(n_components=1),flatten_kwargs={},clustermap_kwargs={'cmap': 'vik'}):
+def clusterall(cf,approach='mean',plot=True,reducer=TSNE(n_components=1),flatten_kwargs={},clustermap_kwargs={'cmap': sns.color_palette("coolwarm", as_cmap=True)}):
     if approach == 'flatten':
         df = flattenall(cf,plot=False,**flatten_kwargs)
         df.fillna(0,inplace=True)
@@ -471,3 +471,5 @@ def relate(cf,meas0,meas1,flatten_kwargs={}):
     
     splot = sns.displot(df,x=corr_str,kde=True)
     plt.xlim(-1, 1)
+    
+    return df, splot.fig

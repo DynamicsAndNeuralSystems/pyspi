@@ -47,6 +47,23 @@
 
     - squared: False
 
+  # Measures based on cross-correlation (squared means we square the xcorr, not the output)
+  xcorr:
+    - statistic: 'max'
+
+    - statistic: 'max'
+      squared: True
+  
+    - statistic: 'mean'
+
+    - statistic: 'mean'
+      squared: True
+      
+    - statistic: 'maxlag'
+
+    - statistic: 'maxlag'
+      squared: True
+
   # Distance correlation
   dcorr:
 
@@ -58,6 +75,22 @@
 
   # Heller-Heller-Gorfine (HHG) test  
   hhg:
+
+.causal:
+
+  # Additive noise model
+  anm:
+
+  gpfit:
+
+  cds:
+
+  # gnn:
+
+  igci:
+
+  reci:
+
   
 # Measures that analyse in the time-domain
 .temporal:
@@ -122,7 +155,6 @@
   # Partial coherence (condition out all other processes)
   partial_coherence:
 
-  ## These two get seg faults sometimes?
   partial_directed_coherence:
 
   directed_transfer_function:

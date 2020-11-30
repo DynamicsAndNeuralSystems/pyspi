@@ -5,13 +5,8 @@
   pearsonr:
     - cov_estimator: empirical
 
-  xcorr:
-    - statistic: 'max'
-    - statistic: 'maxlag'
-
-  # Partial correlation
-  pcor:
-    - cov_estimator: empirical
+  # Spearman correlation
+  spearmanr:
 
 # Measures that analyse in the frequency-domain (see Schoegl and Supp, 2006)
 .spectral:
@@ -20,14 +15,15 @@
   coherence:
     - f_lb: 0.0
       f_ub: 0.2
-    
-  # Spectral granger causality
-  spectral_granger:
-    - fs: 1
 
-.wavelet:
+  partial_directed_coherence:
 
-  wcoh:
+.causal:
+
+  # Additive noise model
+  anm:
+
+  igci:
 
 # Information-theoretic measures
 .infotheory:
@@ -35,7 +31,6 @@
   # Mutual information
   mutual_info:
     - estimator: gaussian
-
     - estimator: kraskov
       prop_k: 4
       dyn_corr_excl: AUTO

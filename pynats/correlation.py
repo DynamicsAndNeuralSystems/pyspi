@@ -90,6 +90,7 @@ class xcorr(undirected,real):
         self.name = 'xcorr'
         self._squared = squared
         self._statistic = statistic
+
         if self._squared:
             self.name = self.name + '-sq'
         self.name = self.name + '_' + statistic
@@ -105,20 +106,25 @@ class xcorr(undirected,real):
             x = z[i]
             y = z[j]
             data.xcorr[i,j] = np.squeeze(signal.correlate(x,y,'full'))
+            data.xcorr[i,j] = data.xcorr[i,j] / x.std() / y.std() / (data.n_observations - 1)
 
         if self._statistic == 'max':
-            stat = np.max(data.xcorr)
+            if self._squared:
+                stat = np.max(data.xcorr[i,j]**2)
+            else:
+                stat = np.max(data.xcorr[i,j])
         elif self._statistic == 'maxlag':
-            stat = data.n_observations - np.argmax(data.xcorr)
+            if self._squared:
+                stat = data.n_observations-np.argmax(data.xcorr[i,j]**2)+1
+            else:
+                stat = data.n_observations-np.argmax(data.xcorr[i,j])+1
         elif self._statistic == 'mean':
-            stat = np.mean(data.xcorr[i,j])
+            if self._squared:
+                stat = np.mean(data.xcorr[i,j]**2)
+            else:
+                stat = np.mean(data.xcorr[i,j])
 
-        if self._squared:
-            return stat ** 2, data
-        else:
-            return stat, data
-
-    
+        return stat, data    
 
 class spearmanr(undirected,real):
 

@@ -57,23 +57,23 @@ class Calculator():
 
     @dataset.setter
     def dataset(self,d):
-        if not isinstance(d,Data):
-            raise TypeError(f'Input is type {type(d)}. Expected {type(Data)}')
-        self._dataset = d
-
-    @dataset.setter
-    def cmap(self,c):
-        if not isinstance(c,str):
-            raise TypeError(f'Input is type {type(c)}. Expected {type(str)}.')
-        self._cmap = c
+        raise Exception('Do not set this property externally. Use the load_dataset method.')
 
     @property
     def name(self):
         return self._name
 
+    @name.setter
+    def name(self,n):
+        self._name = n
+
     @property
     def label(self):
         return self._label
+    
+    @label.setter
+    def label(self,l):
+        self._label = l
 
     @property
     def adjacency(self):
@@ -81,9 +81,7 @@ class Calculator():
 
     @adjacency.setter
     def adjacency(self,a):
-        if (a is not None) and not isinstance(a,np.ndarray):
-            raise TypeError(f'Input is type {type(a)}. Expected {type(np.ndarray)}.')
-        self._adjacency = a
+        raise Exception('Do not set this property externally. Use the compute method to obtain property.')
 
     def _load_yaml(self,document):
         print("Loading configuration file: {}".format(document))
@@ -122,7 +120,7 @@ class Calculator():
     def load_dataset(self,dataset):
         if not isinstance(dataset,Data):
             raise TypeError(f'Input is {type(dataset)}. Expected {type(Data)}')
-        self.dataset = dataset
+        self._dataset = dataset
         self._adjacency = np.empty((self._nmeasures,
                                     self.dataset.n_processes,
                                     self.dataset.n_processes))
@@ -138,7 +136,7 @@ class Calculator():
             pbar.set_description(f'Processing [{self._name}: {self._measure_names[m]}]')
             start_time = time.time()
             try:
-                self._adjacency[m], self.dataset = self._measures[m].adjacency(self.dataset)
+                self._adjacency[m], self._dataset = self._measures[m].adjacency(self.dataset)
             except Exception as err:
                 warnings.warn(f'Caught exception for measure "{self._measure_names[m]}": {err}')
                 self._adjacency[m] = np.NaN
@@ -217,7 +215,7 @@ class Calculator():
         if not isinstance(calc2,Calculator):
             raise TypeError('Input must be of type pynats.Calculator')
 
-    def save(self,filaname):
-        print('Saving object to dill database: "{filaname}"')
-        with open(filaname, 'wb') as f:
+    def save(self,filename):
+        print('Saving object to dill database: "{filename}"')
+        with open(filename, 'wb') as f:
             dill.dump(self, f)

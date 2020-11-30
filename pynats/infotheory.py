@@ -4,79 +4,28 @@ from pynats import utils
 from pynats.base import directed, undirected, parse, positive, real
 from collections import namedtuple
 
+import copy
+import os
 import warnings
+
+if not jp.isJVMStarted():
+    jarloc = os.path.dirname(os.path.abspath(__file__)) + '/lib/jidt/infodynamics.jar'
+    print(f'Starting JVM with java class {jarloc}.')
+    jp.startJVM(jp.getDefaultJVMPath(), '-ea', '-Djava.class.path=' + jarloc)
 
 """
 Contains relevant dependence measures from the information theory community.
 """
 
-def _getentclass(jidt_base_class,estimator):
-    if estimator == 'kernel':
-        jidt_class = jidt_base_class.EntropyCalculatorMultiVariateKernel
-    elif estimator == 'kozachenko':
-        jidt_class = jidt_base_class.EntropyCalculatorMultiVariateKozachenko            
-    else:
-        jidt_class = jidt_base_class.EntropyCalculatorMultiVariateGaussian
-
-    return jidt_class()
-
-def _getuentclass(jidt_base_class,estimator):
-    if estimator == 'kernel':
-        jidt_class = jidt_base_class.EntropyCalculatorKernel
-    elif estimator == 'kozachenko':
-        jidt_class = jidt_base_class.EntropyCalculatorKraskov1            
-    else:
-        jidt_class = jidt_base_class.EntropyCalculatorGaussian
-
-    return jidt_class()
-
-def _getcmiclass(jidt_base_class,estimator):
-    if estimator == 'kernel':
-        jidt_class = jidt_base_class.ConditionalMutualInfoCalculatorMultiVariateKernel
-    elif estimator == 'kraskov':
-        jidt_class = jidt_base_class.ConditionalMutualInfoCalculatorMultiVariateKraskov1            
-    else:
-        jidt_class = jidt_base_class.ConditionalMutualInfoCalculatorMultiVariateGaussian
-
-    return jidt_class()
-
-def _getmiclass(jidt_base_class,estimator):
-    if estimator == 'kernel':
-        jidt_class = jidt_base_class.MutualInfoCalculatorMultiVariateKernel
-    elif estimator == 'kraskov':
-        jidt_class = jidt_base_class.MutualInfoCalculatorMultiVariateKraskov1            
-    else:
-        jidt_class = jidt_base_class.MutualInfoCalculatorMultiVariateGaussian
-
-    return jidt_class()
-
-def _getaisclass(jidt_base_class,estimator):
-    if estimator == 'kernel':
-        calc_class = jidt_base_class.ActiveInfoStorageCalculatorKernel
-    elif estimator == 'kraskov':
-        calc_class = jidt_base_class.ActiveInfoStorageCalculatorKraskov            
-    else:
-        calc_class = jidt_base_class.ActiveInfoStorageCalculatorGaussian
-    return calc_class()
-
-def _getteclass(jidt_base_class,estimator):
-    if estimator == 'kernel':
-        calc_class = jidt_base_class.TransferEntropyCalculatorKernel
-    elif estimator == 'kraskov':
-        calc_class = jidt_base_class.TransferEntropyCalculatorKraskov            
-    else:
-        calc_class = jidt_base_class.TransferEntropyCalculatorGaussian
-    return calc_class()
-
 def computeConditionalEntropy(ent_calc,X,Y):
     XY = np.concatenate([X,Y],axis=1)
 
     ent_calc.initialise(XY.shape[1])
-    ent_calc.setObservations(XY)
+    ent_calc.setObservations(jp.JArray(jp.JDouble,XY.ndim)(XY))
     H_XY = ent_calc.computeAverageLocalOfObservations()
 
     ent_calc.initialise(Y.shape[1])
-    ent_calc.setObservations(Y)
+    ent_calc.setObservations(jp.JArray(jp.JDouble,Y.ndim)(Y))
     H_Y = ent_calc.computeAverageLocalOfObservations()
 
     return H_XY - H_Y
@@ -85,11 +34,11 @@ def theiler(bivariate):
     @parse
     def compute_window(self,data,i=None,j=None):
         if i is None:
-            i = 1
             warnings.warn('Source array not chosen - using first process.')
+            i = 0
         if j is None:
-            j = 1
             warnings.warn('Target array not chosen - using second process.')
+            j = 1
 
         if self._dyn_corr_excl is not None:
             if not hasattr(data,'theiler'):
@@ -123,11 +72,11 @@ def takens(bivariate):
         # TODO: Allow user to only embed source or target
         if self._auto_embed_method is not None:
             if i is None:
-                i = 0
                 warnings.warn('Source array not chosen - using first process.')
+                i = 0
             if j is None:
-                j = 1
                 warnings.warn('Target array not chosen - using second process.')
+                j = 1
 
 
             if not hasattr(data,'embeddings'):
@@ -146,11 +95,11 @@ def takens(bivariate):
                 ais_calc.compute_embeddings(data,i,j)
 
             opt_k = np.min([ais_calc._optimal_history[i],k_search_max])
-            opt_l = np.min([ais_calc._optimal_history[j],k_search_max])
-            opt_ktau, opt_ltau = ais_calc._optimal_timedelay[[i,j]]
-
             self._calc.setProperty(self._K_HISTORY_PROP_NAME, str(int(opt_k)))
+            
             if self._estimator != 'kernel':
+                opt_l = np.min([ais_calc._optimal_history[j],k_search_max])
+                opt_ktau, opt_ltau = ais_calc._optimal_timedelay[[i,j]]
                 self._calc.setProperty(self._K_TAU_PROP_NAME, str(int(opt_ktau)))
                 self._calc.setProperty(self._L_HISTORY_PROP_NAME, str(int(opt_l)))
                 self._calc.setProperty(self._L_TAU_PROP_NAME, str(int(opt_ltau)))
@@ -173,44 +122,19 @@ class jidt_base(positive):
     _K_SEARCH_MAX_PROP_NAME = 'AUTO_EMBED_K_SEARCH_MAX'
     _TAU_SEARCH_MAX_PROP_NAME = 'AUTO_EMBED_TAU_SEARCH_MAX'
     _BIAS_CORRECTION = 'BIAS_CORRECTION'
+    _NORMALISE = 'NORMALISE'
+
+    _base_class = jp.JPackage('infodynamics.measures.continuous')
 
     def __init__(self,estimator='gaussian',
                     kernel_width=0.5,
                     prop_k=4,
-                    dyn_corr_excl=None,
-                    getclass=_getmiclass):
+                    dyn_corr_excl=None):
 
         self._estimator = estimator
         self._kernel_width = kernel_width
         self._prop_k = prop_k
         self._dyn_corr_excl = dyn_corr_excl
-
-        if not jp.isJVMStarted():
-            jarloc = './pynats/lib/jidt/infodynamics.jar'
-            jp.startJVM(jp.getDefaultJVMPath(), '-ea', '-Djava.class.path=' + jarloc)
-        
-        self._jidt_base_class = jp.JPackage('infodynamics.measures.continuous.' + estimator)
-
-        try:
-            self._calc = getclass(self._jidt_base_class,estimator)
-            self._calc.setProperty('NORMALISE', 'true')
-            self._calc.setProperty('BIAS_CORRECTION', 'true')
-
-            if estimator == 'kraskov':
-                self._calc.setProperty(self._NNK_PROP_NAME,str(prop_k))
-            elif estimator == 'kernel':
-                self._calc.setProperty(self._KERNEL_WIDTH_PROP_NAME,str(kernel_width))
-
-        except TypeError:
-            self._calc = []
-            for _class in getclass:
-                self._calc.append(_class(self._jidt_base_class,estimator))
-                self._calc[-1].setProperty('NORMALISE', 'true')
-                self._calc[-1].setProperty('BIAS_CORRECTION', 'true')
-                if estimator == 'kraskov':
-                    self._calc[-1].setProperty(self._NNK_PROP_NAME,str(prop_k))
-                if estimator == 'kernel':
-                    self._calc[-1].setProperty(self._KERNEL_WIDTH_PROP_NAME,str(kernel_width))
 
         self.name = self.name + '_' + estimator
         if estimator == 'kraskov':
@@ -223,6 +147,77 @@ class jidt_base(positive):
         if self._dyn_corr_excl:
             self.name = self.name + '_DCE'
 
+    def __getstate__(self):
+        state = dict(self.__dict__)
+        try:
+            del state['_calc'], state['_base_class']
+        except KeyError:
+            pass
+        return state
+
+    def __deepcopy__(self,memo):
+        newone = type(self)()
+        newone.__dict__.update(self.__dict__)
+        for attr in newone.__dict__:
+            setattr(newone,attr,copy.deepcopy(getattr(self,attr),memo))
+        return newone
+
+    def initCalc(self,calc):
+        if self._estimator == 'kernel':
+            calc.setProperty(self._KERNEL_WIDTH_PROP_NAME,str(self._kernel_width))
+        elif self._estimator == 'kraskov':
+            calc.setProperty(self._NNK_PROP_NAME,str(self._prop_k))
+
+        calc.setProperty(self._NORMALISE, 'true')
+        calc.setProperty(self._BIAS_CORRECTION, 'true')
+
+        return calc
+
+    def getEntropyCalculator(self):
+        if self._estimator == 'kernel':
+            calc = self._base_class.kernel.EntropyCalculatorMultiVariateKernel()
+        elif self._estimator == 'kozachenko':
+            calc = self._base_class.kozachenko.EntropyCalculatorMultiVariateKozachenko()
+        else:
+            calc = self._base_class.gaussian.EntropyCalculatorMultiVariateGaussian()
+        return self.initCalc(calc)
+
+    def getMultivariateMutualInfoCalculator(self):
+        if self._estimator == 'kernel':
+            calc = self._base_class.kernel.ConditionalMutualInfoCalculatorMultiVariateKernel()
+        elif self._estimator == 'kraskov':
+            calc = self._base_class.kraskov.ConditionalMutualInfoCalculatorMultiVariateKraskov1()
+        else:
+            calc = self._base_class.gaussian.ConditionalMutualInfoCalculatorMultiVariateGaussian()
+        return self.initCalc(calc)
+
+    def getMutualInfoCalculator(self):
+        if self._estimator == 'kernel':
+            calc = self._base_class.kernel.MutualInfoCalculatorMultiVariateKernel()
+        elif self._estimator == 'kraskov':
+            calc = self._base_class.kraskov.MutualInfoCalculatorMultiVariateKraskov1()
+        else:
+            calc = self._base_class.gaussian.MutualInfoCalculatorMultiVariateGaussian()
+        return self.initCalc(calc)
+
+    def getActiveInfoStorageCalculator(self):
+        if self._estimator == 'kernel':
+            calc = self._base_class.kernel.ActiveInfoStorageCalculatorKernel()
+        elif self._estimator == 'kraskov':
+            calc = self._base_class.kraskov.ActiveInfoStorageCalculatorKraskov()
+        else:
+            calc = self._base_class.gaussian.ActiveInfoStorageCalculatorGaussian()
+        return self.initCalc(calc)
+
+    def getTransferEntropyCalculator(self):
+        if self._estimator == 'kernel':
+            calc = self._base_class.kernel.TransferEntropyCalculatorKernel()
+        elif self._estimator == 'kraskov':
+            calc = self._base_class.kraskov.TransferEntropyCalculatorKraskov()
+        else:
+            calc = self._base_class.gaussian.TransferEntropyCalculatorGaussian()
+        return self.initCalc(calc)
+
 class active_information_storage(jidt_base):
 
     _HISTORY_PROP_NAME = 'k_HISTORY'
@@ -230,7 +225,7 @@ class active_information_storage(jidt_base):
     name = 'ais'
 
     def __init__(self,auto_embed_method='MAX_CORR_AIS',k_search_max=1,tau_search_max=1,**kwargs):
-        super(active_information_storage, self).__init__(**kwargs,getclass=_getaisclass)
+        super(active_information_storage, self).__init__(**kwargs)
 
         self._auto_embed_method = auto_embed_method
         self._k_search_max = k_search_max
@@ -238,6 +233,8 @@ class active_information_storage(jidt_base):
 
         self._optimal_history = None
         self._optimal_timedelay = None
+
+        self._calc = self.getActiveInfoStorageCalculator()
 
     # Overload dir() to get only attributes we care about
     def __dir__(self):
@@ -247,6 +244,12 @@ class active_information_storage(jidt_base):
         elif self._estimator == 'kernel':
             atts = atts.append('_kernel_width')
         return atts
+
+    def __setstate__(self,state):
+        """ Re-initialise the calculator
+        """
+        self.__dict__.update(state)
+        self._calc = self.getActiveInfoStorageCalculator()
 
     def equivalent(self,other):
         # If the attribute list is different, not the same object
@@ -276,13 +279,10 @@ class active_information_storage(jidt_base):
             for i in range(data.n_processes):
                 src = z[i]
                 self._calc.initialise(1, 1)
-                self._calc.setObservations(jp.JArray(jp.JDouble,1)(src.tolist()))
-                try:
-                    self._optimal_history[i] = int(self._calc.getProperty(self._HISTORY_PROP_NAME))
-                    self._optimal_timedelay[i] = int(self._calc.getProperty(self._TAU_PROP_NAME))
-                except TypeError: 
-                    self._optimal_history[i] = int(self._calc.getProperty(self._HISTORY_PROP_NAME).toString())
-                    self._optimal_timedelay[i] = int(self._calc.getProperty(self._TAU_PROP_NAME).toString())
+                self._calc.setObservations(jp.JArray(jp.JDouble,1)(src))
+                self._optimal_history[i] = int(str(self._calc.getProperty(self._HISTORY_PROP_NAME)))
+                if self._estimator != 'kernel':
+                    self._optimal_timedelay[i] = int(str(self._calc.getProperty(self._TAU_PROP_NAME)))
 
 class mutual_info(jidt_base,undirected):
     humanname = "Mutual information"
@@ -290,23 +290,7 @@ class mutual_info(jidt_base,undirected):
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
-
-    def __getstate__(self):
-        """ The calculator class is unpickleable
-        """
-        state = self.__dict__.copy()
-        del state['_calc']
-        self.__dict__.update(state)
-
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        # Re-initialise
-        self.__dict__.update(state)
-        self.__init__(self,estimator=self._estimator,
-                        kernel_width=self._kernel_width,
-                        prop_k=self._prop_k,
-                        dyn_corr_excl=self._dyn_corr_excl)
+        self._calc = self.getMutualInfoCalculator()
 
     @theiler
     def bivariate(self,data,i=None,j=None,verbose=False):
@@ -318,7 +302,7 @@ class mutual_info(jidt_base,undirected):
 
         self._calc.initialise(1, 1)
         try:
-            self._calc.setObservations(jp.JArray(jp.JDouble)(src.tolist()), jp.JArray(jp.JDouble)(targ.tolist()))
+            self._calc.setObservations(jp.JArray(jp.JDouble)(src), jp.JArray(jp.JDouble)(targ))
             mi = self._calc.computeAverageLocalOfObservations()
         except:
             warnings.warn('MI calcs failed. Maybe check input data for Cholesky factorisation?')
@@ -331,6 +315,7 @@ class time_lagged_mutual_info(mutual_info):
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
+        self._calc = self.getMutualInfoCalculator()
 
     @theiler
     def bivariate(self,data,i=None,j=None,verbose=False):
@@ -344,12 +329,18 @@ class time_lagged_mutual_info(mutual_info):
         targ = targ[1:]
         self._calc.initialise(1, 1)
         try:
-            self._calc.setObservations(jp.JArray(jp.JDouble,1)(src.tolist()), jp.JArray(jp.JDouble,1)(targ.tolist()))
+            self._calc.setObservations(jp.JArray(jp.JDouble,1)(src), jp.JArray(jp.JDouble,1)(targ))
             tl_mi = self._calc.computeAverageLocalOfObservations()
         except:
             warnings.warn('Time-lagged MI calcs failed. Maybe check input data for Cholesky factorisation?')
             tl_mi = np.NaN
         return tl_mi, data
+
+    def __setstate__(self,state):
+        """ Re-initialise the calculator
+        """
+        self.__dict__.update(state)
+        self._calc = self.getMutualInfoCalculator()
 
 class transfer_entropy(jidt_base,directed):
 
@@ -367,7 +358,8 @@ class transfer_entropy(jidt_base,directed):
         self._l_history = l_history
         self._l_tau = l_tau
 
-        super().__init__(**kwargs,getclass=_getteclass)
+        super().__init__(**kwargs)
+        self._calc = self.getTransferEntropyCalculator()
 
         # Auto-embedding
         if auto_embed_method is not None:
@@ -384,30 +376,12 @@ class transfer_entropy(jidt_base,directed):
             else:
                 self.name = self.name + '_k-{}'.format(k_history)
 
-    def __getstate__(self):
-        """ JVMs seem to be unpickleable, so lazy workaround is just to delete the _calc class
-        """
-        state = self.__dict__.copy()
-        del state['_calc']
-        self.__dict__.update(state)
-
     def __setstate__(self,state):
         """ Re-initialise the calculator
         """
         # Re-initialise
         self.__dict__.update(state)
-        self.__init__(self,
-                        auto_embed_method=self._auto_embed_method,
-                        k_search_max=self._k_search_max,
-                        tau_search_max=self._tau_search_max,
-                        k_history=self._k_history,
-                        k_tau=self._k_tau,
-                        l_history=self._l_history,
-                        l_tau=self._l_tau,
-                        estimator=self._estimator,
-                        kernel_width=self._kernel_width,
-                        prop_k=self._prop_k,
-                        dyn_corr_excl=self._dyn_corr_excl)
+        self._calc = self.getTransferEntropyCalculator()
 
     @takens
     def bivariate(self,data,i=None,j=None,verbose=False):
@@ -419,7 +393,7 @@ class transfer_entropy(jidt_base,directed):
 
         self._calc.initialise()
         try:
-            self._calc.setObservations(jp.JArray(jp.JDouble,1)(src.tolist()), jp.JArray(jp.JDouble,1)(targ.tolist()))
+            self._calc.setObservations(jp.JArray(jp.JDouble,1)(src), jp.JArray(jp.JDouble,1)(targ))
             te = self._calc.computeAverageLocalOfObservations()
         except:
             warnings.warn('TE calcs failed. Maybe check input time series for Cholesky decomposition?')
@@ -428,11 +402,19 @@ class transfer_entropy(jidt_base,directed):
 
 class conditional_entropy(jidt_base,directed):
 
-    humanname = 'Causally conditioned entropy'
+    humanname = 'Conditional entropy'
     name = 'ce'
 
     def __init__(self,**kwargs):
-        super(conditional_entropy,self).__init__(**kwargs,getclass=_getentclass)
+        super(conditional_entropy,self).__init__(**kwargs)
+        self._calc = self.getEntropyCalculator()
+
+    def __setstate__(self,state):
+        """ Re-initialise the calculator
+        """
+        # Re-initialise
+        self.__dict__ = state
+        self._calc = self.getEntropyCalculator()
 
     @theiler
     def bivariate(self,data,i=None,j=None):
@@ -445,7 +427,7 @@ class conditional_entropy(jidt_base,directed):
 
         if data.entropy[j] == -np.inf:
             self._calc.initialise(1)
-            self._calc.setObservations(targ)
+            self._calc.setObservations(jp.JArray(jp.JDouble,1)(np.squeeze(targ)))
             data.entropy[j] = self._calc.computeAverageLocalOfObservations()
 
         if not hasattr(data,'joint_entropy'):
@@ -453,11 +435,11 @@ class conditional_entropy(jidt_base,directed):
 
         if data.joint_entropy[i,j] == -np.inf:
             self._calc.initialise(2)
-            self._calc.setObservations(np.concatenate([src,targ],axis=1))
+            self._calc.setObservations(jp.JArray(jp.JDouble, 2)(np.concatenate([src,targ],axis=1)))
             data.joint_entropy[i,j] = self._calc.computeAverageLocalOfObservations()
             data.joint_entropy[j,i] = data.joint_entropy[i,j]
 
-        return data.joint_entropy[i,j] - data.entropy[j], data
+        return data.joint_entropy[i,j] - data.entropy[i], data
 
 class causal_entropy(jidt_base,directed):
 
@@ -465,21 +447,27 @@ class causal_entropy(jidt_base,directed):
     name = 'cce'
 
     def __init__(self,n=5,**kwargs):
-        super(causal_entropy,self).__init__(**kwargs,getclass=_getentclass)
+        super(causal_entropy,self).__init__(**kwargs)
         self._n = n
+        self._calc = self.getEntropyCalculator()
+
+    def __setstate__(self,state):
+        """ Re-initialise the calculator
+        """
+        # Re-initialise
+        self.__dict__.update(state)
+        self._calc = self.getEntropyCalculator()
 
     @staticmethod
     def computeCausalEntropy(calc,n,src,targ):
         mUtils = jp.JPackage('infodynamics.utils').MatrixUtils
         H = 0
         for i in range(2,n):
-            Yp = mUtils.makeDelayEmbeddingVector(targ, i-1)
-            Yp = Yp[1:]
-
-            Yf = targ[i-1:]
-            Xp = mUtils.makeDelayEmbeddingVector(src, i)
-
+            Yp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(targ), i-1)[1:]
+            Xp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(src), i)
             XYp = np.concatenate([Yp,Xp],axis=1)
+
+            Yf = np.expand_dims(targ[i-1:],1)
             H = H + computeConditionalEntropy(calc,Yf,XYp)
         return H
 
@@ -489,7 +477,7 @@ class causal_entropy(jidt_base,directed):
             data.causal_entropy = np.ones((data.n_processes,data.n_processes)) * -np.inf
 
         if data.causal_entropy[i,j] == -np.inf:
-            z = data.to_numpy()
+            z = data.to_numpy(squeeze=True)
             src = z[i]
             targ = z[j]
             data.causal_entropy[i,j] = self.computeCausalEntropy(self._calc,self._n,src,targ)
@@ -502,8 +490,16 @@ class directed_info(jidt_base,directed):
     name = 'di'
 
     def __init__(self,n=5,**kwargs):
-        super(directed_info,self).__init__(**kwargs,getclass=_getentclass)
+        super(directed_info,self).__init__(**kwargs)
         self._n = n
+        self._calc = self.getEntropyCalculator()
+
+    def __setstate__(self,state):
+        """ Re-initialise the calculator
+        """
+        # Re-initialise
+        self.__dict__.update(state)
+        self._calc = self.getEntropyCalculator()
 
     @theiler
     def bivariate(self,data,i=None,j=None):
@@ -524,7 +520,7 @@ class directed_info(jidt_base,directed):
 
         if data.entropy[i] == -np.inf:
             self._calc.initialise(1)
-            self._calc.setObservations(targ)
+            self._calc.setObservations(jp.JArray(jp.JDouble,1)(targ))
             data.entropy[i] = self._calc.computeAverageLocalOfObservations()
 
         return data.entropy[i] - data.causal_entropy[i,j], data
@@ -535,8 +531,16 @@ class stochastic_interaction(jidt_base,undirected):
     name = 'si'
 
     def __init__(self,history=1,**kwargs):
-        super(stochastic_interaction,self).__init__(**kwargs,getclass=_getentclass)
+        super(stochastic_interaction,self).__init__(**kwargs)
         self._history = history
+        self._calc = self.getEntropyCalculator()
+    
+    def __setstate__(self,state):
+        """ Re-initialise the calculator
+        """
+        # Re-initialise
+        self.__dict__.update(state)
+        self._calc = self.getEntropyCalculator()
 
     @theiler
     def bivariate(self,data,i=None,j=None,verbose=False):

@@ -75,13 +75,13 @@ class ccm(directed,real):
             names = []
 
             # First pass: infer optimal embedding
-            for j in range(M):
-                names.append('var' + str(j))
-                df[names[j]] = z[j]
+            for _i in range(M):
+                names.append('var' + str(_i))
+                df[names[_i]] = z[_i]
                 pred = str(10) + ' ' + str(N-10)
                 embed_df = edm.EmbedDimension(dataFrame=df,lib=pred,
-                                                pred=pred,columns=str(j),showPlot=False)
-                embedding[j] = embed_df.iloc[embed_df.idxmax().rho,0]
+                                                pred=pred,columns=str(_i),showPlot=False)
+                embedding[_i] = embed_df.iloc[embed_df.idxmax().rho,0]
             
             # Get some reasonable library lengths
             nlibs = 5
@@ -93,15 +93,15 @@ class ccm(directed,real):
 
             # Second pass: compute CCM
             score = np.zeros((M,M,nlibs+1))
-            for j in range(M):
-                for i in range(j+1,M):
-                    E = int(max(embedding[i],embedding[j]))
-                    ccm_df = edm.CCM(dataFrame=df,E=E,columns=names[i],target=names[j],
+            for _i in range(M):
+                for _j in range(_i+1,M):
+                    E = int(max(embedding[_i],embedding[_j]))
+                    ccm_df = edm.CCM(dataFrame=df,E=E,columns=names[_i],target=names[_j],
                                         libSizes=lib_sizes,sample=100)
                     sc1 = ccm_df.iloc[:,1]
                     sc2 = ccm_df.iloc[:,2]
-                    score[i,j] = np.array(sc1)
-                    score[j,i] = np.array(sc2)
+                    score[_i,_j] = np.array(sc1)
+                    score[_j,_i] = np.array(sc2)
 
             data.ccm = ccm.cache(embedding=embedding, score=score)
 

@@ -1,0 +1,3 @@
+[submodule "pynats/lib/tigramite"]
+	path = pynats/lib/tigramite
+	url = https://github.com/jakobrunge/tigramite.git
