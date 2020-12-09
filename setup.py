@@ -39,12 +39,12 @@ setup(
                         'nilearn>=0.6.2',
                         'nitime==0.6',
                         'hyppo>=0.1.3',
-                        'pyEDM>=1.6.1.0',
+                        'pyEDM>=1.0.3.2',
                         'jpype1>=0.6.1',
                         'sktime>=0.4.3',
                         'dill>=0.3.2',
                         'spectral-connectivity>=0.2.4.dev0',
                         'PyWavelets>=0.2.2',
                         'umap-learn>=0.4.6',
-                        'torch>=1.7.0']
+                        'torch>=0.1.2']
 )

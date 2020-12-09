@@ -7,6 +7,8 @@ from scipy import stats
 from pynats import utils
 import warnings
 
+import matplotlib as mpl
+mpl.use('GTK3Agg') # TKAgg has problems with multithreading
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import matplotlib.gridspec as gridspec
@@ -67,7 +69,7 @@ def update_plots(num,data,lines):
         line.set_ydata(data[:,(num+t)%maxT])
         te = ((num+t)%maxT)+1
 
-def plot_spacetime(data,cmap='davos_r',window=7,cluster=True):
+def plot_spacetime(data,cmap='davos_r',window=7,cluster=True,savefilename=None):
     dat = data.to_numpy(squeeze=True)
 
     g = sns.clustermap(np.transpose(dat),
@@ -93,11 +95,15 @@ def plot_spacetime(data,cmap='davos_r',window=7,cluster=True):
     lims = [np.min(dat),np.max(dat)]
     padding = np.ptp(lims)*0.05
     ax_st.set_ylim([lims[0]-padding,lims[1]+padding])
-    line_ani = animation.FuncAnimation(fig, update_plots,data.n_observations,fargs=(dat,lines),interval=100,blit=False)
+    line_ani = animation.FuncAnimation(fig,update_plots,data.n_observations,fargs=(dat,lines),interval=100,blit=False)
 
     ax_im.locator_params(axis='y', nbins=6)
-
-    plt.show()
+    if savefilename is not None:
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+        line_ani.save(savefilename, writer=writer)
+    else:
+        plt.show()
 
 # TODO: only use the top nmeasures features
 def heatmaps(calc,ncols=5,nmeasures=None,cmap=sns.color_palette("coolwarm", as_cmap=True),**kwargs):

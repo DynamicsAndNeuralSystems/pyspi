@@ -16,15 +16,6 @@
     - f_lb: 0.0
       f_ub: 0.2
 
-  partial_directed_coherence:
-
-.causal:
-
-  # Additive noise model
-  anm:
-
-  igci:
-
 # Information-theoretic measures
 .infotheory:
 

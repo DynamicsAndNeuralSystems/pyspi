@@ -9,6 +9,7 @@ import time
 import multiprocessing
 import warnings
 import dill
+import os
 
 # Plotting tools
 from tqdm import tqdm
@@ -24,7 +25,7 @@ class Calculator():
     """
     
     # Initializer / Instance Attributes
-    def __init__(self,dataset=None,name=None,label=None,configfile='./pynats/config.yaml'):
+    def __init__(self,dataset=None,name=None,label=None,configfile=os.path.dirname(os.path.abspath(__file__)) + '/config.yaml'):
 
         self._load_yaml(configfile)
 
@@ -119,8 +120,9 @@ class Calculator():
 
     def load_dataset(self,dataset):
         if not isinstance(dataset,Data):
-            raise TypeError(f'Input is {type(dataset)}. Expected {type(Data)}')
-        self._dataset = dataset
+            self._dataset = Data.convert_to_numpy(dataset)
+        else:
+            self._dataset = dataset
         self._adjacency = np.empty((self._nmeasures,
                                     self.dataset.n_processes,
                                     self.dataset.n_processes))
