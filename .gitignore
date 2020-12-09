@@ -1,6 +1,9 @@
 pynats.egg-info
 pynats/__pycache__
 demos/data
+pynats/lib/ScientificColourMaps6/__pycache__
+build
+dist
 *.pkl
 *.log
 *.bkp

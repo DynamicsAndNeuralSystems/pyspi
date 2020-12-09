@@ -16,7 +16,7 @@ def forall(func):
                 for calc in calc_ser:
                     func(self,calc,**kwargs)
         except AttributeError:
-            print(f'No calculators in frame yet. Initialise before calling {func}')
+            raise AttributeError(f'No calculators in frame yet. Initialise before calling {func}')
     return do
 
 class CalculatorFrame():

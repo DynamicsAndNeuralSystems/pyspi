@@ -113,10 +113,6 @@ def heatmaps(calc,ncols=5,nmeasures=None,cmap=sns.color_palette("coolwarm", as_c
 
     _, axs = plt.subplots(nrows,ncols,sharex=True,sharey=True,squeeze=False)
 
-    lw = 0.0
-    if split is True:
-        lw = 0.01
-
     for i in range(nmeasures):
         ccol = i % ncols
         crow = i // ncols
@@ -129,7 +125,7 @@ def heatmaps(calc,ncols=5,nmeasures=None,cmap=sns.color_palette("coolwarm", as_c
         adj = calc.adjacency[i,:,:]
         sns.heatmap(adj,
                     ax=myax, cbar_ax=cax,
-                    square=True, linewidth=lw,
+                    square=True,
                     cmap=cmap, mask=np.invert(np.isnan(adj)), center=0.00, **kwargs)
         myax.set_title('[' + str(i) + '] ' + utils.strshort(calc._measure_names[i],20))
 
@@ -137,18 +133,17 @@ def heatmaps(calc,ncols=5,nmeasures=None,cmap=sns.color_palette("coolwarm", as_c
     for ax in axs[-1,(nmeasures % ncols):]:
         ax.axis('off')
 
-def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_data=True,categories=None,strtrunc=20,data_cmap='devon_r',clustermap_kwargs={}):
+def clustermap(calc,which_measure=None,plot=True,plot_data=False,sort_data=True,categories=None,strtrunc=20,data_cmap='devon_r',clustermap_kwargs={}):
 
     if plot_data is True:
         figsize = (15,10)
     else:
         figsize = (10,10)
 
-    if isinstance(which_measure,int):
+    if isinstance(which_measure,int) and which_measure > 0:
         corrs = calc.adjacency[which_measure,:,:]
         np.fill_diagonal(corrs, 0)
         corrs = np.nan_to_num(corrs)
-        df = pd.DataFrame(adj,columns=calc._measure_names)
 
         if plot is True:
             cat_colors = None
@@ -160,11 +155,11 @@ def clustermap(calc,which_measure='all',plot=True,plot_data=False,sort_data=True
                 cat_colors = cats.map(category_lut).tolist()
 
             g = sns.clustermap(corrs, center=0.0, figsize=figsize,
-                                col_colors=cat_colors, row_colors=cat_colors,**kwargs,
+                                col_colors=cat_colors, row_colors=cat_colors,**clustermap_kwargs,
                                 dendrogram_ratio=.05 )
             ax_hm = g.ax_heatmap
             ax_hmcb = g.ax_cbar
-    elif which_measure == 'all':
+    else:
         adj = np.moveaxis(calc.adjacency,0,2)
         adjs = np.resize(adj,(calc.adjacency.shape[1]**2,calc.adjacency.shape[0]))
         if strtrunc is not None:
@@ -313,7 +308,7 @@ def clusterall(cf,approach='mean',plot=True,reducer=TSNE(n_components=1),flatten
         corrs.fillna(0,inplace=True)
     else:
         df = pd.DataFrame()
-        for i in cf._calculators.index:
+        for i in cf.calculators.index:
             df2 = flatten(cf._calculators.loc[i][0],plot=False,strtrunc=None,**flatten_kwargs).corr(method='spearman')
             if df.shape[0] > 0:
                 df = pd.concat([df, df2], axis=0, sort=False)
@@ -393,7 +388,7 @@ def measurespace(cf,averaged=False,pairplot=False,jointplot=False,clustermap=Fal
 
         if jointplot:
             g = sns.jointplot(data=jointdf, x='e1', y='e2', hue='measure', palette=cmap)
-        elif clustermap:
+        else:
             embeddf = pd.DataFrame(data=embedding[:,1],index=df.columns).unstack().transpose()
             embeddf.dropna(inplace=True)
             if embeddf.shape[0] > 20:

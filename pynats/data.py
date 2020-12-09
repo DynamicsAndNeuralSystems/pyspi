@@ -73,7 +73,7 @@ class Data():
 
     """
 
-    def __init__(self, data=None, dim_order='psr', normalise=True, name=None, n_processes=None,n_observations=None):
+    def __init__(self, data=None, dim_order='psr', normalise=True,name=None,n_processes=None,n_observations=None):
         self.normalise = normalise
         if data is not None:
             dat = self.convert_to_numpy(data)
@@ -119,12 +119,17 @@ class Data():
                                               current_value, self.n_observations))
             return self.n_observations - current_value[1]
 
-    def to_numpy(self,squeeze=False):
+    def to_numpy(self,realisation=None,squeeze=False):
         """Return the numpy array."""
-        if squeeze:
-            return np.squeeze(self._data)
+        if realisation is not None:
+            dat = self._data[:,:,realisation]
         else:
-            return self._data
+            dat = self._data
+            
+        if squeeze:
+            return np.squeeze(dat)
+        else:
+            return dat
 
     @staticmethod
     def convert_to_numpy(data):
@@ -196,7 +201,6 @@ class Data():
             self._name = name
 
     def remove_process(self, procs):
-
         try:
             self._data = np.delete(self._data,procs,axis=0)
         except IndexError:

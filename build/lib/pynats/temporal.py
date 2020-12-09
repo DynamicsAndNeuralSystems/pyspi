@@ -34,12 +34,12 @@ class coint(directed,real):
 
         if self._method == 'johansen':
             if isnan(data.coint.max_eig_stat[i,j]):
-                z_ij_T = np.transpose(z[[i,j],:])
+                z_ij_T = np.transpose(z[[i,j]])
                 stats = coint_johansen(z_ij_T,det_order=1,k_ar_diff=10)
                 data.coint.max_eig_stat[[i,j],[j,i]] = stats.max_eig_stat
                 data.coint.trace_stat[[i,j],[j,i]] = stats.trace_stat
         if self._method == 'aeg':
-            stats = ci(z[i,:],z[j,:])
+            stats = ci(z[i],z[j])
             data.coint.tstat[i,j] = stats[0]
             data.coint.pvalue[i,j] = stats[1]
 
@@ -75,33 +75,33 @@ class ccm(directed,real):
             names = []
 
             # First pass: infer optimal embedding
-            for j in range(M):
-                names.append('var' + str(j))
-                df[names[j]] = z[j,:]
+            for _i in range(M):
+                names.append('var' + str(_i))
+                df[names[_i]] = z[_i]
                 pred = str(10) + ' ' + str(N-10)
                 embed_df = edm.EmbedDimension(dataFrame=df,lib=pred,
-                                                pred=pred,columns=str(j),showPlot=False)
-                embedding[j] = embed_df.iloc[embed_df.idxmax().rho,0]
+                                                pred=pred,columns=str(_i),showPlot=False)
+                embedding[_i] = embed_df.iloc[embed_df.idxmax().rho,0]
             
             # Get some reasonable library lengths
             nlibs = 5
             E = int(max(embedding))
             upperE = int(np.floor((N-E-1)/10)*10)
-            lowerE = int(np.ceil(E/10)*10)
+            lowerE = int(np.ceil(2*E/10)*10)
             inc = int((upperE-lowerE) / nlibs)
             lib_sizes = str(lowerE) + ' ' + str(upperE) + ' ' + str(inc)
 
             # Second pass: compute CCM
             score = np.zeros((M,M,nlibs+1))
-            for j in range(M):
-                for i in range(j+1,M):
-                    E = int(max(embedding[i],embedding[j]))
-                    ccm_df = edm.CCM(dataFrame=df,E=E,columns=names[i],target=names[j],
+            for _i in range(M):
+                for _j in range(_i+1,M):
+                    E = int(max(embedding[_i],embedding[_j]))
+                    ccm_df = edm.CCM(dataFrame=df,E=E,columns=names[_i],target=names[_j],
                                         libSizes=lib_sizes,sample=100)
                     sc1 = ccm_df.iloc[:,1]
                     sc2 = ccm_df.iloc[:,2]
-                    score[i,j,:] = np.array(sc1)
-                    score[j,i,:] = np.array(sc2)
+                    score[_i,_j] = np.array(sc1)
+                    score[_j,_i] = np.array(sc2)
 
             data.ccm = ccm.cache(embedding=embedding, score=score)
 
@@ -110,7 +110,7 @@ class ccm(directed,real):
         elif self._statistic == 'max':
             stat = np.nanmax(data.ccm.score[i,j])
         elif self._statistic == 'diff':
-            stat = np.nanmax(data.ccm.score[i,j] - data.ccm.score[j,i])
+            stat = np.nanmean(data.ccm.score[i,j] - data.ccm.score[j,i])
 
         return stat, data
 
@@ -127,8 +127,8 @@ class dcorrx(undirected,positive):
     @parse
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
-        x = z[i,:]
-        y = z[j,:]
+        x = z[i]
+        y = z[j]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _, _ = DcorrX(max_lag=self._max_lag).test(x, y, reps=0 )
@@ -147,8 +147,8 @@ class mgcx(undirected,positive):
     @parse
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
-        x = z[i,:]
-        y = z[j,:]
+        x = z[i]
+        y = z[j]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _, _ = MGCX(max_lag=self._max_lag).test(x, y, reps=0)

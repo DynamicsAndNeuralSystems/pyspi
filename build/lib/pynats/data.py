@@ -8,6 +8,10 @@ from pynats import utils
 from math import sin, cos, sqrt, fabs
 from numba import jit
 from scipy.stats import zscore
+import os
+from sktime.utils.load_data import load_from_tsfile_to_dataframe
+from sktime.utils.data_container import from_nested_to_2d_array
+from scipy.io import loadmat
 
 VERBOSE = False
 
@@ -69,10 +73,11 @@ class Data():
 
     """
 
-    def __init__(self, data=None, dim_order='psr', normalise=True, name=None):
+    def __init__(self, data=None, dim_order='psr', normalise=True,name=None,n_processes=None,n_observations=None):
         self.normalise = normalise
         if data is not None:
-            self.set_data(data, dim_order, name)
+            dat = self.convert_to_numpy(data)
+            self.set_data(dat, dim_order=dim_order, name=name, n_processes=n_processes,n_observations=n_observations)
 
     @property
     def name(self):
@@ -114,14 +119,44 @@ class Data():
                                               current_value, self.n_observations))
             return self.n_observations - current_value[1]
 
-    def to_numpy(self,squeeze=False):
+    def to_numpy(self,realisation=None,squeeze=False):
         """Return the numpy array."""
-        if squeeze:
-            return np.squeeze(self._data)
+        if realisation is not None:
+            dat = self._data[:,:,realisation]
         else:
-            return self._data
+            dat = self._data
+            
+        if squeeze:
+            return np.squeeze(dat)
+        else:
+            return dat
 
-    def set_data(self, data, dim_order='psr', name=None):
+    @staticmethod
+    def convert_to_numpy(data):
+
+        if isinstance(data, np.ndarray):
+            npdat = data
+        elif isinstance(data, pd.DataFrame):
+            npdat = data.to_numpy()
+        elif isinstance(data,str):
+            ext = os.path.splitext(data)[1]
+            if ext == '.npy':
+                npdat = np.load(data)
+            elif ext == '.txt':
+                npdat = np.genfromtxt(data)
+            elif ext == '.csv':
+                npdat = np.genfromtxt(data,',')
+            elif ext == '.ts':
+                tsdat, _ = load_from_tsfile_to_dataframe(data)
+                npdat = from_nested_to_2d_array(tsdat)
+            else:
+                raise TypeError(f'Unknown filename extension: {ext}')
+        else:
+            raise TypeError(f'Unknown data type: {type(data)}')
+
+        return npdat
+
+    def set_data(self, data, dim_order='psr', name=None, n_processes=None, n_observations=None):
         """Overwrite data in an existing Data object.
 
         Args:
@@ -142,6 +177,12 @@ class Data():
 
         # Bring data into the order processes x observations in a pandas dataframe.
         data = self._reorder_data(data, dim_order)
+
+        if n_processes is not None:
+            data = data[:n_processes]
+        if n_observations is not None:
+            data = data[:,:n_observations]
+
         self._set_data_size(data)
         print(f'Adding dataset "{name}" with properties: {self.n_processes} processes, {self.n_observations} observations, {self.n_realisations} '
             'realisations')
@@ -160,7 +201,6 @@ class Data():
             self._name = name
 
     def remove_process(self, procs):
-
         try:
             self._data = np.delete(self._data,procs,axis=0)
         except IndexError:

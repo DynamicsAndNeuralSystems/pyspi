@@ -1,0 +1,22 @@
+package:
+  name: pynats
+  version: 0.0.12
+
+source:
+  git_rev:
+  git_url:
+
+requirements:
+  build:
+    - python
+    - setuptools
+
+  run:
+    - python
+
+test:
+  imports:
+    -
+
+about:
+  home:

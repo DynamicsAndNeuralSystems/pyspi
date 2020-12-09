@@ -1,27 +1,27 @@
 from pynats.calculator import Calculator
+from pynats.data import Data
 import numpy as np
 import pandas as pd
-import seaborn as sns
-from sktime.utils import data_container
-import pynats.plot as natplt
 import scipy.cluster.hierarchy as spc
 import scipy.spatial as sp
 import matplotlib.pyplot as plt
+import copy
+import yaml
 
 def forall(func):
     def do(self,**kwargs):
-        for i in self._calculators.index:
-            calc_ser = self._calculators.loc[i]
-            for calc in calc_ser:
-                func(self,calc,**kwargs)
-
+        try:
+            for i in self._calculators.index:
+                calc_ser = self._calculators.loc[i]
+                for calc in calc_ser:
+                    func(self,calc,**kwargs)
+        except AttributeError:
+            raise AttributeError(f'No calculators in frame yet. Initialise before calling {func}')
     return do
-
 
 class CalculatorFrame():
 
-    def __init__(self,datasets=None,names=None,labels=None,calculators=None,normalise=True):
-        self.normalise = normalise
+    def __init__(self,datasets=None,names=None,labels=None,calculators=None,**kwargs):
         if calculators is not None:
             self.set_calculator(calculators)
 
@@ -30,9 +30,7 @@ class CalculatorFrame():
                 names = [None] * len(datasets)
             if labels is None:
                 labels = [None] * len(datasets)
-            for i, dataset in enumerate(datasets):
-                calc = Calculator(dataset=dataset,name=names[i],label=labels[i])
-                self.add_calculator(calc)
+            self.init_from_list(datasets,names,labels,**kwargs)
 
     def set_calculator(self,calculators,names=None):
         if hasattr(self, '_dataset'):
@@ -53,7 +51,7 @@ class CalculatorFrame():
         if isinstance(calc,CalculatorFrame):
             self._calculators = pd.concat([self._calculators,calc])
         elif isinstance(calc,Calculator):
-            self._calculators = self._calculators.append(pd.Series(data=calc,name=calc.name))
+            self._calculators = self._calculators.append(pd.Series(data=calc,name=calc.name),ignore_index=True)
         elif isinstance(calc,pd.DataFrame):
             if isinstance(calc.iloc[0],Calculator):
                 self._calculators = calc
@@ -63,11 +61,42 @@ class CalculatorFrame():
             raise TypeError(f'Unknown data type: {type(calc)}.')
 
         self.n_calculators = len(self.calculators.index)
+    
+    def init_from_list(self,datasets,names,labels,**kwargs):
+        base_calc = Calculator(**kwargs)
+        for i, dataset in enumerate(datasets):
+            calc = copy.deepcopy(base_calc)
+            calc.load_dataset(dataset)
+            calc.name = names[i]
+            calc.label = labels[i]
+            self.add_calculator(calc)
+
+    def init_from_yaml(self,document,normalise=True,n_processes=None,n_observations=None,**kwargs):
+        datasets = []
+        names = []
+        labels = []
+        with open(document) as f:
+            yf = yaml.load(f,Loader=yaml.FullLoader)
+
+            for config in yf:
+                try:
+                    file = config['file']
+                    dim_order = config['dim_order']
+                    names.append(config['name'])
+                    labels.append(config['labels'])
+                    datasets.append(Data(data=file,dim_order=dim_order,name=names[-1],normalise=normalise,n_processes=n_processes,n_observations=n_observations))
+                except Exception as err:
+                    print(f'Loading dataset: {config} failed ({err}).')
+
+        self.init_from_list(datasets,names,labels,**kwargs)
 
     @property
     def calculators(self):
         """Return data array."""
-        return self._calculators
+        try:
+            return self._calculators
+        except AttributeError:
+            return None
 
     @calculators.setter
     def calculators(self, cs):
@@ -82,49 +111,11 @@ class CalculatorFrame():
         print('Overwriting existing calculators.')
         del(self._calculators)
 
-    @forall
-    def plot_data(cf,calc,**kwargs):
-        natplt.plot_spacetime(calc.dataset,**kwargs)
 
     @forall
     def compute(self,calc):
         calc.compute()
 
     @forall
-    def prune(self,calc):
-        calc.prune()
-
-    @forall
-    def clustermap(self,calc,**kwargs):
-        natplt.clustermap(calc,**kwargs)
-
-    def clusterall(self,approach='mean',cmap='vlag',**kwargs):
-        if approach == 'flatten':
-            df = self.flatten(plot=False,**kwargs)
-            df.fillna(0,inplace=True)
-            corrs = df.corr(method='spearman')
-            corrs.fillna(0,inplace=True)
-        else:
-            df = pd.DataFrame()
-            for i in self._calculators.index:
-                df2 = natplt.flatten(self._calculators.loc[i][0],plot=False,**kwargs).corr(method='spearman')
-                if df.shape[0] > 0:
-                    df = pd.concat([df, df2], axis=0, sort=False)
-                else:
-                    df = df2
-            
-            corrs = df.groupby('Pairwise measure').mean().reindex(df.keys())
-            corrs.fillna(0,inplace=True)
-        g = sns.clustermap(corrs, cmap=cmap, center=0.0, xticklabels=1, yticklabels=1)
-        ax = g.ax_heatmap
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-
-    def flatten(self,**kwargs):
-        df = pd.DataFrame()
-        for i in self._calculators.index:
-            df2 = natplt.flatten(self._calculators.loc[i][0],**kwargs)
-            if df.shape[0] > 0:
-                df = pd.concat([df, df2], axis=0, sort=False, ignore_index=True)
-            else:
-                df = df2
-        return df
+    def prune(self,calc,**kwargs):
+        calc.prune(**kwargs)

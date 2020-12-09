@@ -25,7 +25,7 @@ class Calculator():
     """
     
     # Initializer / Instance Attributes
-    def __init__(self,dataset=None,name=None,label=None,configfile=os.path.dirname(os.path.abspath(__file__)) + '/config.yaml'):
+    def __init__(self,dataset=None,name=None,labels=None,configfile=os.path.dirname(os.path.abspath(__file__)) + '/config.yaml'):
 
         self._load_yaml(configfile)
 
@@ -37,7 +37,7 @@ class Calculator():
         self._nclasses = len(self._classes)
         self._proctimes = np.empty(self._nmeasures)
         self._name = name
-        self._label = label
+        self._labels = labels
 
         print("Number of pairwise measures: {}".format(self._nmeasures))
 
@@ -69,12 +69,12 @@ class Calculator():
         self._name = n
 
     @property
-    def label(self):
-        return self._label
+    def labels(self):
+        return self._labels
     
-    @label.setter
-    def label(self,l):
-        self._label = l
+    @labels.setter
+    def label(self,ls):
+        self._labels = ls
 
     @property
     def adjacency(self):
@@ -214,10 +214,7 @@ class Calculator():
 
     # TODO - merge two calculators (e.g., to include missing/decentralised data or measures)
     def merge(self,calc2):
-        if not isinstance(calc2,Calculator):
-            raise TypeError('Input must be of type pynats.Calculator')
+        raise NotImplementedError
 
     def save(self,filename):
-        print('Saving object to dill database: "{filename}"')
-        with open(filename, 'wb') as f:
-            dill.dump(self, f)
+        raise NotImplementedError

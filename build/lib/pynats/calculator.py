@@ -9,11 +9,11 @@ import time
 import multiprocessing
 import warnings
 import dill
+import os
 
 # Plotting tools
 from tqdm import tqdm
 from tqdm import trange
-import sktime
 from collections import Counter
 
 # From this package
@@ -25,7 +25,7 @@ class Calculator():
     """
     
     # Initializer / Instance Attributes
-    def __init__(self,dataset=None,name=None,label=None,configfile='./pynats/config.yaml'):
+    def __init__(self,dataset=None,name=None,labels=None,configfile=os.path.dirname(os.path.abspath(__file__)) + '/config.yaml'):
 
         self._load_yaml(configfile)
 
@@ -37,7 +37,7 @@ class Calculator():
         self._nclasses = len(self._classes)
         self._proctimes = np.empty(self._nmeasures)
         self._name = name
-        self._label = label
+        self._labels = labels
 
         print("Number of pairwise measures: {}".format(self._nmeasures))
 
@@ -58,23 +58,23 @@ class Calculator():
 
     @dataset.setter
     def dataset(self,d):
-        if not isinstance(d,Data):
-            raise TypeError(f'Input is type {type(d)}. Expected {type(Data)}')
-        self._dataset = d
-
-    @dataset.setter
-    def cmap(self,c):
-        if not isinstance(c,str):
-            raise TypeError(f'Input is type {type(c)}. Expected {type(str)}.')
-        self._cmap = c
+        raise Exception('Do not set this property externally. Use the load_dataset method.')
 
     @property
     def name(self):
         return self._name
 
+    @name.setter
+    def name(self,n):
+        self._name = n
+
     @property
-    def label(self):
-        return self._label
+    def labels(self):
+        return self._labels
+    
+    @labels.setter
+    def label(self,ls):
+        self._labels = ls
 
     @property
     def adjacency(self):
@@ -82,9 +82,7 @@ class Calculator():
 
     @adjacency.setter
     def adjacency(self,a):
-        if (a is not None) and not isinstance(a,np.ndarray):
-            raise TypeError(f'Input is type {type(a)}. Expected {type(np.ndarray)}.')
-        self._adjacency = a
+        raise Exception('Do not set this property externally. Use the compute method to obtain property.')
 
     def _load_yaml(self,document):
         print("Loading configuration file: {}".format(document))
@@ -122,8 +120,9 @@ class Calculator():
 
     def load_dataset(self,dataset):
         if not isinstance(dataset,Data):
-            raise TypeError(f'Input is {type(dataset)}. Expected {type(Data)}')
-        self.dataset = dataset
+            self._dataset = Data.convert_to_numpy(dataset)
+        else:
+            self._dataset = dataset
         self._adjacency = np.empty((self._nmeasures,
                                     self.dataset.n_processes,
                                     self.dataset.n_processes))
@@ -139,18 +138,18 @@ class Calculator():
             pbar.set_description(f'Processing [{self._name}: {self._measure_names[m]}]')
             start_time = time.time()
             try:
-                self._adjacency[m,:,:], self.dataset = self._measures[m].adjacency(self.dataset)
+                self._adjacency[m], self._dataset = self._measures[m].adjacency(self.dataset)
             except Exception as err:
                 warnings.warn(f'Caught exception for measure "{self._measure_names[m]}": {err}')
-                self._adjacency[m,:,:] = np.NaN
+                self._adjacency[m] = np.NaN
             self._proctimes[m] = time.time() - start_time
         pbar.close()
 
-    def prune(self,meas_nans=0.1,proc_nans=0.9):
+    def prune(self,meas_nans=0.0,proc_nans=0.9):
         """Prune the bad processes/measures
         """
-        print(f'Pruning:\n\t- Processes with more than {100*meas_nans}% bad values'
-                f', and\n\t- Measures with more than {100*proc_nans}% bad values')
+        print(f'Pruning:\n\t- Measures with more than {100*meas_nans}% bad values'
+                f', and\n\t- Processes with more than {100*proc_nans}% bad values')
 
         # First, iterate through the time-series and remove any that have NaN's > ts_nans
         M = self._nmeasures * (2*(self._dataset.n_processes-1))
@@ -188,7 +187,13 @@ class Calculator():
             flat_adj = np.concatenate((flat_adj,
                                         self._adjacency[meas,il[0],il[1]].reshape((M//2,1))))
 
-            nzs = np.count_nonzero(np.isnan(flat_adj))
+            # Ensure normalisation, etc., can happen
+            if not np.isfinite(flat_adj.sum()):
+                rm_list.append(meas)
+                print(f'Measure "[{meas}] {self._measure_names[meas]}" has non-finite sum. Removing.')
+                continue
+
+            nzs = np.size(flat_adj) - np.count_nonzero(np.isfinite(flat_adj))
             if nzs > threshold:
                 rm_list.append(meas)
                 print('Removing measure "[{}] {}" with {} ({:.1f}%) '
@@ -209,10 +214,7 @@ class Calculator():
 
     # TODO - merge two calculators (e.g., to include missing/decentralised data or measures)
     def merge(self,calc2):
-        if not isinstance(calc2,Calculator):
-            raise TypeError('Input must be of type pynats.Calculator')
+        raise NotImplementedError
 
-    def save(self,filaname):
-        print('Saving object to dill database: "{filaname}"')
-        with open(filaname, 'wb') as f:
-            dill.dump(self, f)
+    def save(self,filename):
+        raise NotImplementedError
