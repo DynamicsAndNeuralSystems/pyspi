@@ -4,6 +4,7 @@ demos/data
 pynats/lib/ScientificColourMaps6/__pycache__
 build
 dist
+test/__pycache__
 *.pkl
 *.log
 *.bkp

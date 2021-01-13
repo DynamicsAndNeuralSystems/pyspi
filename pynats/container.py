@@ -32,6 +32,17 @@ class CalculatorFrame():
                 labels = [None] * len(datasets)
             self.init_from_list(datasets,names,labels,**kwargs)
 
+    @property
+    def name(self):
+        if hasattr(self,'_name'):
+            return self._name
+        else:
+            return ''
+
+    @name.setter
+    def name(self,n):
+        self._name = n
+
     def set_calculator(self,calculators,names=None):
         if hasattr(self, '_dataset'):
             Warning('Overwriting dataset without explicitly deleting.')

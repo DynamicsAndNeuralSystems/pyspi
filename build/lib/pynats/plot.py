@@ -44,7 +44,7 @@ def diagnostics(calc):
     """ TODO: print out all diagnostics, e.g., compute time, failures, etc.
     """
     sid = np.argsort(calc._proctimes)
-    print('Processing times for all {} measures:'.format(len(sid)))
+    print(f'Processing times for all {len(sid)} measures:')
     for i in sid:
         print('[{}] {}: {} s'.format(i,calc._measure_names[i],calc._proctimes[i]))
 
@@ -59,7 +59,7 @@ def truth(calc,truth):
         corrs[i] = stats.pearsonr(truthflat,measflat)[0]
 
     sid = np.argsort(corrs)
-    print('Pearson correlations for all {} measures to truth:'.format(len(sid)))
+    print(f'Pearson correlations for all {len(sid)} measures to truth:')
     for i in sid:
         print('[{}] {}: {}%'.format(i,calc._measure_names[i],100*corrs[i]))
 
@@ -291,12 +291,9 @@ def flatten(calc,nmeasures=None,split=False,transformer=StandardScaler(),cluster
 @asframe
 def flattenall(cf,**kwargs):
     df = pd.DataFrame()
-    for i in cf._calculators.index:
-        df2 = flatten(cf._calculators.loc[i][0],strtrunc=None,**kwargs)
-        if df.shape[0] > 0:
-            df = pd.concat([df, df2], axis=0, sort=False, ignore_index=True)
-        else:
-            df = df2
+    for i in cf.calculators.index:
+        df2 = flatten(cf.calculators.loc[i][0],strtrunc=None,**kwargs)
+        df = pd.concat([df, df2], axis=0, sort=False, ignore_index=True)
     return df
 
 @asframe
@@ -309,7 +306,7 @@ def clusterall(cf,approach='mean',plot=True,reducer=TSNE(n_components=1),flatten
     else:
         df = pd.DataFrame()
         for i in cf.calculators.index:
-            df2 = flatten(cf._calculators.loc[i][0],plot=False,strtrunc=None,**flatten_kwargs).corr(method='spearman')
+            df2 = flatten(cf.calculators.loc[i][0],plot=False,strtrunc=None,**flatten_kwargs).corr(method='spearman')
             if df.shape[0] > 0:
                 df = pd.concat([df, df2], axis=0, sort=False)
             else:
@@ -327,7 +324,7 @@ def clusterall(cf,approach='mean',plot=True,reducer=TSNE(n_components=1),flatten
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
         sns.set(font_scale=1)
         g.gs.update(top=0.9)
-        g.fig.suptitle(f'Clustermap for all {len(cf.calculators.index)} datasets')
+        g.fig.suptitle(f'Clustermap for all {len(cf.calculators.index)} datasets of "{cf.name}" frame')
         ax_hmcb.set_position([0.05, 0.8, 0.02, 0.1])
         
         return corrs, ax.figure
@@ -461,14 +458,17 @@ def measurespace(cf,averaged=False,pairplot=False,jointplot=False,clustermap=Fal
     fig.tight_layout()
     return df, fig
 
-def relate(cf,meas0,meas1,flatten_kwargs={}):
+def relate(cf,meas0,meas1,raw=False,flatten_kwargs={}):
 
     df = pd.DataFrame()
     corr_str = f'corr({meas0}, {meas1})'
     for i, _index in enumerate(cf.calculators.index):
         calc = cf.calculators.loc[_index][0]
-        rho = flatten(calc,plot=False,strtrunc=None,**flatten_kwargs)[[meas0,meas1]].corr(method='spearman').to_numpy()[0,1]
-        df = df.append({corr_str: rho},ignore_index=True)
+        try:
+            rho = flatten(calc,plot=False,strtrunc=None,**flatten_kwargs)[[meas0,meas1]].corr(method='spearman').to_numpy()[0,1]
+            df = df.append({corr_str: rho},ignore_index=True)
+        except KeyError:
+            print(f'Received key error for calculator "{calc.name}": {KeyError}')
     
     splot = sns.displot(df,x=corr_str,kde=True)
     plt.xlim(-1, 1)

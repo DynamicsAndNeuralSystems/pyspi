@@ -6,14 +6,13 @@ import pandas as pd
 from math import isnan
 from hyppo.time_series import MGCX, DcorrX
 import warnings
-from pynats.base import directed, undirected, parse, positive, real
+from pynats.base import directed, undirected, parse_bivariate, positive, real
 from collections import namedtuple
 
-class coint(directed,real):
+class coint(undirected,real):
     
     humanname = "Cointegration"
     name = "coint"
-    cache = namedtuple('cache','max_eig_stat trace_stat tstat pvalue')
 
     def __init__(self,method='johansen',statistic='pvalue'):
         self._method = method
@@ -21,36 +20,31 @@ class coint(directed,real):
         self.name = self.name + '_' + method + '_' + statistic
 
     # Return the negative t-statistic (proxy for how co-integrated they are)
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):
 
         z = data.to_numpy(squeeze=True)
         M = data.n_processes
-        nullmat = np.empty((M,M))
-        nullmat[:] = np.NaN
 
         if not hasattr(data,'coint'):
-            data.coint = coint.cache(nullmat,nullmat,nullmat,nullmat)
+            data.coint = {'max_eig_stat': np.full((M, M), np.NaN), 'trace_stat': np.full((M, M), np.NaN),
+                            'tstat': np.full((M, M), np.NaN), 'pvalue': np.full((M, M), np.NaN)}
 
         if self._method == 'johansen':
-            if isnan(data.coint.max_eig_stat[i,j]):
+            if isnan(data.coint['max_eig_stat'][i,j]):
                 z_ij_T = np.transpose(z[[i,j]])
-                stats = coint_johansen(z_ij_T,det_order=1,k_ar_diff=10)
-                data.coint.max_eig_stat[[i,j],[j,i]] = stats.max_eig_stat
-                data.coint.trace_stat[[i,j],[j,i]] = stats.trace_stat
-        if self._method == 'aeg':
-            stats = ci(z[i],z[j])
-            data.coint.tstat[i,j] = stats[0]
-            data.coint.pvalue[i,j] = stats[1]
+                stats = coint_johansen(z_ij_T,det_order=0,k_ar_diff=1)
+                data.coint['max_eig_stat'][i,j] = stats.max_eig_stat[0]
+                data.coint['trace_stat'][i,j] = stats.trace_stat[0]
+        elif self._method == 'aeg':
+            if isnan(data.coint['tstat'][i,j]):
+                stats = ci(z[i],z[j])
+                data.coint['tstat'][i,j] = stats[0]
+                data.coint['pvalue'][i,j] = stats[1]
+        else:
+            raise TypeError(f'Unknown statistic: {self._method}')
 
-        if self._statistic == 'tstat':
-            return -data.coint.tstat[i,j], data
-        elif self._statistic == 'pvalue':
-            return 1-data.coint.pvalue[i,j], data
-        elif self._statistic == 'max_eig_stat':
-            return data.coint.max_eig_stat[i,j], data
-        elif self._statistic == 'trace_stat':
-            return data.coint.trace_stat[i,j], data
+        return data.coint[self._statistic][i,j]
 
 class ccm(directed,real):
 
@@ -62,7 +56,7 @@ class ccm(directed,real):
         self._statistic = statistic
         self.name = self.name + '_' + statistic
 
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         if not hasattr(data,'ccm'):
             z = data.to_numpy(squeeze=True)
@@ -85,17 +79,16 @@ class ccm(directed,real):
             
             # Get some reasonable library lengths
             nlibs = 5
-            E = int(max(embedding))
-            upperE = int(np.floor((N-E-1)/10)*10)
-            lowerE = int(np.ceil(2*E/10)*10)
-            inc = int((upperE-lowerE) / nlibs)
-            lib_sizes = str(lowerE) + ' ' + str(upperE) + ' ' + str(inc)
 
             # Second pass: compute CCM
             score = np.zeros((M,M,nlibs+1))
             for _i in range(M):
                 for _j in range(_i+1,M):
-                    E = int(max(embedding[_i],embedding[_j]))
+                    E = int(max(embedding[[_i,_j]]))
+                    upperE = int(np.floor((N-E-1)/10)*10)
+                    lowerE = int(np.ceil(2*E/10)*10)
+                    inc = int((upperE-lowerE) / nlibs)
+                    lib_sizes = str(lowerE) + ' ' + str(upperE) + ' ' + str(inc)
                     ccm_df = edm.CCM(dataFrame=df,E=E,columns=names[_i],target=names[_j],
                                         libSizes=lib_sizes,sample=100)
                     sc1 = ccm_df.iloc[:,1]
@@ -111,8 +104,10 @@ class ccm(directed,real):
             stat = np.nanmax(data.ccm.score[i,j])
         elif self._statistic == 'diff':
             stat = np.nanmean(data.ccm.score[i,j] - data.ccm.score[j,i])
+        else:
+            raise TypeError(f'Unknown statistic: {self._statistic}')
 
-        return stat, data
+        return stat
 
 class dcorrx(undirected,positive):
     """ Multi-graph correlation for time series
@@ -124,7 +119,7 @@ class dcorrx(undirected,positive):
     def __init__(self,max_lag=1):
         self._max_lag = max_lag
 
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
         x = z[i]
@@ -132,7 +127,7 @@ class dcorrx(undirected,positive):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _, _ = DcorrX(max_lag=self._max_lag).test(x, y, reps=0 )
-        return stat, data
+        return stat
 
 class mgcx(undirected,positive):
     """ Multi-graph correlation for time series
@@ -144,7 +139,7 @@ class mgcx(undirected,positive):
     def __init__(self,max_lag=1):
         self._max_lag = max_lag
 
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
         x = z[i]
@@ -152,4 +147,4 @@ class mgcx(undirected,positive):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _, _ = MGCX(max_lag=self._max_lag).test(x, y, reps=0)
-        return stat, data
+        return stat

@@ -1,6 +1,6 @@
 import numpy as np
 from pynats import utils
-from pynats.base import directed, undirected, parse, positive, real
+from pynats.base import directed, undirected, parse_bivariate, positive, real
 
 from scipy import ndimage
 import warnings
@@ -10,7 +10,7 @@ Toolkits used for spectral analysis of time series
 """
 
 def cwt(bivariate):
-    @parse
+    @parse_bivariate
     def decorator(self,data,i=None,j=None):
         if not hasattr(data,'wavelet'):
             z = data.to_numpy()
@@ -66,4 +66,4 @@ class wcoh(undirected,positive):
         S_ij = ndimage.gaussian_filter((np.abs(coeff_ij / scale_matrix)), sigma=2)
         wcoh = np.mean(S_ij**2 / (S_i * S_j))
 
-        return wcoh, data
+        return wcoh

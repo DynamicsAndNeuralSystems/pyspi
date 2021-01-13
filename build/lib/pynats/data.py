@@ -147,7 +147,7 @@ class Data():
             elif ext == '.csv':
                 npdat = np.genfromtxt(data,',')
             elif ext == '.ts':
-                tsdat, _ = load_from_tsfile_to_dataframe(data)
+                tsdat, tsclasses = load_from_tsfile_to_dataframe(data)
                 npdat = from_nested_to_2d_array(tsdat)
             else:
                 raise TypeError(f'Unknown filename extension: {ext}')

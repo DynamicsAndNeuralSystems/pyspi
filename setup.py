@@ -12,7 +12,7 @@ setup(
     #scripts=['bin/script1','bin/script2'],
     package_data={'': ['config.yaml','lib/jidt/infodynamics.jar']},
     include_package_data=True,
-    version='0.0.12',
+    version='0.0.13',
     description='Network analysis for time series',
     author='Oliver M. Cliff',
     author_email='oliver.m.cliff@gmail.com',
@@ -47,6 +47,7 @@ setup(
                         'spectral-connectivity>=0.2.4.dev0',
                         'PyWavelets>=0.2.2',
                         'umap-learn>=0.4.6',
-                        'torch>=1.7.0']
+                        'torch>=1.7.0',
+                        'cdt==0.5.22']
                  
 )

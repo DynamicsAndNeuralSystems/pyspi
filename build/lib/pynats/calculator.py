@@ -73,7 +73,7 @@ class Calculator():
         return self._labels
     
     @labels.setter
-    def label(self,ls):
+    def labels(self,ls):
         self._labels = ls
 
     @property
@@ -140,7 +140,7 @@ class Calculator():
             try:
                 self._adjacency[m], self._dataset = self._measures[m].adjacency(self.dataset)
             except Exception as err:
-                warnings.warn(f'Caught exception for measure "{self._measure_names[m]}": {err}')
+                warnings.warn(f'Caught {type(err)} for measure "{self._measure_names[m]}": {err}')
                 self._adjacency[m] = np.NaN
             self._proctimes[m] = time.time() - start_time
         pbar.close()

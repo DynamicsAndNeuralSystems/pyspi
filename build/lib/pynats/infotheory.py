@@ -34,10 +34,10 @@ def theiler(bivariate):
     @parse
     def compute_window(self,data,i=None,j=None):
         if i is None:
-            warnings.warn('Source array not chosen - using first process.')
+            warnings.warn('compute_window: Source array not chosen - using first process.')
             i = 0
         if j is None:
-            warnings.warn('Target array not chosen - using second process.')
+            warnings.warn('compute_window: Target array not chosen - using second process.')
             j = 1
 
         if self._dyn_corr_excl is not None:
@@ -72,10 +72,10 @@ def takens(bivariate):
         # TODO: Allow user to only embed source or target
         if self._auto_embed_method is not None:
             if i is None:
-                warnings.warn('Source array not chosen - using first process.')
+                warnings.warn('compute_embedding: Source array not chosen - using first process.')
                 i = 0
             if j is None:
-                warnings.warn('Target array not chosen - using second process.')
+                warnings.warn('compute_embedding: Target array not chosen - using second process.')
                 j = 1
 
 
@@ -278,7 +278,7 @@ class active_information_storage(jidt_base):
 
             for i in range(data.n_processes):
                 src = z[i]
-                self._calc.initialise(1, 1)
+                self._calc.initialise(int(1), int(1))
                 self._calc.setObservations(jp.JArray(jp.JDouble,1)(src))
                 self._optimal_history[i] = int(str(self._calc.getProperty(self._HISTORY_PROP_NAME)))
                 if self._estimator != 'kernel':
@@ -363,7 +363,10 @@ class transfer_entropy(jidt_base,directed):
 
         # Auto-embedding
         if auto_embed_method is not None:
-            self.name = self.name + '_k-max-{}_tau-max-{}'.format(k_search_max,tau_search_max)
+            if self._estimator != 'kernel':
+                self.name = self.name + '_k-max-{}_tau-max-{}'.format(k_search_max,tau_search_max)
+            else:
+                self.name = self.name + '_k-max-{}'.format(k_search_max)
             # Set up calculator
             self._ais_calc = active_information_storage(k_search_max=k_search_max,tau_search_max=tau_search_max,**kwargs)
         else:

@@ -1,7 +1,7 @@
 import jpype as jp
 import numpy as np
 from pynats import utils
-from pynats.base import directed, undirected, parse, positive, real
+from pynats.base import directed, undirected, parse_bivariate, positive, real
 from collections import namedtuple
 
 import copy
@@ -31,13 +31,13 @@ def computeConditionalEntropy(ent_calc,X,Y):
     return H_XY - H_Y
 
 def theiler(bivariate):
-    @parse
+    @parse_bivariate
     def compute_window(self,data,i=None,j=None):
         if i is None:
-            warnings.warn('Source array not chosen - using first process.')
+            warnings.warn('compute_window: Source array not chosen - using first process.')
             i = 0
         if j is None:
-            warnings.warn('Target array not chosen - using second process.')
+            warnings.warn('compute_window: Target array not chosen - using second process.')
             j = 1
 
         if self._dyn_corr_excl is not None:
@@ -72,10 +72,10 @@ def takens(bivariate):
         # TODO: Allow user to only embed source or target
         if self._auto_embed_method is not None:
             if i is None:
-                warnings.warn('Source array not chosen - using first process.')
+                warnings.warn('compute_embedding: Source array not chosen - using first process.')
                 i = 0
             if j is None:
-                warnings.warn('Target array not chosen - using second process.')
+                warnings.warn('compute_embedding: Target array not chosen - using second process.')
                 j = 1
 
 
@@ -146,6 +146,17 @@ class jidt_base(positive):
 
         if self._dyn_corr_excl:
             self.name = self.name + '_DCE'
+    
+    def __eq__(self,other):
+        if self._estimator == other._estimator:
+            if self._dyn_corr_excl == other._dyn_corr_excl:
+                if self._estimator == 'kraskov':
+                    if self._prop_k = other._prop_k:
+                        return True
+                elif self._estimator == 'kernel':
+                    if self._kernel_width == other._kernel_width:
+                        return True
+        return False
 
     def __getstate__(self):
         state = dict(self.__dict__)
@@ -278,7 +289,7 @@ class active_information_storage(jidt_base):
 
             for i in range(data.n_processes):
                 src = z[i]
-                self._calc.initialise(1, 1)
+                self._calc.initialise(int(1), int(1))
                 self._calc.setObservations(jp.JArray(jp.JDouble,1)(src))
                 self._optimal_history[i] = int(str(self._calc.getProperty(self._HISTORY_PROP_NAME)))
                 if self._estimator != 'kernel':
@@ -307,7 +318,7 @@ class mutual_info(jidt_base,undirected):
         except:
             warnings.warn('MI calcs failed. Maybe check input data for Cholesky factorisation?')
             mi = np.NaN
-        return mi, data
+        return mi
 
 class time_lagged_mutual_info(mutual_info):
     humanname = "Time-lagged mutual information"
@@ -334,7 +345,7 @@ class time_lagged_mutual_info(mutual_info):
         except:
             warnings.warn('Time-lagged MI calcs failed. Maybe check input data for Cholesky factorisation?')
             tl_mi = np.NaN
-        return tl_mi, data
+        return tl_mi
 
     def __setstate__(self,state):
         """ Re-initialise the calculator
@@ -363,7 +374,10 @@ class transfer_entropy(jidt_base,directed):
 
         # Auto-embedding
         if auto_embed_method is not None:
-            self.name = self.name + '_k-max-{}_tau-max-{}'.format(k_search_max,tau_search_max)
+            if self._estimator != 'kernel':
+                self.name = self.name + '_k-max-{}_tau-max-{}'.format(k_search_max,tau_search_max)
+            else:
+                self.name = self.name + '_k-max-{}'.format(k_search_max)
             # Set up calculator
             self._ais_calc = active_information_storage(k_search_max=k_search_max,tau_search_max=tau_search_max,**kwargs)
         else:
@@ -396,9 +410,9 @@ class transfer_entropy(jidt_base,directed):
             self._calc.setObservations(jp.JArray(jp.JDouble,1)(src), jp.JArray(jp.JDouble,1)(targ))
             te = self._calc.computeAverageLocalOfObservations()
         except:
-            warnings.warn('TE calcs failed. Maybe check input time series for Cholesky decomposition?')
+            warnings.warn('TE calcs failed. Trying checking input time series for Cholesky decomposition.')
             te = np.NaN
-        return te, data
+        return te
 
 class conditional_entropy(jidt_base,directed):
 
@@ -423,15 +437,15 @@ class conditional_entropy(jidt_base,directed):
         targ = z[j]
 
         if not hasattr(data,'entropy'):
-            data.entropy = np.ones((data.n_processes,1)) * -np.inf
+            data.entropy = np.full((data.n_processes,1), -np.inf)
 
-        if data.entropy[j] == -np.inf:
+        if data.entropy[i] == -np.inf:
             self._calc.initialise(1)
-            self._calc.setObservations(jp.JArray(jp.JDouble,1)(np.squeeze(targ)))
-            data.entropy[j] = self._calc.computeAverageLocalOfObservations()
+            self._calc.setObservations(jp.JArray(jp.JDouble,1)(np.squeeze(src)))
+            data.entropy[i] = self._calc.computeAverageLocalOfObservations()
 
         if not hasattr(data,'joint_entropy'):
-            data.joint_entropy = np.ones((data.n_processes,data.n_processes)) * -np.inf
+            data.joint_entropy = np.full((data.n_processes,data.n_processes), -np.inf)
 
         if data.joint_entropy[i,j] == -np.inf:
             self._calc.initialise(2)
@@ -439,7 +453,7 @@ class conditional_entropy(jidt_base,directed):
             data.joint_entropy[i,j] = self._calc.computeAverageLocalOfObservations()
             data.joint_entropy[j,i] = data.joint_entropy[i,j]
 
-        return data.joint_entropy[i,j] - data.entropy[i], data
+        return data.joint_entropy[i,j] - data.entropy[i]
 
 class causal_entropy(jidt_base,directed):
 
@@ -462,6 +476,8 @@ class causal_entropy(jidt_base,directed):
     def computeCausalEntropy(calc,n,src,targ):
         mUtils = jp.JPackage('infodynamics.utils').MatrixUtils
         H = 0
+        src = np.squeeze(src)
+        targ = np.squeeze(targ)
         for i in range(2,n):
             Yp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(targ), i-1)[1:]
             Xp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(src), i)
@@ -474,7 +490,7 @@ class causal_entropy(jidt_base,directed):
     @theiler
     def bivariate(self,data,i=None,j=None):
         if not hasattr(data,'causal_entropy'):
-            data.causal_entropy = np.ones((data.n_processes,data.n_processes)) * -np.inf
+            data.causal_entropy = np.full((data.n_processes,data.n_processes)), -np.inf)
 
         if data.causal_entropy[i,j] == -np.inf:
             z = data.to_numpy(squeeze=True)
@@ -482,7 +498,7 @@ class causal_entropy(jidt_base,directed):
             targ = z[j]
             data.causal_entropy[i,j] = self.computeCausalEntropy(self._calc,self._n,src,targ)
 
-        return data.causal_entropy[i,j], data
+        return data.causal_entropy[i,j]
 
 class directed_info(jidt_base,directed):
 
@@ -503,27 +519,27 @@ class directed_info(jidt_base,directed):
 
     @theiler
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
+        z = data.to_numpy(squeeze=True)
         src = z[i]
         targ = z[j]
         """ Compute mutual information between Y and X
         """
 
         if not hasattr(data,'causal_entropy'):
-            data.causal_entropy = np.ones((data.n_processes,data.n_processes)) * -np.inf
+            data.causal_entropy = np.full((data.n_processes,data.n_processes), -np.inf)
 
         if data.causal_entropy[i,j] == -np.inf:
             data.causal_entropy[i,j] = causal_entropy.computeCausalEntropy(self._calc,self._n,src,targ)
 
         if not hasattr(data,'entropy'):
-            data.entropy = np.ones((data.n_processes,1)) * -np.inf
+            data.entropy = np.full((data.n_processes,1), -np.inf)
 
-        if data.entropy[i] == -np.inf:
+        if data.entropy[j] == -np.inf:
             self._calc.initialise(1)
             self._calc.setObservations(jp.JArray(jp.JDouble,1)(targ))
-            data.entropy[i] = self._calc.computeAverageLocalOfObservations()
+            data.entropy[j] = self._calc.computeAverageLocalOfObservations()
 
-        return data.entropy[i] - data.causal_entropy[i,j], data
+        return data.entropy[j] - data.causal_entropy[j,i]
 
 class stochastic_interaction(jidt_base,undirected):
 
@@ -557,4 +573,4 @@ class stochastic_interaction(jidt_base,undirected):
         H_src = computeConditionalEntropy(self._calc,src[k:],src[:-k])
         H_targ = computeConditionalEntropy(self._calc,targ[k:],targ[:-k])
 
-        return H_src + H_targ - H_joint, data
+        return H_src + H_targ - H_joint
