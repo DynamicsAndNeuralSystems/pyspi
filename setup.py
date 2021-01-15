@@ -12,7 +12,7 @@ setup(
     #scripts=['bin/script1','bin/script2'],
     package_data={'': ['config.yaml','lib/jidt/infodynamics.jar']},
     include_package_data=True,
-    version='0.0.13',
+    version='0.1.0',
     description='Network analysis for time series',
     author='Oliver M. Cliff',
     author_email='oliver.m.cliff@gmail.com',

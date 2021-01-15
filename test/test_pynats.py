@@ -282,6 +282,22 @@ def test_mgc():
 
     assert dep > ind
 
+def test_load():
+    import dill
+
+    calc = Calculator()
+
+    with open('test.pkl', 'wb') as f:
+        dill.dump(calc,f)
+
+
+    with open('test.pkl', 'rb') as f:
+        calc = dill.load(f)
+
+    calc.load_dataset(get_data())
+    calc.compute()
+    
+
 if __name__ == '__main__':
     # TODO: make the code a bit better since anything coming from the same package uses the same dataset (e.g., the CDT and EDM stuff)
     test_spearmanr()
@@ -299,4 +315,5 @@ if __name__ == '__main__':
     test_ccm() # 3 tests
 
     test_yaml()
+    test_load()
     test_adjacency()

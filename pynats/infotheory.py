@@ -61,11 +61,19 @@ class jidt_base(positive):
 
     def __getstate__(self):
         state = dict(self.__dict__)
+        del state['_entropy_calc']
         try:
-            del state['_calc'], state['_base_class']
+            del state['_calc']
         except KeyError:
             pass
         return state
+
+    def __setstate__(self,state):
+        """ Re-initialise the calculator
+        """
+        # Re-initialise
+        self.__dict__.update(state)
+        self._entropy_calc = self._getcalc('entropy')
 
     def __deepcopy__(self,memo):
         newone = type(self)()
@@ -231,6 +239,11 @@ class mutual_info(jidt_base,undirected):
         super().__init__(**kwargs)
         self._calc = self._getcalc('mutual_info')
 
+    def __setstate__(self,state):
+        super(mutual_info,self).__setstate__(state)
+        self.__dict__.update(state)
+        self._calc = self._getcalc('mutual_info')
+
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):
         """ Compute mutual information between Y and X
@@ -254,6 +267,13 @@ class time_lagged_mutual_info(mutual_info):
         super().__init__(**kwargs)
         self._calc = self._getcalc('mutual_info')
 
+    def __setstate__(self,state):
+        """ Re-initialise the calculator
+        """
+        super(time_lagged_mutual_info,self).__setstate__(state)
+        self.__dict__.update(state)
+        self._calc = self._getcalc('mutual_info')
+
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):
         self._set_theiler_window(data,i,j)
@@ -267,12 +287,6 @@ class time_lagged_mutual_info(mutual_info):
         except:
             warnings.warn('Time-lagged MI calcs failed. Maybe check input data for Cholesky factorisation?')
             return np.NaN
-
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        self.__dict__.update(state)
-        self._calc = self._getcalc('mutual_info')
 
 class active_information_storage(jidt_base):
 
@@ -304,6 +318,7 @@ class active_information_storage(jidt_base):
     def __setstate__(self,state):
         """ Re-initialise the calculator
         """
+        super(active_information_storage,self).__setstate__(state)
         self.__dict__.update(state)
         self._calc = self._getcalc('active_info_storage')
 
@@ -370,6 +385,7 @@ class transfer_entropy(jidt_base,directed):
         """ Re-initialise the calculator
         """
         # Re-initialise
+        super(transfer_entropy,self).__setstate__(state)
         self.__dict__.update(state)
         self._calc = self._getcalc('transfer_entropy')
 
@@ -397,13 +413,6 @@ class conditional_entropy(jidt_base,directed):
     def __init__(self,**kwargs):
         super(conditional_entropy,self).__init__(**kwargs)
 
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        # Re-initialise
-        self.__dict__ = state
-        self._calc = self._entropy_calc
-
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         return self._compute_joint_entropy(data,i=i,j=j) - self._compute_entropy(data,i=i)
@@ -416,12 +425,6 @@ class causal_entropy(jidt_base,directed):
     def __init__(self,n=5,**kwargs):
         super(causal_entropy,self).__init__(**kwargs)
         self._n = n
-
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        # Re-initialise
-        self.__dict__.update(state)
 
     def _compute_causal_entropy(self,src,targ):
         mUtils = jp.JPackage('infodynamics.utils').MatrixUtils
@@ -462,13 +465,6 @@ class directed_info(causal_entropy,directed):
         super(directed_info,self).__init__(**kwargs)
         self._n = n
 
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        # Re-initialise
-        self.__dict__.update(state)
-        self._calc = self._entropy_calc
-
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         """ Compute directed information from i to j
@@ -487,14 +483,6 @@ class stochastic_interaction(jidt_base,undirected):
     def __init__(self,history=1,**kwargs):
         super(stochastic_interaction,self).__init__(**kwargs)
         self._history = history
-        self._calc = self._entropy_calc
-    
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        # Re-initialise
-        self.__dict__.update(state)
-        self._calc = self._entropy_calc
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):

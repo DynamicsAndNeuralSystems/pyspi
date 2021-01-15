@@ -4,16 +4,15 @@ import nitime.analysis as nta
 import nitime.timeseries as ts
 import nitime.utils as tsu
 import spectral_connectivity as sc
-from pynats.base import directed, undirected, parse, positive, real
+from pynats.base import directed, undirected, parse_multivariate, positive, real
 
 import warnings
-from collections import namedtuple
 """
 Toolkits used for spectral analysis of time series
 """
 
 def spectral(adjacency):
-    @parse
+    @parse_multivariate
     def decorator(self,data):
         if not hasattr(data,'connectivity'):
             z = np.squeeze(np.moveaxis(data.to_numpy(),0,1))
@@ -54,7 +53,7 @@ class coherence(connectivity,undirected,positive):
             gamma = np.nanmean(data.connectivity.coherence_magnitude()[0,freq_id,:,:], axis=0)
         np.fill_diagonal(gamma,np.nan)
 
-        return gamma, data
+        return gamma
 
 class icoherence(connectivity,undirected,positive):
 
@@ -75,7 +74,7 @@ class icoherence(connectivity,undirected,positive):
             gamma = np.nanmean(data.connectivity.imaginary_coherence()[0,freq_id,:,:], axis=0)
         np.fill_diagonal(gamma,np.nan)
 
-        return gamma, data
+        return gamma
 
 class phase(connectivity,undirected,positive):
     humanname = 'Phase consistency'
@@ -93,7 +92,7 @@ class phase(connectivity,undirected,positive):
             warnings.simplefilter("ignore", category=RuntimeWarning)
             phi = np.nanmean(data.connectivity.pairwise_phase_consistency()[0,freq_id,:,:], axis=0)
         np.fill_diagonal(phi,np.nan)
-        return phi, data
+        return phi
 
 class phase_lag(connectivity,undirected,real):
     humanname = 'Phase lag'
@@ -111,7 +110,7 @@ class phase_lag(connectivity,undirected,real):
             warnings.simplefilter("ignore", category=RuntimeWarning)
             phi = np.nanmean(data.connectivity.phase_lag_index()[0,freq_id,:,:], axis=0)
         np.fill_diagonal(phi,np.nan)
-        return phi, data
+        return phi
 
 class weighted_phase_lag(connectivity,undirected,real):
     humanname = 'Weighted phase lag'
@@ -129,7 +128,7 @@ class weighted_phase_lag(connectivity,undirected,real):
             warnings.simplefilter("ignore", category=RuntimeWarning)
             phi = np.nanmean(data.connectivity.weighted_phase_lag_index()[0,freq_id,:,:], axis=0)
         np.fill_diagonal(phi,np.nan)
-        return phi, data
+        return phi
 
 class debiased_squared_weighted_phase_lag(connectivity,undirected,positive):
     humanname = 'Debiased squared weighted phase lag'
@@ -147,11 +146,10 @@ class debiased_squared_weighted_phase_lag(connectivity,undirected,positive):
             warnings.simplefilter("ignore", category=RuntimeWarning)
             phi = np.nanmean(data.connectivity.debiased_squared_phase_lag_index()[0,freq_id,:,:], axis=0)
         np.fill_diagonal(phi,np.nan)
-        return phi, data
+        return phi
 
 class partial_coherence(connectivity,undirected,positive):
     humanname = "Partial coherence"
-    cache = namedtuple('cache', 'gamma freq')
 
     def __init__(self,tr=1,f_lb=0.02,f_ub=0.15):
         self._TR = tr # Not yet implemented
@@ -160,7 +158,7 @@ class partial_coherence(connectivity,undirected,positive):
         self.name = 'pcoh_t-{}_flb-{}_fub-{}'.format(tr,f_lb,f_ub)
         self.name = self.name.replace('.','')
 
-    @parse
+    @parse_multivariate
     def adjacency(self,data):        
         # This should be changed to conditioning on all, rather than averaging all conditionals
 
@@ -169,12 +167,12 @@ class partial_coherence(connectivity,undirected,positive):
             pdata = tsu.percent_change(z)
             time_series = ts.TimeSeries(pdata, sampling_interval=1)
             C1 = nta.CoherenceAnalyzer(time_series)
-            data.pcoh = partial_coherence.cache(np.nanmean(C1.coherence_partial,axis=2),C1.frequencies)
+            data.pcoh = {'gamma': np.nanmean(C1.coherence_partial,axis=2), 'freq': C1.frequencies}
 
-        freq_idx_C = np.where((data.pcoh.freq > self._f_lb) * (data.pcoh.freq < self._f_ub))[0]
-        pcoh = np.nan_to_num(np.mean(data.pcoh.gamma[:, :, freq_idx_C], -1))
+        freq_idx_C = np.where((data.pcoh['freq'] > self._f_lb) * (data.pcoh['freq'] < self._f_ub))[0]
+        pcoh = np.nan_to_num(np.mean(data.pcoh['gamma'][:, :, freq_idx_C], -1))
         np.fill_diagonal(pcoh,np.nan)
-        return pcoh, data
+        return pcoh
 
 class partial_directed_coherence(connectivity,directed,positive):
     humanname = 'Partial directed coherence'
@@ -192,7 +190,7 @@ class partial_directed_coherence(connectivity,directed,positive):
             warnings.simplefilter("ignore", category=RuntimeWarning)
             phi = np.nanmean(data.connectivity.partial_directed_coherence()[0,freq_id,:,:], axis=0)
         np.fill_diagonal(phi,np.nan)
-        return phi, data
+        return phi
 
 class directed_transfer_function(connectivity,directed,positive):
     humanname = 'Directed transfer function'
@@ -210,7 +208,7 @@ class directed_transfer_function(connectivity,directed,positive):
             warnings.simplefilter("ignore", category=RuntimeWarning)
             phi = np.nanmean(data.connectivity.directed_transfer_function()[0,freq_id,:,:], axis=0)
         np.fill_diagonal(phi,np.nan)
-        return phi, data
+        return phi
 
 class spectral_granger(connectivity,directed,positive):
     humanname = 'Spectral Granger causality'
@@ -229,4 +227,4 @@ class spectral_granger(connectivity,directed,positive):
             warnings.simplefilter("ignore", category=RuntimeWarning)
             F = np.nanmean(data.connectivity.pairwise_spectral_granger_prediction()[0,freq_id,:,:], axis=0)
         np.fill_diagonal(F,np.nan)
-        return F, data
+        return F

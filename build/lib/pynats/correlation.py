@@ -2,7 +2,7 @@ from nilearn import connectome as fc
 from sklearn import covariance as cov
 from scipy import stats, spatial, signal
 import numpy as np
-from pynats.base import directed, undirected, parse, positive, real
+from pynats.base import undirected, directed, parse_bivariate, parse_multivariate, positive, real
 from hyppo.independence import MGC, Dcorr, HHG, Hsic
 import warnings
 
@@ -29,6 +29,7 @@ class connectivity(undirected,real):
         self._cov_estimator = eval('self._' + cov_estimator + '()')
         self._kind = kind
 
+    @parse_multivariate
     def adjacency(self,data):
         z = np.swapaxes(data.to_numpy(),2,0)
         fc_measure = fc.ConnectivityMeasure(cov_estimator=self._cov_estimator,
@@ -37,9 +38,9 @@ class connectivity(undirected,real):
         fc_matrix = fc_measure.fit_transform(z)[0]
         np.fill_diagonal(fc_matrix,np.nan)
         if self._squared:
-            return np.square(fc_matrix), data
+            return np.square(fc_matrix)
         else:
-            return fc_matrix, data
+            return fc_matrix
 
 class pearsonr(connectivity):
 
@@ -95,36 +96,29 @@ class xcorr(undirected,real):
             self.name = self.name + '-sq'
         self.name = self.name + '_' + statistic
     
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
 
         if not hasattr(data,'xcorr'):
             data.xcorr = np.ones((data.n_processes,data.n_processes,data.n_observations*2-1)) * -np.inf
 
         if data.xcorr[i,j,0] == -np.inf:
-            z = data.to_numpy()
-            x = z[i]
-            y = z[j]
+            x, y = data.to_numpy()[[i,j]]
             data.xcorr[i,j] = np.squeeze(signal.correlate(x,y,'full'))
             data.xcorr[i,j] = data.xcorr[i,j] / x.std() / y.std() / (data.n_observations - 1)
 
         if self._statistic == 'max':
             if self._squared:
-                stat = np.max(data.xcorr[i,j]**2)
+                return np.max(data.xcorr[i,j]**2)
             else:
-                stat = np.max(data.xcorr[i,j])
-        elif self._statistic == 'maxlag':
-            if self._squared:
-                stat = data.n_observations-np.argmax(data.xcorr[i,j]**2)+1
-            else:
-                stat = data.n_observations-np.argmax(data.xcorr[i,j])+1
+                return np.max(data.xcorr[i,j])
         elif self._statistic == 'mean':
             if self._squared:
-                stat = np.mean(data.xcorr[i,j]**2)
+                return np.mean(data.xcorr[i,j]**2)
             else:
-                stat = np.mean(data.xcorr[i,j])
-
-        return stat, data    
+                return np.mean(data.xcorr[i,j])
+        else:
+            raise TypeError(f'Unknown statistic: {self._statistic}') 
 
 class spearmanr(undirected,real):
 
@@ -136,15 +130,13 @@ class spearmanr(undirected,real):
         if squared:
             self.name = self.name + '-sq'
     
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         if self._squared:
-            return stats.spearmanr(x,y).correlation ** 2, data
+            return stats.spearmanr(x,y).correlation ** 2
         else:
-            return stats.spearmanr(x,y).correlation, data
+            return stats.spearmanr(x,y).correlation
 
 class kendalltau(undirected,real):
 
@@ -156,15 +148,13 @@ class kendalltau(undirected,real):
         if squared:
             self.name = self.name + '-sq'
 
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         if self._squared:
-            return stats.kendalltau(x,y).correlation ** 2, data
+            return stats.kendalltau(x,y).correlation ** 2
         else:
-            return stats.kendalltau(x,y).correlation, data
+            return stats.kendalltau(x,y).correlation
 
 """ TODO: include optional kernels in each method
 """
@@ -175,30 +165,26 @@ class hsic(undirected,positive):
     humanname = "Hilbert-Schmidt Independence Criterion"
     name = 'hsic'
 
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         stat, _ = Hsic().test(x, y, auto=True )
-        return stat, data
+        return stat
 
-class hhg(undirected,positive):
+class hhg(directed,positive):
     """ Heller-Heller-Gorfine independence criterion
     """
 
     humanname = "Heller-Heller-Gorfine Independence Criterion"
-    name = 'hhc'
+    name = 'hhg'
 
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _ = HHG().test(x, y, reps=0)
-        return stat, data
+        return stat
 
 class dcorr(undirected,positive):
     """ Correlation of distances
@@ -207,17 +193,15 @@ class dcorr(undirected,positive):
     humanname = "Distance correlation"
     name = 'dcorr'
     
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         """
         """
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            stat, _ = Dcorr().test(x, y, auto=True, reps=0 )
-        return stat, data
+            stat, _ = Dcorr().test(x, y, auto=True, reps=0)
+        return stat
 
 class mgc(undirected,positive):
     """ Multi-graph correlation
@@ -226,12 +210,10 @@ class mgc(undirected,positive):
     humanname = "Multi-scale graph correlation"
     name = "mgc"
 
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _, _ = MGC().test(x, y, reps=0 )
-        return stat, data
+        return stat

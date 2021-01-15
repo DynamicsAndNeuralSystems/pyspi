@@ -1,6 +1,7 @@
 import numpy as np
 import math
 from pynats.data import Data
+import copy
 
 """
 Base class for pairwise dependency measurements.
@@ -8,23 +9,69 @@ Base class for pairwise dependency measurements.
 The child classes should either overload the adjacency method (if it computes the full adjacency)
 or the bivariate method if it computes only pairwise measurements
 """
-def parse(measure):
-    def parsed_measure(self,data,i=None,j=None):
-        # Create a data
-        if isinstance(data,np.ndarray):
-            if data.ndim != 2:
-                raise Exception('np.ndarray must be two-dimensional')
-            data = Data(data=data,dim_order='ps')
+
+"""
+Some parsing functions for decorating so that we can either input the processes directly or use the data structure
+"""
+def parse_univariate(measure):
+    def parsed_measure(self,data,i=None,inplace=True):
+        if not isinstance(data,Data):
+            data1 = data
+            data = Data(data=data1)
+        elif not inplace:
+            # Ensure we don't write over the original
+            data = copy.deepcopy(data)
+    
+        if i is None:
+            if data.n_processes == 1:
+                i = 0
+            else:
+                raise ValueError('Require argument i to be set.')
+
+        return measure(self,data,i=i)
+
+    return parsed_measure
+
+def parse_bivariate(measure):
+    def parsed_measure(self,data,data2=None,i=None,j=None,inplace=True):
+        if not isinstance(data,Data):
+            if data2 is None:
+                raise TypeError('Input must be either a pynats.data object or two 1D-array inputs.'
+                                    f' Received {type(data)} and {type(data2)}.')                        
+            data1 = data
+            data = Data()
+            data.add_process(data1)
+            data.add_process(data2)
+        elif not inplace:
+            # Ensure we don't write over the original
+            data = copy.deepcopy(data)
+    
+        if i is None and j is None:
             if data.n_processes == 2:
                 i,j = 0,1
+            else:
+                Warning('i and j not set.')
 
+        return measure(self,data,i=i,j=j)
+
+    return parsed_measure
+
+def parse_multivariate(measure):
+    def parsed_measure(self,data,inplace=True):
         if not isinstance(data,Data):
-            raise TypeError('Data must be either numpy.ndarray or pynats.data.Data objects.')
+            # Create a pynats.Data object from iterable data object
+            try:
+                procs = data
+                data = Data()
+                for p in procs:
+                    data.add_process(p)
+            except IndexError:
+                raise TypeError('Data must be either a pynats.data.Data object or an and iterable of numpy.ndarray''s.')
+        elif not inplace:
+            # Ensure we don't write over the original
+            data = copy.deepcopy(data)
 
-        try:
-            return measure(self,data,i=i,j=j)
-        except TypeError:
-            return measure(self,data)
+        return measure(self,data)
 
     return parsed_measure
 
@@ -35,31 +82,23 @@ class directed:
     humanname = 'Bivariate base class'
     name = 'bivariate_base'
 
-    @parse
+    @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         """ Overload method for getting the pairwise dependencies
         """
-        raise Exception("You must overload this method.")
+        raise NotImplementedError("Method not yet overloaded.")
 
+    @parse_multivariate
     def adjacency(self,data):
         """ Compute the dependency measures for the entire multivariate dataset
         """
-        if not isinstance(data,Data):
-            raise TypeError(f'Received data type {type(data)} but expected {type(Data)}.')
-
         A = np.empty((data.n_processes,data.n_processes))
         A[:] = np.NaN
 
         for j in range(data.n_processes):
-            for i in [ii for ii in range(data.n_processes) if ii != j and math.isnan(A[ii,j])]:
-                a, data = self.bivariate(data,i,j)
-                try:
-                    A[i,j] = a
-                except (IndexError):
-                    A[i,j] = a[0]
-                    A[j,i] = a[1]
-        
-        return A, data
+            for i in [ii for ii in range(data.n_processes) if ii != j]:
+                A[i,j] = self.bivariate(data,i=i,j=j)
+        return A
 
 class undirected(directed):
 
@@ -69,20 +108,13 @@ class undirected(directed):
     def ispositive(self):
         return False
 
+    @parse_multivariate
     def adjacency(self,data):
-
-        if not isinstance(data,Data):
-            raise TypeError(f'Received data type {type(data)} but expected {type(Data)}.')
-
-        A = np.empty((data.n_processes,data.n_processes))
-        A[:] = np.NaN
-
-        for j in range(data.n_processes):
-            for i in [ii for ii in range(data.n_processes) if ii != j]:
-                A[i,j], data = self.bivariate(data,i,j)
-                A[j,i] = A[i,j]
+        A = super(undirected,self).adjacency(data)
         
-        return A, data
+        li = np.tril_indices(data.n_processes,-1)
+        A[li] = A.T[li]
+        return A
 
 # Maybe this would be more pythonic as decorators or something?
 class positive:

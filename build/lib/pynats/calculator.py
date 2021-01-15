@@ -138,7 +138,7 @@ class Calculator():
             pbar.set_description(f'Processing [{self._name}: {self._measure_names[m]}]')
             start_time = time.time()
             try:
-                self._adjacency[m], self._dataset = self._measures[m].adjacency(self.dataset)
+                self._adjacency[m] = self._measures[m].adjacency(self.dataset)
             except Exception as err:
                 warnings.warn(f'Caught {type(err)} for measure "{self._measure_names[m]}": {err}')
                 self._adjacency[m] = np.NaN
@@ -213,7 +213,7 @@ class Calculator():
         print('Number of pairwise measures after pruning: {}'.format(self._nmeasures))
 
     # TODO - merge two calculators (e.g., to include missing/decentralised data or measures)
-    def merge(self,calc2):
+    def merge(self,other):
         raise NotImplementedError
 
     def save(self,filename):
