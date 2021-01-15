@@ -213,7 +213,7 @@ class Calculator():
         print('Number of pairwise measures after pruning: {}'.format(self._nmeasures))
 
     # TODO - merge two calculators (e.g., to include missing/decentralised data or measures)
-    def merge(self,calc2):
+    def merge(self,other):
         raise NotImplementedError
 
     def save(self,filename):

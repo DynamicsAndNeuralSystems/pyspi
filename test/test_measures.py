@@ -64,11 +64,14 @@ def test_adjacency():
         if any([m.name == e for e in excuse_stochastic]):
             continue
 
-        new_adj = m.adjacency(data,inplace=False)
+        scratch_adj = m.adjacency(data.to_numpy())
         adj = m.adjacency(data)
+        assert np.allclose(adj,scratch_adj,rtol=1e-1,atol=1e-2,equal_nan=True), (
+                    f'{m.name} ({m.humanname}) Adjacency output changed between cached and strach computations.')
 
-        assert np.allclose(adj, new_adj,rtol=1e-1,atol=1e-2,equal_nan=True), (
-                    f'{m.name} ({m.humanname}) Something went wrong with cache for the full adjacency.')
+        recomp_adj = m.adjacency(data)
+        assert np.allclose(adj,recomp_adj,rtol=1e-1,atol=1e-2,equal_nan=True), (
+                    f'{m.name} ({m.humanname}) Adjacency output changed when recomputing.')
 
         for i in range(data.n_processes):
             for j in range(i+1,data.n_processes):
@@ -80,12 +83,12 @@ def test_adjacency():
                     s_t = m.bivariate(data,i=i,j=j)
                     new_s_t = m.bivariate(p[i],p[j])
                     assert s_t == pytest.approx(new_s_t,rel=1e-1,abs=1e-2), (
-                        f'{m.name} ({m.humanname}) ({i},{j}) something went wrong with cache: {s_t} != {new_s_t}')
+                        f'{m.name} ({m.humanname}) Bivariate output from cache mismatch results from scratch for computation ({i},{j}): {s_t} != {new_s_t}')
 
                     t_s = m.bivariate(data,i=j,j=i)
                     new_t_s = m.bivariate(p[j],p[i])
                     assert t_s == pytest.approx(new_t_s,rel=1e-1,abs=1e-2), (
-                        f'{m.name} ({m.humanname}) ({j},{i}) something went wrong with cache: {t_s} != {new_t_s}')
+                        f'{m.name} ({m.humanname}) Bivariate output from cache mismatch results from scratch for computation ({j},{i}): {t_s} != {new_t_s}')
                 except NotImplementedError:
                     a = m.adjacency(p[[i,j]])
                     s_t, t_s = a[0,1], a[1,0]

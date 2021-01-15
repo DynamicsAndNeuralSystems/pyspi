@@ -9,6 +9,29 @@ Base class for pairwise dependency measurements.
 The child classes should either overload the adjacency method (if it computes the full adjacency)
 or the bivariate method if it computes only pairwise measurements
 """
+
+"""
+Some parsing functions for decorating so that we can either input the processes directly or use the data structure
+"""
+def parse_univariate(measure):
+    def parsed_measure(self,data,i=None,inplace=True):
+        if not isinstance(data,Data):
+            data1 = data
+            data = Data(data=data1)
+        elif not inplace:
+            # Ensure we don't write over the original
+            data = copy.deepcopy(data)
+    
+        if i is None:
+            if data.n_processes == 1:
+                i = 0
+            else:
+                raise ValueError('Require argument i to be set.')
+
+        return measure(self,data,i=i)
+
+    return parsed_measure
+
 def parse_bivariate(measure):
     def parsed_measure(self,data,data2=None,i=None,j=None,inplace=True):
         if not isinstance(data,Data):
@@ -66,7 +89,7 @@ class directed:
         raise NotImplementedError("Method not yet overloaded.")
 
     @parse_multivariate
-    def adjacency(self,data,inplace=True):
+    def adjacency(self,data):
         """ Compute the dependency measures for the entire multivariate dataset
         """
         A = np.empty((data.n_processes,data.n_processes))
@@ -85,8 +108,9 @@ class undirected(directed):
     def ispositive(self):
         return False
 
-    def adjacency(self,data,inplace=True):
-        A = super(undirected,self).adjacency(data,inplace)
+    @parse_multivariate
+    def adjacency(self,data):
+        A = super(undirected,self).adjacency(data)
         
         li = np.tril_indices(data.n_processes,-1)
         A[li] = A.T[li]

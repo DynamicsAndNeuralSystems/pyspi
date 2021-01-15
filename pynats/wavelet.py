@@ -54,7 +54,6 @@ class wcoh(undirected,positive):
         freq = data.wavelet['frequencies']
         scales = data.wavelet['scales']
 
-        freq_id = np.where((freq > self._f_lb) * (freq < self._f_ub))[0]        
         scale_matrix = np.ones([1, data.n_observations]) * scales[:, None]
         
         coeff_i = data.wavelet['coeff'][i]

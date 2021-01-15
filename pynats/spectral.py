@@ -7,7 +7,6 @@ import spectral_connectivity as sc
 from pynats.base import directed, undirected, parse_multivariate, positive, real
 
 import warnings
-from collections import namedtuple
 """
 Toolkits used for spectral analysis of time series
 """
@@ -151,7 +150,6 @@ class debiased_squared_weighted_phase_lag(connectivity,undirected,positive):
 
 class partial_coherence(connectivity,undirected,positive):
     humanname = "Partial coherence"
-    cache = namedtuple('cache', 'gamma freq')
 
     def __init__(self,tr=1,f_lb=0.02,f_ub=0.15):
         self._TR = tr # Not yet implemented
@@ -169,10 +167,10 @@ class partial_coherence(connectivity,undirected,positive):
             pdata = tsu.percent_change(z)
             time_series = ts.TimeSeries(pdata, sampling_interval=1)
             C1 = nta.CoherenceAnalyzer(time_series)
-            data.pcoh = partial_coherence.cache(np.nanmean(C1.coherence_partial,axis=2),C1.frequencies)
+            data.pcoh = {'gamma': np.nanmean(C1.coherence_partial,axis=2), 'freq': C1.frequencies}
 
-        freq_idx_C = np.where((data.pcoh.freq > self._f_lb) * (data.pcoh.freq < self._f_ub))[0]
-        pcoh = np.nan_to_num(np.mean(data.pcoh.gamma[:, :, freq_idx_C], -1))
+        freq_idx_C = np.where((data.pcoh['freq'] > self._f_lb) * (data.pcoh['freq'] < self._f_ub))[0]
+        pcoh = np.nan_to_num(np.mean(data.pcoh['gamma'][:, :, freq_idx_C], -1))
         np.fill_diagonal(pcoh,np.nan)
         return pcoh
 

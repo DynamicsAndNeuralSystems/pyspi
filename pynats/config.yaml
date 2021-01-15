@@ -171,7 +171,7 @@
 # Information-theoretic measures
 .infotheory:
 
-  conditional_entropy:
+  conditional_entropy: # No theiler window yet
 
     - estimator: gaussian
 
@@ -179,7 +179,7 @@
 
     - estimator: kernel
 
-  causal_entropy:
+  causal_entropy: # No theiler window yet
 
     - estimator: gaussian
 
@@ -187,7 +187,7 @@
 
     - estimator: kernel
 
-  directed_info:
+  directed_info: # No theiler window yet
 
     - estimator: gaussian
 
@@ -195,7 +195,7 @@
 
     - estimator: kernel
 
-  stochastic_interaction:
+  stochastic_interaction: # No theiler window
 
     - estimator: gaussian
 

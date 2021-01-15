@@ -103,9 +103,7 @@ class xcorr(undirected,real):
             data.xcorr = np.ones((data.n_processes,data.n_processes,data.n_observations*2-1)) * -np.inf
 
         if data.xcorr[i,j,0] == -np.inf:
-            z = data.to_numpy()
-            x = z[i]
-            y = z[j]
+            x, y = data.to_numpy()[[i,j]]
             data.xcorr[i,j] = np.squeeze(signal.correlate(x,y,'full'))
             data.xcorr[i,j] = data.xcorr[i,j] / x.std() / y.std() / (data.n_observations - 1)
 
@@ -134,9 +132,7 @@ class spearmanr(undirected,real):
     
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         if self._squared:
             return stats.spearmanr(x,y).correlation ** 2
         else:
@@ -154,9 +150,7 @@ class kendalltau(undirected,real):
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         if self._squared:
             return stats.kendalltau(x,y).correlation ** 2
         else:
@@ -173,9 +167,7 @@ class hsic(undirected,positive):
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         stat, _ = Hsic().test(x, y, auto=True )
         return stat
 
@@ -188,9 +180,7 @@ class hhg(directed,positive):
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _ = HHG().test(x, y, reps=0)
@@ -207,9 +197,7 @@ class dcorr(undirected,positive):
     def bivariate(self,data,i=None,j=None):
         """
         """
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _ = Dcorr().test(x, y, auto=True, reps=0)
@@ -224,9 +212,7 @@ class mgc(undirected,positive):
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x,y = data.to_numpy()[[i,j]]
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             stat, _, _ = MGC().test(x, y, reps=0 )

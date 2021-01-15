@@ -1,6 +1,4 @@
 from cdt.causality.pairwise import ANM, BivariateFit, CDS, GNN, IGCI, RECI
-import numpy as np
-import pandas as pd
 from pynats.base import directed, undirected, parse_bivariate, real
 
 class anm(directed,real):
