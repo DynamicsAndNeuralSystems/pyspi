@@ -9,6 +9,19 @@ from pynats.base import undirected
 
 np.random.seed(0) # For reproducibility
 
+def get_inddata():
+    T = 100
+    ar_params = .75
+
+    # Generate our random time series
+    procs = [np.random.normal(size=T), np.random.normal(size=T)]
+    for _i, p in enumerate(procs):
+        for t in range(1,T):
+            p[t] += ar_params * p[t-1]
+
+    # For each measure, check that the adjacencies match the subclass (directed/undirected and bivariate->adjacency)dim_order='ps')
+    return Data(np.vstack(procs),dim_order='ps',normalise=True)
+
 def get_data():
     T = 100
     ar_params = .75
@@ -20,7 +33,7 @@ def get_data():
             if _i == 0:
                 p[t] += ar_params * p[t-1]
             else:
-                p[t] += ar_params * procs[_i-1][t] # Contemporaneous causation
+                p[t] += ar_params * procs[_i-1][t-1] # Time-lagged correlation
 
     # For each measure, check that the adjacencies match the subclass (directed/undirected and bivariate->adjacency)dim_order='ps')
     return Data(np.vstack(procs),dim_order='ps',normalise=True)
@@ -120,26 +133,6 @@ def test_adjacency():
 
     More advanced testing will be *slowly* introduced into the package
 """
-def test_spearmanr():
-    from pynats.correlation import spearmanr
-
-    x = np.random.normal(size=100)
-    y = 0.9*x
-
-    y_ind = np.random.normal(size=100)
-
-    calc = spearmanr()
-    dep = calc.bivariate(x,y)
-    ind = calc.bivariate(x,y_ind)
-
-    assert dep > ind, (f'{calc.humanname} test failed: {dep} < {ind}')
-
-
-def test_kendalltau():
-    from pynats.correlation import kendalltau
-
-def test_connectivity():
-    from pynats.correlation import connectivity
     
 def test_ccm():
     """
@@ -193,97 +186,8 @@ def test_gpfit():
 
     assert s_t > t_s, (f'{calc.humanname} test failed test for pair1: {s_t} < {t_s}')
 
-def test_cds():
-    # Load our wrapper
-    pass
-    # from pynats.causal import cds
-
-    # x = np.random.normal(size=100)
-    # y = 0.9*x
-
-    # y_ind = np.random.normal(size=100)
-
-    # calc = cds()
-    # dep = calc.bivariate(x,y)
-    # ind = calc.bivariate(x,y_ind)
-    
-    # assert dep > ind, (f'{calc.humanname} test failed: {dep} < {ind}')
-
-def test_igci():
-    # Load our wrapper
-    pass
-    # from pynats.causal import igci
-
-    # x = np.random.normal(size=100)
-    # y = 0.9*x
-
-    # y_ind = np.random.normal(size=100)
-
-    # calc = igci()
-    # dep = calc.bivariate(x,y)
-    # ind = calc.bivariate(x,y_ind)
-
-    # assert dep > ind, (f'{calc.humanname} test failed: {dep} < {ind}')
-
-def test_hsic():
-    # Import our wrapper
-    from pynats.correlation import hsic
-
-    # Import linear simulation code
-    x = np.random.normal(size=100)
-    y = 0.9*x
-
-    y_ind = np.random.normal(size=100)
-
-    calc = hsic()
-    dep = calc.bivariate(x,y)
-    ind = calc.bivariate(x,y_ind)
-
-    assert dep > ind
-
-def test_hhg():
-    from pynats.correlation import hhg
-    x = np.random.normal(size=100)
-    y = 0.9*x
-
-    y_ind = np.random.normal(size=100)
-
-    calc = hhg()
-    dep = calc.bivariate(x,y)
-    ind = calc.bivariate(x,y_ind)
-
-    assert dep > ind
-
-def test_dcorr():
-    from pynats.correlation import dcorr
-
-    x = np.random.normal(size=100)
-    y = 0.9*x
-
-    y_ind = np.random.normal(size=100)
-
-    calc = dcorr()
-    dep = calc.bivariate(x,y)
-    ind = calc.bivariate(x,y_ind)
-
-    assert dep > ind
-
-def test_mgc():
-    from pynats.correlation import mgc
-
-    x = np.random.normal(size=100)
-    y = 0.9*x
-
-    y_ind = np.random.normal(size=100)
-
-    calc = mgc()
-    dep = calc.bivariate(x,y)
-    ind = calc.bivariate(x,y_ind)
-
-    assert dep > ind
-
 def test_load():
-    import dill
+    import dill, os
 
     calc = Calculator()
 
@@ -296,24 +200,43 @@ def test_load():
 
     calc.load_dataset(get_data())
     calc.compute()
-    
+
+    with open('test.pkl', 'wb') as f:
+        dill.dump(calc,f)
+
+def test_simple_correlation(calc,inddat,depdat):
+    x, y = depdat.to_numpy()[[0,1]]
+    _, y_ind = inddat.to_numpy()[[0,1]]
+
+    try:
+        dep = calc.bivariate(x,y)
+        ind = calc.bivariate(x,y_ind)
+    except NotImplementedError:
+        a = calc.adjacency([x,y])
+        dep = a[0,1]
+        a = calc.adjacency([x,y_ind])
+        ind = a[0,1]
+
+    assert dep > ind
 
 if __name__ == '__main__':
-    # TODO: make the code a bit better since anything coming from the same package uses the same dataset (e.g., the CDT and EDM stuff)
-    test_spearmanr()
-
-    test_anm()
-    test_gpfit()
-    # test_igci() # These two can't even get correlation?
-    # test_cds() 
-
-    test_hsic()
-    test_hhg()
-    test_dcorr()
-    test_mgc()
-
-    test_ccm() # 3 tests
-
     test_yaml()
     test_load()
     test_adjacency()
+
+    inddat = get_inddata()
+    depdat = get_data()
+    calc = Calculator()
+    for m in calc._measures:
+        try:
+            test_simple_correlation(m,inddat,depdat)
+        except AssertionError:
+            print(f'Measure {m.name} failed assertion.')
+
+    # Some tests from the creator's websites
+    test_ccm() # 3 tests
+
+    test_anm()
+    test_gpfit()
+    # test_igci() # These two fail simple correlation?
+    # test_cds()

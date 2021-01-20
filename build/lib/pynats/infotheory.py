@@ -61,11 +61,22 @@ class jidt_base(positive):
 
     def __getstate__(self):
         state = dict(self.__dict__)
+        del state['_entropy_calc']
         try:
-            del state['_calc'], state['_base_class']
+            del state['_calc']
         except KeyError:
             pass
+
+        if '_entropy_calc' in state.keys() or '_calc' in state.keys():
+            print(f'{self.name} contains a calculator still')
         return state
+
+    def __setstate__(self,state):
+        """ Re-initialise the calculator
+        """
+        # Re-initialise
+        self.__dict__.update(state)
+        self._entropy_calc = self._getcalc('entropy')
 
     def __deepcopy__(self,memo):
         newone = type(self)()
@@ -84,6 +95,14 @@ class jidt_base(positive):
         calc.setProperty(self._BIAS_CORRECTION, 'true')
 
         return calc
+
+    def _getconfig(self):
+        if self._estimator == 'kernel':
+            return (self._estimator,self._kernel_width)
+        elif self._estimator == 'kraskov':
+            return (self._estimator,self._prop_k)
+        else:
+            return (self._estimator,)
 
     def _getcalc(self,measure):
         if measure == 'entropy':
@@ -125,16 +144,17 @@ class jidt_base(positive):
         if not hasattr(data,'entropy'):
             data.entropy = {}
 
-        if self._entropy_calc not in data.entropy:
-            data.entropy[self._entropy_calc] = np.full((data.n_processes,1), -np.inf)
+        key = self._getconfig()
+        if key not in data.entropy:
+            data.entropy[key] = np.full((data.n_processes,1), -np.inf)
 
-        if data.entropy[self._entropy_calc][i] == -np.inf:
+        if data.entropy[key][i] == -np.inf:
             x = np.squeeze(data.to_numpy()[i])
             self._entropy_calc.initialise(1)
             self._entropy_calc.setObservations(jp.JArray(jp.JDouble,1)(x))
-            data.entropy[self._entropy_calc][i] = self._entropy_calc.computeAverageLocalOfObservations()
+            data.entropy[key][i] = self._entropy_calc.computeAverageLocalOfObservations()
 
-        return data.entropy[self._entropy_calc][i]
+        return data.entropy[key][i]
 
     # No Theiler window yet (can it be done?)
     @parse_bivariate
@@ -142,18 +162,19 @@ class jidt_base(positive):
         if not hasattr(data,'joint_entropy'):
             data.joint_entropy = {}
 
-        if self._entropy_calc not in data.joint_entropy:
-            data.joint_entropy[self._entropy_calc] = np.full((data.n_processes,data.n_processes), -np.inf)
+        key = self._getconfig()
+        if key not in data.joint_entropy:
+            data.joint_entropy[key] = np.full((data.n_processes,data.n_processes), -np.inf)
 
-        if data.joint_entropy[self._entropy_calc][i,j] == -np.inf:
+        if data.joint_entropy[key][i,j] == -np.inf:
             x,y = data.to_numpy()[[i,j]]
 
             self._entropy_calc.initialise(2)
             self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 2)(np.concatenate([x,y],axis=1)))
-            data.joint_entropy[self._entropy_calc][i,j] = self._entropy_calc.computeAverageLocalOfObservations()
-            data.joint_entropy[self._entropy_calc][j,i] = data.joint_entropy[self._entropy_calc][i,j]
+            data.joint_entropy[key][i,j] = self._entropy_calc.computeAverageLocalOfObservations()
+            data.joint_entropy[key][j,i] = data.joint_entropy[key][i,j]
         
-        return data.joint_entropy[self._entropy_calc][i,j]
+        return data.joint_entropy[key][i,j]
 
     # No Theiler window yet (can it be done?)
     """
@@ -231,6 +252,11 @@ class mutual_info(jidt_base,undirected):
         super().__init__(**kwargs)
         self._calc = self._getcalc('mutual_info')
 
+    def __setstate__(self,state):
+        super(mutual_info,self).__setstate__(state)
+        self.__dict__.update(state)
+        self._calc = self._getcalc('mutual_info')
+
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):
         """ Compute mutual information between Y and X
@@ -254,6 +280,13 @@ class time_lagged_mutual_info(mutual_info):
         super().__init__(**kwargs)
         self._calc = self._getcalc('mutual_info')
 
+    def __setstate__(self,state):
+        """ Re-initialise the calculator
+        """
+        super(time_lagged_mutual_info,self).__setstate__(state)
+        self.__dict__.update(state)
+        self._calc = self._getcalc('mutual_info')
+
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):
         self._set_theiler_window(data,i,j)
@@ -267,12 +300,6 @@ class time_lagged_mutual_info(mutual_info):
         except:
             warnings.warn('Time-lagged MI calcs failed. Maybe check input data for Cholesky factorisation?')
             return np.NaN
-
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        self.__dict__.update(state)
-        self._calc = self._getcalc('mutual_info')
 
 class active_information_storage(jidt_base):
 
@@ -304,6 +331,7 @@ class active_information_storage(jidt_base):
     def __setstate__(self,state):
         """ Re-initialise the calculator
         """
+        super(active_information_storage,self).__setstate__(state)
         self.__dict__.update(state)
         self._calc = self._getcalc('active_info_storage')
 
@@ -370,6 +398,7 @@ class transfer_entropy(jidt_base,directed):
         """ Re-initialise the calculator
         """
         # Re-initialise
+        super(transfer_entropy,self).__setstate__(state)
         self.__dict__.update(state)
         self._calc = self._getcalc('transfer_entropy')
 
@@ -397,13 +426,6 @@ class conditional_entropy(jidt_base,directed):
     def __init__(self,**kwargs):
         super(conditional_entropy,self).__init__(**kwargs)
 
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        # Re-initialise
-        self.__dict__ = state
-        self._calc = self._entropy_calc
-
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         return self._compute_joint_entropy(data,i=i,j=j) - self._compute_entropy(data,i=i)
@@ -416,12 +438,6 @@ class causal_entropy(jidt_base,directed):
     def __init__(self,n=5,**kwargs):
         super(causal_entropy,self).__init__(**kwargs)
         self._n = n
-
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        # Re-initialise
-        self.__dict__.update(state)
 
     def _compute_causal_entropy(self,src,targ):
         mUtils = jp.JPackage('infodynamics.utils').MatrixUtils
@@ -437,13 +453,15 @@ class causal_entropy(jidt_base,directed):
             H = H + self._compute_conditional_entropy(Yf,XYp)
         return H
 
+    def _getconfig(self):
+        return super(causal_entropy,self)._getconfig() + (self._n,)
+
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        key = (self._entropy_calc,self._n)
-
         if not hasattr(data,'causal_entropy'):
             data.causal_entropy = {}
 
+        key = self._getconfig()
         if key not in data.causal_entropy:
             data.causal_entropy[key] = np.full((data.n_processes,data.n_processes), -np.inf)
 
@@ -462,18 +480,11 @@ class directed_info(causal_entropy,directed):
         super(directed_info,self).__init__(**kwargs)
         self._n = n
 
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        # Re-initialise
-        self.__dict__.update(state)
-        self._calc = self._entropy_calc
-
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         """ Compute directed information from i to j
         """
-        # Would be nice to match these two up nicer
+        # Would prefer to match these two calls
         entropy = self._compute_entropy(data,j)
         causal_entropy = super(directed_info,self).bivariate(data,i=i,j=j)
 
@@ -487,14 +498,6 @@ class stochastic_interaction(jidt_base,undirected):
     def __init__(self,history=1,**kwargs):
         super(stochastic_interaction,self).__init__(**kwargs)
         self._history = history
-        self._calc = self._entropy_calc
-    
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        # Re-initialise
-        self.__dict__.update(state)
-        self._calc = self._entropy_calc
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):

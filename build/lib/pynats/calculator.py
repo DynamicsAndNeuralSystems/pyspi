@@ -130,6 +130,9 @@ class Calculator():
     def compute(self,replication=None):
         """ Compute the dependency measures for all target processes for a given replication
         """
+        if not hasattr(self,'_dataset'):
+            raise AttributeError('Dataset not loaded yet. Please initialise with load_dataset.')
+
         if replication is None:
             replication = 0
 
