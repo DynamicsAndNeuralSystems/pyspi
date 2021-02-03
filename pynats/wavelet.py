@@ -1,3 +1,6 @@
+"""
+Redundant methods now (all in spectral.py)
+"""
 import numpy as np
 from pynats import utils
 from pynats.base import directed, undirected, parse_bivariate, positive, real
@@ -6,7 +9,6 @@ from scipy import ndimage
 import warnings
 import pywt
 """
-Toolkits used for spectral analysis of time series
 """
 
 def cwt(bivariate):

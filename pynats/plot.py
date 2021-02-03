@@ -133,7 +133,7 @@ def heatmaps(calc,ncols=5,nmeasures=None,cmap=sns.color_palette("coolwarm", as_c
     for ax in axs[-1,(nmeasures % ncols):]:
         ax.axis('off')
 
-def clustermap(calc,which_measure=None,plot=True,plot_data=False,sort_data=True,categories=None,strtrunc=20,data_cmap='devon_r',clustermap_kwargs={}):
+def clustermap(calc,which_measure=None,plot=True,plot_data=False,sort_data=True,categories=None,strtrunc=20,data_cmap='devon_r',clustermap_kwargs={'cmap': sns.color_palette("coolwarm", as_cmap=True)}):
 
     if plot_data is True:
         figsize = (15,10)
@@ -230,7 +230,7 @@ def clustermap(calc,which_measure=None,plot=True,plot_data=False,sort_data=True,
         return corrs, g.fig
     return corrs
 
-def flatten(calc,nmeasures=None,split=False,transformer=StandardScaler(),cluster=True,row_cluster=False,strtrunc=None,cmap=sns.color_palette("coolwarm", as_cmap=True),plot=True,**kwargs):
+def flatten(calc,nmeasures=None,split=False,transformer=None,cluster=True,row_cluster=False,strtrunc=None,cmap=sns.color_palette("coolwarm", as_cmap=True),plot=True,**kwargs):
     if nmeasures is None:
         nmeasures = calc.n_measures 
 

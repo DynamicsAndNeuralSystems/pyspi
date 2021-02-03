@@ -219,7 +219,40 @@ def test_simple_correlation(calc,inddat,depdat):
 
     assert dep > ind
 
+def test_spectral():
+    """
+    We implemented our own versions of these since otherwise the CSD is not cached.
+
+    Another toolkit that does this nicely is the spectral_connectivity toolkit but it doesn't
+    have wavelet (Mortlet) transformations and also gets different results to MNE-Python.
+
+    We use spectral_connectivity for some directed measures though -- hopefully this is OK.
+    """
+    import mne.connectivity as mnec
+    import pynats.spectral as sc
+
+    data = get_data()
+    z = np.moveaxis(np.atleast_3d(data.to_numpy()),-1,0)
+
+    ours = ('coherence','icoherence','phase_locking_value','corrected_imaginary_phase_locking_value',
+                'pairwise_phase_consistency','phase_lag_index')
+    theirs = ('coh','imcoh','plv','ciplv','ppc','pli')
+    
+    for measure, method in zip(ours,theirs):
+        calc = getattr(sc, measure)()
+        res = calc.bivariate(data)
+        con_flat = mnec.spectral_connectivity(z, method=method, sfreq=calc._fs, fmin=calc._fmin, fmax=calc._fmax,verbose='WARNING')
+        res2 = np.nanmean(con_flat[0][1,0])
+        if not np.isnan(res2):
+            assert res2 == pytest.approx(res, rel=1e-1, abs=1e-2), (
+                f'Spectral measure {measure} failed to match MNE-Python [{res} != {res2}]')
+
+
+
 if __name__ == '__main__':
+
+    test_spectral()
+
     test_yaml()
     test_load()
     test_adjacency()
@@ -231,12 +264,13 @@ if __name__ == '__main__':
         try:
             test_simple_correlation(m,inddat,depdat)
         except AssertionError:
-            print(f'Measure {m.name} failed assertion.')
+            print(f'Measure {m.name} failed simple correlation test (perhaps just verify this makes sense?).')
 
     # Some tests from the creator's websites
     test_ccm() # 3 tests
 
     test_anm()
     test_gpfit()
-    # test_igci() # These two fail simple correlation?
+    
+    # test_igci() # These two fail simple correlation tests..?
     # test_cds()

@@ -121,31 +121,37 @@
 # Measures that analyse in the frequency-domain (see Schoegl and Supp, 2006)
 .spectral:
 
-  # Cross-spectrum
-  # spectrum:
-
   # Coherence (ordinal or squared? real components of the coherence)
   coherence:
-    - f_lb: 0.0
-      f_ub: 0.2
-
-    - f_lb: 0.02
-      f_ub: 10
+    - mode: 'multitaper'
+    - mode: 'fourier'
+    - mode: 'mortlet'
 
   # Coherence (ordinal or squared? imaginary components of the coherence)
   icoherence:
+    - mode: 'multitaper'
+    - mode: 'fourier'
+    - mode: 'mortlet'
 
-  # Phase difference of signals relative to one another
-  phase:
+  phase_locking_value:
+    - mode: 'multitaper'
+    - mode: 'fourier'
+    - mode: 'mortlet'
 
-  # Phase lag
-  phase_lag:
+  corrected_imaginary_phase_locking_value:
+    - mode: 'multitaper'
+    - mode: 'fourier'
+    - mode: 'mortlet'
 
-  # Weighted phase lag
-  weighted_phase_lag:
+  pairwise_phase_consistency:
+    - mode: 'multitaper'
+    - mode: 'fourier'
+    - mode: 'mortlet'
 
-  # De-biased squared weighted phase lag
-  debiased_squared_weighted_phase_lag:
+  phase_lag_index:
+    - mode: 'multitaper'
+    - mode: 'fourier'
+    - mode: 'mortlet'
 
   # Partial coherence (condition out all other processes)
   partial_coherence:
@@ -163,10 +169,6 @@
 
     - fs: 1
       order: 20
-
-.wavelet:
-
-  wcoh:
 
 # Information-theoretic measures
 .infotheory:
