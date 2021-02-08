@@ -38,6 +38,23 @@ def get_data():
     # For each measure, check that the adjacencies match the subclass (directed/undirected and bivariate->adjacency)dim_order='ps')
     return Data(np.vstack(procs),dim_order='ps',normalise=True)
 
+def get_more_data():
+    T = 100
+    M = 3
+    ar_params = .75
+
+    # Generate our random time series
+    procs = np.random.normal(size=(M,T))
+    for _i, p in enumerate(procs):
+        for t in range(1,T):
+            if _i == 0:
+                p[t] += ar_params * p[t-1]
+            else:
+                p[t] += ar_params * procs[_i-1][t-1] # Time-lagged correlation
+
+    # For each measure, check that the adjacencies match the subclass (directed/undirected and bivariate->adjacency)dim_order='ps')
+    return Data(np.vstack(procs),dim_order='ps',normalise=True)
+
 def test_yaml():
     data = get_data()
     calc = Calculator(dataset=data)
@@ -68,7 +85,7 @@ def test_adjacency():
     
     excuse_directed = ['coint_aeg_tstat']
 
-    excuse_stochastic = ['ccm_max','ccm_mean','ccm_diff']
+    excuse_stochastic = ['ccm_max','ccm_mean','ccm_diff','gd_fs-1_fmin-0-05_fmax-1-57']
 
     p = data.to_numpy()
     for _i, m in enumerate(calc._measures):
@@ -77,10 +94,12 @@ def test_adjacency():
         if any([m.name == e for e in excuse_stochastic]):
             continue
 
+        m.adjacency(get_more_data())
+
         scratch_adj = m.adjacency(data.to_numpy())
         adj = m.adjacency(data)
         assert np.allclose(adj,scratch_adj,rtol=1e-1,atol=1e-2,equal_nan=True), (
-                    f'{m.name} ({m.humanname}) Adjacency output changed between cached and strach computations.')
+                    f'{m.name} ({m.humanname}) Adjacency output changed between cached and strach computations: {adj} != {scratch_adj}')
 
         recomp_adj = m.adjacency(data)
         assert np.allclose(adj,recomp_adj,rtol=1e-1,atol=1e-2,equal_nan=True), (
@@ -251,10 +270,10 @@ def test_spectral():
 
 if __name__ == '__main__':
 
-    test_spectral()
+    # test_spectral()
 
-    test_yaml()
-    test_load()
+    # test_yaml()
+    # test_load()
     test_adjacency()
 
     inddat = get_inddata()

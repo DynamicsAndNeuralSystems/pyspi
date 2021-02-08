@@ -21,9 +21,11 @@ def forall(func):
 
 class CalculatorFrame():
 
-    def __init__(self,datasets=None,names=None,labels=None,calculators=None,**kwargs):
+    def __init__(self,name=None,datasets=None,names=None,labels=None,calculators=None,**kwargs):
         if calculators is not None:
             self.set_calculator(calculators)
+
+        self.name = name
 
         if datasets is not None:
             if names is None:
@@ -34,7 +36,7 @@ class CalculatorFrame():
 
     @property
     def name(self):
-        if hasattr(self,'_name'):
+        if hasattr(self,'_name') and self._name is not None:
             return self._name
         else:
             return ''

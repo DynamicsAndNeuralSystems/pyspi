@@ -122,45 +122,41 @@
 .spectral:
 
   # Coherence (ordinal or squared? real components of the coherence)
-  coherence:
-    - mode: 'multitaper'
-    - mode: 'fourier'
-    - mode: 'mortlet'
+  coherency:
+
+  coherence_phase:
+
+  coherence_magnitude:
 
   # Coherence (ordinal or squared? imaginary components of the coherence)
   icoherence:
-    - mode: 'multitaper'
-    - mode: 'fourier'
-    - mode: 'mortlet'
+
+  phase_slope_index:
 
   phase_locking_value:
-    - mode: 'multitaper'
-    - mode: 'fourier'
-    - mode: 'mortlet'
-
-  corrected_imaginary_phase_locking_value:
-    - mode: 'multitaper'
-    - mode: 'fourier'
-    - mode: 'mortlet'
-
-  pairwise_phase_consistency:
-    - mode: 'multitaper'
-    - mode: 'fourier'
-    - mode: 'mortlet'
 
   phase_lag_index:
-    - mode: 'multitaper'
-    - mode: 'fourier'
-    - mode: 'mortlet'
 
-  # Partial coherence (condition out all other processes)
-  partial_coherence:
+  weighted_phase_lag_index:
+
+  debiased_squared_phase_lag_index:
+
+  debiased_squared_weighted_phase_lag_index:
+
+  pairwise_phase_consistency:
+
+  directed_transfer_function:
+
+  directed_coherence:
 
   partial_directed_coherence:
 
-  directed_transfer_function:
+  generalized_partial_directed_coherence:
+
+  direct_directed_transfer_function:
+
+  group_delay:
     
-  # Spectral granger causality
   spectral_granger:
     - fs: 1
 

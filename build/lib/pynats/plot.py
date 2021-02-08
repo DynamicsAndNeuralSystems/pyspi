@@ -133,7 +133,7 @@ def heatmaps(calc,ncols=5,nmeasures=None,cmap=sns.color_palette("coolwarm", as_c
     for ax in axs[-1,(nmeasures % ncols):]:
         ax.axis('off')
 
-def clustermap(calc,which_measure=None,plot=True,plot_data=False,sort_data=True,categories=None,strtrunc=20,data_cmap='devon_r',clustermap_kwargs={}):
+def clustermap(calc,which_measure=None,plot=True,plot_data=False,sort_data=True,categories=None,strtrunc=20,data_cmap='devon_r',clustermap_kwargs={'cmap': sns.color_palette("coolwarm", as_cmap=True)}):
 
     if plot_data is True:
         figsize = (15,10)
@@ -230,7 +230,7 @@ def clustermap(calc,which_measure=None,plot=True,plot_data=False,sort_data=True,
         return corrs, g.fig
     return corrs
 
-def flatten(calc,nmeasures=None,split=False,transformer=StandardScaler(),cluster=True,row_cluster=False,strtrunc=None,cmap=sns.color_palette("coolwarm", as_cmap=True),plot=True,**kwargs):
+def flatten(calc,nmeasures=None,split=False,transformer=None,cluster=True,row_cluster=False,strtrunc=None,cmap=sns.color_palette("coolwarm", as_cmap=True),plot=True,**kwargs):
     if nmeasures is None:
         nmeasures = calc.n_measures 
 
@@ -289,17 +289,44 @@ def flatten(calc,nmeasures=None,split=False,transformer=StandardScaler(),cluster
     return df
        
 @asframe
-def flattenall(cf,**kwargs):
+def flattenall(cf,plot=True,cluster=True,cmap=sns.color_palette("coolwarm", as_cmap=True),row_cluster=False,flatten_kwargs={},**kwargs):
     df = pd.DataFrame()
     for i in cf.calculators.index:
-        df2 = flatten(cf.calculators.loc[i][0],strtrunc=None,**kwargs)
+        df2 = flatten(cf.calculators.loc[i][0],strtrunc=None,plot=False,**flatten_kwargs)
         df = pd.concat([df, df2], axis=0, sort=False, ignore_index=True)
+
+    if plot:
+        if cluster is True:
+            dfp = df
+            dfp.fillna(0,inplace=True)
+            try:
+                sns.set(font_scale=0.7)
+                g = sns.clustermap(dfp,
+                                    cmap=cmap, row_cluster=row_cluster,
+                                    figsize=(15, 7),
+                                    xticklabels=1, **kwargs )
+                sns.set(font_scale=1.0)
+                ax = g.ax_heatmap
+            except FloatingPointError:
+                warnings.warn('Disimilarity value returned NaN. Have you run prune() for the calculator?', RuntimeWarning)
+                return
+            ax_hmcb = g.ax_cbar
+            plt.subplots_adjust(left=0.0,right=0.9,bottom=0.2,top=0.9)
+            ax_hmcb.set_position([0.1, 0.25, 0.015, 0.4])
+            ax_hmcb.yaxis.set_ticks_position('left') 
+        else:
+            _, ax = plt.subplots(1,1)
+            ax = sns.heatmap(df, ax=ax, cmap=cmap,
+                                xticklabels=1, **kwargs )
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        return df, ax.figure    
+
     return df
 
 @asframe
 def clusterall(cf,approach='mean',plot=True,reducer=TSNE(n_components=1),flatten_kwargs={},clustermap_kwargs={'cmap': sns.color_palette("coolwarm", as_cmap=True)}):
     if approach == 'flatten':
-        df = flattenall(cf,plot=False,**flatten_kwargs)
+        df = flattenall(cf,plot=False,flatten_kwargs=flatten_kwargs)
         df.fillna(0,inplace=True)
         corrs = df.corr(method='spearman')
         corrs.fillna(0,inplace=True)
