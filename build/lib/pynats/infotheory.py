@@ -96,7 +96,7 @@ class jidt_base(positive):
 
         return calc
 
-    def _getconfig(self):
+    def _getkey(self):
         if self._estimator == 'kernel':
             return (self._estimator,self._kernel_width)
         elif self._estimator == 'kraskov':
@@ -119,13 +119,6 @@ class jidt_base(positive):
                 calc = self._base_class.kraskov.MutualInfoCalculatorMultiVariateKraskov1()
             else:
                 calc = self._base_class.gaussian.MutualInfoCalculatorMultiVariateGaussian()
-        elif measure == 'active_info_storage':
-            if self._estimator == 'kernel':
-                calc = self._base_class.kernel.ActiveInfoStorageCalculatorKernel()
-            elif self._estimator == 'kraskov':
-                calc = self._base_class.kraskov.ActiveInfoStorageCalculatorKraskov()
-            else:
-                calc = self._base_class.gaussian.ActiveInfoStorageCalculatorGaussian()
         elif measure == 'transfer_entropy':
             if self._estimator == 'kernel':
                 calc = self._base_class.kernel.TransferEntropyCalculatorKernel()
@@ -144,9 +137,9 @@ class jidt_base(positive):
         if not hasattr(data,'entropy'):
             data.entropy = {}
 
-        key = self._getconfig()
+        key = self._getkey()
         if key not in data.entropy:
-            data.entropy[key] = np.full((data.n_processes,1), -np.inf)
+            data.entropy[key] = np.full((data.n_processes,), -np.inf)
 
         if data.entropy[key][i] == -np.inf:
             x = np.squeeze(data.to_numpy()[i])
@@ -162,7 +155,7 @@ class jidt_base(positive):
         if not hasattr(data,'joint_entropy'):
             data.joint_entropy = {}
 
-        key = self._getconfig()
+        key = self._getkey()
         if key not in data.joint_entropy:
             data.joint_entropy[key] = np.full((data.n_processes,data.n_processes), -np.inf)
 
@@ -199,50 +192,20 @@ class jidt_base(positive):
                 z = data.to_numpy()
                 theiler_window = -np.ones((data.n_processes,data.n_processes))
                 # Compute effective sample size for each pair
-                for i in range(data.n_processes):
-                    targ = z[i]
-                    for j in range(i+1,data.n_processes):
-                        src = z[j]
+                for _i in range(data.n_processes):
+                    targ = z[_i]
+                    for _j in range(_i+1,data.n_processes):
+                        src = z[_j]
                         # Init the Theiler window using Bartlett's formula
-                        theiler_window[i,j] = 2*np.dot(utils.acf(src),utils.acf(targ))
-                        theiler_window[j,i] = theiler_window[i,j]
+                        theiler_window[_i,_j] = 2*np.dot(utils.acf(src),utils.acf(targ))
+                        theiler_window[_j,_i] = theiler_window[_i,_j]
                 data.theiler = theiler_window
 
-                self._calc.setProperty(self._DYN_CORR_EXCL_PROP_NAME,
-                                        str(int(data.theiler[i,j])))
+            self._calc.setProperty(self._DYN_CORR_EXCL_PROP_NAME,
+                                    str(int(data.theiler[i,j])))
         elif self._dyn_corr_excl is not None:
             self._calc.setProperty(self._DYN_CORR_EXCL_PROP_NAME,
                                     str(int(self._dyn_corr_excl)))
-
-    def _set_embeddings(self,data,i,j):
-        
-        self._set_theiler_window(data,i,j)
-
-        if self._auto_embed_method is not None:
-            if not hasattr(data,'embeddings'):
-                data.embeddings = []
-            
-            # If we've already got a calculator that's explored this k_search_max, we can use it
-            if len(data.embeddings) > 0:
-                ids = [calc >= self._ais_calc for calc in data.embeddings]
-                if any(ids):
-                    ais_calc = data.embeddings[ids]
-                else:
-                    ais_calc = self._ais_calc
-                    ais_calc._compute_embeddings(data,i,j)
-            else:
-                ais_calc = self._ais_calc
-                ais_calc._compute_embeddings(data,i,j)
-
-            opt_k = np.min([ais_calc._optimal_history[i],self._k_search_max])
-            self._calc.setProperty(self._K_HISTORY_PROP_NAME, str(int(opt_k)))
-            
-            if self._estimator != 'kernel':
-                opt_l = np.min([ais_calc._optimal_history[j],self._k_search_max])
-                opt_ktau, opt_ltau = ais_calc._optimal_timedelay[[i,j]]
-                self._calc.setProperty(self._K_TAU_PROP_NAME, str(int(opt_ktau)))
-                self._calc.setProperty(self._L_HISTORY_PROP_NAME, str(int(opt_l)))
-                self._calc.setProperty(self._L_TAU_PROP_NAME, str(int(opt_ltau)))
 
 class mutual_info(jidt_base,undirected):
     humanname = "Mutual information"
@@ -301,62 +264,6 @@ class time_lagged_mutual_info(mutual_info):
             warnings.warn('Time-lagged MI calcs failed. Maybe check input data for Cholesky factorisation?')
             return np.NaN
 
-class active_information_storage(jidt_base):
-
-    _HISTORY_PROP_NAME = 'k_HISTORY'
-    _TAU_PROP_NAME = 'TAU'
-    name = 'ais'
-
-    def __init__(self,auto_embed_method='MAX_CORR_AIS',k_search_max=1,tau_search_max=1,**kwargs):
-        super(active_information_storage, self).__init__(**kwargs)
-
-        self._auto_embed_method = auto_embed_method
-        self._k_search_max = k_search_max
-        self._tau_search_max = tau_search_max
-
-        self._optimal_history = None
-        self._optimal_timedelay = None
-
-        self._calc = self._getcalc('active_info_storage')
-
-    # Overload dir() to get only attributes we care about
-    def __dir__(self):
-        atts = ['_auto_embed_method', '_estimator', '_dyn_corr_excl']
-        if self._estimator == 'kraskov':
-            atts = atts.append('_prop_k')
-        elif self._estimator == 'kernel':
-            atts = atts.append('_kernel_width')
-        return atts
-
-    def __setstate__(self,state):
-        """ Re-initialise the calculator
-        """
-        super(active_information_storage,self).__setstate__(state)
-        self.__dict__.update(state)
-        self._calc = self._getcalc('active_info_storage')
-
-    def __ge__(self,other):
-        if self == other:
-            if self._k_search_max >= other._k_search_max and self._tau_search_max == other._tau_search_max:
-                return True
-        return False
-
-    def _compute_embeddings(self,data,i=None,j=None):
-        
-        if self._optimal_history is None:
-            self._optimal_history = np.zeros((data.n_processes))
-            self._optimal_timedelay = np.zeros((data.n_processes))
-
-            for i in range(data.n_processes):
-                x = data.to_numpy(squeeze=True)[i]
-                
-                self._set_theiler_window(data,i,j)
-                self._calc.initialise(int(1), int(1))
-                self._calc.setObservations(jp.JArray(jp.JDouble,1)(x))
-                self._optimal_history[i] = int(str(self._calc.getProperty(self._HISTORY_PROP_NAME)))
-                if self._estimator != 'kernel':
-                    self._optimal_timedelay[i] = int(str(self._calc.getProperty(self._TAU_PROP_NAME)))
-
 class transfer_entropy(jidt_base,directed):
 
     humanname = "Transfer entropy"
@@ -377,13 +284,15 @@ class transfer_entropy(jidt_base,directed):
         self._calc = self._getcalc('transfer_entropy')
 
         # Auto-embedding
-        if auto_embed_method is not None:
+        if self._auto_embed_method is not None:
+            self._calc.setProperty(self._AUTO_EMBED_METHOD_PROP_NAME,self._auto_embed_method)
+            self._calc.setProperty(self._K_SEARCH_MAX_PROP_NAME,str(self._k_search_max))
             if self._estimator != 'kernel':
                 self.name = self.name + '_k-max-{}_tau-max-{}'.format(k_search_max,tau_search_max)
+                self._calc.setProperty(self._TAU_SEARCH_MAX_PROP_NAME,str(self._tau_search_max))
             else:
                 self.name = self.name + '_k-max-{}'.format(k_search_max)
             # Set up calculator
-            self._ais_calc = active_information_storage(k_search_max=k_search_max,tau_search_max=tau_search_max,**kwargs)
         else:
             self._calc.setProperty(self._K_HISTORY_PROP_NAME,str(k_history))
             if self._estimator != 'kernel':
@@ -408,7 +317,6 @@ class transfer_entropy(jidt_base,directed):
         Compute transfer entropy from i->j
         """
         self._set_theiler_window(data,i,j)
-        self._set_embeddings(data,i,j)
         self._calc.initialise()
         try:
             src, targ = data.to_numpy(squeeze=True)[[i,j]]
@@ -453,15 +361,15 @@ class causal_entropy(jidt_base,directed):
             H = H + self._compute_conditional_entropy(Yf,XYp)
         return H
 
-    def _getconfig(self):
-        return super(causal_entropy,self)._getconfig() + (self._n,)
+    def _getkey(self):
+        return super(causal_entropy,self)._getkey() + (self._n,)
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         if not hasattr(data,'causal_entropy'):
             data.causal_entropy = {}
 
-        key = self._getconfig()
+        key = self._getkey()
         if key not in data.causal_entropy:
             data.causal_entropy[key] = np.full((data.n_processes,data.n_processes), -np.inf)
 

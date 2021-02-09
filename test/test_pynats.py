@@ -11,29 +11,17 @@ np.random.seed(0) # For reproducibility
 
 def get_inddata():
     T = 100
-    ar_params = .75
 
-    # Generate our random time series
-    procs = [np.random.normal(size=T), np.random.normal(size=T)]
-    for _i, p in enumerate(procs):
-        for t in range(1,T):
-            p[t] += ar_params * p[t-1]
-
-    # For each measure, check that the adjacencies match the subclass (directed/undirected and bivariate->adjacency)dim_order='ps')
+    # Generate and return our random data
+    procs = np.random.normal(size=(2,T))
     return Data(np.vstack(procs),dim_order='ps',normalise=True)
 
 def get_data():
     T = 100
-    ar_params = .75
 
     # Generate our random time series
-    procs = [np.random.normal(size=T), np.random.normal(size=T)]
-    for _i, p in enumerate(procs):
-        for t in range(1,T):
-            if _i == 0:
-                p[t] += ar_params * p[t-1]
-            else:
-                p[t] += ar_params * procs[_i-1][t-1] # Time-lagged correlation
+    procs = np.random.normal(size=(2,T))
+    procs[1] += 0.5 * procs[0]
 
     # For each measure, check that the adjacencies match the subclass (directed/undirected and bivariate->adjacency)dim_order='ps')
     return Data(np.vstack(procs),dim_order='ps',normalise=True)
@@ -223,73 +211,38 @@ def test_load():
     with open('test.pkl', 'wb') as f:
         dill.dump(calc,f)
 
-def test_simple_correlation(calc,inddat,depdat):
-    x, y = depdat.to_numpy()[[0,1]]
-    _, y_ind = inddat.to_numpy()[[0,1]]
-
-    try:
-        dep = calc.bivariate(x,y)
-        ind = calc.bivariate(x,y_ind)
-    except NotImplementedError:
-        a = calc.adjacency([x,y])
-        dep = a[0,1]
-        a = calc.adjacency([x,y_ind])
-        ind = a[0,1]
-
-    assert dep > ind
-
-def test_spectral():
-    """
-    We implemented our own versions of these since otherwise the CSD is not cached.
-
-    Another toolkit that does this nicely is the spectral_connectivity toolkit but it doesn't
-    have wavelet (Mortlet) transformations and also gets different results to MNE-Python.
-
-    We use spectral_connectivity for some directed measures though -- hopefully this is OK.
-    """
-    import mne.connectivity as mnec
-    import pynats.spectral as sc
-
-    data = get_data()
-    z = np.moveaxis(np.atleast_3d(data.to_numpy()),-1,0)
-
-    ours = ('coherence','icoherence','phase_locking_value','corrected_imaginary_phase_locking_value',
-                'pairwise_phase_consistency','phase_lag_index')
-    theirs = ('coh','imcoh','plv','ciplv','ppc','pli')
-    
-    for measure, method in zip(ours,theirs):
-        calc = getattr(sc, measure)()
-        res = calc.bivariate(data)
-        con_flat = mnec.spectral_connectivity(z, method=method, sfreq=calc._fs, fmin=calc._fmin, fmax=calc._fmax,verbose='WARNING')
-        res2 = np.nanmean(con_flat[0][1,0])
-        if not np.isnan(res2):
-            assert res2 == pytest.approx(res, rel=1e-1, abs=1e-2), (
-                f'Spectral measure {measure} failed to match MNE-Python [{res} != {res2}]')
-
-
-
-if __name__ == '__main__':
-
-    # test_spectral()
-
-    # test_yaml()
-    # test_load()
-    test_adjacency()
-
+def test_simple_correlation():
     inddat = get_inddata()
     depdat = get_data()
     calc = Calculator()
     for m in calc._measures:
         try:
-            test_simple_correlation(m,inddat,depdat)
-        except AssertionError:
-            print(f'Measure {m.name} failed simple correlation test (perhaps just verify this makes sense?).')
+            x, y = depdat.to_numpy()[[0,1]]
+            _, y_ind = inddat.to_numpy()[[0,1]]
+
+            try:
+                dep = m.bivariate(x,y)
+                ind = m.bivariate(x,y_ind)
+            except NotImplementedError:
+                a = m.adjacency([x,y])
+                dep = a[0,1]
+                a = m.adjacency([x,y_ind])
+                ind = a[0,1]
+
+            assert dep > ind, (f"verify that {dep} should or can be less than {ind}")
+        except AssertionError as e:
+            print(f'{m.name} failed simple correlation test: {e}')
+
+if __name__ == '__main__':
+
+    test_yaml()
+    test_load()
+    test_adjacency()
+
+    test_simple_correlation()
 
     # Some tests from the creator's websites
     test_ccm() # 3 tests
 
     test_anm()
     test_gpfit()
-    
-    # test_igci() # These two fail simple correlation tests..?
-    # test_cds()

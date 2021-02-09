@@ -20,7 +20,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import seaborn as sns
 from scipy.cluster.hierarchy import dendrogram, linkage, leaves_list, set_link_color_palette
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
+# from sklearn.preprocessing import StandardScaler
 from umap import UMAP
 from sklearn.manifold import TSNE
 
@@ -123,10 +123,7 @@ def heatmaps(calc,ncols=5,nmeasures=None,cmap=sns.color_palette("coolwarm", as_c
         cax = divider.append_axes("right", size="5%", pad=0.1)    
         
         adj = calc.adjacency[i,:,:]
-        sns.heatmap(adj,
-                    ax=myax, cbar_ax=cax,
-                    square=True,
-                    cmap=cmap, mask=np.invert(np.isnan(adj)), center=0.00, **kwargs)
+        sns.heatmap(adj, ax=myax, cbar_ax=cax, square=True, cmap=cmap,**kwargs)
         myax.set_title('[' + str(i) + '] ' + utils.strshort(calc._measure_names[i],20))
 
     # Make remaining subplots empty:

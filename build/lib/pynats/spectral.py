@@ -1,11 +1,8 @@
 import numpy as np
+from functools import partial
 from pynats import utils
 import spectral_connectivity as sc # For directed spectral measures (excl. spectral GC) 
-import mne.time_frequency as mtf
 from pynats.base import directed, parse_bivariate, undirected, parse_multivariate, positive, real
-# import pygc.parametric
-# import pygc.granger
-# import pygc.pySpec
 import nitime.analysis as nta
 import nitime.timeseries as ts
 import nitime.utils as tsu
@@ -15,178 +12,220 @@ import warnings
 """
 The measures here come from three different toolkits:
 
-    - Undirected measurements generally come from MNE (coherence, imaginary coherence, phase-locking value, etc.)
+    - Simple undirected measurements generally come from MNE (coherence, imaginary coherence, phase slope index)
+        - This is not true anymore. I originally used this b/c they had additional (short-time fourier and Mortlet)
+            ways of computing the spectral measures, but the use of epochs, etc. seemed dissimilar to literature.
+            Need to look into this
     - Some directed measurements come from Eden Kramer Lab's spectral_connectivity toolkit (partial directed coherence and directed transfer function)
     - Spectral Granger causality comes from nitime (since Kramer's version doesn't optimise AR order)
 
 Hopefully we'll eventually just use the cross-spectral density and VAR models to compute these directly, however this may involve integration with the temporal toolkits so may not ever get done..
 """
-class connectivity():
+# class mne_connectivity():
 
-    def __init__(self,mode='multitaper',fs=1,fmin=None,fmax=None):
+#     def __init__(self,mode='multitaper',fs=1,fmin=None,fmax=None):
+#         if fmin is None:
+#             if mode == 'mortlet':
+#                 fmin = 1
+#             else:
+#                 fmin = 0.05
+#         if fmax is None:
+#             fmax = np.pi/2
 
-        if fmin is None:
-            if mode == 'mortlet':
-                fmin = 1
-            else:
-                fmin = 0.05
-        if fmax is None:
-            fmax = np.pi/2
+#         self._fs = fs # Not yet implemented
+#         self._fmin = fmin
+#         self._fmax = fmax
+#         self._mode = mode
+#         paramstr = f'_{self._mode}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}'.replace('.','-')
+#         self.name = self.name + paramstr
 
-        self._fs = fs # Not yet implemented
-        self._fmin = fmin
-        self._fmax = fmax
-        self._mode = mode
-        paramstr = f'_{self._mode}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}'.replace('.','-')
-        self.name = self.name + paramstr
-
-    def _get_csd(self,data):
-        if not hasattr(data,'connectivity'):
-            data.connectivity = {}
+#     def _get_csd(self,data):
+#         if not hasattr(data,'connectivity'):
+#             data.connectivity = {}
         
-        if self._mode not in data.connectivity:
-            """
-            TODO: Allow for appending frequencies
-            """
-            z = np.moveaxis(np.atleast_3d(data.to_numpy()),-1,0)
-            if self._mode == 'multitaper':
-                data.connectivity[self._mode] = mtf.csd_array_multitaper(z, sfreq=self._fs,fmin=self._fmin,fmax=self._fmax,verbose='WARNING')
-            if self._mode == 'fourier':
-                data.connectivity[self._mode] = mtf.csd_array_fourier(z, sfreq=self._fs,fmin=self._fmin,fmax=self._fmax,verbose='WARNING')
-            if self._mode == 'mortlet':
-                data.connectivity[self._mode] = mtf.csd_array_morlet(z,sfreq=self._fs,frequencies=np.linspace(self._fmin,self._fmax,20),verbose='WARNING')
+#         if self._mode not in data.connectivity:
+#             """
+#             TODO: Allow for appending frequencies
+#             """
+#             z = np.moveaxis(np.atleast_3d(data.to_numpy()),-1,0)
+#             if self._mode == 'multitaper':
+#                 data.connectivity[self._mode] = mtf.csd_array_multitaper(z,sfreq=self._fs,fmin=self._fmin,fmax=self._fmax,verbose='WARNING')
+#             if self._mode == 'fourier':
+#                 data.connectivity[self._mode] = mtf.csd_array_fourier(z, sfreq=self._fs,fmin=self._fmin,fmax=self._fmax,verbose='WARNING')
+#             if self._mode == 'mortlet':
+#                 data.connectivity[self._mode] = mtf.csd_array_morlet(z,sfreq=self._fs,frequencies=np.linspace(self._fmin,self._fmax,20),verbose='WARNING')
 
-        return data.connectivity[self._mode]
+#         return data.connectivity[self._mode]
 
-    def _compute_stat(psd,i,j):
-        raise NotImplementedError('This method must be overloaded')
+#     def _compute_stat(psd,i,j):
+#         raise NotImplementedError('This method must be overloaded')
 
-    @parse_bivariate
-    def bivariate(self,data,i=None,j=None):
+#     @parse_bivariate
+#     def bivariate(self,data,i=None,j=None):
 
-        csd = self._get_csd(data)
+#         csd = self._get_csd(data)
         
-        freq = csd.frequencies
-        freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
+#         freq = csd.frequencies
+#         freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
         
-        stat = np.zeros((freq_id.shape[0]))
-        for f in freq_id:
-            psd = csd.get_data(freq[f])
-            stat[f] = self._compute_stat(psd,i,j)
+#         stat = np.zeros((freq_id.shape[0]))
+#         for f in freq_id:
+#             psd = csd.get_data(freq[f])
+#             stat[f] = self._compute_stat(psd,i,j)
 
-        return np.nanmean(stat)
+#         return np.nanmean(stat)
 
-class coherence(connectivity,undirected,positive):
+# class coherence(mne_connectivity,undirected):
 
-    humanname = "Coherence"
+#     humanname = "Coherence"
 
-    def __init__(self,**kwargs):
-        self.name = 'coh'
-        super().__init__(**kwargs)
+#     def __init__(self,**kwargs):
+#         self.name = 'coh'
+#         super().__init__(**kwargs)
 
-    def _compute_stat(self,psd,i,j):
-        return np.absolute(psd[i,j]) / np.real(np.sqrt(psd[i,i] * psd[j,j] ))
+#     def _compute_stat(self,psd,i,j):
+#         return np.absolute(psd[i,j]) / np.real(np.sqrt(psd[i,i] * psd[j,j] ))
 
-class icoherence(connectivity,undirected,positive):
+# class icoherence(mne_connectivity,undirected):
 
-    humanname = 'Imaginary Coherence'
+#     humanname = 'Imaginary Coherence'
 
-    def __init__(self,**kwargs):
-        self.name = 'icoh'
-        super().__init__(**kwargs)
+#     def __init__(self,**kwargs):
+#         self.name = 'icoh'
+#         super().__init__(**kwargs)
 
-    def _compute_stat(self,psd,i,j):
-        """ It's unclear why I have to put -np.real to match the MNE implementation?
-        """
-        return -np.real(np.imag(psd[i,j]) / np.sqrt(psd[i,i] * psd[j,j] ))
+#     def _compute_stat(self,psd,i,j):
+#         """ It's unclear why I have to put -np.real to match the MNE implementation?
+#         """
+#         return -np.real(np.imag(psd[i,j]) / np.sqrt(psd[i,i] * psd[j,j] ))
 
-class phase_locking_value(connectivity,undirected,positive):
+# class phase_slope_index(undirected):
 
-    humanname = 'Phase-locking value'
+#     humanname = 'Phase slope index'
 
-    def __init__(self,**kwargs):
-        self.name = 'plv'
-        super().__init__(**kwargs)
+#     def __init__(self,mode='multitaper',fs=1,fmin=None,fmax=None):
+#         self.name = 'psi'
+#         if fmin is None:
+#             if mode == 'mortlet':
+#                 fmin = 1
+#             else:
+#                 fmin = 0.05
+#         if fmax is None:
+#             fmax = np.pi/2
 
-    def _compute_stat(self,psd,i,j):
-        return np.absolute( psd[i,j] / np.absolute(psd[i,j]) )
+#         self._fs = fs # Not yet implemented
+#         self._fmin = fmin
+#         self._fmax = fmax
+#         self._mode = mode
+#         paramstr = f'_{self._mode}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}'.replace('.','-')
+#         self.name = self.name + paramstr
 
-class corrected_imaginary_phase_locking_value(connectivity,undirected,positive):
+#     @parse_bivariate
+#     def bivariate(self,data,i=None,j=None):
+#         z = np.moveaxis(np.atleast_3d(data.to_numpy()[[i,j]]),-1,0)
+#         psi = mnec.phase_slope_index(z,mode=self._mode,sfreq=self._fs,fmin=self._fmin,fmax=self._fmax,verbose='WARNING')
+#         return np.mean(psi[1][0])
 
-    humanname = 'Corrected imaginary phase-locking value'
 
-    def __init__(self,**kwargs):
-        self.name = 'ciplv'
-        super().__init__(**kwargs)
+# class phase_locking_value(connectivity,undirected):
 
-    def _compute_stat(self,psd,i,j):
-        acc = psd[i,j] / np.abs(psd[i,j])
-        imag_plv = np.abs(np.imag(acc))
-        real_plv = np.real(acc)
-        real_plv = np.clip(real_plv, -1, 1)  # bounded from -1 to 1
-        if np.abs(real_plv) == 1:
-            real_plv = 0
-        corrected_imag_plv = imag_plv / np.sqrt(1 - real_plv ** 2)
-        return corrected_imag_plv
+#     humanname = 'Phase-locking value'
 
-class pairwise_phase_consistency(connectivity,undirected,positive):
+#     def __init__(self,**kwargs):
+#         self.name = 'plv'
+#         super().__init__(**kwargs)
 
-    humanname = 'Pairwise phase consistency'
+#     def _compute_stat(self,psd,i,j):
+#         raise NotImplementedError('This will be implemented as a multivariate statistic (not bivariate).')
+#         return np.absolute( psd[i,j] / np.absolute(psd[i,j]) )
 
-    def __init__(self,**kwargs):
-        self.name = 'ppc'
-        super().__init__(**kwargs)
+# class corrected_imaginary_phase_locking_value(connectivity,undirected):
 
-    def _compute_stat(self,psd,i,j):
-        return phase_locking_value._compute_stat(self,psd,i,j) ** 2
+#     humanname = 'Corrected imaginary phase-locking value'
 
-class phase_lag_index(connectivity,undirected,positive):
+#     def __init__(self,**kwargs):
+#         self.name = 'ciplv'
+#         super().__init__(**kwargs)
 
-    humanname = 'Phase-lag index'
+#     def _compute_stat(self,psd,i,j):
+#         raise NotImplementedError('This will be implemented as a multivariate statistic (not bivariate).')
+#         acc = psd[i,j] / np.abs(psd[i,j])
+#         imag_plv = np.abs(np.imag(acc))
+#         real_plv = np.real(acc)
+#         real_plv = np.clip(real_plv, -1, 1)  # bounded from -1 to 1
+#         if np.abs(real_plv) == 1:
+#             real_plv = 0
+#         corrected_imag_plv = imag_plv / np.sqrt(1 - real_plv ** 2)
+#         return corrected_imag_plv
 
-    def __init__(self,**kwargs):
-        self.name = 'pli'
-        super().__init__(**kwargs)
+# class pairwise_phase_consistency(connectivity,undirected):
 
-    def _compute_stat(self,psd,i,j):
-        return np.absolute(np.sign(psd[i,j]))
+#     humanname = 'Pairwise phase consistency'
 
-class unbiased_squared_phase_lag_index(connectivity,undirected,positive):
+#     def __init__(self,**kwargs):
+#         self.name = 'ppc'
+#         super().__init__(**kwargs)
 
-    humanname = 'Unbiased estimator of squared phase-lag index'
+#     def _compute_stat(self,psd,i,j):
+#         raise NotImplementedError('This will be implemented as a multivariate statistic (not bivariate).')
+#         denom = np.abs(psd[i,j])
+#         if denom == 0.:
+#             denom = 1.
+#             acc = 0.  # handle division by zero
+#         else:
+#             acc = psd[i,j] / denom
 
-    def __init__(self,**kwargs):
-        self.name = 'spli'
-        super().__init__(**kwargs)
+#         return np.real(acc * np.conj(acc))
 
-    def _compute_stat(self,psd,i,j):
-        return phase_lag_index._compute_stat(self,psd,i,j) ** 2
+# class phase_lag_index(connectivity,undirected):
 
-class weighted_phase_lag_index(connectivity,undirected,positive):
+#     humanname = 'Phase-lag index'
 
-    humanname = 'Weighted phase-lag index'
+#     def __init__(self,**kwargs):
+#         self.name = 'pli'
+#         super().__init__(**kwargs)
 
-    def __init__(self,**kwargs):
-        self.name = 'wpli'
-        super().__init__(**kwargs)
+#     def _compute_stat(self,psd,i,j):
+#         raise NotImplementedError('This will be implemented as a multivariate statistic (not bivariate).')
+#         return np.absolute(np.sign(np.imag(psd[i,j])))
 
-    def _compute_stat(self,psd,i,j):
-        raise NotImplementedError('This cannot be implemented since without multiple realisations')
+# class unbiased_squared_phase_lag_index(connectivity,undirected):
 
-class debiased_weighted_phase_lag_index(connectivity,undirected,positive):
+#     humanname = 'Unbiased estimator of squared phase-lag index'
 
-    humanname = 'Weighted phase-lag index'
+#     def __init__(self,**kwargs):
+#         self.name = 'spli'
+#         super().__init__(**kwargs)
 
-    def __init__(self,**kwargs):
-        self.name = 'wpli'
-        super().__init__(**kwargs)
-        self._compute_stat = debiased_weighted_phase_lag_index._dwpli
+#     def _compute_stat(self,psd,i,j):
+#         raise NotImplementedError('This will be implemented as a multivariate statistic (not bivariate).')
+#         return phase_lag_index._compute_stat(self,psd,i,j) ** 2
 
-    @staticmethod
-    def _dwpli(psd,i,j):
-        raise NotImplementedError('This cannot be implemented since without multiple realisations')
+# class weighted_phase_lag_index(connectivity,undirected):
 
-class conditional_connectivity(directed,positive):
+#     humanname = 'Weighted phase-lag index'
+
+#     def __init__(self,**kwargs):
+#         self.name = 'wpli'
+#         super().__init__(**kwargs)
+
+#     def _compute_stat(self,psd,i,j):
+#         raise NotImplementedError('This will be implemented as a multivariate statistic (not bivariate).')
+
+# class debiased_weighted_phase_lag_index(connectivity,undirected):
+
+#     humanname = 'Weighted phase-lag index'
+
+#     def __init__(self,**kwargs):
+#         self.name = 'wpli'
+#         super().__init__(**kwargs)
+#         self._compute_stat = debiased_weighted_phase_lag_index._dwpli
+
+#     @staticmethod
+#     def _dwpli(psd,i,j):
+#         raise NotImplementedError('This will be implemented as a multivariate statistic (not bivariate).')
+
+class kramer_connectivity(directed):
 
     def __init__(self,fs=1,fmin=0.05,fmax=np.pi/2):
         self._fs = fs # Not yet implemented
@@ -195,47 +234,215 @@ class conditional_connectivity(directed,positive):
         paramstr = f'_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}'.replace('.','-')
         self.name = self.name + paramstr
 
+    def _get_measure(self,C):
+        raise NotImplementedError
+
     @parse_multivariate
     def adjacency(self, data):
-        if not hasattr(data,'directed_connectivity'):
-            data.directed_connectivity = {}
+        if not hasattr(data,'connectivity'):
+            data.connectivity = {}
             z = np.squeeze(np.moveaxis(data.to_numpy(),0,1))
             m = sc.Multitaper(z,
                             sampling_frequency=self._fs,
                             time_halfbandwidth_product=3,
                             start_time=0)
-            data.directed_connectivity = sc.Connectivity(fourier_coefficients=m.fft(),
-                                                frequencies=m.frequencies)
+            data.connectivity = sc.Connectivity.from_multitaper(m)
 
-        C = data.directed_connectivity
+        C = data.connectivity
 
         freq = C.frequencies
         freq_id = np.where((freq > self._fmin) * (freq < self._fmax))[0]
         
-        measure = getattr(C,self._measure)
+        measure = self._get_measure(C)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            phi = np.nanmean(measure()[0,freq_id,:,:], axis=0)
+            res = measure()
+            try:
+                phi = np.nanmean(np.real(res[0,freq_id,:,:]), axis=0)
+            except IndexError: # For phase-slope index
+                phi = res[0]
+            except TypeError: # For group delay
+                phi = res[1][0]
         np.fill_diagonal(phi,np.nan)
         return phi
 
-class partial_directed_coherence(conditional_connectivity,directed,positive):
+class coherency(kramer_connectivity,undirected):
+    humanname = 'Coherency'
+
+    def __init__(self,**kwargs):
+        self.name = 'coh'
+        super().__init__(**kwargs)
+
+    def _get_measure(self,C):
+        return C.coherency
+
+class coherence_phase(kramer_connectivity,undirected):
+    humanname = 'Coherence phase'
+
+    def __init__(self,**kwargs):
+        self.name = 'phase'
+        super().__init__(**kwargs)
+
+    def _get_measure(self,C):
+        return C.coherence_phase
+
+class coherence_magnitude(kramer_connectivity,undirected):
+    humanname = 'Coherence magnitude'
+
+    def __init__(self,**kwargs):
+        self.name = 'cohmag'
+        super().__init__(**kwargs)
+
+    def _get_measure(self,C):
+        return C.coherence_magnitude
+
+class icoherence(kramer_connectivity,undirected):
+    humanname = 'Coherence'
+
+    def __init__(self,**kwargs):
+        self.name = 'icoh'
+        super().__init__(**kwargs)
+        self._measure = 'imaginary_coherence'
+
+    def _get_measure(self,C):
+        return C.imaginary_coherence
+
+class phase_locking_value(kramer_connectivity,undirected):
+    humanname = 'Phase-locking value'
+
+    def __init__(self,**kwargs):
+        self.name = 'plv'
+        super().__init__(**kwargs)
+        self._measure = 'phase_locking_value'
+
+    def _get_measure(self,C):
+        return C.phase_locking_value
+
+class phase_lag_index(kramer_connectivity,undirected):
+    humanname = 'Phase-locking value'
+
+    def __init__(self,**kwargs):
+        self.name = 'pli'
+        super().__init__(**kwargs)
+    
+    def _get_measure(self,C):
+        return C.phase_lag_index
+
+class weighted_phase_lag_index(kramer_connectivity,undirected):
+    humanname = 'Weighted phase-lag index'
+
+    def __init__(self,**kwargs):
+        self.name = 'wpli'
+        super().__init__(**kwargs)
+        
+    def _get_measure(self,C):
+        return C.weighted_phase_lag_index
+
+class debiased_squared_phase_lag_index(kramer_connectivity,undirected):
+    humanname = 'Debiased squared phase-lag value'
+
+    def __init__(self,**kwargs):
+        self.name = 'dspli'
+        super().__init__(**kwargs)
+        
+    def _get_measure(self,C):
+        return C.debiased_squared_phase_lag_index
+
+class debiased_squared_weighted_phase_lag_index(kramer_connectivity,undirected):
+    humanname = 'Debiased squared weighted phase-lag value'
+
+    def __init__(self,**kwargs):
+        self.name = 'dswpli'
+        super().__init__(**kwargs)
+    
+    def _get_measure(self,C):
+        return C.debiased_squared_weighted_phase_lag_index
+
+class pairwise_phase_consistency(kramer_connectivity,undirected):
+    humanname = 'Pairwise phase consistency'
+
+    def __init__(self,**kwargs):
+        self.name = 'ppc'
+        super().__init__(**kwargs)
+    
+    def _get_measure(self,C):
+        return C.pairwise_phase_consistency
+
+class directed_coherence(kramer_connectivity,directed):
+    humanname = 'Directed coherence'
+
+    def __init__(self,**kwargs):
+        self.name = 'dcoh'
+        super().__init__(**kwargs)
+    
+    def _get_measure(self,C):
+        return C.directed_coherence
+
+class partial_directed_coherence(kramer_connectivity,directed):
     humanname = 'Partial directed coherence'
 
     def __init__(self,**kwargs):
         self.name = 'pdcoh'
         super().__init__(**kwargs)
-        self._measure = 'partial_directed_coherence'
+    
+    def _get_measure(self,C):
+        return C.partial_directed_coherence
 
-class directed_transfer_function(conditional_connectivity,directed,positive):
+class generalized_partial_directed_coherence(kramer_connectivity,directed):
+    humanname = 'Generalized partial directed coherence'
+
+    def __init__(self,**kwargs):
+        self.name = 'gpdcoh'
+        super().__init__(**kwargs)
+    
+    def _get_measure(self,C):
+        return C.generalized_partial_directed_coherence
+
+class directed_transfer_function(kramer_connectivity,directed):
     humanname = 'Directed transfer function'
 
     def __init__(self,**kwargs):
         self.name = 'dtf'
         super().__init__(**kwargs)
-        self._measure = 'directed_transfer_function'
+    
+    def _get_measure(self,C):
+        return C.directed_transfer_function
 
-class partial_coherence(undirected,positive):
+class direct_directed_transfer_function(kramer_connectivity,directed):
+    humanname = 'Direct directed transfer function'
+
+    def __init__(self,**kwargs):
+        self.name = 'ddtf'
+        super().__init__(**kwargs)
+    
+    def _get_measure(self,C):
+        return C.direct_directed_transfer_function
+
+class phase_slope_index(kramer_connectivity,directed):
+    humanname = 'Phase slope index'
+
+    def __init__(self,**kwargs):
+        self.name = 'psi'
+        super().__init__(**kwargs)
+    
+    def _get_measure(self,C):
+        return partial(C.phase_slope_index,
+                        frequencies_of_interest=[self._fmin,self._fmax],
+                        frequency_resolution=0.1)
+
+class group_delay(kramer_connectivity,directed):
+    humanname = 'Group delay'
+
+    def __init__(self,**kwargs):
+        self.name = 'gd'
+        super().__init__(**kwargs)
+    
+    def _get_measure(self,C):
+        return partial(C.group_delay,
+                        frequencies_of_interest=[self._fmin,self._fmax],
+                        frequency_resolution=0.1)
+
+class partial_coherence(undirected):
 
     humanname = 'Partial coherence'
     name = 'pcoh'
@@ -263,7 +470,7 @@ class partial_coherence(undirected,positive):
         np.fill_diagonal(pcoh,np.nan)
         return pcoh
 
-class spectral_granger(directed,positive):
+class spectral_granger(directed):
     
     humanname = 'Spectral Granger causality'
     name = 'sgc'
