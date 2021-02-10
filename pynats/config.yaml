@@ -238,13 +238,12 @@
       auto_embed_method: MAX_CORR_AIS
       k_search_max: 10
       tau_search_max: 4
-      dyn_corr_excl: AUTO
 
     - estimator: kraskov
       prop_k: 4
       auto_embed_method: MAX_CORR_AIS
       k_search_max: 10
-      tau_search_max: 1
+      tau_search_max: 4
       dyn_corr_excl: AUTO
 
     # Kraskov estimator with auto-embedding on target-only, src history of 1, and DCE

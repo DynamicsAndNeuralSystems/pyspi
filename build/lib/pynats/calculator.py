@@ -123,9 +123,9 @@ class Calculator():
             self._dataset = Data.convert_to_numpy(dataset)
         else:
             self._dataset = dataset
-        self._adjacency = np.empty((self._nmeasures,
+        self._adjacency = np.full((self._nmeasures,
                                     self.dataset.n_processes,
-                                    self.dataset.n_processes))
+                                    self.dataset.n_processes), np.NaN)
 
     def compute(self,replication=None):
         """ Compute the dependency measures for all target processes for a given replication

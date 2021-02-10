@@ -482,17 +482,16 @@ def measurespace(cf,averaged=False,pairplot=False,jointplot=False,clustermap=Fal
     fig.tight_layout()
     return df, fig
 
-def relate(cf,meas0,meas1,raw=False,flatten_kwargs={}):
+def relate(cf,meas0,meas1,flatten_kwargs={}):
 
     df = pd.DataFrame()
     corr_str = f'corr({meas0}, {meas1})'
-    for i, _index in enumerate(cf.calculators.index):
-        calc = cf.calculators.loc[_index][0]
+    for calc in [c[0] for c in cf.calculators.to_numpy()]:
         try:
             rho = flatten(calc,plot=False,strtrunc=None,**flatten_kwargs)[[meas0,meas1]].corr(method='spearman').to_numpy()[0,1]
             df = df.append({corr_str: rho},ignore_index=True)
-        except KeyError:
-            print(f'Received key error for calculator "{calc.name}": {KeyError}')
+        except KeyError as err:
+            print(f'Received key error for calculator "{calc.name}": {err}')
     
     splot = sns.displot(df,x=corr_str,kde=True)
     plt.xlim(-1, 1)

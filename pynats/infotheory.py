@@ -318,12 +318,12 @@ class transfer_entropy(jidt_base,directed):
         """
         self._set_theiler_window(data,i,j)
         self._calc.initialise()
+        src, targ = data.to_numpy(squeeze=True)[[i,j]]
         try:
-            src, targ = data.to_numpy(squeeze=True)[[i,j]]
             self._calc.setObservations(jp.JArray(jp.JDouble,1)(src), jp.JArray(jp.JDouble,1)(targ))
             return self._calc.computeAverageLocalOfObservations()
-        except:
-            warnings.warn('TE calcs failed. Trying checking input time series for Cholesky decomposition.')
+        except Exception as err:
+            warnings.warn(f'TE calcs failed: {err}. Trying checking input time series for Cholesky decomposition.')
             return np.NaN
 
 class conditional_entropy(jidt_base,directed):

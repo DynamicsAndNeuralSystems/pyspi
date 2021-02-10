@@ -272,11 +272,12 @@ class spectral_granger(directed):
     humanname = 'Spectral Granger causality'
     name = 'sgc'
 
-    def __init__(self,fs=1,fmin=0.05,fmax=np.pi/2,order=None):
+    def __init__(self,fs=1,fmin=0.05,fmax=np.pi/2,order=None,max_order=50):
         self._fs = fs # Not yet implemented
         self._fmin = fmin
         self._fmax = fmax
         self._order = order
+        self._max_order = max_order
         paramstr = f'_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}_order-{order}'.replace('.','-')
         self.name = self.name + paramstr
 
@@ -287,7 +288,7 @@ class spectral_granger(directed):
  
         pdata = tsu.percent_change(z)
         time_series = ts.TimeSeries(pdata, sampling_interval=1)
-        G = nta.GrangerAnalyzer(time_series, order=self._order, max_order=30)
+        G = nta.GrangerAnalyzer(time_series, order=self._order, max_order=self._max_order)
         try:
             freq_idx_G = np.where((G.frequencies > self._fmin) * (G.frequencies < self._fmax))[0]
         
@@ -300,7 +301,7 @@ class spectral_granger(directed):
             gc[triu_id] = gc_triu[triu_id]
             gc[triu_id[1],triu_id[0]] = gc_tril[triu_id]
         except (ValueError,TypeError) as err:
-            print('Spectral GC failed {0}'.format(err))
+            print(f'Spectral GC failed: {err}')
             gc = np.empty((m,m))
             gc[:] = np.NaN
 
