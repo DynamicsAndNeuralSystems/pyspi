@@ -120,7 +120,7 @@ class ccm(directed,signed):
         return ccmf
 
     @parse_multivariate
-    def adjacency(self,data):
+    def mpi(self,data):
         ccmf = self._from_cache(data)
 
         if self._statistic == 'mean':

@@ -23,7 +23,7 @@ def get_data():
     procs = np.random.normal(size=(2,T))
     procs[1] += 0.5 * procs[0]
 
-    # For each statistic, check that the adjacencies match the subclass (directed/undirected and bivariate->adjacency)dim_order='ps')
+    # For each statistic, check that the adjacencies match the subclass (directed/undirected and bivariate->mpi)dim_order='ps')
     return Data(np.vstack(procs),dim_order='ps',normalise=True)
 
 def get_more_data():
@@ -40,7 +40,7 @@ def get_more_data():
             else:
                 p[t] += ar_params * procs[_i-1][t-1] # Time-lagged correlation
 
-    # For each statistic, check that the adjacencies match the subclass (directed/undirected and bivariate->adjacency)dim_order='ps')
+    # For each statistic, check that the adjacencies match the subclass (directed/undirected and bivariate->mpi)dim_order='ps')
     return Data(np.vstack(procs),dim_order='ps',normalise=True)
 
 def test_yaml():
@@ -53,7 +53,7 @@ def test_yaml():
     assert calc.n_statistics == len(calc._statistics), (
                 'Property not equal to number of statistics')
 
-def test_adjacency():
+def test_mpi():
     # Load in all base statistics from the YAML file
 
     data = get_data()
@@ -81,24 +81,24 @@ def test_adjacency():
         if any([m.name == e for e in excuse_stochastic]):
             continue
 
-        m.adjacency(get_more_data())
+        m.mpi(get_more_data())
 
-        scratch_adj = m.adjacency(data.to_numpy())
-        adj = m.adjacency(data)
+        scratch_adj = m.mpi(data.to_numpy())
+        adj = m.mpi(data)
         assert np.allclose(adj,scratch_adj,rtol=1e-1,atol=1e-2,equal_nan=True), (
-                    f'{m.name} ({m.humanname}) Adjacency output changed between cached and strach computations: {adj} != {scratch_adj}')
+                    f'{m.name} ({m.humanname}) mpi output changed between cached and strach computations: {adj} != {scratch_adj}')
 
-        recomp_adj = m.adjacency(data)
+        recomp_adj = m.mpi(data)
         assert np.allclose(adj,recomp_adj,rtol=1e-1,atol=1e-2,equal_nan=True), (
-                    f'{m.name} ({m.humanname}) Adjacency output changed when recomputing.')
+                    f'{m.name} ({m.humanname}) mpi output changed when recomputing.')
 
         for i in range(data.n_processes):
             for j in range(i+1,data.n_processes):
 
                 if not math.isfinite(adj[i,j]):
-                    warnings.warn(f'{m.name} ({m.humanname}): Invalid adjacency entry ({i},{j}): {adj[i,j]}')
+                    warnings.warn(f'{m.name} ({m.humanname}): Invalid mpi entry ({i},{j}): {adj[i,j]}')
                 if not math.isfinite(adj[j,i]):
-                    warnings.warn(f'{m.name} ({m.humanname}): Invalid adjacency entry ({i},{j}): {adj[j,i]}')
+                    warnings.warn(f'{m.name} ({m.humanname}): Invalid mpi entry ({i},{j}): {adj[j,i]}')
 
                 try:
                     s_t = m.bivariate(data,i=i,j=j)
@@ -111,7 +111,7 @@ def test_adjacency():
                     assert t_s == pytest.approx(new_t_s,rel=1e-1,abs=1e-2), (
                         f'{m.name} ({m.humanname}) Bivariate output from cache mismatch results from scratch for computation ({j},{i}): {t_s} != {new_t_s}')
                 except NotImplementedError:
-                    a = m.adjacency(p[[i,j]])
+                    a = m.mpi(p[[i,j]])
                     s_t, t_s = a[0,1], a[1,0]
 
                 if not math.isfinite(s_t):
@@ -125,7 +125,7 @@ def test_adjacency():
                             assert s_t == pytest.approx(adj[i,j], rel=1e-1, abs=1e-2)
                         except AssertionError:
                             assert np.abs(s_t - adj[i,j]) < np.abs(t_s - adj[i,j])*2, (
-                                f'{m.name} ({m.humanname}): Bivariate output ({i},{j}) does not match adjacency: {s_t} != {adj[i,j]} '
+                                f'{m.name} ({m.humanname}): Bivariate output ({i},{j}) does not match mpi: {s_t} != {adj[i,j]} '
                                     f' AND the lower diagonal is over 2x closer to it: {t_s} is closer to {adj[i,j]}')
 
                     if not any([m.name == e for e in excuse_directed]):
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     test_yaml()
     test_load()
     test_group()
-    test_adjacency()
+    test_mpi()
 
     # This was a bit tricky to implement so just ensuring it passes a test from the creator's website
     test_ccm()

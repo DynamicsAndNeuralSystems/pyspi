@@ -59,7 +59,7 @@ class mne(unsigned):
         return conn, freq_id
 
     @parse_multivariate
-    def adjacency(self, data):
+    def mpi(self, data):
         adj_freq, freq_id = self._get_cache(data)
         try:
             adj = self._statfn(adj_freq[...,freq_id,:], axis=(2,3))
@@ -189,7 +189,7 @@ class phase_slope_index(mne,undirected):
         return psi, freq_id
 
     @parse_multivariate
-    def adjacency(self, data):
+    def mpi(self, data):
         adj_freq, freq_id = self._get_cache(data)
         adj = self._statfn(np.real(adj_freq[...,freq_id]), axis=(2,3))
 
