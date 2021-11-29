@@ -1,0 +1,11 @@
+name: pyspi
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python==3.9
+  - fastcluster
+  - dask
+  - pylint
+  - cairo
+prefix: /home/oliver/miniconda3/envs/pyspi

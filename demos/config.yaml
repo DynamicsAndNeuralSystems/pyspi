@@ -1,0 +1,5 @@
+.statistics.spectral:
+
+  debiased_squared_weighted_phase_lag_index:
+    - fs: 1
+      statistic: max

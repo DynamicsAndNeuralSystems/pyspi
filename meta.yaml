@@ -1,0 +1,34 @@
+{% set name = "pyspi" %}
+{% set version = "0.1.2.4" %}
+
+package:
+  name: "{{ name|lower }}"
+  version: "{{ version }}"
+
+source:
+  path: .
+
+requirements:
+  build:
+    - setuptools-git
+    - numpy
+  host:
+    - python
+    - setuptools
+    - pip
+  run:
+    - python
+    - numpy
+    - cdt >=0.5.23
+  url:
+    - https://pypi.org/simple/cdt/
+
+test:
+  imports:
+    - pyspi
+
+about:
+  home: https://github.com/olivercliff/pyspi.git
+  license: BSD
+  license_family: BSD
+  summary: Python-based network analysis for time series
