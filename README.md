@@ -1,8 +1,8 @@
 # Python Library of Statistics for Pairwise Interactions (pyspi)
 
-*pyspi* provides a comprehensive library for computing pairwise interactions from multivariate time-series data.
+*pyspi* is a comprehensive library for computing pairwise interactions from multivariate time-series data.
 
-The code provides easy access to evaluating hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation and coherence) to advanced multi-step algorithms (like convergent cross mapping and transfer entropy).
+The code provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation and coherence) to advanced multi-step algorithms (like convergent cross mapping and transfer entropy).
 
 # Pre-installation
 
