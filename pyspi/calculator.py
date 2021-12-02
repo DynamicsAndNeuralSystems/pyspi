@@ -131,7 +131,6 @@ class Calculator():
                             spi = getattr(module, fcn)(**params)
                             self._spis[spi.name] = spi
                             print(f'Succesfully initialised SPI with identifier "{spi.name}" and labels {spi.labels}')
-
                     except TypeError:
                         print(f'[{self.n_spis}] Adding SPI {module_name}.{fcn}(x,y)...')
                         spi = getattr(module, fcn)()
