@@ -42,7 +42,7 @@ class covariance_estimators(undirected,signed):
         return mycov
 
     @parse_multivariate
-    def adjacency(self,data):
+    def mpi(self,data):
         mycov = self._from_cache(data)
         matrix = getattr(mycov,self._kind+'_')
         np.fill_diagonal(matrix,np.nan)

@@ -14,37 +14,49 @@ from .utils import convert_mdf_to_ddf
 
 logger = getLogger(__name__)
 
+""" TODO: use the MPI class for each entry in the table
+"""
+class MPI():
+    def __init__(self, procnames, S=None):
+        if S is None:
+            S = np.full((len(procnames),len(procnames)),np.nan)
+        self.S = pd.DataFrame(index=procnames,columns=procnames,data=S)
+
+    def __eq__(self, S):
+        self.S = S
+
 class Calculator():
     """Calculator for one multivariate time-series dataset
     """
     
     # Initializer / Instance Attributes
     def __init__(self,dataset=None,name=None,labels=None,configfile=os.path.dirname(os.path.abspath(__file__)) + '/config.yaml'):
-
+        self._spis = {}
         self._load_yaml(configfile)
 
-        duplicates = [name for name, count in Counter(self._statnames).items() if count > 1]
+        duplicates = [name for name, count in Counter(self._spis.keys()).items() if count > 1]
         if len(duplicates) > 0:
-            raise ValueError(f'Duplicate statistic identifiers: {duplicates}.\n Check the config file for duplicates.')
+            raise ValueError(f'Duplicate SPI identifiers: {duplicates}.\n Check the config file for duplicates.')
 
-        self._nstatistics = len(self._statistics)
-        self._nclasses = len(self._classes)
-        self._proctimes = np.empty(self._nstatistics)
         self._name = name
         self._labels = labels
 
-        print("Number of bivariate statistics: {}".format(self._nstatistics))
+        print("Number of SPIs: {}".format(len(self.spis)))
 
         if dataset is not None:
             self.load_dataset(dataset)
 
     @property
-    def n_statistics(self):
-        return self._nstatistics
+    def spis(self):
+        return self._spis
 
-    @n_statistics.setter
-    def n_statistics(self,n):
+    @spis.setter
+    def spis(self,s):
         raise Exception('Do not set this property externally.')
+
+    @property
+    def n_spis(self):
+        return len(self._spis)
 
     @property
     def dataset(self):
@@ -71,11 +83,11 @@ class Calculator():
         self._labels = ls
 
     @property
-    def adjacency(self):
-        return self._adjacency
+    def table(self):
+        return self._table
 
-    @adjacency.setter
-    def adjacency(self,a):
+    @table.setter
+    def table(self,a):
         raise Exception('Do not set this property externally. Use the compute() method.')
 
     @property
@@ -104,49 +116,40 @@ class Calculator():
 
     def _load_yaml(self,document):
         print("Loading configuration file: {}".format(document))
-        self._classes = []
-        self._class_names = []
-
-        self._statistics = []
-        self._statnames = []
 
         with open(document) as f:
             yf = yaml.load(f,Loader=yaml.FullLoader)
 
-            # Instantiate the calc classes 
+            # Instantiate the SPIs
             for module_name in yf:
                 print("*** Importing module {}".format(module_name))
-                classes = yf[module_name]
                 module = importlib.import_module(module_name,__package__)
-
-                for class_name in classes:
-                    paramlist = classes[class_name]
-
-                    self._classes.append(getattr(module, class_name))
-                    self._class_names.append(class_name)
-                    if paramlist is not None:
-                        for params in paramlist:
-                            print(f'[{len(self._statistics)}] Adding statistic {module_name}.{class_name}(x,y,{params})...')
-                            self._statistics.append(self._classes[-1](**params))
-                            self._statnames.append(self._statistics[-1].name)
-                            print(f'Succesfully initialised with identifier "{self._statistics[-1].name}" and labels {self._statistics[-1].labels}')
-                    else:
-                        print(f'[{len(self._statistics)}] Adding statistic {module_name}.{class_name}(x,y)...')
-                        self._statistics.append(self._classes[-1]())
-                        self._statnames.append(self._statistics[-1].name)
-                        print(f'Succesfully initialised with identifier "{self._statistics[-1].name}" and labels {self._statistics[-1].labels}')
+                for fcn in yf[module_name]:
+                    try:
+                        for params in yf[module_name][fcn]:
+                            print(f'[{self.n_spis}] Adding SPI {module_name}.{fcn}(x,y,{params})...')
+                            spi = getattr(module, fcn)(**params)
+                            self._spis[spi.name] = spi
+                            print(f'Succesfully initialised SPI with identifier "{spi.name}" and labels {spi.labels}')
+                    except TypeError:
+                        print(f'[{self.n_spis}] Adding SPI {module_name}.{fcn}(x,y)...')
+                        spi = getattr(module, fcn)()
+                        self._spis[spi.name] = spi
+                        print(f'Succesfully initialised SPI with identifier "{spi.name}" and labels {spi.labels}')
 
     def load_dataset(self,dataset):
         if not isinstance(dataset,Data):
             self._dataset = Data(Data.convert_to_numpy(dataset))
         else:
             self._dataset = dataset
-        self._adjacency = np.full((self._nstatistics,
-                                    self.dataset.n_processes,
-                                    self.dataset.n_processes), np.NaN)
+
+        columns = pd.MultiIndex.from_product([self.spis.keys(),self._dataset.procnames],names=['spi','process'])
+        self._table = pd.DataFrame(data=np.full((self.dataset.n_processes,self.n_spis*self.dataset.n_processes), np.NaN),
+                                    columns=columns,index=self._dataset.procnames)
+        self._table.columns.name = 'process'
 
     def compute(self,replication=None):
-        """ Compute the dependency statistics for all target processes for a given replication
+        """ Compute the SPIs on the MVTS dataset
         """
         if not hasattr(self,'_dataset'):
             raise AttributeError('Dataset not loaded yet. Please initialise with load_dataset.')
@@ -154,90 +157,23 @@ class Calculator():
         if replication is None:
             replication = 0
 
-        pbar = tqdm(range(self._nstatistics))
+        pbar = tqdm(self.spis.keys())
         for m in pbar:
-            pbar.set_description(f'Processing [{self._name}: {self._statnames[m]}]')
+            pbar.set_description(f'Processing [{self._name}: {m}]')
             start_time = time.time()
             try:
-                self._adjacency[m] = self._statistics[m].adjacency(self.dataset)
+                self._table[m] = self._spis[m].mpi(self.dataset)
             except Exception as err:
-                warnings.warn(f'Caught {type(err)} for statistic "{self._statnames[m]}": {err}')
-                self._adjacency[m] = np.NaN
-            self._proctimes[m] = time.time() - start_time
+                warnings.warn(f'Caught {type(err)} for SPI "{self._statnames[m]}": {err}')
+                self._table[m] = np.NaN
         pbar.close()
 
-    def prune(self,meas_nans=0.2,proc_nans=0.8):
-        """Prune the bad processes/statistics
+    def rmmin(self):
+        """ Iterate through all spis and remove the minimum (fixes absolute value errors when correlating)
         """
-        print(f'Pruning:\n\t- statistics with more than {100*meas_nans}% bad values'
-                f', and\n\t- Processes with more than {100*proc_nans}% bad values')
-
-        # First, iterate through the time-series and remove any that have NaN's > ts_nans
-        M = self._nstatistics * (2*(self._dataset.n_processes-1))
-        threshold = M * proc_nans
-        rm_list = []
-        for proc in range(self._dataset.n_processes):
-
-            other_procs = [i for i in range(self._dataset.n_processes) if i != proc]
-
-            flat_adj = self._adjacency[:,other_procs,proc].reshape((M//2,1))
-            flat_adj = np.concatenate((flat_adj,self._adjacency[:,proc,other_procs].reshape((M//2,1))))
-
-            nzs = np.count_nonzero(np.isnan(flat_adj))
-            if nzs > threshold:
-                # print(f'Removing process {proc} with {nzs} ({100*nzs/M.1f}%) special characters.')
-                print(f'Removing process {proc} with {nzs} ({100*nzs/M}:1f%) special characters.')
-                rm_list.append(proc)
-
-        # Remove from the dataset object
-        self._dataset.remove_process(rm_list)
-
-        # Remove from the adjacency matrix (should probs move this to an attribute that cannot be set)
-        self._adjacency = np.delete(self._adjacency,rm_list,axis=1)
-        self._adjacency = np.delete(self._adjacency,rm_list,axis=2)
-
-        # Then, iterate through the statistics and remove any that have NaN's > meas_nans
-        M = self._dataset.n_processes ** 2 - self._dataset.n_processes
-        threshold = M * meas_nans
-        il = np.tril_indices(self._dataset.n_processes,-1)
-
-        rm_list = []
-        for meas in range(self._nstatistics):
-
-            flat_adj = self._adjacency[meas,il[1],il[0]].reshape((M//2,1))
-            flat_adj = np.concatenate((flat_adj,
-                                        self._adjacency[meas,il[0],il[1]].reshape((M//2,1))))
-
-            # Ensure normalisation, etc., can happen
-            if not np.isfinite(flat_adj.sum()):
-                rm_list.append(meas)
-                print(f'Statistic "[{meas}] {self._statnames[meas]}" has non-finite sum. Removing.')
-                continue
-
-            nzs = np.size(flat_adj) - np.count_nonzero(np.isfinite(flat_adj))
-            if nzs > threshold:
-                rm_list.append(meas)
-                print(f'Removing statistic "[{meas}] {self._statnames[meas]}" with {nzs} ({100*nzs/M:.1f}%) '
-                        f'NaNs (max is {threshold} [{100*meas_nans}%])')
-
-        # Remove the statistic from the adjacency and process times matrix
-        self._adjacency = np.delete(self._adjacency,rm_list,axis=0)
-        self._proctimes = np.delete(self._proctimes,rm_list,axis=0)
-
-        # Remove from the statistic lists (move to a method and protect statistic)
-        for s in sorted(rm_list,reverse=True):
-            del self._statistics[s]
-            del self._statnames[s]
-
-        self._nstatistics = len(self._statistics)
-        print('Number of statistics after pruning: {}'.format(self._nstatistics))
-
-    def debias(self):
-        """ Iterate through all statistics and zero the unsigned statistics (fixes absolute value errors when correlating)
-        """
-        for adj, m in zip(self._adjacency,self._statistics):
+        for mpi, m in zip(self._table,self._spis):
             if not m.issigned():
-                adj -= np.nanmin(adj)
+                mpi -= np.nanmin(mpi)
 
     def set_group(self,classes):
         self._group = None
@@ -267,8 +203,9 @@ class Calculator():
             except (TypeError,IndexError):
                 pass
 
-    # Merge two calculators (to include additional statistics)
     def merge(self,other):
+        """ TODO: Merge two calculators (to include additional SPIs)
+        """
         raise NotImplementedError()
         if self.name is not other.name:
             raise TypeError(f'Calculator name does do not match. Aborting merge.')
@@ -279,56 +216,28 @@ class Calculator():
             if selfattr is not otherattr:
                 raise TypeError(f'Attribute {attr} does not match between calculators ({selfattr} != {otherattr})')
 
-    def flatten(self,transformer=None):
-        """ Gives a statistic-by-edges matrix for correlations, etc.
-        """
-        M = self.dataset.n_processes
-        n_edges = M*(M-1)
-
-        il = np.tril_indices(M,-1)
-
-        flatmat = np.empty((n_edges,self.n_statistics))
-        for f, adj in enumerate(self.adjacency):
-            flatmat[:-1:2,f] = adj[il[1],il[0]]
-            flatmat[1::2,f] = adj[il[0],il[1]]
-
-        if transformer is not None:
-            try:
-                flatmat = transformer.fit_transform(flatmat)
-            except ValueError as err:
-                warnings.warn(f'Something went wrong with the transformer: {err}')
-
-        edges = [None] * n_edges
-        edges[:-1:2] = [f'{i}->{j}' for i, j in zip(*il)]
-        edges[1::2] = [f'{j}->{i}' for i, j in zip(*il)]
-
-        df = pd.DataFrame(flatmat, index=edges, columns=self._statnames)
-        df.columns.name = 'Bivariate statistic'
-        df.index.name = 'Edges'
-        return df
-
     def getstatlabels(self):
-        return { s.name : s.labels for s in self._statistics }
+        return { s.name : s.labels for s in self._spis }
 
-    def get_correlation_df(self,with_labels=False,debias=False,which_stat=['spearman'],flatten_kwargs={}):
-        # Sorts out pesky numerical issues in the unsigned statistics
-        if debias:
-            self.debias()
+    def get_correlation_df(self,with_labels=False,rmmin=False,which_stat=['spearman']):
+        # Sorts out pesky numerical issues in the unsigned spis
+        if rmmin:
+            self.rmmin()
 
-        # Flatten (get edge-by-statistic matrix)
-        edges = self.flatten(**flatten_kwargs).abs()
+        # Flatten (get Edge-by-SPI matrix)
+        edges = calc.table.stack().abs()
 
         # Correlate the edge matrix (using pearson and/or spearman correlation)
         mdf = pd.DataFrame()
         if 'pearson' in which_stat:
             pmat = edges.corr(method='pearson')
-            pmat.index = pd.MultiIndex.from_tuples([('pearson',m) for m in pmat.index],names=['Type','Source statistic'])
-            pmat.columns.name = 'Target statistic'
+            pmat.index = pd.MultiIndex.from_tuples(['pearson',pmat.index],names=['Type','SPI-1'])
+            pmat.columns.name = 'SPI-2'
             mdf = pmat
         if 'spearman' in which_stat:
             spmat = edges.corr(method='spearman')
-            spmat.index = pd.MultiIndex.from_tuples([('spearman',m) for m in spmat.index],names=['Type','Source statistic'])
-            spmat.columns.name = 'Target statistic'
+            spmat.index = pd.MultiIndex.from_product(['spearman',spmat.index],names=['Type','SPI-1'])
+            spmat.columns.name = 'SPI-2'
             mdf = mdf.append(spmat)
 
         if with_labels:
@@ -480,8 +389,8 @@ class CalculatorFrame():
         calc.set_group(*args)
 
     @forall
-    def debias(calc):
-        calc.debias()
+    def rmmin(calc):
+        calc.rmmin()
 
     def flattenall(self,**kwargs):
         df = pd.DataFrame()
@@ -576,7 +485,7 @@ class CorrelationFrame():
         return self.ddf.shape[1]
 
     @property
-    def n_statistics(self):
+    def n_spis(self):
         return self.mdf.shape[1]
 
     @property
@@ -638,15 +547,15 @@ class CorrelationFrame():
                     group_pvalue[f2][f1] = group_pvalue[f1][f2]
             self._insig_group = group_pvalue > 0.05
 
-    def get_average_correlation(self,thresh=0.2,absolute=True,statistic='mean',remove_insig=False):
+    def get_average_correlation(self,thresh=0.2,absolute=True,summary='mean',remove_insig=False):
         mdf = copy.deepcopy(self.mdf)
         # if remove_insig:
         #     mdf[self._insig_ind] = np.nan
 
         if absolute:
-            ss_adj = getattr(mdf.abs().groupby('Source statistic'),statistic)()
+            ss_adj = getattr(mdf.abs().groupby('SPI-1'),summary)()
         else:
-            ss_adj = getattr(mdf.groupby('Source statistic'),statistic)()
+            ss_adj = getattr(mdf.groupby('SPI-1'),summary)()
         ss_adj = ss_adj.dropna(thresh=ss_adj.shape[0]*thresh,axis=0).dropna(thresh=ss_adj.shape[1]*thresh,axis=1).sort_index(axis=1)
         if remove_insig:
             ss_adj[self._insig_group.sort_index()] = np.nan
@@ -738,8 +647,8 @@ class CorrelationFrame():
             names = self._mdf.columns
         return [self._sgroup_names[i] for i in self.get_sgroup_ids(names)]
 
-    def relabel_statistics(self,names,labels):
-        assert len(names) == len(labels), 'Length of statistics must equal length of labels.'
+    def relabel_spis(self,names,labels):
+        assert len(names) == len(labels), 'Length of spis must equal length of labels.'
         for n, l in zip(names,labels):
             try:
                 self._slabels[n] = l

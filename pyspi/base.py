@@ -5,7 +5,7 @@ import warnings, copy
 """
 Base class for pairwise statistics.
 
-The child classes should either overload the adjacency method (if it computes the full adjacency)
+The child classes should either overload the mpi method (if it computes the full mpi)
 or the bivariate method if it computes only pairwise statisticss
 """
 
@@ -89,7 +89,7 @@ class directed:
         raise NotImplementedError("Method not yet overloaded.")
 
     @parse_multivariate
-    def adjacency(self,data):
+    def mpi(self,data):
         """ Compute the dependency statistics for the entire multivariate dataset
         """
         A = np.empty((data.n_processes,data.n_processes))
@@ -135,8 +135,8 @@ class undirected(directed):
         return False
 
     @parse_multivariate
-    def adjacency(self,data):
-        A = super(undirected,self).adjacency(data)
+    def mpi(self,data):
+        A = super(undirected,self).mpi(data)
         
         li = np.tril_indices(data.n_processes,-1)
         A[li] = A.T[li]

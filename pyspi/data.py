@@ -83,6 +83,14 @@ class Data():
         else:
             return ''
 
+    @property
+    # TODO: allow process names to be passed in
+    def procnames(self):
+        if hasattr(self,'_procnames'):
+            return self._procnames
+        else:
+            return [f'proc-{i}' for i in range(self.n_processes)]
+
     def n_realisations(self, current_value=None):
         """Number of realisations over samples and replications.
 
