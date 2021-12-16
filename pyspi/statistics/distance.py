@@ -2,11 +2,26 @@ from hyppo.independence import MGC, Dcorr, HHG, Hsic
 from hyppo.time_series import MGCX, DcorrX
 
 import scipy.spatial.distance as distance
+from sklearn.metrics import pairwise_distances
 import tslearn.metrics
 from tslearn.barycenters import euclidean_barycenter, dtw_barycenter_averaging, dtw_barycenter_averaging_subgradient, softdtw_barycenter
 
-from pyspi.base import directed, undirected, parse_bivariate, unsigned, signed
+from pyspi.base import directed, undirected, parse_bivariate, parse_multivariate, unsigned, signed
 import numpy as np
+
+class pdist(undirected,unsigned):
+
+    humanname = 'Pairwise distance'
+    name = 'pdist'
+    labels = ['unsigned','distance','unordered','nonlinear','undirected']
+
+    def __init__(self,metric='euclidean',**kwargs):
+        self._metric = metric
+        self.name += f'_{metric}'
+
+    @parse_multivariate
+    def adjacency(self,data):
+        return pairwise_distances(data.to_numpy(squeeze=True),metric=self._metric)
 
 """ TODO: include optional kernels in each method
 """

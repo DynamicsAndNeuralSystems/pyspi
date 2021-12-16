@@ -310,26 +310,18 @@ class transfer_entropy(jidt_base,directed):
     def __init__(self,auto_embed_method=None,k_search_max=None,tau_search_max=None,
                         k_history=1,k_tau=1,l_history=1,l_tau=1,**kwargs):
 
-        self._auto_embed_method = auto_embed_method
-        self._k_search_max = k_search_max
-        self._tau_search_max = tau_search_max
-        self._k_history = k_history
-        self._k_tau = k_tau
-        self._l_history = l_history
-        self._l_tau = l_tau
-
         if 'estimator' not in kwargs.keys() or kwargs['estimator'] == 'gaussian':
             self.name = 'gc'
         super().__init__(**kwargs)
         self._calc = self._getcalc('transfer_entropy')
 
         # Auto-embedding
-        if self._auto_embed_method is not None:
-            self._calc.setProperty(self._AUTO_EMBED_METHOD_PROP_NAME,self._auto_embed_method)
-            self._calc.setProperty(self._K_SEARCH_MAX_PROP_NAME,str(self._k_search_max))
+        if auto_embed_method is not None:
+            self._calc.setProperty(self._AUTO_EMBED_METHOD_PROP_NAME,auto_embed_method)
+            self._calc.setProperty(self._K_SEARCH_MAX_PROP_NAME,str(k_search_max))
             if self._estimator != 'kernel':
                 self.name = self.name + '_k-max-{}_tau-max-{}'.format(k_search_max,tau_search_max)
-                self._calc.setProperty(self._TAU_SEARCH_MAX_PROP_NAME,str(self._tau_search_max))
+                self._calc.setProperty(self._TAU_SEARCH_MAX_PROP_NAME,str(tau_search_max))
             else:
                 self.name = self.name + '_k-max-{}'.format(k_search_max)
             # Set up calculator

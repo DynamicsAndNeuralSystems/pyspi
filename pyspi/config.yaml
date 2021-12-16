@@ -88,6 +88,14 @@
 
 .statistics.distance:
 
+  pdist:
+    - metric: 'euclidean'
+    - metric: 'cityblock'
+    - metric: 'cosine'
+    - metric: 'chebyshev'
+    - metric: 'canberra'
+    - metric: 'braycurtis'
+
   # Distance correlation
   dcorr:
     - biased: False
@@ -124,20 +132,11 @@
     - global_constraint: null
     - global_constraint: itakura
     - global_constraint: sakoe_chiba
-
-  canonical_time_warping:
-    - global_constraint: null
-    - global_constraint: itakura
-    - global_constraint: sakoe_chiba
   
   longest_common_subsequence:
     - global_constraint: null
     - global_constraint: itakura
     - global_constraint: sakoe_chiba
-
-  global_alignment_kernel:
-
-  lb_keogh:
 
   barycenter:
   - mode: euclidean
