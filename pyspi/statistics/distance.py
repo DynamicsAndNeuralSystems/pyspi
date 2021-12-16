@@ -20,7 +20,7 @@ class pdist(undirected,unsigned):
         self.name += f'_{metric}'
 
     @parse_multivariate
-    def adjacency(self,data):
+    def multivariate(self,data):
         return pairwise_distances(data.to_numpy(squeeze=True),metric=self._metric)
 
 """ TODO: include optional kernels in each method

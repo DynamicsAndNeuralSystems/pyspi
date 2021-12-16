@@ -77,7 +77,7 @@ class kramer_mv(kramer):
         return res, freq
 
     @parse_multivariate
-    def mpi(self, data):
+    def multivariate(self, data):
         adj_freq, freq = self._get_cache(data)
         freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
 
@@ -299,7 +299,7 @@ class group_delay(kramer_mv,directed):
 #         self.name = self.name + paramstr
 
 #     @parse_multivariate
-#     def mpi(self,data):        
+#     def multivariate(self,data):        
 #         # This should be changed to conditioning on all, rather than averaging all conditionals
 #         if not hasattr(data,'pcoh'):
 #             z = np.squeeze(data.to_numpy())
@@ -372,7 +372,7 @@ class spectral_granger(kramer_mv,directed,unsigned):
         return F, freq
 
     @parse_multivariate
-    def mpi(self,data):
+    def multivariate(self,data):
         try:
             F, freq = self._get_cache(data)
             freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
@@ -399,7 +399,7 @@ class envelope_correlation(undirected,unsigned):
             self.name += '_abs'
 
     @parse_multivariate
-    def mpi(self, data):
+    def multivariate(self, data):
         z = np.moveaxis(data.to_numpy(),2,0)
         adj = np.squeeze(mnec.envelope_correlation(z,orthogonalize=self._orth,log=self._log,absolute=self._absolute))
         np.fill_diagonal(adj,np.nan)

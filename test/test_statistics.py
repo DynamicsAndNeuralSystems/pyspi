@@ -53,7 +53,7 @@ def test_yaml():
     assert calc.n_statistics == len(calc._statistics), (
                 'Property not equal to number of statistics')
 
-def test_mpi():
+def test_multivariate():
     # Load in all base statistics from the YAML file
 
     data = get_data()
@@ -81,14 +81,14 @@ def test_mpi():
         if any([m.name == e for e in excuse_stochastic]):
             continue
 
-        m.mpi(get_more_data())
+        m.multivariate(get_more_data())
 
-        scratch_adj = m.mpi(data.to_numpy())
-        adj = m.mpi(data)
+        scratch_adj = m.multivariate(data.to_numpy())
+        adj = m.multivariate(data)
         assert np.allclose(adj,scratch_adj,rtol=1e-1,atol=1e-2,equal_nan=True), (
                     f'{m.name} ({m.humanname}) mpi output changed between cached and strach computations: {adj} != {scratch_adj}')
 
-        recomp_adj = m.mpi(data)
+        recomp_adj = m.multivariate(data)
         assert np.allclose(adj,recomp_adj,rtol=1e-1,atol=1e-2,equal_nan=True), (
                     f'{m.name} ({m.humanname}) mpi output changed when recomputing.')
 
@@ -111,7 +111,7 @@ def test_mpi():
                     assert t_s == pytest.approx(new_t_s,rel=1e-1,abs=1e-2), (
                         f'{m.name} ({m.humanname}) Bivariate output from cache mismatch results from scratch for computation ({j},{i}): {t_s} != {new_t_s}')
                 except NotImplementedError:
-                    a = m.mpi(p[[i,j]])
+                    a = m.multivariate(p[[i,j]])
                     s_t, t_s = a[0,1], a[1,0]
 
                 if not math.isfinite(s_t):
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     test_yaml()
     test_load()
     test_group()
-    test_mpi()
+    test_multivariate()
 
     # This was a bit tricky to implement so just ensuring it passes a test from the creator's website
     test_ccm()

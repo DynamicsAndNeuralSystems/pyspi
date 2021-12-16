@@ -16,7 +16,7 @@ logger = getLogger(__name__)
 
 """ TODO: use the MPI class for each entry in the table
 """
-class MPI():
+class multivariate():
     def __init__(self, procnames, S=None):
         if S is None:
             S = np.full((len(procnames),len(procnames)),np.nan)
@@ -158,14 +158,14 @@ class Calculator():
             replication = 0
 
         pbar = tqdm(self.spis.keys())
-        for m in pbar:
-            pbar.set_description(f'Processing [{self._name}: {m}]')
+        for spi in pbar:
+            pbar.set_description(f'Processing [{self._name}: {spi}]')
             start_time = time.time()
             try:
-                self._table[m] = self._spis[m].mpi(self.dataset)
+                self._table[spi] = self._spis[spi].multivariate(self.dataset)
             except Exception as err:
-                warnings.warn(f'Caught {type(err)} for SPI "{self._statnames[m]}": {err}')
-                self._table[m] = np.NaN
+                warnings.warn(f'Caught {type(err)} for SPI "{spi}": {err}')
+                self._table[spi] = np.NaN
         pbar.close()
 
     def rmmin(self):

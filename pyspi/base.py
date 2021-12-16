@@ -89,7 +89,7 @@ class directed:
         raise NotImplementedError("Method not yet overloaded.")
 
     @parse_multivariate
-    def mpi(self,data):
+    def multivariate(self,data):
         """ Compute the dependency statistics for the entire multivariate dataset
         """
         A = np.empty((data.n_processes,data.n_processes))
@@ -135,8 +135,8 @@ class undirected(directed):
         return False
 
     @parse_multivariate
-    def mpi(self,data):
-        A = super(undirected,self).mpi(data)
+    def multivariate(self,data):
+        A = super(undirected,self).multivariate(data)
         
         li = np.tril_indices(data.n_processes,-1)
         A[li] = A.T[li]
