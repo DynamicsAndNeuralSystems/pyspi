@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5787486.svg)](https://doi.org/10.5281/zenodo.5787486)
+
 # Python Library of Statistics for Pairwise Interactions (pyspi)
 
 *pyspi* is a comprehensive library for computing pairwise interactions from multivariate time-series data.
