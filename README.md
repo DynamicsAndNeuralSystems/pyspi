@@ -1,5 +1,7 @@
 # Python Library of Statistics for Pairwise Interactions (pyspi)
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5787486.svg)](https://doi.org/10.5281/zenodo.5787486)
+
 *pyspi* is a comprehensive library for computing pairwise interactions from multivariate time-series data.
 
 The code provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation and coherence) to advanced multi-step algorithms (like convergent cross mapping and transfer entropy).
@@ -41,7 +43,7 @@ We recommend the [installation in a conda environment](#conda-install).
 
 ## Getting started
 
-Check out the demo scripts in `demos/demo.py` and `demos/demo.ipynb`
+Check out the demo script in `demos/demo.py`
 
 # <a name="conda-install"></a>Conda installation
 
