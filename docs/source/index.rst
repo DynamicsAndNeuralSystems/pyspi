@@ -1,40 +1,22 @@
-$project
-========
+Welcome to Lumache's documentation!
+===================================
 
-Welcome to $project's documentation!
+**Lumache** (/lu'make/) is a Python library for cooks and food lovers
+that creates recipes mixing random ingredients.
+It pulls data from the `Open Food Facts database <https://world.openfoodfacts.org/>`_
+and offers a *simple* and *intuitive* API.
 
-Look how easy it is to use:
+Check out the :doc:`usage` section for further information, including
+how to :ref:`installation` the project.
 
-    import project
-    # Get your stuff done
-    $project.compute()
+.. note::
 
-Features
+   This project is under active development.
+
+Contents
 --------
 
-- Be awesome
-- Make things faster
+.. toctree::
 
-Installation
-------------
-
-Install $project by running:
-
-    pip install project
-
-Contribute
-----------
-
-- Issue Tracker: github.com/$project/$project/issues
-- Source Code: github.com/$project/$project
-
-Support
--------
-
-If you are having issues, please let us know.
-We have a mailing list located at: project@google-groups.com
-
-License
--------
-
-The project is licensed under the BSD license.
+   usage
+   api
