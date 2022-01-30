@@ -43,7 +43,7 @@ We recommend the [installation in a conda environment](#conda-install).
 
 ## Getting started
 
-Check out the demo scripts in `demos/demo.py` and `demos/demo.ipynb`
+Check out the demo script in `demos/demo.py`
 
 # <a name="conda-install"></a>Conda installation
 
