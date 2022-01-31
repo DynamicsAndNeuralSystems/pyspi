@@ -1,9 +1,9 @@
 Usage
 =====
 
-.. _pre-installation:
+.. _pre-install:
 
-Pre-installation
+Pre-install
 ------------
 
 The code requires GNU's [Octave](https://www.gnu.org/software/octave/index) by default. Install octave using your favourite package manager, e.g.,
@@ -25,9 +25,9 @@ for Arch; and
 for MacOS.
 
 
-.. _installation:
+.. _install:
 
-Installation
+Install
 ------------
 
 Download or clone the [latest version](https://github.com/olivercliff/pyspi) from GitHub, unpack and run (from the folder containing `pyspi` setup.py file):
