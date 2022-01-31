@@ -5,6 +5,8 @@ Welcome to PySPI's documentation!
 
 It provides easy access to over 250 methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation coefficients and coherence) to advanced multi-step algorithms (like convergent cross-mapping and Granger causality).
 
+PySPI has its documentation hosted on Read the Docs.
+
 Check out the :doc:`usage` section for further information, including
 how to :ref:`install` the project.
 
