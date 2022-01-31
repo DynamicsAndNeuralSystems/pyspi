@@ -43,12 +43,14 @@ or
 
 for editable mode.
 
-We recommend installation in a conda environment, see :doc:`Conda Installation`.
+We recommend installation in a conda environment, see :ref:`conda`.
 
 Getting Started
 ------------
 
 Check out the demo script in ``demos/demo.py``
+
+.. _conda
 
 Conda Installation
 ------------
