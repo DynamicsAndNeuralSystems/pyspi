@@ -1,10 +1,8 @@
-Welcome to Lumache's documentation!
+Welcome to PySPI's documentation!
 ===================================
 
-**Lumache** (/lu'make/) is a Python library for cooks and food lovers
-that creates recipes mixing random ingredients.
-It pulls data from the `Open Food Facts database <https://world.openfoodfacts.org/>`_
-and offers a *simple* and *intuitive* API.
+**PySPI** (/pie'spy/) is a Python library for simultaneously evaluating hundreds of pairwise interactions directly from multivariate time-series data.
+It provides easy access to over 250 methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation coefficients and coherence) to advanced multi-step algorithms (like convergent cross-mapping and Granger causality).
 
 Check out the :doc:`usage` section for further information, including
 how to :ref:`installation` the project.
