@@ -43,7 +43,7 @@ We recommend the [installation in a conda environment](#conda-install).
 
 ## Getting started
 
-Check out the demo script in `demos/demo.py`
+Check out the demo script in `demos/simple_demo.py`
 
 # <a name="conda-install"></a>Conda installation
 
@@ -53,5 +53,5 @@ conda create -n pyspi python=3.9.0
 conda activate pyspi
 cd pyspi
 pip install .
-python demos/demo.py
+python demos/simple_demo.py
 ```
