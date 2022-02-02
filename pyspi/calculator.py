@@ -4,26 +4,11 @@ import pandas as pd
 import copy, yaml, importlib, time, warnings, os
 from tqdm import tqdm
 from collections import Counter
-from copy import deepcopy
-from logging import getLogger
 from scipy import stats
 
 # From this package
 from .data import Data
 from .utils import convert_mdf_to_ddf
-
-logger = getLogger(__name__)
-
-""" TODO: use the MPI class for each entry in the table
-"""
-class multivariate():
-    def __init__(self, procnames, S=None):
-        if S is None:
-            S = np.full((len(procnames),len(procnames)),np.nan)
-        self.S = pd.DataFrame(index=procnames,columns=procnames,data=S)
-
-    def __eq__(self, S):
-        self.S = S
 
 class Calculator():
     """Calculator for one multivariate time-series dataset
