@@ -34,6 +34,7 @@ class Calculator():
         self._spis = {}
         self._load_yaml(configfile)
 
+
         duplicates = [name for name, count in Counter(self._spis.keys()).items() if count > 1]
         if len(duplicates) > 0:
             raise ValueError(f'Duplicate SPI identifiers: {duplicates}.\n Check the config file for duplicates.')
@@ -95,7 +96,7 @@ class Calculator():
         try:
             return self._group
         except AttributeError as err:
-            logger.warning('Group undefined. Call set_group() method first.')
+            warnings.warn('Group undefined. Call set_group() method first.')
             raise AttributeError(err)
 
     @group.setter
@@ -107,7 +108,7 @@ class Calculator():
         try:
             return self._group_name
         except AttributeError as err:
-            logger.warnings(f'Group name undefined. Call set_group() method first.')
+            warnings.warn(f'Group name undefined. Call set_group() method first.')
             return None
 
     @group_name.setter
@@ -379,10 +380,6 @@ class CalculatorFrame():
     @forall
     def compute(calc):
         calc.compute()
-
-    @forall
-    def prune(calc,**kwargs):
-        calc.prune(**kwargs)
 
     @forall
     def set_group(calc,*args):

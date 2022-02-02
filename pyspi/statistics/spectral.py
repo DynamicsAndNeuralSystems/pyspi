@@ -3,13 +3,11 @@ import spectral_connectivity as sc # For directed spectral statistics (excl. spe
 from pyspi.base import directed, parse_bivariate, undirected, parse_multivariate, unsigned
 import nitime.analysis as nta
 import nitime.timeseries as ts
-import nitime.utils as tsu
-import mne.connectivity as mnec
 import warnings
 
 """
-    - Most statistics come from the Eden-Kramer Lab's spectral_connectivity toolkit
-    - parametric Spectral GC comes from nitime. [The VAR model could be computed from those in the infotheory module but this involves pretty intense integration so may not ever get done.]
+    - Most statistics come from the Eden-Kramer spectral_connectivity toolkit
+    - parametric Spectral GC comes from nitime. The VAR model could be computed from those in the infotheory module but this involves pretty intense integration so may not ever get done.
     - non-parametric Spectral GC still comes from EK lab
 """
 
@@ -21,7 +19,7 @@ class kramer(unsigned):
             
         self._fs = fs
         if fs != 1:
-            logger.warning('Multiple sampling frequencies not yet handled.')
+            warnings.warn('Multiple sampling frequencies not yet handled.')
         self._fmin = fmin
         self._fmax = fmax
         if statistic == 'mean':
@@ -378,29 +376,5 @@ class spectral_granger(kramer_mv,directed,unsigned):
             freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
             return self._statfn(F[0,freq_id,:,:], axis=0)
         except ValueError as err:
-            logger.warning(err)
+            warnings.warn(err)
             return np.full((data.n_processes,data.n_processes),np.nan)
-
-class envelope_correlation(undirected,unsigned):
-    humanname = 'Power envelope correlation'
-    labels = ['unsigned','spectral','undirected']
-
-    def __init__(self,orth=False,log=False,absolute=False):
-        self.name = 'pec'
-        self._orth = False
-        if orth:
-            self._orth = 'pairwise'
-            self.name += '_orth'
-        self._log = log
-        if log:
-            self.name += '_log'
-        self._absolute = absolute
-        if absolute:
-            self.name += '_abs'
-
-    @parse_multivariate
-    def multivariate(self, data):
-        z = np.moveaxis(data.to_numpy(),2,0)
-        adj = np.squeeze(mnec.envelope_correlation(z,orthogonalize=self._orth,log=self._log,absolute=self._absolute))
-        np.fill_diagonal(adj,np.nan)
-        return adj

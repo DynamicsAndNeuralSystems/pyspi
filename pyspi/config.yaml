@@ -855,32 +855,6 @@
       method: parametric
       statistic: max
 
-  # Power envelope correlation
-  envelope_correlation:
-    - orth: False
-      log: False
-      absolute: False
-
-    - orth: True
-      log: False
-      absolute: False
-
-    - orth: False
-      log: True
-      absolute: False
-
-    - orth: True
-      log: True
-      absolute: False
-
-    - orth: True
-      log: False
-      absolute: True
-
-    - orth: True
-      log: True
-      absolute: True
-
 # statistics that analyse in the wavlet-domain (only Mortlet wavelet's at the moment)
 .statistics.wavelet:
 
@@ -1159,3 +1133,30 @@
       autolag: bic
       maxlag: 10
       trend: ct
+
+
+  # Power envelope correlation
+  envelope_correlation:
+    - orth: False
+      log: False
+      absolute: False
+
+    - orth: True
+      log: False
+      absolute: False
+
+    - orth: False
+      log: True
+      absolute: False
+
+    - orth: True
+      log: True
+      absolute: False
+
+    - orth: True
+      log: False
+      absolute: True
+
+    - orth: True
+      log: True
+      absolute: True
