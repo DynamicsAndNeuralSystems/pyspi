@@ -2,7 +2,7 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5787486.svg)](https://doi.org/10.5281/zenodo.5787486)
 
-*pyspi* is a comprehensive library for computing pairwise interactions from multivariate time-series data.
+*pyspi* is a comprehensive library for computing pairwise interactions from multivariate time-series (MTS) data.
 
 The code provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation and coherence) to advanced multi-step algorithms (like convergent cross mapping and transfer entropy).
 
@@ -43,7 +43,9 @@ We recommend the [installation in a conda environment](#conda-install).
 
 ## Getting started
 
-Check out the demo script in `demos/demo.py`
+Check out the demo script in `demos/simple_demo.py`.
+
+A detailed tutorial on MTS classification is coming soon!
 
 # <a name="conda-install"></a>Conda installation
 
@@ -53,5 +55,5 @@ conda create -n pyspi python=3.9.0
 conda activate pyspi
 cd pyspi
 pip install .
-python demos/demo.py
+python demos/simple_demo.py
 ```
