@@ -58,7 +58,7 @@ setup(
                         'hyppo>=0.2.1',
                         'pyEDM>=1.0.3.2',
                         'jpype1>=1.2.0',
-                        'sktime>=0.8.0',
+                        'sktime==0.8.0',
                         'dill>=0.3.2',
                         'spectral-connectivity>=0.2.4.dev0',
                         'umap-learn>=0.4.6',
