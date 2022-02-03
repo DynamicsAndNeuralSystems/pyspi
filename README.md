@@ -2,58 +2,32 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5787486.svg)](https://doi.org/10.5281/zenodo.5787486)
 
-*pyspi* is a comprehensive library for computing pairwise interactions from multivariate time-series (MTS) data.
+*PySPI* is a comprehensive library for computing pairwise interactions from multivariate time-series (MTS) data.
 
 The code provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation and coherence) to advanced multi-step algorithms (like convergent cross mapping and transfer entropy).
+The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/gpl-3.0.html) (or later).
 
-# Pre-installation
+**Feel free to [email me](mailto:oliver.cliff@sydney.edu.au) for help with read-world applications.**
 
-The code requires GNU's [Octave](https://www.gnu.org/software/octave/index) by default. Install octave using your favourite package manager, e.g.,
-```
-apt-get install octave
-```
-for Ubuntu;
-```
-pacman -S octave
-```
-for Arch; and
-```
-brew install octave
-```
+Feedback is much appreciated through email, [issues](https://github.com/olivercliff/pyspi/issues), or [pull requests](https://github.com/olivercliff/pyspi/pulls).
 
-for MacOS.
+## Acknowledgement
 
-# Installation
+If you use this code, please cite the following preprint:
 
-Download or clone the [latest version](https://github.com/olivercliff/pyspi) from GitHub, unpack and run (from the folder containing `pyspi` setup.py file):
-
-```
-pip install .
-```
-
-or 
-
-```
-pip install -e .
-```
-
-for editable mode.
-
-We recommend the [installation in a conda environment](#conda-install).
+Oliver M. Cliff, Joseph T. Lizier, Naotsugu Tsuchiya, Ben D Fulcher, "Unifying Pairwise Interactions in Complex Dynamics," ArXiv preprint, [arXiv:2201.11941](https://arxiv.org/abs/2201.11941) (2022).
 
 ## Getting started
 
-Check out the demo script in `demos/simple_demo.py`.
+See the [documentation](https://pyspi-toolkit.readthedocs.io/en/latest/) for setting up and implementing *PySPI*.
+Alternatively, skip straight to the simple demo (`demos/simple_demo.py`) and jump straight into it!
 
-A detailed tutorial on MTS classification is coming soon!
+## Related resources
 
-# <a name="conda-install"></a>Conda installation
+### HCTSA
 
-```
-git clone https://github.com/olivercliff/pyspi.git 
-conda create -n pyspi python=3.9.0
-conda activate pyspi
-cd pyspi
-pip install .
-python demos/simple_demo.py
-```
+[HCTSA](https://github.com/benfulcher/hctsa), the *Highly Comparative Time-Series Analysis* toolkit, computes over 7000 time-series features from univariate time series.
+
+### HCGA
+
+[HCGA](https://github.com/barahona-research-group/hcga), the *Highly Comparative Graph Analysis* toolkit, computes several thousand of graph features directly from any given network.
