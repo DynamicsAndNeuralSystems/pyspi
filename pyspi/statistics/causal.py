@@ -92,7 +92,7 @@ class ccm(directed,signed):
 
             # Compute CCM from the fixed or optimal embedding
             nlibs = 21
-            ccmf = np.fill((M,M,nlibs+1),np.nan)
+            ccmf = np.zeros((M,M,nlibs+1))
             for _i in range(M):
                 for _j in range(_i+1,M):
                     try:

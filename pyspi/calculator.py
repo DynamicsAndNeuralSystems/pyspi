@@ -163,7 +163,14 @@ class Calculator():
             pbar.set_description(f'Processing [{self._name}: {spi}]')
             start_time = time.time()
             try:
-                self._table[spi] = self._spis[spi].multivariate(self.dataset)
+                # Get the MPI from the dataset
+                S = self._spis[spi].multivariate(self.dataset)
+
+                # Ensure the diagonal is NaN (sometimes set within the functions)
+                np.fill_diagonal(S,np.NaN)
+
+                # Save results
+                self._table[spi] = S
             except Exception as err:
                 warnings.warn(f'Caught {type(err)} for SPI "{spi}": {err}')
                 self._table[spi] = np.NaN
