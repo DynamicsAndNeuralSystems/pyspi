@@ -1,7 +1,6 @@
 pyspi.egg-info
 pyspi/__pycache__
 **/__pycache__/**
-build
 dist
 *.pkl
 *.log
