@@ -60,14 +60,13 @@ class Data():
         data : numpy array
             realisations, can only be set via 'set_data' method
         n_processes : int
-            number of processes
+            truncate data to this many processes
         n_observations : int
-            number of observations in time
+            truncate data to this many observations
         n_realisations : int
-            number of realisations
+            number of realisations (currently unused).
         normalise : bool
             if true, all data gets z-standardised per process
-
     """
 
     def __init__(self,data=None,dim_order='ps',normalise=True,name=None,n_processes=None,n_observations=None):

@@ -46,12 +46,12 @@ class jidt_base(unsigned):
         self._dyn_corr_excl = dyn_corr_excl
         self._entropy_calc = self._getcalc('entropy')
 
-        self.name = self.name + '_' + estimator
+        self.identifier = self.identifier + '_' + estimator
         if estimator == 'kraskov':
-            self.name = self.name + '_NN-{}'.format(prop_k)
+            self.identifier = self.identifier + '_NN-{}'.format(prop_k)
             self.labels = self.labels + ['nonlinear']
         elif estimator == 'kernel':
-            self.name = self.name + '_W-{}'.format(kernel_width)
+            self.identifier = self.identifier + '_W-{}'.format(kernel_width)
             self.labels = self.labels + ['nonlinear']
         elif estimator == 'symbolic':
             if not isinstance(self,transfer_entropy):
@@ -64,7 +64,7 @@ class jidt_base(unsigned):
             self._dyn_corr_excl = None
 
         if self._dyn_corr_excl:
-            self.name = self.name + '_DCE'
+            self.identifier = self.identifier + '_DCE'
 
     def __getstate__(self):
         state = dict(self.__dict__)
@@ -78,7 +78,7 @@ class jidt_base(unsigned):
             pass
 
         if '_entropy_calc' in state.keys() or '_calc' in state.keys():
-            logging.info(f'{self.name} contains a calculator still')
+            logging.info(f'{self.identifier} contains a calculator still')
         return state
 
     def __setstate__(self,state):
@@ -218,8 +218,8 @@ class jidt_base(unsigned):
 
 class joint_entropy(jidt_base,undirected):
 
-    humanname = 'Joint entropy'
-    name = 'je'
+    name = 'Joint entropy'
+    identifier = 'je'
     labels = ['unsigned','infotheory','unordered','undirected']
 
     def __init__(self,**kwargs):
@@ -231,8 +231,8 @@ class joint_entropy(jidt_base,undirected):
 
 class conditional_entropy(jidt_base,directed):
 
-    humanname = 'Conditional entropy'
-    name = 'ce'
+    name = 'Conditional entropy'
+    identifier = 'ce'
     labels = ['unsigned','infotheory','unordered','directed']
 
     def __init__(self,**kwargs):
@@ -243,8 +243,8 @@ class conditional_entropy(jidt_base,directed):
         return self._compute_joint_entropy(data,i=i,j=j) - self._compute_entropy(data,i=i)
         
 class mutual_info(jidt_base,undirected):
-    humanname = "Mutual information"
-    name = 'mi'
+    name = "Mutual information"
+    identifier = 'mi'
     labels = ['unsigned','infotheory','unordered','undirected']
 
     def __init__(self,**kwargs):
@@ -272,8 +272,8 @@ class mutual_info(jidt_base,undirected):
             return np.NaN
 
 class time_lagged_mutual_info(mutual_info):
-    humanname = "Time-lagged mutual information"
-    name = 'tlmi'
+    name = "Time-lagged mutual information"
+    identifier = 'tlmi'
     labels = ['unsigned','infotheory','temporal','undirected']
 
     def __init__(self,**kwargs):
@@ -303,15 +303,15 @@ class time_lagged_mutual_info(mutual_info):
 
 class transfer_entropy(jidt_base,directed):
 
-    humanname = "Transfer entropy"
-    name = 'te'
+    name = "Transfer entropy"
+    identifier = 'te'
     labels = ['unsigned','embedding','infotheory','temporal','directed']
 
     def __init__(self,auto_embed_method=None,k_search_max=None,tau_search_max=None,
                         k_history=1,k_tau=1,l_history=1,l_tau=1,**kwargs):
 
         if 'estimator' not in kwargs.keys() or kwargs['estimator'] == 'gaussian':
-            self.name = 'gc'
+            self.identifier = 'gc'
         super().__init__(**kwargs)
         self._calc = self._getcalc('transfer_entropy')
 
@@ -320,10 +320,10 @@ class transfer_entropy(jidt_base,directed):
             self._calc.setProperty(self._AUTO_EMBED_METHOD_PROP_NAME,auto_embed_method)
             self._calc.setProperty(self._K_SEARCH_MAX_PROP_NAME,str(k_search_max))
             if self._estimator != 'kernel':
-                self.name = self.name + '_k-max-{}_tau-max-{}'.format(k_search_max,tau_search_max)
+                self.identifier = self.identifier + '_k-max-{}_tau-max-{}'.format(k_search_max,tau_search_max)
                 self._calc.setProperty(self._TAU_SEARCH_MAX_PROP_NAME,str(tau_search_max))
             else:
-                self.name = self.name + '_k-max-{}'.format(k_search_max)
+                self.identifier = self.identifier + '_k-max-{}'.format(k_search_max)
             # Set up calculator
         else:
             self._calc.setProperty(self._K_HISTORY_PROP_NAME,str(k_history))
@@ -331,9 +331,9 @@ class transfer_entropy(jidt_base,directed):
                 self._calc.setProperty(self._K_TAU_PROP_NAME,str(k_tau))
                 self._calc.setProperty(self._L_HISTORY_PROP_NAME,str(l_history))
                 self._calc.setProperty(self._L_TAU_PROP_NAME,str(l_tau))
-                self.name = self.name + '_k-{}_kt-{}_l-{}_lt-{}'.format(k_history,k_tau,l_history,l_tau)
+                self.identifier = self.identifier + '_k-{}_kt-{}_l-{}_lt-{}'.format(k_history,k_tau,l_history,l_tau)
             else:
-                self.name = self.name + '_k-{}'.format(k_history)
+                self.identifier = self.identifier + '_k-{}'.format(k_history)
 
     def __setstate__(self,state):
         """ Re-initialise the calculator
@@ -360,13 +360,13 @@ class transfer_entropy(jidt_base,directed):
 
 class crossmap_entropy(jidt_base,directed):
 
-    humanname = 'Cross-map entropy'
-    name = 'xme'
+    name = 'Cross-map entropy'
+    identifier = 'xme'
     labels = ['unsigned','infotheory','temporal','directed']
 
     def __init__(self,history_length=10,**kwargs):
         super().__init__(**kwargs)
-        self.name += f'_k{history_length}'
+        self.identifier += f'_k{history_length}'
         self._history_length = history_length
 
     @parse_bivariate
@@ -392,8 +392,8 @@ class crossmap_entropy(jidt_base,directed):
 
 class causal_entropy(jidt_base,directed):
 
-    humanname = 'Causally conditioned entropy'
-    name = 'cce'
+    name = 'Causally conditioned entropy'
+    identifier = 'cce'
     labels = ['unsigned','infotheory','temporal','directed']
 
     def __init__(self,n=5,**kwargs):
@@ -434,8 +434,8 @@ class causal_entropy(jidt_base,directed):
 
 class directed_info(causal_entropy,directed):
 
-    humanname = 'Directed information'
-    name = 'di'
+    name = 'Directed information'
+    identifier = 'di'
     labels = ['unsigned','infotheory','temporal','directed']
 
     def __init__(self,n=10,**kwargs):
@@ -454,14 +454,14 @@ class directed_info(causal_entropy,directed):
 
 class stochastic_interaction(jidt_base,undirected):
 
-    humanname = "Stochastic interaction"
-    name = 'si'
+    name = "Stochastic interaction"
+    identifier = 'si'
     labels = ['unsigned','infotheory','temporal','undirected']
 
     def __init__(self,delay=1,**kwargs):
         super().__init__(**kwargs)
         self._delay = delay
-        self.name += f'_k-{delay}'
+        self.identifier += f'_k-{delay}'
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):
@@ -477,8 +477,8 @@ class stochastic_interaction(jidt_base,undirected):
 
 class integrated_information(undirected,unsigned):
     
-    humanname = "Integrated information"
-    name = "phi"
+    name = "Integrated information"
+    identifier = "phi"
     labels = ['linear','unsigned','infotheory','temporal','undirected']
 
     def __init__(self,phitype='star',delay=1,normalization=0):
@@ -488,7 +488,7 @@ class integrated_information(undirected,unsigned):
         self._options['type_of_phi'] = phitype
         self._options['type_of_dist'] = 'Gauss'
         self._options['normalization'] = normalization
-        self.name += f'_{phitype}_t-{delay}_norm-{normalization}'
+        self.identifier += f'_{phitype}_t-{delay}_norm-{normalization}'
     
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):

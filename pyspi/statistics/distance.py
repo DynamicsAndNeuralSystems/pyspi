@@ -11,13 +11,13 @@ import numpy as np
 
 class pdist(undirected,unsigned):
 
-    humanname = 'Pairwise distance'
-    name = 'pdist'
+    name = 'Pairwise distance'
+    identifier = 'pdist'
     labels = ['unsigned','distance','unordered','nonlinear','undirected']
 
     def __init__(self,metric='euclidean',**kwargs):
         self._metric = metric
-        self.name += f'_{metric}'
+        self.identifier += f'_{metric}'
 
     @parse_multivariate
     def multivariate(self,data):
@@ -29,14 +29,14 @@ class hsic(undirected,unsigned):
     """ Hilbert-Schmidt Independence Criterion (Hsic)
     """
 
-    humanname = "Hilbert-Schmidt Independence Criterion"
-    name = 'hsic'
+    name = "Hilbert-Schmidt Independence Criterion"
+    identifier = 'hsic'
     labels = ['unsigned','distance','unordered','nonlinear','undirected']
 
     def __init__(self,biased=False):
         self._biased = biased
         if biased:
-            self.name += '_biased'
+            self.identifier += '_biased'
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
@@ -48,8 +48,8 @@ class hhg(directed,unsigned):
     """ Heller-Heller-Gorfine independence criterion
     """
 
-    humanname = "Heller-Heller-Gorfine Independence Criterion"
-    name = 'hhg'
+    name = "Heller-Heller-Gorfine Independence Criterion"
+    identifier = 'hhg'
     labels = ['unsigned','distance','unordered','nonlinear','directed']
 
     @parse_bivariate
@@ -62,14 +62,14 @@ class dcorr(undirected,unsigned):
     """ Distance correlation
     """
 
-    humanname = "Distance correlation"
-    name = 'dcorr'
+    name = "Distance correlation"
+    identifier = 'dcorr'
     labels = ['unsigned','distance','unordered','nonlinear','undirected']
 
     def __init__(self,biased=False):
         self._biased = biased
         if biased:
-            self.name += '_biased'
+            self.identifier += '_biased'
     
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
@@ -83,8 +83,8 @@ class mgc(undirected,unsigned):
     """ Multiscale graph correlation
     """
 
-    humanname = "Multiscale graph correlation"
-    name = "mgc"
+    name = "Multiscale graph correlation"
+    identifier = "mgc"
     labels = ['distance','unsigned','unordered','nonlinear','undirected']
 
     @parse_bivariate
@@ -98,13 +98,13 @@ class dcorrx(directed,unsigned):
     """ Cross-distance correlation
     """
 
-    humanname = "Cross-distance correlation"
-    name = "dcorrx"
+    name = "Cross-distance correlation"
+    identifier = "dcorrx"
     labels = ['distance','unsigned','temporal','directed','nonlinear']
 
     def __init__(self,max_lag=1):
         self._max_lag = max_lag
-        self.name += f'_maxlag-{max_lag}'
+        self.identifier += f'_maxlag-{max_lag}'
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
@@ -118,13 +118,13 @@ class mgcx(directed,unsigned):
     """ Cross-multiscale graph correlation
     """
 
-    humanname = "Cross-multiscale graph correlation"
-    name = "mgcx"
+    name = "Cross-multiscale graph correlation"
+    identifier = "mgcx"
     labels = ['unsigned','distance','temporal','directed','nonlinear']
 
     def __init__(self,max_lag=1):
         self._max_lag = max_lag
-        self.name += f'_maxlag-{max_lag}'
+        self.identifier += f'_maxlag-{max_lag}'
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
@@ -142,7 +142,7 @@ class time_warping(undirected, unsigned):
         gcstr = global_constraint
         if gcstr is not None:
             gcstr = gcstr.replace('_','-')
-            self.name += f'_constraint-{gcstr}'
+            self.identifier += f'_constraint-{gcstr}'
         self._global_constraint = global_constraint
 
     @property
@@ -150,7 +150,7 @@ class time_warping(undirected, unsigned):
         try:
             return self._simfn
         except AttributeError:
-            raise NotImplementedError(f'Add the similarity function for {self.name}')
+            raise NotImplementedError(f'Add the similarity function for {self.identifier}')
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
@@ -159,8 +159,8 @@ class time_warping(undirected, unsigned):
 
 class dynamic_time_warping(time_warping):
 
-    humanname = 'Dynamic time warping'
-    name = 'dtw'
+    name = 'Dynamic time warping'
+    identifier = 'dtw'
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
@@ -168,8 +168,8 @@ class dynamic_time_warping(time_warping):
 
 class canonical_time_warping(time_warping):
 
-    humanname = 'Canonical time warping'
-    name = 'ctw'
+    name = 'Canonical time warping'
+    identifier = 'ctw'
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
@@ -177,8 +177,8 @@ class canonical_time_warping(time_warping):
 
 class longest_common_subsequence(time_warping):
 
-    humanname = 'Longest common subsequence'
-    name = 'lcss'
+    name = 'Longest common subsequence'
+    identifier = 'lcss'
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
@@ -186,8 +186,8 @@ class longest_common_subsequence(time_warping):
 
 class soft_dynamic_time_warping(time_warping):
 
-    humanname = 'Dynamic time warping'
-    name = 'softdtw'
+    name = 'Dynamic time warping'
+    identifier = 'softdtw'
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
@@ -196,8 +196,8 @@ class soft_dynamic_time_warping(time_warping):
 
 class global_alignment_kernel(time_warping):
 
-    humanname = 'Global alignment kernel'
-    name = 'gak'
+    name = 'Global alignment kernel'
+    identifier = 'gak'
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
@@ -205,8 +205,8 @@ class global_alignment_kernel(time_warping):
         return tslearn.metrics.gak(z[i],z[j])
 
 class lb_keogh(unsigned,directed):
-    humanname = 'LB Keogh'
-    name = 'lbk'
+    name = 'LB Keogh'
+    identifier = 'lbk'
     labels = ['nonlinear','unsigned','distance','temporal','undirected']
 
     @parse_bivariate
@@ -216,8 +216,8 @@ class lb_keogh(unsigned,directed):
 
 class barycenter(directed,signed):
 
-    humanname = 'Barycenter'
-    name = 'bary'
+    name = 'Barycenter'
+    identifier = 'bary'
     labels = ['distance','signed','undirected','temporal','nonlinear']
 
     def __init__(self,mode='euclidean',squared=False,statistic='mean'):
@@ -237,7 +237,7 @@ class barycenter(directed,signed):
         self._preproc = lambda x : x
         if squared:
             self._preproc = lambda x : x**2
-            self.name += f'-sq'
+            self.identifier += f'-sq'
             
         if statistic == 'mean':
             self._statfn = lambda x : np.nanmean(self._preproc(x))
@@ -246,7 +246,7 @@ class barycenter(directed,signed):
         else:
             raise NameError(f'Unknown statistic: {statistic}')
 
-        self.name += f'_{mode}_{statistic}'
+        self.identifier += f'_{mode}_{statistic}'
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):

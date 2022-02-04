@@ -34,7 +34,7 @@ class kramer(unsigned):
             self._statfn = None
         self._statistic = statistic
         paramstr = f'_multitaper_{statistic}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}'.replace('.','-')
-        self.name += paramstr
+        self.identifier += paramstr
 
     @property
     def key(self):
@@ -48,7 +48,7 @@ class kramer(unsigned):
         try:
             return self._measure
         except AttributeError:
-            raise AttributeError(f'Include measure for {self.humanname}')
+            raise AttributeError(f'Include measure for {self.name}')
 
     def _get_statistic(self,C):
         raise NotImplementedError
@@ -125,83 +125,83 @@ class kramer_bv(kramer):
         return self._statfn(bv_freq[0,freq_id,0,1])
 
 class coherence_magnitude(kramer_mv,undirected):
-    humanname = 'Coherence magnitude'
+    name = 'Coherence magnitude'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'cohmag'
+        self.identifier = 'cohmag'
         super().__init__(**kwargs)
         self._measure = 'coherence_magnitude'
 
 class coherence_phase(kramer_mv,undirected):
-    humanname = 'Coherence phase'
+    name = 'Coherence phase'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'phase'
+        self.identifier = 'phase'
         super().__init__(**kwargs)
         self._measure = 'coherence_phase'
 
 class icoherence(kramer_mv,undirected):
-    humanname = 'Imaginary coherence'
+    name = 'Imaginary coherence'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'icoh'
+        self.identifier = 'icoh'
         super().__init__(**kwargs)
         self._measure = 'imaginary_coherence'
 
 class phase_locking_value(kramer_mv,undirected):
-    humanname = 'Phase locking value'
+    name = 'Phase locking value'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'plv'
+        self.identifier = 'plv'
         super().__init__(**kwargs)
         self._measure = 'phase_locking_value'
 
 class phase_lag_index(kramer_mv,undirected):
-    humanname = 'Phase lag index'
+    name = 'Phase lag index'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'pli'
+        self.identifier = 'pli'
         super().__init__(**kwargs)
         self._measure = 'phase_lag_index'
 
 class weighted_phase_lag_index(kramer_mv,undirected):
-    humanname = 'Weighted phase lag index'
+    name = 'Weighted phase lag index'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'wpli'
+        self.identifier = 'wpli'
         super().__init__(**kwargs)
         self._measure = 'weighted_phase_lag_index'
 
 class debiased_squared_phase_lag_index(kramer_mv,undirected):
-    humanname = 'Debiased squared phase lag index'
+    name = 'Debiased squared phase lag index'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'dspli'
+        self.identifier = 'dspli'
         super().__init__(**kwargs)
         self._measure = 'debiased_squared_phase_lag_index'
 
 class debiased_squared_weighted_phase_lag_index(kramer_mv,undirected):
-    humanname = 'Debiased squared weighted phase-lag index'
+    name = 'Debiased squared weighted phase-lag index'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'dswpli'
+        self.identifier = 'dswpli'
         super().__init__(**kwargs)
         self._measure = 'debiased_squared_weighted_phase_lag_index'
 
 class pairwise_phase_consistency(kramer_mv,undirected):
-    humanname = 'Pairwise phase consistency'
+    name = 'Pairwise phase consistency'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'ppc'
+        self.identifier = 'ppc'
         super().__init__(**kwargs)
         self._measure = 'pairwise_phase_consistency'
 
@@ -210,56 +210,56 @@ class pairwise_phase_consistency(kramer_mv,undirected):
     Switched them to bivariate for now until the issue is resolved
 """
 class directed_coherence(kramer_bv,directed):
-    humanname = 'Directed coherence'
+    name = 'Directed coherence'
     labels = ['unsigned','spectral','directed']
 
     def __init__(self,**kwargs):
-        self.name = 'dcoh'
+        self.identifier = 'dcoh'
         super().__init__(**kwargs)
         self._measure = 'directed_coherence'
 
 class partial_directed_coherence(kramer_bv,directed):
-    humanname = 'Partial directed coherence'
+    name = 'Partial directed coherence'
     labels = ['unsigned','spectral','directed']
 
     def __init__(self,**kwargs):
-        self.name = 'pdcoh'
+        self.identifier = 'pdcoh'
         super().__init__(**kwargs)
         self._measure = 'partial_directed_coherence'
 
 class generalized_partial_directed_coherence(kramer_bv,directed):
-    humanname = 'Generalized partial directed coherence'
+    name = 'Generalized partial directed coherence'
     labels = ['unsigned','spectral','directed']
 
     def __init__(self,**kwargs):
-        self.name = 'gpdcoh'
+        self.identifier = 'gpdcoh'
         super().__init__(**kwargs)
         self._measure = 'generalized_partial_directed_coherence'
 
 class directed_transfer_function(kramer_bv,directed):
-    humanname = 'Directed transfer function'
+    name = 'Directed transfer function'
     labels = ['unsigned','spectral','directed','lagged']
 
     def __init__(self,**kwargs):
-        self.name = 'dtf'
+        self.identifier = 'dtf'
         super().__init__(**kwargs)
         self._measure = 'directed_transfer_function'
 
 class direct_directed_transfer_function(kramer_bv,directed):
-    humanname = 'Direct directed transfer function'
+    name = 'Direct directed transfer function'
     labels = ['unsigned','spectral','directed','lagged']
 
     def __init__(self,**kwargs):
-        self.name = 'ddtf'
+        self.identifier = 'ddtf'
         super().__init__(**kwargs)
         self._measure = 'direct_directed_transfer_function'
 
 class phase_slope_index(kramer_mv,undirected):
-    humanname = 'Phase slope index'
+    name = 'Phase slope index'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'psi'
+        self.identifier = 'psi'
         super().__init__(**kwargs)
         self._measure = 'phase_slope_index'
     
@@ -268,11 +268,11 @@ class phase_slope_index(kramer_mv,undirected):
                                     frequency_resolution=(self._fmax-self._fmin)/50)
 
 class group_delay(kramer_mv,directed):
-    humanname = 'Group delay'
+    name = 'Group delay'
     labels = ['unsigned','spectral','directed','lagged']
 
     def __init__(self,**kwargs):
-        self.name = 'gd'
+        self.identifier = 'gd'
         super().__init__(**kwargs)
         self._measure = 'group_delay'
     
@@ -281,8 +281,8 @@ class group_delay(kramer_mv,directed):
                             frequency_resolution=(self._fmax-self._fmin)/50)
 
 # class partial_coherence(undirected,unsigned):
-#     humanname = 'Partial coherence'
-#     name = 'pcoh'
+#     name = 'Partial coherence'
+#     identifier = 'pcoh'
 #     labels = ['unsigned','spectral','directed']
 
 #     def __init__(self,fs=1,fmin=0.05,fmax=np.pi/2,statistic='mean'):
@@ -296,7 +296,7 @@ class group_delay(kramer_mv,directed):
 #         else:
 #             raise NameError(f'Unknown statistic {statistic}')
 #         paramstr = f'_{statistic}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}'.replace('.','-')
-#         self.name = self.name + paramstr
+#         self.identifier = self.identifier + paramstr
 
 #     @parse_multivariate
 #     def multivariate(self,data):        
@@ -314,8 +314,8 @@ class group_delay(kramer_mv,directed):
 #         return pcoh
 
 class spectral_granger(kramer_mv,directed,unsigned):
-    humanname = 'Spectral Granger causality'
-    name = 'sgc'
+    name = 'Spectral Granger causality'
+    identifier = 'sgc'
     labels = ['unsigned','embedding','spectral','directed','lagged']
 
     def __init__(self,fs=1,fmin=0.0,fmax=0.5,method='nonparametric',order=None,max_order=50,statistic='mean'):
@@ -337,7 +337,7 @@ class spectral_granger(kramer_mv,directed,unsigned):
             self._order = order
             self._max_order = max_order
             paramstr = f'_parametric_{statistic}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}_order-{order}'.replace('.','-')
-        self.name = self.name + paramstr
+        self.identifier = self.identifier + paramstr
 
     def _getkey(self):
         if self._method == 'nonparametric':
@@ -382,21 +382,21 @@ class spectral_granger(kramer_mv,directed,unsigned):
             return np.full((data.n_processes,data.n_processes),np.nan)
 
 class envelope_correlation(undirected,unsigned):
-    humanname = 'Power envelope correlation'
+    name = 'Power envelope correlation'
     labels = ['unsigned','spectral','undirected']
 
     def __init__(self,orth=False,log=False,absolute=False):
-        self.name = 'pec'
+        self.identifier = 'pec'
         self._orth = False
         if orth:
             self._orth = 'pairwise'
-            self.name += '_orth'
+            self.identifier += '_orth'
         self._log = log
         if log:
-            self.name += '_log'
+            self.identifier += '_log'
         self._absolute = absolute
         if absolute:
-            self.name += '_abs'
+            self.identifier += '_abs'
 
     @parse_multivariate
     def multivariate(self, data):

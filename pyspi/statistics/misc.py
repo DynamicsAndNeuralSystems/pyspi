@@ -9,8 +9,8 @@ import warnings
 
 class coint(undirected,unsigned):
     
-    humanname = "Cointegration"
-    name = "coint"
+    name = "Cointegration"
+    identifier = "coint"
     labels = ['misc','unsigned','temporal','undirected','nonlinear']
 
     def __init__(self,method='johansen',statistic='trace_stat',
@@ -19,14 +19,14 @@ class coint(undirected,unsigned):
         self._method = method
         self._statistic = statistic
         if method == 'johansen':
-            self.name += f'_{method}_{statistic}_order-{det_order}_ardiff-{k_ar_diff}'
+            self.identifier += f'_{method}_{statistic}_order-{det_order}_ardiff-{k_ar_diff}'
             self._det_order = det_order
             self._k_ar_diff = k_ar_diff
         else:
             self._autolag = autolag
             self._maxlag = maxlag
             self._trend = trend
-            self.name += f'_{method}_{statistic}_trend-{trend}_autolag-{autolag}_maxlag-{maxlag}'
+            self.identifier += f'_{method}_{statistic}_trend-{trend}_autolag-{autolag}_maxlag-{maxlag}'
 
     @property
     def key(self):
@@ -67,12 +67,12 @@ class coint(undirected,unsigned):
         return ci[self._statistic]
 
 class linearmodel(directed,unsigned):
-    humanname = 'Linear model regression'
-    name = 'lmfit'
+    name = 'Linear model regression'
+    identifier = 'lmfit'
     labels = ['misc','unsigned','unordered','normal','linear','directed']
 
     def __init__(self,model):
-        self.name += f'_{model}'
+        self.identifier += f'_{model}'
         self._model = getattr(linear_model,model)
 
     @parse_bivariate
@@ -85,12 +85,12 @@ class linearmodel(directed,unsigned):
         return mean_squared_error(y_predict, np.ravel(z[j]))
 
 class gpmodel(directed,unsigned):    
-    humanname = 'Gaussian process regression'
-    name = 'gpfit'
+    name = 'Gaussian process regression'
+    identifier = 'gpfit'
     labels = ['misc','unsigned','unordered','normal','nonlinear','directed']
 
     def __init__(self,kernel='RBF'):
-        self.name += f'_{kernel}'
+        self.identifier += f'_{kernel}'
         self._kernel = kernels.ConstantKernel() + kernels.WhiteKernel()
         self._kernel += getattr(kernels,kernel)()
 

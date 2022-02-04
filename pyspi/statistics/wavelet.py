@@ -25,14 +25,14 @@ class mne(unsigned):
         self._statistic = statistic
 
         paramstr = f'_wavelet_{statistic}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}'.replace('.','-')
-        self.name += paramstr
+        self.identifier += paramstr
 
     @property
     def measure(self):
         try:
             return self._measure
         except AttributeError:
-            raise AttributeError(f'Include measure for {self.humanname}')
+            raise AttributeError(f'Include measure for {self.name}')
 
     def _get_cache(self,data):
         try:
@@ -76,20 +76,20 @@ def modify_stats(statfn,modifier):
     return partial(parsed_stats, statfn=statfn, modifier=modifier)
 
 class coherence_magnitude(mne,undirected):
-    humanname = 'Coherence magnitude (wavelet)'
+    name = 'Coherence magnitude (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'cohmag'
+        self.identifier = 'cohmag'
         self._measure = 'coh'
         super().__init__(**kwargs)
 
 class coherence_phase(mne,undirected):
-    humanname = 'Coherence phase (wavelet)'
+    name = 'Coherence phase (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'phase'
+        self.identifier = 'phase'
         self._measure = 'cohy'
         super().__init__(**kwargs)
 
@@ -97,76 +97,76 @@ class coherence_phase(mne,undirected):
         self._statfn = modify_stats(self._statfn,np.angle)
 
 class icoherence(mne,undirected):
-    humanname = 'Imaginary coherency (wavelet)'
+    name = 'Imaginary coherency (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'icoh'
+        self.identifier = 'icoh'
         self._measure = 'imcoh'
         super().__init__(**kwargs)
 
 class phase_locking_value(mne,undirected):
-    humanname = 'Phase locking value (wavelet)'
+    name = 'Phase locking value (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'plv'
+        self.identifier = 'plv'
         self._measure = 'plv'
         super().__init__(**kwargs)
 
 class pairwise_phase_consistency(mne,undirected):
-    humanname = 'Pairwise phase consistency (wavelet)'
+    name = 'Pairwise phase consistency (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'ppc'
+        self.identifier = 'ppc'
         self._measure = 'ppc'
         super().__init__(**kwargs)
 
 class phase_lag_index(mne,undirected):
-    humanname = 'Phase lag index (wavelet)'
+    name = 'Phase lag index (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'pli'
+        self.identifier = 'pli'
         self._measure = 'pli'
         super().__init__(**kwargs)
 
 class debiased_squared_phase_lag_index(mne,undirected):
-    humanname = 'Debiased squared phase lag index (wavelet)'
+    name = 'Debiased squared phase lag index (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'dspli'
+        self.identifier = 'dspli'
         self._measure = 'pli2_unbiased'
         super().__init__(**kwargs)
 
 class weighted_phase_lag_index(mne,undirected):
-    humanname = 'Weighted squared phase lag index (wavelet)'
+    name = 'Weighted squared phase lag index (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'wspli'
+        self.identifier = 'wspli'
         self._measure = 'wpli'
         super().__init__(**kwargs)
 
 class debiased_weighted_squared_phase_lag_index(mne,undirected):
-    humanname = 'Debiased weighted squared phase lag index (wavelet)'
+    name = 'Debiased weighted squared phase lag index (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'dwspli'
+        self.identifier = 'dwspli'
         self._measure = 'wpli2_debiased'
         super().__init__(**kwargs)
 
 class phase_slope_index(mne,undirected):
-    humanname = 'Phase slope index (wavelet)'
+    name = 'Phase slope index (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
     def __init__(self,**kwargs):
-        self.name = 'psi'
+        self.identifier = 'psi'
         super().__init__(**kwargs)
-        self.name += f'_{self._statistic}'
+        self.identifier += f'_{self._statistic}'
 
     def _get_cache(self,data):
         try:

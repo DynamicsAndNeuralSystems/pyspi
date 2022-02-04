@@ -10,7 +10,7 @@ class covariance_estimators(undirected,signed):
     Information on covariance estimators at: https://scikit-learn.org/stable/modules/covariance.html
     """
 
-    humanname = "Covariance"
+    name = "Covariance"
     labels = ['basic','unordered','linear','undirected']
 
     def __init__(self,kind,estimator='EmpiricalCovariance',squared=False):
@@ -21,7 +21,7 @@ class covariance_estimators(undirected,signed):
             self.issigned = lambda : False
         else:
             self.labels = covariance_estimators.labels + ['signed']
-        self.name = self.name + paramstr
+        self.identifier = self.identifier + paramstr
         self._squared = squared
         self._estimator = estimator
         self._kind = kind
@@ -53,38 +53,38 @@ class covariance_estimators(undirected,signed):
 
 class covariance(covariance_estimators):
 
-    humanname = "Covariance"
-    name = 'cov'
+    name = "Covariance"
+    identifier = 'cov'
 
     def __init__(self,estimator='EmpiricalCovariance',squared=False):
         super().__init__(kind='covariance',squared=squared,estimator=estimator)
 
 class precision(covariance_estimators):
 
-    humanname = "Precision"
-    name = 'prec'
+    name = "Precision"
+    identifier = 'prec'
 
     def __init__(self,estimator='EmpiricalCovariance',squared=False):
         super().__init__(kind='precision',squared=squared,estimator=estimator)
 
 class xcorr(undirected,signed):
 
-    humanname = "Cross correlation"
+    name = "Cross correlation"
     labels = ['basic','linear','undirected','temporal']
 
     def __init__(self,squared=False,statistic='max',sigonly=True):
-        self.name = 'xcorr'
+        self.identifier = 'xcorr'
         self._squared = squared
         self._statistic = statistic
         self._sigonly = sigonly
 
         if self._squared:
             self.issigned = lambda : False
-            self.name = self.name + '-sq'
+            self.identifier = self.identifier + '-sq'
             self.labels = xcorr.labels + ['unsigned']
         else:
             self.labels = xcorr.labels + ['signed']
-        self.name += f'_{statistic}_sig-{sigonly}'
+        self.identifier += f'_{statistic}_sig-{sigonly}'
     
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
@@ -129,15 +129,15 @@ class xcorr(undirected,signed):
 
 class spearmanr(undirected,signed):
 
-    humanname = "Spearman's correlation coefficient"
-    name = "spearmanr"
+    name = "Spearman's correlation coefficient"
+    identifier = "spearmanr"
     labels = ['basic','unordered','rank','linear','undirected']
 
     def __init__(self,squared=False):
         self._squared = squared
         if squared:
             self.issigned = lambda : False
-            self.name = self.name + '-sq'
+            self.identifier = self.identifier + '-sq'
             self.labels += ['unsigned']
         else:
             self.labels += ['signed']
@@ -152,15 +152,15 @@ class spearmanr(undirected,signed):
 
 class kendalltau(undirected,signed):
 
-    humanname = "Kendall's tau"
-    name = "kendalltau"
+    name = "Kendall's tau"
+    identifier = "kendalltau"
     labels = ['basic','unordered','rank','linear','undirected']
 
     def __init__(self,squared=False):
         self._squared = squared
         if squared:
             self.issigned = lambda : False
-            self.name = self.name + '-sq'
+            self.identifier = self.identifier + '-sq'
             self.labels += ['unsigned']
         else:
             self.labels += ['signed']

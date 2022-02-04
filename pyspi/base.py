@@ -78,8 +78,8 @@ class directed:
     """ Directed statistics
     """
 
-    humanname = 'Bivariate base class'
-    name = 'bivariate_base'
+    name = 'Bivariate base class'
+    identifier = 'bivariate_base'
     labels = ['signed']
 
     @parse_bivariate
@@ -127,8 +127,8 @@ class directed:
 
 class undirected(directed):
 
-    humanname = 'Base class'
-    name = 'base'
+    name = 'Base class'
+    identifier = 'base'
     labels = ['unsigned']
 
     def ispositive(self):

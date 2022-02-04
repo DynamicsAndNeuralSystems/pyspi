@@ -8,8 +8,8 @@ from pyspi.base import directed, undirected, parse_bivariate, parse_multivariate
 
 class anm(directed,unsigned):
 
-    humanname = "Additive noise model"
-    name = 'anm'
+    name = "Additive noise model"
+    identifier = 'anm'
     labels = ['unsigned','causal','unordered','linear','directed']
 
     @parse_bivariate
@@ -19,8 +19,8 @@ class anm(directed,unsigned):
 
 class cds(directed,unsigned):
     
-    humanname = 'Conditional distribution similarity statistic'
-    name = 'cds'
+    name = 'Conditional distribution similarity statistic'
+    identifier = 'cds'
     labels = ['unsigned','causal','unordered','nonlinear','directed']
 
     @parse_bivariate
@@ -30,8 +30,8 @@ class cds(directed,unsigned):
 
 class reci(directed,unsigned):
 
-    humanname = 'Regression error-based causal inference'
-    name = 'reci'
+    name = 'Regression error-based causal inference'
+    identifier = 'reci'
     labels = ['unsigned','causal','unordered','nonlinear','directed']
 
     @parse_bivariate
@@ -41,8 +41,8 @@ class reci(directed,unsigned):
 
 class igci(directed,unsigned):
 
-    humanname = 'Information-geometric conditional independence'
-    name = 'igci'
+    name = 'Information-geometric conditional independence'
+    identifier = 'igci'
     labels = ['causal','directed','nonlinear','unsigned','unordered']
 
     @parse_bivariate
@@ -52,15 +52,15 @@ class igci(directed,unsigned):
 
 class ccm(directed,signed):
 
-    humanname = "Convergent cross-maping"
-    name = "ccm"
+    name = "Convergent cross-maping"
+    identifier = "ccm"
     labels = ['causal','directed','nonlinear','temporal','signed']
 
     def __init__(self,statistic='mean',embedding_dimension=None):
         self._statistic = statistic
         self._E = embedding_dimension
 
-        self.name += f'_E-{embedding_dimension}_{statistic}'
+        self.identifier += f'_E-{embedding_dimension}_{statistic}'
 
     @property
     def key(self):

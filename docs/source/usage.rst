@@ -2,64 +2,61 @@ Usage
 =====
 
 Pre-installation
-------------
+----------------
 
-The code requires GNU's `Octave <https://www.gnu.org/software/octave/index>`_ by default. Install octave using your favourite package manager, e.g.,
+The code requires GNU's `Octave <https://www.gnu.org/software/octave/index>`_ by default, which is freely available on all popular operating systems.
+See the `installation instructions <https://wiki.octave.org/Category:Installation>`_ to find out how to install Octave on your system.
 
-.. code-block:: console
+.. note::
+   You can safely install `PySPI` without first installing Octave but you will not have access to the `Integrated Information Theory` statistics, see :ref:`Using the toolkit without Octave`.
 
-   $ apt-get install octave
-
-for Ubuntu;
-
-.. code-block:: console
-
-   $ pacman -S octave
-
-for Arch; and
+While you can install `PySPI` outside of a `conda <https://docs.conda.io/projects/conda/en/latest/index.html>`_ environment, it depends on a lot of user packages that may make managing dependencies quite difficult.
+So, we would also recommend installing `PySPI` in a conda environment.
+After following the `installation instructions <https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html>`_ for conda, create a new environment for using the toolkit:
 
 .. code-block:: console
 
-   $ brew install octave
-
-for MacOS.
+   $ conda create -n pyspi python=3.9.0
+   $ conda activate pyspi
 
 
 Installation
 ------------
 
-Download or clone the `latest version <https://github.com/olivercliff/pyspi>`_ from GitHub, unpack and run (from the folder containing the ``setup.py`` file):
-
-.. code-block:: console
-
-   $ pip install .
-
-or 
-
-
-.. code-block:: console
-
-   $ pip install -e .
-
-for editable mode.
-
-We recommend installation in a conda environment, see :ref:`conda`.
-
-Getting Started
-------------
-
-Check out the demo script in ``demos/demo.py``
-
-.. _conda
-
-Conda Installation
-------------
+Next, download or clone the `latest version <https://github.com/olivercliff/pyspi>`_ from GitHub, unpack and install:
 
 .. code-block:: console
 
    $ git clone https://github.com/olivercliff/pyspi.git 
-   $ conda create -n pyspi python=3.9.0
-   $ conda activate pyspi
    $ cd pyspi
    $ pip install .
-   $ python demos/demo.py
+
+
+Getting Started
+---------------
+
+In order to demonstrate the functionality of this software, we will first need a sample multivariate time series (MTS).
+We will use data generated from a multivariate Gaussian:
+
+.. code-block::
+
+   import numpy as np
+   import random
+
+   random.seed(42)
+
+   M = 5 # 5 processes
+   T = 500 # 500 observations
+
+   dataset = np.random.rand(M,T)
+
+Now, given our dataset, the main functionality of this software can then be accessed using two lines:
+
+.. code-block::
+
+   from pyspi.calculator import Calculator
+
+   calc = Calculator(dataset=dataset)
+   calc.compute()
+
+

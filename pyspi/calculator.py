@@ -11,11 +11,19 @@ from .data import Data
 from .utils import convert_mdf_to_ddf
 
 class Calculator():
-    """Calculator for one multivariate time-series dataset
-    """
     
-    # Initializer / Instance Attributes
     def __init__(self,dataset=None,name=None,labels=None,configfile=os.path.dirname(os.path.abspath(__file__)) + '/config.yaml'):
+        """ Instantiate the calculator.
+
+        Parameters
+        ----------
+        dataset : array_like, shape (M,T)
+            The multivariate time series of M processes and T observations.
+        name : string
+            The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances.
+        labels : array_like
+            Any set of strings by which you want to label the calculator. This can be useful later for classification purposes.
+        """
         self._spis = {}
         self._load_yaml(configfile)
 
@@ -192,7 +200,7 @@ class Calculator():
         """ TODO: Merge two calculators (to include additional SPIs)
         """
         raise NotImplementedError()
-        if self.name is not other.name:
+        if self.identifier is not other.name:
             raise TypeError(f'Calculator name does do not match. Aborting merge.')
         
         for attr in ['name','n_processes','n_observations']:
@@ -210,7 +218,7 @@ class Calculator():
             self.rmmin()
 
         # Flatten (get Edge-by-SPI matrix)
-        edges = calc.table.stack().abs()
+        edges = self.table.stack().abs()
 
         # Correlate the edge matrix (using pearson and/or spearman correlation)
         mdf = pd.DataFrame()
@@ -250,7 +258,7 @@ class CalculatorFrame():
         if calculators is not None:
             self.set_calculator(calculators)
 
-        self.name = name
+        self.identifier = name
 
         if datasets is not None:
             if names is None:
