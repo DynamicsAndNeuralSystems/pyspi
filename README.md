@@ -30,4 +30,4 @@ Alternatively, skip straight to the simple demo (`demos/simple_demo.py`) and jum
 
 ### HCGA
 
-[HCGA](https://github.com/barahona-research-group/hcga), the *Highly Comparative Graph Analysis* toolkit, computes several thousand of graph features directly from any given network.
+[HCGA](https://github.com/barahona-research-group/hcga), the *Highly Comparative Graph Analysis* toolkit, computes several thousands of graph features directly from any given network.
