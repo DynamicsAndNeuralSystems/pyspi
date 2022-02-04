@@ -1,9 +1,9 @@
 API
 ===
 
+Coming soon.
+
 .. autosummary::
    :toctree: generated
 
-   PySPI
-
-Coming soon.
+   pyspi
