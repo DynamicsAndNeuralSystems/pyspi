@@ -27,6 +27,7 @@ class Calculator():
         self._spis = {}
         self._load_yaml(configfile)
 
+
         duplicates = [name for name, count in Counter(self._spis.keys()).items() if count > 1]
         if len(duplicates) > 0:
             raise ValueError(f'Duplicate SPI identifiers: {duplicates}.\n Check the config file for duplicates.')
@@ -88,7 +89,7 @@ class Calculator():
         try:
             return self._group
         except AttributeError as err:
-            logger.warning('Group undefined. Call set_group() method first.')
+            warnings.warn('Group undefined. Call set_group() method first.')
             raise AttributeError(err)
 
     @group.setter
@@ -100,7 +101,7 @@ class Calculator():
         try:
             return self._group_name
         except AttributeError as err:
-            logger.warnings(f'Group name undefined. Call set_group() method first.')
+            warnings.warn(f'Group name undefined. Call set_group() method first.')
             return None
 
     @group_name.setter
@@ -122,13 +123,13 @@ class Calculator():
                         for params in yf[module_name][fcn]:
                             print(f'[{self.n_spis}] Adding SPI {module_name}.{fcn}(x,y,{params})...')
                             spi = getattr(module, fcn)(**params)
-                            self._spis[spi.name] = spi
-                            print(f'Succesfully initialised SPI with identifier "{spi.name}" and labels {spi.labels}')
+                            self._spis[spi.identifier] = spi
+                            print(f'Succesfully initialised SPI with identifier "{spi.identifier}" and labels {spi.labels}')
                     except TypeError:
                         print(f'[{self.n_spis}] Adding SPI {module_name}.{fcn}(x,y)...')
                         spi = getattr(module, fcn)()
-                        self._spis[spi.name] = spi
-                        print(f'Succesfully initialised SPI with identifier "{spi.name}" and labels {spi.labels}')
+                        self._spis[spi.identifier] = spi
+                        print(f'Succesfully initialised SPI with identifier "{spi.identifier}" and labels {spi.labels}')
 
     def load_dataset(self,dataset):
         if not isinstance(dataset,Data):
@@ -155,7 +156,14 @@ class Calculator():
             pbar.set_description(f'Processing [{self._name}: {spi}]')
             start_time = time.time()
             try:
-                self._table[spi] = self._spis[spi].multivariate(self.dataset)
+                # Get the MPI from the dataset
+                S = self._spis[spi].multivariate(self.dataset)
+
+                # Ensure the diagonal is NaN (sometimes set within the functions)
+                np.fill_diagonal(S,np.NaN)
+
+                # Save results
+                self._table[spi] = S
             except Exception as err:
                 warnings.warn(f'Caught {type(err)} for SPI "{spi}": {err}')
                 self._table[spi] = np.NaN
@@ -372,10 +380,6 @@ class CalculatorFrame():
     @forall
     def compute(calc):
         calc.compute()
-
-    @forall
-    def prune(calc,**kwargs):
-        calc.prune(**kwargs)
 
     @forall
     def set_group(calc,*args):

@@ -3,13 +3,11 @@ import spectral_connectivity as sc # For directed spectral statistics (excl. spe
 from pyspi.base import directed, parse_bivariate, undirected, parse_multivariate, unsigned
 import nitime.analysis as nta
 import nitime.timeseries as ts
-import nitime.utils as tsu
-import mne.connectivity as mnec
 import warnings
 
 """
-    - Most statistics come from the Eden-Kramer Lab's spectral_connectivity toolkit
-    - parametric Spectral GC comes from nitime. [The VAR model could be computed from those in the infotheory module but this involves pretty intense integration so may not ever get done.]
+    - Most statistics come from the Eden-Kramer spectral_connectivity toolkit
+    - parametric Spectral GC comes from nitime. The VAR model could be computed from those in the infotheory module but this involves pretty intense integration so may not ever get done.
     - non-parametric Spectral GC still comes from EK lab
 """
 
@@ -21,7 +19,7 @@ class kramer(unsigned):
             
         self._fs = fs
         if fs != 1:
-            logger.warning('Multiple sampling frequencies not yet handled.')
+            warnings.warn('Multiple sampling frequencies not yet handled.')
         self._fmin = fmin
         self._fmax = fmax
         if statistic == 'mean':
@@ -48,7 +46,7 @@ class kramer(unsigned):
         try:
             return self._measure
         except AttributeError:
-            raise AttributeError(f'Include measure for {self.name}')
+            raise AttributeError(f'Include measure for {self.identifier}')
 
     def _get_statistic(self,C):
         raise NotImplementedError
@@ -280,39 +278,6 @@ class group_delay(kramer_mv,directed):
         return C.group_delay(frequencies_of_interest=[self._fmin,self._fmax],
                             frequency_resolution=(self._fmax-self._fmin)/50)
 
-# class partial_coherence(undirected,unsigned):
-#     name = 'Partial coherence'
-#     identifier = 'pcoh'
-#     labels = ['unsigned','spectral','directed']
-
-#     def __init__(self,fs=1,fmin=0.05,fmax=np.pi/2,statistic='mean'):
-#         self._TR = 1/fs # Not yet implemented
-#         self._fmin = fmin
-#         self._fmax = fmax
-#         if statistic == 'mean':
-#             self._statfn = np.mean
-#         elif statistic == 'max':
-#             self._statfn = np.max
-#         else:
-#             raise NameError(f'Unknown statistic {statistic}')
-#         paramstr = f'_{statistic}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}'.replace('.','-')
-#         self.identifier = self.identifier + paramstr
-
-#     @parse_multivariate
-#     def multivariate(self,data):        
-#         # This should be changed to conditioning on all, rather than averaging all conditionals
-#         if not hasattr(data,'pcoh'):
-#             z = np.squeeze(data.to_numpy())
-#             pdata = tsu.percent_change(z)
-#             time_series = ts.TimeSeries(pdata, sampling_interval=1)
-#             C1 = nta.CoherenceAnalyzer(time_series)
-#             data.pcoh = {'gamma': np.nanmean(C1.coherence_partial,axis=2), 'freq': C1.frequencies}
-
-#         freq_idx_C = np.where((data.pcoh['freq'] > self._fmin) * (data.pcoh['freq'] < self._fmax))[0]
-#         pcoh = self._statfn(data.pcoh['gamma'][:, :, freq_idx_C], -1)
-#         np.fill_diagonal(pcoh,np.nan)
-#         return pcoh
-
 class spectral_granger(kramer_mv,directed,unsigned):
     name = 'Spectral Granger causality'
     identifier = 'sgc'
@@ -378,29 +343,5 @@ class spectral_granger(kramer_mv,directed,unsigned):
             freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
             return self._statfn(F[0,freq_id,:,:], axis=0)
         except ValueError as err:
-            logger.warning(err)
+            warnings.warn(err)
             return np.full((data.n_processes,data.n_processes),np.nan)
-
-class envelope_correlation(undirected,unsigned):
-    name = 'Power envelope correlation'
-    labels = ['unsigned','spectral','undirected']
-
-    def __init__(self,orth=False,log=False,absolute=False):
-        self.identifier = 'pec'
-        self._orth = False
-        if orth:
-            self._orth = 'pairwise'
-            self.identifier += '_orth'
-        self._log = log
-        if log:
-            self.identifier += '_log'
-        self._absolute = absolute
-        if absolute:
-            self.identifier += '_abs'
-
-    @parse_multivariate
-    def multivariate(self, data):
-        z = np.moveaxis(data.to_numpy(),2,0)
-        adj = np.squeeze(mnec.envelope_correlation(z,orthogonalize=self._orth,log=self._log,absolute=self._absolute))
-        np.fill_diagonal(adj,np.nan)
-        return adj

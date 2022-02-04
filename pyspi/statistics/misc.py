@@ -3,8 +3,9 @@ from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from sklearn.gaussian_process import kernels, GaussianProcessRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn import linear_model
-from pyspi.base import directed, undirected, parse_bivariate, unsigned
+from pyspi.base import directed, undirected, parse_bivariate, parse_multivariate, unsigned
 import numpy as np
+import mne.connectivity as mnec
 import warnings
 
 class coint(undirected,unsigned):
@@ -103,3 +104,27 @@ class gpmodel(directed,unsigned):
             gp = GaussianProcessRegressor(kernel=self._kernel).fit(z[i], np.ravel(z[j]))
         y_predict = gp.predict(z[i])
         return mean_squared_error(y_predict, np.ravel(z[j]))
+
+class envelope_correlation(undirected,unsigned):
+    humanname = 'Power envelope correlation'
+    identifier = 'pec'
+    labels = ['unsigned','misc','undirected']
+
+    def __init__(self,orth=False,log=False,absolute=False):
+        self._orth = False
+        if orth:
+            self._orth = 'pairwise'
+            self.identifier += '_orth'
+        self._log = log
+        if log:
+            self.identifier += '_log'
+        self._absolute = absolute
+        if absolute:
+            self.identifier += '_abs'
+
+    @parse_multivariate
+    def multivariate(self, data):
+        z = np.moveaxis(data.to_numpy(),2,0)
+        adj = np.squeeze(mnec.envelope_correlation(z,orthogonalize=self._orth,log=self._log,absolute=self._absolute))
+        np.fill_diagonal(adj,np.nan)
+        return adj

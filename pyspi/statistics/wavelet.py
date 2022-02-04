@@ -32,7 +32,7 @@ class mne(unsigned):
         try:
             return self._measure
         except AttributeError:
-            raise AttributeError(f'Include measure for {self.name}')
+            raise AttributeError(f'Include measure for {self.identifier}')
 
     def _get_cache(self,data):
         try:
