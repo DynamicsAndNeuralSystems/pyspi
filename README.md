@@ -4,7 +4,7 @@
 
 *PySPI* is a comprehensive library for computing pairwise interactions from multivariate time-series (MTS) data.
 
-The code provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation and coherence) to advanced multi-step algorithms (like convergent cross mapping and transfer entropy).
+The code provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation) to advanced multi-step algorithms (like Granger causality).
 The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/gpl-3.0.html) (or later).
 
 **Feel free to [email me](mailto:oliver.cliff@sydney.edu.au) for help with read-world applications.**
