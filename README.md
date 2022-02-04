@@ -20,7 +20,7 @@ Oliver M. Cliff, Joseph T. Lizier, Naotsugu Tsuchiya, Ben D Fulcher, "Unifying P
 ## Getting started
 
 See the [documentation](https://pyspi-toolkit.readthedocs.io/en/latest/) for setting up and implementing *PySPI*.
-Alternatively, skip straight to the simple demo (`demos/simple_demo.py`) and jump straight into it!
+Alternatively, skip to the simple demo (`demos/simple_demo.py`) and jump straight into it!
 
 ## Related resources
 
