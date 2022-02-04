@@ -18,5 +18,4 @@ Contents
 
    usage
    advanced
-   statistics
    api

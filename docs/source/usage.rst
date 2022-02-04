@@ -48,15 +48,37 @@ We will use data generated from a multivariate Gaussian:
    M = 5 # 5 processes
    T = 500 # 500 observations
 
-   dataset = np.random.rand(M,T)
+   dataset = np.random.randn(M,T)
 
-Now, given our dataset, the main functionality of this software can then be accessed using two lines:
+Now, given our dataset, we can instantiate the calculator:
 
 .. code-block::
 
    from pyspi.calculator import Calculator
 
    calc = Calculator(dataset=dataset)
+
+And, using one line, compute over 250 methods for analysing pairwise interactions in the MTS.
+
+.. code-block::
+
    calc.compute()
 
+.. note::
+   While we tried to make the calculator as efficient as possible, computing all statistics can take a while (depending on the size of your dataset.
+   It might be good practice to begin with a subset of the statistics while you're getting started, see :ref:`Using a reduced SPI set`.
 
+Once the calculator has computed each of the statistics, you can access all values using the :code:`table` property:
+
+.. code-block::
+
+   print(calc.table)
+
+Or, extract one matrix of pairwise interactions (MPI) for a given method using their unique `identifier`.
+For instance, the following code will extract the covariance matrix computed with the maximum likelihood estimator:
+
+.. code-block::
+
+   print(calc.table['cov_EmpiricalCovariance'])
+
+The identifiers for many of the statistics are outlined in the Supplementary Material of our `preprint <https://arxiv.org/abs/2201.11941>`_, and an up-to-date list of included statistics will be provided in this documentation shortly.
