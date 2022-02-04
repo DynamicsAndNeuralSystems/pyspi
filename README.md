@@ -1,4 +1,4 @@
-# Python Library of Statistics for Pairwise Interactions (pyspi)
+# Python Toolkit of Statistics for Pairwise Interactions (pyspi)
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5787486.svg)](https://doi.org/10.5281/zenodo.5787486)
 
