@@ -1,10 +1,10 @@
-# Python Library of Statistics for Pairwise Interactions (pyspi)
+# Python Toolkit of Statistics for Pairwise Interactions (pyspi)
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5787486.svg)](https://doi.org/10.5281/zenodo.5787486)
 
 *PySPI* is a comprehensive library for computing pairwise interactions from multivariate time-series (MTS) data.
 
-The code provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation and coherence) to advanced multi-step algorithms (like convergent cross mapping and transfer entropy).
+The code provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation) to advanced multi-step algorithms (like Granger causality).
 The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/gpl-3.0.html) (or later).
 
 **Feel free to [email me](mailto:oliver.cliff@sydney.edu.au) for help with read-world applications.**
@@ -19,8 +19,8 @@ Oliver M. Cliff, Joseph T. Lizier, Naotsugu Tsuchiya, Ben D Fulcher, "Unifying P
 
 ## Getting started
 
-See the [documentation](https://pyspi-toolkit.readthedocs.io/en/latest/) for setting up and implementing *PySPI*.
-Alternatively, skip straight to the simple demo (`demos/simple_demo.py`) and jump straight into it!
+See the [documentation](https://pyspi-toolkit.readthedocs.io/en/latest/) for installing and setting up *PySPI*.
+Once you're done, check out the [tutorial](https://github.com/olivercliff/pyspi/blob/main/demos/tutorial.ipynb) and [simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py) to learn how to use the package.
 
 ## Related resources
 
@@ -30,4 +30,4 @@ Alternatively, skip straight to the simple demo (`demos/simple_demo.py`) and jum
 
 ### HCGA
 
-[HCGA](https://github.com/barahona-research-group/hcga), the *Highly Comparative Graph Analysis* toolkit, computes several thousand of graph features directly from any given network.
+[HCGA](https://github.com/barahona-research-group/hcga), the *Highly Comparative Graph Analysis* toolkit, computes several thousands of graph features directly from any given network.
