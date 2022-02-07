@@ -8,7 +8,6 @@ The code provides easy access to hundreds of methods for evaluating the relation
 The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/gpl-3.0.html) (or later).
 
 **Feel free to [email me](mailto:oliver.cliff@sydney.edu.au) for help with read-world applications.**
-
 Feedback is much appreciated through email, [issues](https://github.com/olivercliff/pyspi/issues), or [pull requests](https://github.com/olivercliff/pyspi/pulls).
 
 ## Acknowledgement
