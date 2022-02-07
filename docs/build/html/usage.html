@@ -117,13 +117,13 @@ We will use data generated from a multivariate Gaussian:</p>
 <span class="n">dataset</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">M</span><span class="p">,</span><span class="n">T</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Now, given our dataset, we can instantiate the calculator:</p>
+<p>Now, given our dataset, we can instantiate the <a class="reference internal" href="generated/pyspi.calculator.Calculator.html#pyspi.calculator.Calculator" title="pyspi.calculator.Calculator"><code class="xref py py-class docutils literal notranslate"><span class="pre">Calculator</span></code></a> object:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyspi.calculator</span> <span class="kn">import</span> <span class="n">Calculator</span>
 
 <span class="n">calc</span> <span class="o">=</span> <span class="n">Calculator</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>And, using one line, compute over 250 methods for analysing pairwise interactions in the MTS.</p>
+<p>And, using only the <code class="xref py py-meth docutils literal notranslate"><span class="pre">compute()</span></code> method, we can compute over 250 statistics for analysing pairwise interactions in the MTS.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">calc</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
 </pre></div>
 </div>
@@ -132,7 +132,7 @@ We will use data generated from a multivariate Gaussian:</p>
 <p>While we tried to make the calculator as efficient as possible, computing all statistics can take a while (depending on the size of your dataset).
 It might be good practice to begin with a subset of the statistics while you’re getting started, see <a class="reference internal" href="advanced.html#using-a-reduced-spi-set"><span class="std std-ref">Using a reduced SPI set</span></a>.</p>
 </div>
-<p>Once the calculator has computed each of the statistics, you can access all values using the <code class="code docutils literal notranslate"><span class="pre">table</span></code> property:</p>
+<p>Once the calculator has computed each of the statistics, you can access all values using the <code class="xref py py-attr docutils literal notranslate"><span class="pre">table</span></code> property:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">calc</span><span class="o">.</span><span class="n">table</span><span class="p">)</span>
 </pre></div>
 </div>

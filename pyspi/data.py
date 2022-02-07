@@ -42,6 +42,10 @@ class Data():
             Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, defaults to 'ps'.
         normalise (bool, optional):
             If True, data is z-scored (normalised) along the time dimension, defaults to True.
+        name (str, optional):
+            Name of the dataset
+        procnames (list, optional):
+            List of process names with length the number of processes, defaults to None.
         n_processes (int, optional):
             Truncates data to this many processes, defaults to None.
         n_observations (int, optional):
@@ -49,73 +53,32 @@ class Data():
 
     """
 
-    def __init__(self,data=None,dim_order='ps',normalise=True,name=None,n_processes=None,n_observations=None):
+    def __init__(self,data=None,dim_order='ps',normalise=True,name=None,procnames=None,n_processes=None,n_observations=None):
         self.normalise = normalise
         if data is not None:
             dat = self.convert_to_numpy(data)
             self.set_data(dat, dim_order=dim_order, name=name, n_processes=n_processes,n_observations=n_observations)
 
+        if procnames is not None:
+            assert len(procnames) == self.n_processes
+
     @property
     def name(self):
+        """Name of the data object.
+        """
         if hasattr(self,'_name'):
             return self._name 
         else:
             return ''
 
     @property
-    # TODO: allow process names to be passed in
     def procnames(self):
+        """List of process names.
+        """
         if hasattr(self,'_procnames'):
             return self._procnames
         else:
             return [f'proc-{i}' for i in range(self.n_processes)]
-
-    def n_realisations(self, current_value=None):
-        """Number of realisations over samples and replications.
-
-        Args:
-            current_value : tuple [optional]
-                reference point for calculation of number of realisations
-                (e.g. when using an embedding of length k, we count
-                realisations from the k+1th sample because we loose the first k
-                samples to the embedding); if no current_value is provided, the
-                number of all samples is used
-        """
-        return (self.n_realisations_observations(current_value) *
-                self.n_realisations_repl())
-
-    def n_realisations_repl(self, current_value=None):
-        """Number of realisations over observations and realisations.
-
-        Args:
-            current_value : tuple [optional]
-                reference point for calculation of number of realisations
-                (e.g. when using an embedding of length k, we count
-                realisations from the k+1th observation because we loose the first k
-                observations to the embedding); if no current_value is provided, the
-                number of all observations is used
-        """
-        return (self.n_realisations_observations(current_value) * self.n_replications)
-
-    def n_realisations_observations(self, current_value=None):
-        """Number of realisations over observations.
-
-        Args:
-            current_value : tuple [optional]
-                reference point for calculation of number of realisations
-                (e.g. when using an embedding of length k, the current value is
-                at observation k + 1; we thus count realisations from the k + 1st
-                observation because we loose the first k observations to the embedding)
-        """
-        if current_value is None:
-            return self.n_observations
-        else:
-            if current_value[1] >= self.n_observations:
-                raise RuntimeError('The observation index of the current value '
-                                   '({0}) is larger than the number of observations'
-                                   ' in the data set ({1}).'.format(
-                                              current_value, self.n_observations))
-            return self.n_observations - current_value[1]
 
     def to_numpy(self,realisation=None,squeeze=False):
         """Return the numpy array."""
@@ -131,6 +94,8 @@ class Data():
 
     @staticmethod
     def convert_to_numpy(data):
+        """Converts other data instances to default numpy format.
+        """
 
         if isinstance(data, np.ndarray):
             npdat = data
@@ -155,14 +120,14 @@ class Data():
         return npdat
 
     def set_data(self,data,dim_order='ps',name=None,n_processes=None,n_observations=None,verbose=False):
-        """Overwrite data in an existing Data object.
+        """Overwrite data in an existing instance.
 
         Args:
-            data : numpy array
-                1- to 3-dimensional array of realisations
-            dim_order : string
-                order of dimensions, accepts any combination of the characters
-                'p', 's', and 'r' for processes, observations, and realisations;
+            data (np.ndarray):
+                2-dimensional array of realisations
+            dim_order (str, optional):
+                order of dimensions, accepts a combination of the characters
+                'p' and 's', for processes and observations;
                 must have the same length as number of dimensions in data
         """
         if len(dim_order) > 3:
@@ -201,6 +166,12 @@ class Data():
                     'replications')
 
     def add_process(self,proc,verbose=False):
+        """Appends a univariate process to the dataset.
+
+        Args:
+            proc (ndarray):
+                Univariate process to add, must be an array the same size as existing ones.
+        """
         proc = np.squeeze(proc)
         if not isinstance(proc,np.ndarray) or proc.ndim != 1:
             raise TypeError('Process must be a 1D numpy array')

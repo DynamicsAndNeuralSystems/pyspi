@@ -15,11 +15,8 @@
    
       ~Calculator.__init__
       ~Calculator.compute
-      ~Calculator.get_correlation_df
       ~Calculator.getstatlabels
       ~Calculator.load_dataset
-      ~Calculator.merge
-      ~Calculator.rmmin
       ~Calculator.set_group
    
    

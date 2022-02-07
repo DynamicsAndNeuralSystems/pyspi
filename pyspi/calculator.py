@@ -23,7 +23,7 @@ class Calculator():
         >>> calc.compute()                      # Compute all pairwise interactions
 
     Args:
-        dataset (:class:`pyspi.data.Data`, array_like, optional):
+        dataset (:class:`~pyspi.data.Data`, array_like, optional):
             The multivariate time series of M processes and T observations, defaults to None.
         name (str, optional):
             The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances, defaults to None.
@@ -52,6 +52,10 @@ class Calculator():
 
     @property
     def spis(self):
+        """Dict of SPIs.
+
+        Keys are the SPI identifier and values are their objects.
+        """
         return self._spis
 
     @spis.setter
@@ -60,10 +64,14 @@ class Calculator():
 
     @property
     def n_spis(self):
+        """Number of SPIs in the calculator.
+        """
         return len(self._spis)
 
     @property
     def dataset(self):
+        """Dataset as a data object.
+        """
         return self._dataset
 
     @dataset.setter
@@ -72,6 +80,8 @@ class Calculator():
 
     @property
     def name(self):
+        """Name of the calculator.
+        """
         return self._name
 
     @name.setter
@@ -80,6 +90,8 @@ class Calculator():
 
     @property
     def labels(self):
+        """List of calculator labels.
+        """
         return self._labels
     
     @labels.setter
@@ -88,6 +100,8 @@ class Calculator():
 
     @property
     def table(self):
+        """Results table for all pairwise interactions.
+        """
         return self._table
 
     @table.setter
@@ -96,6 +110,8 @@ class Calculator():
 
     @property
     def group(self):
+        """The numerical group assigned during :meth:`~pyspi.Calculator.calculator.set_group`.
+        """
         try:
             return self._group
         except AttributeError as err:
@@ -108,6 +124,8 @@ class Calculator():
 
     @property
     def group_name(self):
+        """The group name assigned during :meth:`~pyspi.Calculator.calculator.set_group`.
+        """
         try:
             return self._group_name
         except AttributeError as err:
@@ -142,6 +160,12 @@ class Calculator():
                         print(f'Succesfully initialised SPI with identifier "{spi.identifier}" and labels {spi.labels}')
 
     def load_dataset(self,dataset):
+        """Load new dataset into existing instance.
+
+        Args:
+            dataset (:class:`~pyspi.data.Data`, array_list):
+                New dataset to attach to calculator.
+        """
         if not isinstance(dataset,Data):
             self._dataset = Data(Data.convert_to_numpy(dataset))
         else:
@@ -152,14 +176,11 @@ class Calculator():
                                     columns=columns,index=self._dataset.procnames)
         self._table.columns.name = 'process'
 
-    def compute(self,replication=None):
-        """ Compute the SPIs on the MVTS dataset
+    def compute(self):
+        """ Compute the SPIs on the MVTS dataset.
         """
         if not hasattr(self,'_dataset'):
             raise AttributeError('Dataset not loaded yet. Please initialise with load_dataset.')
-
-        if replication is None:
-            replication = 0
 
         pbar = tqdm(self.spis.keys())
         for spi in pbar:
@@ -179,7 +200,7 @@ class Calculator():
                 self._table[spi] = np.NaN
         pbar.close()
 
-    def rmmin(self):
+    def _rmmin(self):
         """ Iterate through all spis and remove the minimum (fixes absolute value errors when correlating)
         """
         for mpi, m in zip(self._table,self._spis):
@@ -187,6 +208,13 @@ class Calculator():
                 mpi -= np.nanmin(mpi)
 
     def set_group(self,classes):
+        """Assigns a numeric value to this instance based on list of classes.
+
+        Args:
+            classes (list):
+                If any of the labels in this instance matches one in the class list, then we assign the index
+                value to this class.
+        """
         self._group = None
         self._group_name = None
 
@@ -214,7 +242,7 @@ class Calculator():
             except (TypeError,IndexError):
                 pass
 
-    def merge(self,other):
+    def _merge(self,other):
         """ TODO: Merge two calculators (to include additional SPIs)
         """
         raise NotImplementedError()
@@ -228,9 +256,14 @@ class Calculator():
                 raise TypeError(f'Attribute {attr} does not match between calculators ({selfattr} != {otherattr})')
 
     def getstatlabels(self):
-        return { s.name : s.labels for s in self._spis }
+        """Get the labels for each statistic.
 
-    def get_correlation_df(self,with_labels=False,rmmin=False,which_stat=['spearman']):
+        Returns:
+            stat_labels (dict): dictionary of 
+        """
+        return { s.identifier : s.labels for s in self._spis }
+
+    def _get_correlation_df(self,with_labels=False,rmmin=False,which_stat=['spearman']):
         # Sorts out pesky numerical issues in the unsigned spis
         if rmmin:
             self.rmmin()
@@ -396,8 +429,8 @@ class CalculatorFrame():
         calc.set_group(*args)
 
     @forall
-    def rmmin(calc):
-        calc.rmmin()
+    def _rmmin(calc):
+        calc._rmmin()
 
     def flattenall(self,**kwargs):
         df = pd.DataFrame()

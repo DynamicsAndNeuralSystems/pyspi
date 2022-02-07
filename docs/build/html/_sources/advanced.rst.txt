@@ -4,8 +4,8 @@ Advanced
 The Data object
 ---------------------
 
-The MTS data is contained within the :code:`Data` object, along with preprocessed properties of the MTS that allows us to efficiently compute the methods.
-If you want more control over how the MTS are treated upon input, you can directly instantiate a :code:`Data` object for inputting to the calculator:
+The MTS data is contained within the :class:`~pyspi.data.Data` object, along with preprocessed properties of the MTS that allows us to efficiently compute the methods.
+If you want more control over how the MTS are treated upon input, you can directly instantiate a :class:`~pyspi.data.Data` object for inputting to the calculator:
 
 .. code-block::
 

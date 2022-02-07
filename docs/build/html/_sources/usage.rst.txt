@@ -50,7 +50,7 @@ We will use data generated from a multivariate Gaussian:
 
    dataset = np.random.randn(M,T)
 
-Now, given our dataset, we can instantiate the calculator:
+Now, given our dataset, we can instantiate the :class:`~pyspi.calculator.Calculator` object:
 
 .. code-block::
 
@@ -58,7 +58,7 @@ Now, given our dataset, we can instantiate the calculator:
 
    calc = Calculator(dataset=dataset)
 
-And, using one line, compute over 250 methods for analysing pairwise interactions in the MTS.
+And, using only the :meth:`~pyspi.calculator.Calculator.compute` method, we can compute over 250 statistics for analysing pairwise interactions in the MTS.
 
 .. code-block::
 
@@ -68,7 +68,7 @@ And, using one line, compute over 250 methods for analysing pairwise interaction
    While we tried to make the calculator as efficient as possible, computing all statistics can take a while (depending on the size of your dataset).
    It might be good practice to begin with a subset of the statistics while you're getting started, see :ref:`Using a reduced SPI set`.
 
-Once the calculator has computed each of the statistics, you can access all values using the :code:`table` property:
+Once the calculator has computed each of the statistics, you can access all values using the :attr:`~pyspi.calculator.Calculator.table` property:
 
 .. code-block::
 
