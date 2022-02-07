@@ -10,7 +10,7 @@ See the `installation instructions <https://wiki.octave.org/Category:Installatio
 .. note::
    You can safely install `PySPI` without first installing Octave but you will not have access to the `Integrated Information Theory` statistics, see :ref:`Using the toolkit without Octave`.
 
-While you can install `PySPI` outside of a `conda <https://docs.conda.io/projects/conda/en/latest/index.html>`_ environment, it depends on a lot of user packages that may make managing dependencies quite difficult.
+While you can also install `PySPI` outside of a `conda <https://docs.conda.io/projects/conda/en/latest/index.html>`_ environment, it depends on a lot of user packages that may make managing dependencies quite difficult.
 So, we would also recommend installing `PySPI` in a conda environment.
 After following the `installation instructions <https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html>`_ for conda, create a new environment for using the toolkit:
 
@@ -65,7 +65,7 @@ And, using one line, compute over 250 methods for analysing pairwise interaction
    calc.compute()
 
 .. note::
-   While we tried to make the calculator as efficient as possible, computing all statistics can take a while (depending on the size of your dataset.
+   While we tried to make the calculator as efficient as possible, computing all statistics can take a while (depending on the size of your dataset).
    It might be good practice to begin with a subset of the statistics while you're getting started, see :ref:`Using a reduced SPI set`.
 
 Once the calculator has computed each of the statistics, you can access all values using the :code:`table` property:

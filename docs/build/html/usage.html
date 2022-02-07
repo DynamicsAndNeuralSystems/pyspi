@@ -85,7 +85,7 @@ See the <a class="reference external" href="https://wiki.octave.org/Category:Ins
 <p class="admonition-title">Note</p>
 <p>You can safely install <cite>PySPI</cite> without first installing Octave but you will not have access to the <cite>Integrated Information Theory</cite> statistics, see <a class="reference internal" href="advanced.html#using-the-toolkit-without-octave"><span class="std std-ref">Using the toolkit without Octave</span></a>.</p>
 </div>
-<p>While you can install <cite>PySPI</cite> outside of a <a class="reference external" href="https://docs.conda.io/projects/conda/en/latest/index.html">conda</a> environment, it depends on a lot of user packages that may make managing dependencies quite difficult.
+<p>While you can also install <cite>PySPI</cite> outside of a <a class="reference external" href="https://docs.conda.io/projects/conda/en/latest/index.html">conda</a> environment, it depends on a lot of user packages that may make managing dependencies quite difficult.
 So, we would also recommend installing <cite>PySPI</cite> in a conda environment.
 After following the <a class="reference external" href="https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html">installation instructions</a> for conda, create a new environment for using the toolkit:</p>
 <div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>conda create -n pyspi <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9.0
@@ -129,7 +129,7 @@ We will use data generated from a multivariate Gaussian:</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>While we tried to make the calculator as efficient as possible, computing all statistics can take a while (depending on the size of your dataset.
+<p>While we tried to make the calculator as efficient as possible, computing all statistics can take a while (depending on the size of your dataset).
 It might be good practice to begin with a subset of the statistics while you’re getting started, see <a class="reference internal" href="advanced.html#using-a-reduced-spi-set"><span class="std std-ref">Using a reduced SPI set</span></a>.</p>
 </div>
 <p>Once the calculator has computed each of the statistics, you can access all values using the <code class="code docutils literal notranslate"><span class="pre">table</span></code> property:</p>

@@ -1,9 +1,8 @@
 API
 ===
 
-Coming soon.
-
 .. autosummary::
    :toctree: generated
 
-   pyspi
+   pyspi.calculator.Calculator
+   pyspi.data.Data

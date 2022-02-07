@@ -1,6 +1,6 @@
 """Provide data structures for multivariate analysis.
 
-Stolen mostly from IDTxL (for now...)
+Code is adapted from Patricia Wollstadt's IDTxL (https://github.com/pwollstadt/IDTxl)
 """
 import numpy as np
 import pandas as pd
@@ -15,24 +15,17 @@ VERBOSE = False
 class Data():
     """Store data for dependency analysis.
 
-    Data takes a 1- to 3-dimensional array representing realisations of random
-    variables in dimensions: processes, observations (over time), and realisations.
-    If necessary, data reshapes provided realisations to fit the format
-    expected by _nats_, which is a 3-dimensional array with axes representing
-    (process index, observation index, replication index). Indicate the actual order
-    of dimensions in the provided array in a three-character string, e.g. 'spr'
-    for an array with realisations over (1) observations in time, (2) processes, (3)
-    realisations.
+    Data takes a 2-dimensional array representing realisations of random
+    variables in dimensions: processes and observations.
+    Indicate the actual order of dimensions in the provided array in a two-character string, e.g. 'ps'
+    for an array with realisations over (1) processes, and (2) observations in time.
 
     Example:
 
-        >>> data_mute = Data()              # initialise empty data object
-        >>> data_mute.generate_mute_data()  # simulate data from MuTE paper
+    >>> data = Data()                           # initialise empty data object
+        >>> data_forex = Data().load_dataset()  # Load a prefilled ForEx dataset
         >>>
         >>> # Create data objects with data of various sizes
-        >>> d = np.arange(10000).reshape((2, 1000, 5))  # 2 procs.,
-        >>> data_1 = Data(d, dim_order='psd')           # 1000 observations, 5 repl.
-        >>>
         >>> d = np.arange(3000).reshape((3, 1000))  # 3 procs.,
         >>> data_2 = Data(d, dim_order='ps')        # 1000 observations
         >>>
@@ -46,13 +39,10 @@ class Data():
 
     Args:
         data : numpy array [optional]
-            1/2/3-dimensional array with raw data
+            2-dimensional array with raw data
         dim_order : string [optional]
-            order of dimensions, accepts any combination of the characters
-            'd', 'p', and 's' for realisations, processes, and observations; must
-            have the same length as the data dimensionality, e.g., 'ps' for a
-            two-dimensional array of data from several processes over time
-            (default='dps')
+            order of dimensions, accepts two combinations of the characters
+            'p', and 's' for processes and observations (default='ps')
         normalise : bool [optional]
             if True, data gets normalised per time series (default=True)
 
