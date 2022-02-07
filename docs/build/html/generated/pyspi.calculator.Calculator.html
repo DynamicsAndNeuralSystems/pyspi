@@ -83,18 +83,21 @@
 <dd><p>Compute all pairwise interactions.</p>
 <p>The calculator takes in a multivariate time-series dataset, computes and stores all pairwise interactions for the dataset.
 It uses a YAML configuration file that can be modified in order to compute a reduced set of pairwise methods.</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>              
+<p class="rubric">Example</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">500</span><span class="p">)</span>    <span class="c1"># create a random multivariate time series (MTS)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">calc</span> <span class="o">=</span> <span class="n">Calculator</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">)</span>  <span class="c1"># Instantiate the calculator</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">calc</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>                      <span class="c1"># Compute all pairwise interactions</span>
 </pre></div>
 </div>
-<dl class="simple">
-<dt>dataset<span class="classifier">array_like, shape (M,T)</span></dt><dd><p>The multivariate time series of M processes and T observations.</p>
-</dd>
-<dt>name<span class="classifier">string</span></dt><dd><p>The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances.</p>
-</dd>
-<dt>labels<span class="classifier">array_like</span></dt><dd><p>Any set of strings by which you want to label the calculator. This can be useful later for classification purposes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset</strong> (<a class="reference internal" href="pyspi.data.Data.html#pyspi.data.Data" title="pyspi.data.Data"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyspi.data.Data</span></code></a>, array_like, optional) – The multivariate time series of M processes and T observations, defaults to None.</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><em>str</em></a><em>, </em><em>optional</em>) – The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances, defaults to None.</p></li>
+<li><p><strong>labels</strong> (<em>array_like</em><em>, </em><em>optional</em>) – Any set of strings by which you want to label the calculator. This can be useful later for classification purposes, defaults to None.</p></li>
+<li><p><strong>configfile</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><em>str</em></a><em>, </em><em>optional</em>) – The location of the YAML configuration file. See <a class="reference internal" href="../advanced.html#using-a-reduced-spi-set"><span class="std std-ref">Using a reduced SPI set</span></a>, defaults to <code class="code docutils literal notranslate"><span class="pre">'&lt;/path/to/pyspi&gt;/pyspi/config.yaml'</span></code></p></li>
+</ul>
 </dd>
 </dl>
 <dl class="py method">

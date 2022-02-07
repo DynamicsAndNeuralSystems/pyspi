@@ -84,45 +84,31 @@
 variables in dimensions: processes and observations.
 Indicate the actual order of dimensions in the provided array in a two-character string, e.g. ‘ps’
 for an array with realisations over (1) processes, and (2) observations in time.</p>
-<p>Example:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span> <span class="o">=</span> <span class="n">Data</span><span class="p">()</span>                           <span class="c1"># initialise empty data object</span>
-<span class="go">    &gt;&gt;&gt; data_forex = Data().load_dataset()  # Load a prefilled ForEx dataset</span>
-<span class="go">    &gt;&gt;&gt;</span>
-<span class="go">    &gt;&gt;&gt; # Create data objects with data of various sizes</span>
-<span class="go">    &gt;&gt;&gt; d = np.arange(3000).reshape((3, 1000))  # 3 procs.,</span>
-<span class="go">    &gt;&gt;&gt; data_2 = Data(d, dim_order=&#39;ps&#39;)        # 1000 observations</span>
-<span class="go">    &gt;&gt;&gt;</span>
-<span class="go">    &gt;&gt;&gt; # Overwrite data in existing object with random data</span>
-<span class="go">    &gt;&gt;&gt; d = np.arange(5000)</span>
-<span class="go">    &gt;&gt;&gt; data_2.set_data(data_new, &#39;s&#39;)</span>
+<p class="rubric">Example</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Initialise empty data object</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span> <span class="o">=</span> <span class="n">Data</span><span class="p">()</span>
+<span class="go">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Load a prefilled financial dataset</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data_forex</span> <span class="o">=</span> <span class="n">Data</span><span class="p">()</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="n">forex</span><span class="p">)</span>
+<span class="go">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Create data objects with data of various sizes</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">3000</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1000</span><span class="p">))</span>  <span class="c1"># 3 procs.,</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data_2</span> <span class="o">=</span> <span class="n">Data</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">dim_order</span><span class="o">=</span><span class="s1">&#39;ps&#39;</span><span class="p">)</span>        <span class="c1"># 1000 observations</span>
+<span class="go">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Overwrite data in existing object with random data</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">5000</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data_2</span><span class="o">.</span><span class="n">set_data</span><span class="p">(</span><span class="n">data_new</span><span class="p">,</span> <span class="s1">&#39;s&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
-<dl class="simple">
-<dt>Note:</dt><dd><p>Realisations are stored as attribute ‘data’. This can only be set via
-the ‘set_data()’ method.</p>
-</dd>
-<dt>Args:</dt><dd><dl class="simple">
-<dt>data<span class="classifier">numpy array [optional]</span></dt><dd><p>2-dimensional array with raw data</p>
-</dd>
-<dt>dim_order<span class="classifier">string [optional]</span></dt><dd><p>order of dimensions, accepts two combinations of the characters
-‘p’, and ‘s’ for processes and observations (default=’ps’)</p>
-</dd>
-<dt>normalise<span class="classifier">bool [optional]</span></dt><dd><p>if True, data gets normalised per time series (default=True)</p>
-</dd>
-</dl>
-</dd>
-<dt>Attributes:</dt><dd><dl class="simple">
-<dt>data<span class="classifier">numpy array</span></dt><dd><p>realisations, can only be set via ‘set_data’ method</p>
-</dd>
-<dt>n_processes<span class="classifier">int</span></dt><dd><p>truncate data to this many processes</p>
-</dd>
-<dt>n_observations<span class="classifier">int</span></dt><dd><p>truncate data to this many observations</p>
-</dd>
-<dt>n_realisations<span class="classifier">int</span></dt><dd><p>number of realisations (currently unused).</p>
-</dd>
-<dt>normalise<span class="classifier">bool</span></dt><dd><p>if true, all data gets z-standardised per process</p>
-</dd>
-</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>array_like</em><em>, </em><em>optional</em>) – 2-dimensional array with raw data, defaults to None.</p></li>
+<li><p><strong>dim_order</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><em>str</em></a><em>, </em><em>optional</em>) – Order of dimensions, accepts two combinations of the characters ‘p’, and ‘s’ for processes and observations, defaults to ‘ps’.</p></li>
+<li><p><strong>normalise</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.10)"><em>bool</em></a><em>, </em><em>optional</em>) – If True, data is z-scored (normalised) along the time dimension, defaults to True.</p></li>
+<li><p><strong>n_processes</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.10)"><em>int</em></a><em>, </em><em>optional</em>) – Truncates data to this many processes, defaults to None.</p></li>
+<li><p><strong>n_observations</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.10)"><em>int</em></a><em>, </em><em>optional</em>) – Truncates data to this many observations, defaults to None.</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="py method">

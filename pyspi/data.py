@@ -21,9 +21,11 @@ class Data():
     for an array with realisations over (1) processes, and (2) observations in time.
 
     Example:
-
-    >>> data = Data()                           # initialise empty data object
-        >>> data_forex = Data().load_dataset()  # Load a prefilled ForEx dataset
+        >>> # Initialise empty data object
+        >>> data = Data()
+        >>>
+        >>> # Load a prefilled financial dataset
+        >>> data_forex = Data().load_dataset(forex)     
         >>>
         >>> # Create data objects with data of various sizes
         >>> d = np.arange(3000).reshape((3, 1000))  # 3 procs.,
@@ -33,30 +35,18 @@ class Data():
         >>> d = np.arange(5000)
         >>> data_2.set_data(data_new, 's')
 
-    Note:
-        Realisations are stored as attribute 'data'. This can only be set via
-        the 'set_data()' method.
-
     Args:
-        data : numpy array [optional]
-            2-dimensional array with raw data
-        dim_order : string [optional]
-            order of dimensions, accepts two combinations of the characters
-            'p', and 's' for processes and observations (default='ps')
-        normalise : bool [optional]
-            if True, data gets normalised per time series (default=True)
+        data (array_like, optional):
+            2-dimensional array with raw data, defaults to None. 
+        dim_order (str, optional):
+            Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, defaults to 'ps'.
+        normalise (bool, optional):
+            If True, data is z-scored (normalised) along the time dimension, defaults to True.
+        n_processes (int, optional):
+            Truncates data to this many processes, defaults to None.
+        n_observations (int, optional):
+            Truncates data to this many observations, defaults to None.
 
-    Attributes:
-        data : numpy array
-            realisations, can only be set via 'set_data' method
-        n_processes : int
-            truncate data to this many processes
-        n_observations : int
-            truncate data to this many observations
-        n_realisations : int
-            number of realisations (currently unused).
-        normalise : bool
-            if true, all data gets z-standardised per process
     """
 
     def __init__(self,data=None,dim_order='ps',normalise=True,name=None,n_processes=None,n_observations=None):

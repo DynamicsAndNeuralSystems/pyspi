@@ -12,7 +12,7 @@ See the `installation instructions <https://wiki.octave.org/Category:Installatio
 
 While you can also install `PySPI` outside of a `conda <https://docs.conda.io/projects/conda/en/latest/index.html>`_ environment, it depends on a lot of user packages that may make managing dependencies quite difficult.
 So, we would also recommend installing `PySPI` in a conda environment.
-After following the `installation instructions <https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html>`_ for conda, create a new environment for using the toolkit:
+After `installing conda <https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html>`_, create a new environment for using the toolkit:
 
 .. code-block:: console
 

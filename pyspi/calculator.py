@@ -17,23 +17,20 @@ class Calculator():
     It uses a YAML configuration file that can be modified in order to compute a reduced set of pairwise methods.
 
     Example:
-    --------
+        >>> import numpy as np              
+        >>> dataset = np.random.randn(5,500)    # create a random multivariate time series (MTS)
+        >>> calc = Calculator(dataset=dataset)  # Instantiate the calculator
+        >>> calc.compute()                      # Compute all pairwise interactions
 
-    >>> import numpy as np              
-    >>> dataset = np.random.randn(5,500)    # create a random multivariate time series (MTS)
-    >>> calc = Calculator(dataset=dataset)  # Instantiate the calculator
-    >>> calc.compute()                      # Compute all pairwise interactions
-
-    
-    Parameters
-    ----------
-
-    dataset : array_like, shape (M,T)
-        The multivariate time series of M processes and T observations.
-    name : string
-        The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances.
-    labels : array_like
-        Any set of strings by which you want to label the calculator. This can be useful later for classification purposes.
+    Args:
+        dataset (:class:`pyspi.data.Data`, array_like, optional):
+            The multivariate time series of M processes and T observations, defaults to None.
+        name (str, optional):
+            The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances, defaults to None.
+        labels (array_like, optional):
+            Any set of strings by which you want to label the calculator. This can be useful later for classification purposes, defaults to None.
+        configfile (str, optional):
+            The location of the YAML configuration file. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
     """
     
     def __init__(self,dataset=None,name=None,labels=None,configfile=os.path.dirname(os.path.abspath(__file__)) + '/config.yaml'):
