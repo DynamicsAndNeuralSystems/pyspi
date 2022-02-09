@@ -261,9 +261,9 @@ class Calculator():
         Returns:
             stat_labels (dict): dictionary of 
         """
-        return { s.identifier : s.labels for s in self._spis }
+        return { k : v.labels for k, v in zip(self._spis.keys(), self._spis.values()) }
 
-    def _get_correlation_df(self,with_labels=False,rmmin=False,which_stat=['spearman']):
+    def _get_correlation_df(self,with_labels=False,rmmin=False):
         # Sorts out pesky numerical issues in the unsigned spis
         if rmmin:
             self.rmmin()
@@ -272,17 +272,9 @@ class Calculator():
         edges = self.table.stack().abs()
 
         # Correlate the edge matrix (using pearson and/or spearman correlation)
-        mdf = pd.DataFrame()
-        if 'pearson' in which_stat:
-            pmat = edges.corr(method='pearson')
-            pmat.index = pd.MultiIndex.from_tuples(['pearson',pmat.index],names=['Type','SPI-1'])
-            pmat.columns.name = 'SPI-2'
-            mdf = pmat
-        if 'spearman' in which_stat:
-            spmat = edges.corr(method='spearman')
-            spmat.index = pd.MultiIndex.from_product(['spearman',spmat.index],names=['Type','SPI-1'])
-            spmat.columns.name = 'SPI-2'
-            mdf = mdf.append(spmat)
+        mdf = edges.corr(method='spearman')
+        mdf.index.name = 'SPI-1'
+        mdf.columns.name = 'SPI-2'
 
         if with_labels:
             return mdf, self.getstatlabels()
@@ -309,7 +301,7 @@ class CalculatorFrame():
         if calculators is not None:
             self.set_calculator(calculators)
 
-        self.identifier = name
+        self.name = name
 
         if datasets is not None:
             if names is None:
@@ -343,8 +335,11 @@ class CalculatorFrame():
         if isinstance(calculators,Calculator):
             calculators = [calculators]
 
-        for calc in calculators:
-            self.add_calculator(calc)
+        if isinstance(calculators,CalculatorFrame):
+            self.add_calculator(calculators)
+        else:
+            for calc in calculators:
+                self.add_calculator(calc)
     
     def add_calculator(self,calc):
 
@@ -352,9 +347,9 @@ class CalculatorFrame():
             self._calculators = pd.DataFrame()
 
         if isinstance(calc,CalculatorFrame):
-            self._calculators = pd.concat([self._calculators,calc])
+            self._calculators = pd.concat([self._calculators.values,calc])
         elif isinstance(calc,Calculator):
-            self._calculators = self._calculators.append(pd.Series(data=calc,name=calc.name),ignore_index=True)
+            self._calculators = pd.concat([self._calculators,pd.Series(data=calc,name=calc.name)],ignore_index=True)
         elif isinstance(calc,pd.DataFrame):
             if isinstance(calc.iloc[0],Calculator):
                 self._calculators = calc
@@ -416,7 +411,7 @@ class CalculatorFrame():
 
     def merge(self,other):
         try:
-            self._calculators = self._calculators.append(other._calculators,ignore_index=True)
+            self._calculators = pd.concat([self._calculators,other._calculators],ignore_index=True)
         except AttributeError:
             self._calculators = other._calculators
 
@@ -432,17 +427,7 @@ class CalculatorFrame():
     def _rmmin(calc):
         calc._rmmin()
 
-    def flattenall(self,**kwargs):
-        df = pd.DataFrame()
-        for i in self.calculators.index:
-            calc = self.calculators.loc[i][0]
-            df2 = calc.flatten(**kwargs)
-            df = df.append(df2, ignore_index=True)
-
-        df.dropna(axis='index',how='all',inplace=True)
-        return df
-
-    def get_correlation_df(self,with_labels=False,flatten_kwargs={},**kwargs):
+    def get_correlation_df(self,with_labels=False,**kwargs):
         if with_labels:
             mlabels = {}
             dlabels = {}
@@ -450,15 +435,15 @@ class CalculatorFrame():
         shapes = pd.DataFrame()
         mdf = pd.DataFrame()
         for calc in [c[0] for c in self.calculators.values]:
-            out = calc.get_correlation_df(with_labels=with_labels,flatten_kwargs=flatten_kwargs,**kwargs)
+            out = calc._get_correlation_df(with_labels=with_labels,**kwargs)
 
             s = pd.Series(dict(n_processes=calc.dataset.n_processes,n_observations=calc.dataset.n_observations))
             if calc.name is not None:
                 s.name = calc.name
-                shapes = shapes.append(s)
+                shapes = pd.concat([shapes,s])
             else:
                 s.name = 'N/A'
-                shapes = shapes.append(s)
+                shapes = pd.concat([shapes,s])
             if with_labels:
                 df = pd.concat({calc.name: out[0]}, names=['Dataset']) 
                 try:
@@ -470,27 +455,29 @@ class CalculatorFrame():
                 df = pd.concat({calc.name: out}, names=['Dataset']) 
 
             # Adds another hierarchical level giving the dataset name
-            mdf = mdf.append(df)
+            mdf = pd.concat([mdf,df])
         shapes.index.name = 'Dataset'
 
         if with_labels:
-            return mdf, nandf, shapes, mlabels, dlabels
+            return mdf, shapes, mlabels, dlabels
         else:
-            return mdf, nandf, shapes
+            return mdf, shapes
 
 class CorrelationFrame():
 
-    def __init__(self,cf=None,flatten_kwargs={},**kwargs):
+    def __init__(self,cf=None,**kwargs):
         self._slabels = {}
         self._dlabels = {}
         self._mdf = pd.DataFrame()
         self._shapes = pd.DataFrame()
         
         if cf is not None:
-            if isinstance(cf,CalculatorFrame) or isinstance(cf,Calculator):
+            if isinstance(cf,Calculator):
                 cf = CalculatorFrame(cf)
+
+            if isinstance(cf,CalculatorFrame):
                 # Store the statistic-focused dataframe, statistic labels, and dataset labels
-                self._mdf, self._shapes, self._slabels, self._dlabels = cf.get_correlation_df(with_labels=True,flatten_kwargs=flatten_kwargs,**kwargs)
+                self._mdf, self._shapes, self._slabels, self._dlabels = cf.get_correlation_df(with_labels=True,**kwargs)
                 self._name = cf.name
             else:
                 self.merge(cf)
