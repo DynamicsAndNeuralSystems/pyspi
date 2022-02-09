@@ -9,8 +9,6 @@ author = 'Oliver M. Cliff'
 release = '0.1'
 version = '0.1.0'
 
-import pyspi
-
 # -- General configuration
 
 extensions = [
