@@ -406,7 +406,7 @@ class CalculatorFrame():
 
     @calculators.deleter
     def calculators(self):
-        logger.debug('Overwriting existing calculators.')
+        warnings.warn('Overwriting existing calculators.')
         del(self._calculators)
 
     def merge(self,other):
