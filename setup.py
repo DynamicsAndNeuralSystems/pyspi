@@ -13,7 +13,7 @@ install_requires = [
         'numpy==1.21.1',
         'pandas==1.3.3',
         'statsmodels==0.12.1',
-        'pyyaml==5.3.1',
+        'pyyaml==5.4',
         'tqdm==4.50.2',
         'nitime==0.9',
         'hyppo==0.2.1',
