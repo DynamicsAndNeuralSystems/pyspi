@@ -21,6 +21,8 @@ Oliver M. Cliff, Joseph T. Lizier, Naotsugu Tsuchiya, Ben D Fulcher, "Unifying P
 See the [documentation](https://pyspi-toolkit.readthedocs.io/en/latest/) for installing and setting up *PySPI*.
 Once you're done, check out the [tutorial](https://github.com/olivercliff/pyspi/blob/main/demos/tutorial.ipynb) and [simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py) to learn how to use the package.
 
+If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTSs), then you may find the [PySPI distribute](https://github.com/olivercliff/pyspi-distribute) repository helpful.
+
 ## Related resources
 
 ### HCTSA
