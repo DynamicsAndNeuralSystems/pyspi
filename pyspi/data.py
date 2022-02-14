@@ -2,10 +2,12 @@
 
 Code is adapted from Patricia Wollstadt's IDTxL (https://github.com/pwollstadt/IDTxl)
 """
+from multiprocessing.sharedctypes import Value
 import numpy as np
 import pandas as pd
 from pyspi import utils
 from scipy.stats import zscore
+from scipy.signal import detrend
 import os
 from sktime.utils.data_io import load_from_tsfile_to_dataframe
 from sktime.datatypes._panel._convert import from_nested_to_3d_numpy
@@ -148,6 +150,10 @@ class Data():
 
         if self.normalise:
             data = zscore(data,axis=1,nan_policy='omit',ddof=1)
+            try:
+                data = detrend(data,axis=1)
+            except ValueError as err:
+                print(f'Could not detrend data: {err}')
 
         nans = np.isnan(data)
         if nans.any():
