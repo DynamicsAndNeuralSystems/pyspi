@@ -71,7 +71,15 @@ class Data():
         if hasattr(self,'_name'):
             return self._name 
         else:
-            return ''
+            return 'N/A'
+
+    @name.setter
+    def name(self,n):
+        """Set the name of the data object.
+        """
+        if not isinstance(n,str):
+            raise TypeError(f'Name should be a string, received {type(n)}.')
+        self._name = n
 
     @property
     def procnames(self):

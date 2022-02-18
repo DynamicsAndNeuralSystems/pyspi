@@ -537,10 +537,12 @@ class CorrelationFrame():
         raise AttributeError('Do not directly set the dlabels attribute.')
 
     def merge(self,other):
+        if not all(isinstance(i[0],str) for i in self._mdf.index):
+            raise TypeError(f'This operation only works with named calculators (set each calc.name property).')
         
         self._ddf = self.ddf.join(other.ddf)
-        self._mdf = self._mdf.append(other.mdf,verify_integrity=True)
-        self._shapes = self._shapes.append(other.shapes)
+        self._mdf = pd.concat([self._mdf,other.mdf],verify_integrity=True)
+        self._shapes = pd.concat([self._shapes,other.shapes])
 
         try:
             self._slabels = self._slabels | other.mlabels
