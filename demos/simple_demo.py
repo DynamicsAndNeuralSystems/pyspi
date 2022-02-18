@@ -14,6 +14,14 @@ print(calc.table) # Print the table of results.
 
 R = calc.table['cov_EmpiricalCovariance'] #  Extract the results for an individual SPI (we're using covariance here)
 
+cf = CorrelationFrame()
+
+# Needs a name so that we can uniquely index
+calc.name = 'Calc1'
+cf.merge(CorrelationFrame(calc,rmmin=True))
+calc.name = 'Calc2'
+cf.merge(CorrelationFrame(calc,rmmin=True))
+
 plt.imshow(R)
 plt.colorbar()
 plt.ylabel('Process')

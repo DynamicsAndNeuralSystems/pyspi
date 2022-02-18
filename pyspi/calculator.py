@@ -540,9 +540,14 @@ class CorrelationFrame():
         if not all(isinstance(i[0],str) for i in self._mdf.index):
             raise TypeError(f'This operation only works with named calculators (set each calc.name property).')
         
-        self._ddf = self.ddf.join(other.ddf)
-        self._mdf = pd.concat([self._mdf,other.mdf],verify_integrity=True)
-        self._shapes = pd.concat([self._shapes,other.shapes])
+        try:
+            self._ddf = self.ddf.join(other.ddf)
+            self._mdf = pd.concat([self._mdf,other.mdf],verify_integrity=True)
+            self._shapes = pd.concat([self._shapes,other.shapes])
+        except KeyError:
+            self._ddf = copy.deepcopy(other.ddf)
+            self._mdf = copy.deepcopy(other.mdf)
+            self._shapes = copy.deepcopy(other.shapes)
 
         try:
             self._slabels = self._slabels | other.mlabels
