@@ -203,8 +203,9 @@ class Calculator():
     def _rmmin(self):
         """ Iterate through all spis and remove the minimum (fixes absolute value errors when correlating)
         """
-        for mpi, s in zip(self._table,self._spis.values()):
-            if not s.issigned():
+        for spi in self.spis:
+            mpi = self.table[spi]
+            if not self.spis[spi].issigned():
                 mpi -= np.nanmin(mpi)
 
     def set_group(self,classes):
