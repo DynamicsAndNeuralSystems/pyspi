@@ -266,7 +266,7 @@ class Calculator():
     def _get_correlation_df(self,with_labels=False,rmmin=False):
         # Sorts out pesky numerical issues in the unsigned spis
         if rmmin:
-            self.rmmin()
+            self._rmmin()
 
         # Flatten (get Edge-by-SPI matrix)
         edges = self.table.stack().abs()
