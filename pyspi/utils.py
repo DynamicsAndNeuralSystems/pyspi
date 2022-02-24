@@ -1,5 +1,4 @@
 """Provide _nats_ utility functions."""
-import pprint
 import numpy as np
 from scipy.stats import zscore
 import warnings

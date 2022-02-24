@@ -441,10 +441,10 @@ class CalculatorFrame():
             s = pd.Series(dict(n_processes=calc.dataset.n_processes,n_observations=calc.dataset.n_observations))
             if calc.name is not None:
                 s.name = calc.name
-                shapes = pd.concat([shapes,s])
+                shapes = pd.concat([shapes,pd.DataFrame(s).T])
             else:
                 s.name = 'N/A'
-                shapes = pd.concat([shapes,s])
+                shapes = pd.concat([shapes,pd.DataFrame(s).T])
             if with_labels:
                 df = pd.concat({calc.name: out[0]}, names=['Dataset']) 
                 try:
