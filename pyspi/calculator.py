@@ -206,7 +206,7 @@ class Calculator():
         for spi in self.spis:
             mpi = self.table[spi]
             if not self.spis[spi].issigned():
-                mpi -= np.nanmin(mpi)
+                self.table[spi] = mpi - np.nanmin(mpi)
 
     def set_group(self,classes):
         """Assigns a numeric value to this instance based on list of classes.
@@ -543,7 +543,7 @@ class CorrelationFrame():
         try:
             self._ddf = self.ddf.join(other.ddf)
             self._mdf = pd.concat([self._mdf,other.mdf],verify_integrity=True)
-            self._shapes = pd.concat([self._shapes,other.shapes])
+            self._shapes = pd.concat([self._shapes,other.shapes],verify_integrity=True)
         except KeyError:
             self._ddf = copy.deepcopy(other.ddf)
             self._mdf = copy.deepcopy(other.mdf)
@@ -597,8 +597,11 @@ class CorrelationFrame():
 
         return ss_adj
 
-    def get_feature_matrix(self,sthresh=0.8,dthresh=0.2):
-        fm = self.ddf.drop_duplicates()
+    def get_feature_matrix(self,sthresh=0.8,dthresh=0.2,dropduplicates=True):
+
+        fm = self.ddf
+        if dropduplicates:
+            fm = fm.drop_duplicates()
             
         # Drop datasets based on NaN threshold
         num_dnans = dthresh*fm.shape[0]
