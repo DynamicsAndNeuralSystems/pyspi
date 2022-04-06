@@ -273,25 +273,25 @@ class Calculator():
         edges = self.table.stack()
 
         # Correlate the edge matrix (using pearson and/or spearman correlation)
-        mdf = pd.DataFrame(index=edges.columns,columns=edges.columns)
+        cf = pd.DataFrame(index=[c for c in edges.columns],columns=[c for c in edges.columns])
         # Need to iterate through each pair to handle unsigned/signed statistics
         for i, s0 in enumerate(edges.columns):
             for j, s1 in enumerate(edges.columns[i+1:]):
 
                 if self.spis[s0].issigned() and self.spis[s1].issigned():
                     # When they're both signed, just take the correlation
-                    mdf.iloc[[i,i+j+1],[i,i+j+1]] = edges[[s0,s1]].corr(method='spearman')
+                    cf.iloc[[i,i+j+1],[i,i+j+1]] = edges[[s0,s1]].corr(method='spearman')
                 else:
                     # Otherwise, take the absolute value to make sure we compare like-for-like
-                    mdf.iloc[[i,i+j+1],[i,i+j+1]] = edges[[s0,s1]].abs().corr(method='spearman')
+                    cf.iloc[[i,i+j+1],[i,i+j+1]] = edges[[s0,s1]].abs().corr(method='spearman')
                     
-        mdf.index.name = 'SPI-1'
-        mdf.columns.name = 'SPI-2'
+        cf.index.name = 'SPI-1'
+        cf.columns.name = 'SPI-2'
 
         if with_labels:
-            return mdf, self.getstatlabels()
+            return cf, self.getstatlabels()
         else:
-            return mdf
+            return cf
 
 """ CalculatorFrame
 Container for batch level commands, like computing/pruning/initialising multiple datasets at once
