@@ -13,6 +13,7 @@ print(f'Obtained results table of shape {calc.table.shape}:')
 print(calc.table) # Print the table of results.
 
 R = calc.table['cov_EmpiricalCovariance'] #  Extract the results for an individual SPI (we're using covariance here)
+R = calc._get_correlation_df(rmmin=True)
 
 plt.imshow(R)
 plt.colorbar()

@@ -270,10 +270,21 @@ class Calculator():
             self._rmmin()
 
         # Flatten (get Edge-by-SPI matrix)
-        edges = self.table.stack().abs()
+        edges = self.table.stack()
 
         # Correlate the edge matrix (using pearson and/or spearman correlation)
-        mdf = edges.corr(method='spearman')
+        mdf = pd.DataFrame(index=edges.columns,columns=edges.columns)
+        # Need to iterate through each pair to handle unsigned/signed statistics
+        for i, s0 in enumerate(edges.columns):
+            for j, s1 in enumerate(edges.columns[i+1:]):
+
+                if self.spis[s0].issigned() and self.spis[s1].issigned():
+                    # When they're both signed, just take the correlation
+                    mdf.iloc[[i,i+j+1],[i,i+j+1]] = edges[[s0,s1]].corr(method='spearman')
+                else:
+                    # Otherwise, take the absolute value to make sure we compare like-for-like
+                    mdf.iloc[[i,i+j+1],[i,i+j+1]] = edges[[s0,s1]].abs().corr(method='spearman')
+                    
         mdf.index.name = 'SPI-1'
         mdf.columns.name = 'SPI-2'
 
@@ -610,7 +621,7 @@ class CorrelationFrame():
         # Drop measures based on NaN threshold
         num_snans = sthresh*fm.shape[1]
         fm = fm.dropna(axis=0,thresh=num_snans)
-        return fm
+        # return fm
 
     @staticmethod
     def _verify_classes(classes):
