@@ -33,10 +33,15 @@ class Calculator():
             The location of the YAML configuration file. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
     """
     
-    def __init__(self,dataset=None,name=None,labels=None,configfile=os.path.dirname(os.path.abspath(__file__)) + '/config.yaml'):
+    def __init__(self,dataset=None,name=None,labels=None,fast=False,configfile=None):
         self._spis = {}
-        self._load_yaml(configfile)
 
+        if configfile is None:
+            if fast is True:
+                configfile = os.path.dirname(os.path.abspath(__file__)) + '/fast_config.yaml'
+            else:
+                configfile = os.path.dirname(os.path.abspath(__file__)) + '/config.yaml'
+        self._load_yaml(configfile)
 
         duplicates = [name for name, count in Counter(self._spis.keys()).items() if count > 1]
         if len(duplicates) > 0:
@@ -621,7 +626,7 @@ class CorrelationFrame():
         # Drop measures based on NaN threshold
         num_snans = sthresh*fm.shape[1]
         fm = fm.dropna(axis=0,thresh=num_snans)
-        # return fm
+        return fm
 
     @staticmethod
     def _verify_classes(classes):
