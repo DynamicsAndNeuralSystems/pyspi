@@ -4,9 +4,9 @@ import numpy as np
 from pyspi.calculator import Calculator
 import matplotlib.pyplot as plt
 
-dataset = np.random.randn(3,100) # Generate multivariate data with 3 processes and 100 observations
+dataset = np.random.randn(3,1000) # Generate multivariate data with 3 processes and 100 observations
 
-calc = Calculator(dataset=dataset) # Instantiate the calculator, loading the data
+calc = Calculator(dataset=dataset,fast=True) # Instantiate the calculator with only fast SPIs (set fast=False to compute all SPIs)
 calc.compute() # Compute all SPIs
 
 print(f'Obtained results table of shape {calc.table.shape}:')
