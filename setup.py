@@ -48,6 +48,7 @@ setup(
     name='pyspi',
     packages=find_packages(),
     package_data={'': ['config.yaml',
+                        'fast_config.yaml',
                         'lib/jidt/infodynamics.jar',
                         'lib/PhiToolbox/Phi/phi_comp.m',
                         'lib/PhiToolbox/Phi/phi_star_Gauss.m',
