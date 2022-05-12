@@ -23,6 +23,8 @@ Once you're done, check out the [tutorial](https://github.com/olivercliff/pyspi/
 
 If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTSs), then you may find the [PySPI distribute](https://github.com/olivercliff/pyspi-distribute) repository helpful.
 
+If your data is quite large (i.e., there are many processes or observations), begin by using a reduced set of statistics by instantiating the calculator with the `fast=True` parameter (see the [simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py)).
+
 ## Related resources
 
 ### HCTSA
