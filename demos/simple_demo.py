@@ -3,7 +3,6 @@
 import numpy as np
 from pyspi.calculator import Calculator
 import matplotlib.pyplot as plt
-import time
 
 dataset = np.random.randn(3,1000) # Generate multivariate data with 3 processes and 100 observations
 
