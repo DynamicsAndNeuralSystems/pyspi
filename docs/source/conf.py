@@ -6,8 +6,8 @@ project = 'PySPI'
 copyright = '2022, Oliver M. Cliff'
 author = 'Oliver M. Cliff'
 
-release = '0.1'
-version = '0.1.0'
+release = '0.3'
+version = '0.3.0'
 
 # -- General configuration
 
