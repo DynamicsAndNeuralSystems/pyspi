@@ -621,7 +621,7 @@ class CorrelationFrame():
         # Drop measures based on NaN threshold
         num_snans = sthresh*fm.shape[1]
         fm = fm.dropna(axis=0,thresh=num_snans)
-        # return fm
+        return fm
 
     @staticmethod
     def _verify_classes(classes):
