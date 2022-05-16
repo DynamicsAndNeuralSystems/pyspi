@@ -1,6 +1,6 @@
 # Python Toolkit of Statistics for Pairwise Interactions (pyspi)
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5787486.svg)](https://doi.org/10.5281/zenodo.5787486)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6541022.svg)](https://doi.org/10.5281/zenodo.6541022)
 
 *PySPI* is a comprehensive library for computing pairwise interactions from multivariate time-series (MTS) data.
 
@@ -22,6 +22,8 @@ See the [documentation](https://pyspi-toolkit.readthedocs.io/en/latest/) for ins
 Once you're done, check out the [tutorial](https://github.com/olivercliff/pyspi/blob/main/demos/tutorial.ipynb) and [simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py) to learn how to use the package.
 
 If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTSs), then you may find the [PySPI distribute](https://github.com/olivercliff/pyspi-distribute) repository helpful.
+
+If your data is quite large (i.e., there are many processes or observations), you can use a reduced set of statistics by instantiating the calculator with the `fast=True` parameter (see the [simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py)).
 
 ## Related resources
 
