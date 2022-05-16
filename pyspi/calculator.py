@@ -29,6 +29,8 @@ class Calculator():
             The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances, defaults to None.
         labels (array_like, optional):
             Any set of strings by which you want to label the calculator. This can be useful later for classification purposes, defaults to None.
+        fast (bool, optional):
+            If True, use a hand-picked set of ~210 SPIs that compute quickly but are still relatively comprehensive, defaults to False.
         configfile (str, optional):
             The location of the YAML configuration file. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
     """

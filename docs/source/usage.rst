@@ -66,7 +66,8 @@ And, using only the :meth:`~pyspi.calculator.Calculator.compute` method, we can 
 
 .. note::
    While we tried to make the calculator as efficient as possible, computing all statistics can take a while (depending on the size of your dataset).
-   It might be good practice to begin with a subset of the statistics while you're getting started, see :ref:`Using a reduced SPI set`.
+   You can use a faster set of statistics by instantiating the calculator with :code:`fast=True`, see :class:`~pyspi.calculator.Calculator`.
+   Alternatively, design your own subset of the statistics by following the instructions in :ref:`Using a reduced SPI set`.
 
 Once the calculator has computed each of the statistics, you can access all values using the :attr:`~pyspi.calculator.Calculator.table` property:
 
