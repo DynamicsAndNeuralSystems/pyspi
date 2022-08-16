@@ -7,7 +7,7 @@
 The code provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation) to advanced multi-step algorithms (like Granger causality).
 The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/gpl-3.0.html) (or later).
 
-**Feel free to [email me](mailto:oliver.cliff@sydney.edu.au) for help with real-world applications.**
+**Feel free to [email me](mailto:oliver.m.cliff@gmail.com) for help with real-world applications.**
 Feedback is much appreciated through email, [issues](https://github.com/olivercliff/pyspi/issues), or [pull requests](https://github.com/olivercliff/pyspi/pulls).
 
 ## Acknowledgement
