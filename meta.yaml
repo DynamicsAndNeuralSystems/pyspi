@@ -1,4 +1,4 @@
-{% set name = "pyspi" %}
+{% set name = "pynats" %}
 {% set version = "0.1.2.4" %}
 
 package:
@@ -25,10 +25,10 @@ requirements:
 
 test:
   imports:
-    - pyspi
+    - pynats
 
 about:
-  home: https://github.com/olivercliff/pyspi.git
+  home: https://github.com/olivercliff/pynats.git
   license: BSD
   license_family: BSD
   summary: Python-based network analysis for time series
