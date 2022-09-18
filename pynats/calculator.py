@@ -491,6 +491,15 @@ class CalculatorFrame():
     def set_group(calc,*args):
         calc.set_group(*args)
 
+    @property
+    def groups(self):
+        groups = []
+        for i in self._calculators.index:
+            calc_ser = self._calculators.loc[i]
+            for calc in calc_ser:
+                groups.append(calc.group)
+        return groups
+
     @forall
     def debias(calc):
         calc.debias()
