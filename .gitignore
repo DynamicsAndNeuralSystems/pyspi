@@ -1,4 +1,5 @@
 pyspi.egg-info
+pynats.egg-info
 pyspi/__pycache__
 **/__pycache__/**
 build
