@@ -6,5 +6,6 @@ dist
 *.log
 *.bkp
 .vscode
+build
 octave-workspace
 readme.html
