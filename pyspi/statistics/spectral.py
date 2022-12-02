@@ -283,14 +283,20 @@ class spectral_granger(kramer_mv,directed,unsigned):
     identifier = 'sgc'
     labels = ['unsigned','embedding','spectral','directed','lagged']
 
-    def __init__(self,fs=1,fmin=0.0,fmax=0.5,method='nonparametric',order=None,max_order=50,statistic='mean'):
+    def __init__(self,fs=1,fmin=0.0,fmax=0.5,method='nonparametric',order=None,max_order=50,statistic='mean',ignore_NaN=True):
         self._fs = fs # Not yet implemented
         self._fmin = fmin
         self._fmax = fmax
         if statistic == 'mean':
-            self._statfn = np.mean
+            if ignore_NaN:
+                self._statfn = np.nanmean
+            else:
+                self._statfn = np.mean
         elif statistic == 'max':
-            self._statfn = np.max
+            if ignore_NaN:
+                self._statfn = np.nanmax
+            else:
+                self._statfn = np.max
         else:
             raise NameError(f'Unknown statistic {statistic}')
 

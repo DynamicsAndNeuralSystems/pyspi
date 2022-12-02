@@ -9,7 +9,7 @@ with open('README.md') as file:
 
 install_requires = [
         'scikit-learn==0.24.1',
-        'scipy==1.7.3',
+        'scipy==1.5.4',
         'numpy>=1.21.1',
         'pandas>=1.3.3',
         'statsmodels==0.12.1',
