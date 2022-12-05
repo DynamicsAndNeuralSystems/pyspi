@@ -288,19 +288,15 @@ class spectral_granger(kramer_mv,directed,unsigned):
         self._fmin = fmin
         self._fmax = fmax
         if statistic == 'mean':
-            self._statfn = np.mean
+            if ignore_NaN:
+                self._statfn = np.nanmean
+            else:
+                self._statfn = np.mean
         elif statistic == 'max':
-            self._statfn = np.max
-        # if statistic == 'mean':
-        #     if ignore_NaN:
-        #         self._statfn = np.nanmean
-        #     else:
-        #         self._statfn = np.mean
-        # elif statistic == 'max':
-        #     if ignore_NaN:
-        #         self._statfn = np.nanmax
-        #     else:
-        #         self._statfn = np.max
+            if ignore_NaN:
+                self._statfn = np.nanmax
+            else:
+                self._statfn = np.max
         else:
             raise NameError(f'Unknown statistic {statistic}')
 
@@ -350,8 +346,32 @@ class spectral_granger(kramer_mv,directed,unsigned):
     def multivariate(self,data):
         try:
             F, freq = self._get_cache(data)
-            freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
-            return self._statfn(F[0,freq_id,:,:], axis=0)
+            # Restrict frequencies to those greater than 0
+            if self._fmin == 0:
+                freq_id = np.where((freq > self._fmin) * (freq <= self._fmax))[0]
+            else:
+                freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
+
+            result = self._statfn(F[0,freq_id,:,:], axis=0)
+
+            # extract proc0 to proc1 SGC F values
+            proc0_proc1_SGC = F[0,freq_id,0,1]
+            # extract proc0 to proc1 SGC F values
+            proc1_proc0_SGC = F[0,freq_id,1,0]
+            
+            # If more than 10% of values are NaN in either direction, 
+            # set the SGC result to NaN
+            perc_proc0_proc1_NaN = np.count_nonzero(np.isnan(proc0_proc1_SGC))/num_freqs
+            perc_proc1_proc0_NaN = np.count_nonzero(np.isnan(proc1_proc0_SGC))/num_freqs
+
+            if perc_proc0_proc1_NaN > 0.1:
+                warnings.warn("More than 10% NaN from proc0 to proc1, setting to NaN.")
+                result[0,1] = float('NaN')
+            if perc_proc1_proc0_NaN > 0.1:
+                warnings.warn("More than 10% NaN from proc0 to proc1, setting to NaN.")
+                result[1,0] = float('NaN')
+
+            return result
         except ValueError as err:
             warnings.warn(err)
             return np.full((data.n_processes,data.n_processes),np.nan)
