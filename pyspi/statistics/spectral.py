@@ -288,15 +288,19 @@ class spectral_granger(kramer_mv,directed,unsigned):
         self._fmin = fmin
         self._fmax = fmax
         if statistic == 'mean':
-            if ignore_NaN:
-                self._statfn = np.nanmean
-            else:
-                self._statfn = np.mean
+            self._statfn = np.mean
         elif statistic == 'max':
-            if ignore_NaN:
-                self._statfn = np.nanmax
-            else:
-                self._statfn = np.max
+            self._statfn = np.max
+        # if statistic == 'mean':
+        #     if ignore_NaN:
+        #         self._statfn = np.nanmean
+        #     else:
+        #         self._statfn = np.mean
+        # elif statistic == 'max':
+        #     if ignore_NaN:
+        #         self._statfn = np.nanmax
+        #     else:
+        #         self._statfn = np.max
         else:
             raise NameError(f'Unknown statistic {statistic}')
 
