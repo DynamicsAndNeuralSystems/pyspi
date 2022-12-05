@@ -358,6 +358,9 @@ class spectral_granger(kramer_mv,directed,unsigned):
             proc0_proc1_SGC = F[0,freq_id,0,1]
             # extract proc0 to proc1 SGC F values
             proc1_proc0_SGC = F[0,freq_id,1,0]
+
+            # Get number of frequency values
+            num_freqs = len(proc0_proc1_SGC)
             
             # If more than 10% of values are NaN in either direction, 
             # set the SGC result to NaN
