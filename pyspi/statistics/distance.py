@@ -1,15 +1,13 @@
-from hyppo.independence import MGC, Dcorr, HHG, Hsic
-from hyppo.time_series import MGCX, DcorrX
-
-import scipy.spatial.distance as distance
+import numpy as np
 from sklearn.metrics import pairwise_distances
 import tslearn.metrics
 from tslearn.barycenters import euclidean_barycenter, dtw_barycenter_averaging, dtw_barycenter_averaging_subgradient, softdtw_barycenter
+from hyppo.independence import MGC, Dcorr, HHG, Hsic
+from hyppo.time_series import MGCX, DcorrX
 
-from pyspi.base import directed, undirected, parse_bivariate, parse_multivariate, unsigned, signed
-import numpy as np
+from pyspi.base import Directed, Undirected, Unsigned, Signed, parse_bivariate, parse_multivariate
 
-class pdist(undirected,unsigned):
+class pdist(Undirected, Unsigned):
 
     name = 'Pairwise distance'
     identifier = 'pdist'
@@ -25,7 +23,7 @@ class pdist(undirected,unsigned):
 
 """ TODO: include optional kernels in each method
 """
-class hsic(undirected,unsigned):
+class hsic(Undirected, Unsigned):
     """ Hilbert-Schmidt Independence Criterion (Hsic)
     """
 
@@ -44,7 +42,7 @@ class hsic(undirected,unsigned):
         stat = Hsic(bias=self._biased).statistic(x,y)
         return stat
 
-class hhg(directed,unsigned):
+class hhg(Directed, Unsigned):
     """ Heller-Heller-Gorfine independence criterion
     """
 
@@ -58,7 +56,7 @@ class hhg(directed,unsigned):
         stat = HHG().statistic(x,y)
         return stat
 
-class dcorr(undirected,unsigned):
+class dcorr(Undirected, Unsigned):
     """ Distance correlation
     """
 
@@ -70,7 +68,7 @@ class dcorr(undirected,unsigned):
         self._biased = biased
         if biased:
             self.identifier += '_biased'
-    
+
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         """
@@ -79,7 +77,7 @@ class dcorr(undirected,unsigned):
         stat = Dcorr(bias=self._biased).statistic(x,y)
         return stat
 
-class mgc(undirected,unsigned):
+class mgc(Undirected, Unsigned):
     """ Multiscale graph correlation
     """
 
@@ -94,7 +92,7 @@ class mgc(undirected,unsigned):
         return stat
 
 
-class dcorrx(directed,unsigned):
+class dcorrx(Directed, Unsigned):
     """ Cross-distance correlation
     """
 
@@ -114,7 +112,7 @@ class dcorrx(directed,unsigned):
         stat, _ = DcorrX(max_lag=self._max_lag).statistic(x,y)
         return stat
 
-class mgcx(directed,unsigned):
+class mgcx(Directed, Unsigned):
     """ Cross-multiscale graph correlation
     """
 
@@ -134,7 +132,7 @@ class mgcx(directed,unsigned):
         stat, _, _ = MGCX(max_lag=self._max_lag).statistic(x,y)
         return stat
 
-class time_warping(undirected, unsigned):
+class time_warping(Undirected, Unsigned):
 
     labels = ['unsigned','distance','temporal','undirected','nonlinear']
 
@@ -173,7 +171,7 @@ class canonical_time_warping(time_warping):
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
-        self._simfn = tslearn.metrics.ctw    
+        self._simfn = tslearn.metrics.ctw
 
 class longest_common_subsequence(time_warping):
 
@@ -204,7 +202,7 @@ class global_alignment_kernel(time_warping):
         z = data.to_numpy(squeeze=True)
         return tslearn.metrics.gak(z[i],z[j])
 
-class lb_keogh(unsigned,directed):
+class lb_keogh(Directed, Unsigned):
     name = 'LB Keogh'
     identifier = 'lbk'
     labels = ['nonlinear','unsigned','distance','temporal','undirected']
@@ -214,7 +212,7 @@ class lb_keogh(unsigned,directed):
         z = data.to_numpy(squeeze=True)
         return tslearn.metrics.lb_keogh(ts_query=z[j],ts_candidate=z[j])
 
-class barycenter(directed,signed):
+class barycenter(Directed, Signed):
 
     name = 'Barycenter'
     identifier = 'bary'
@@ -238,7 +236,7 @@ class barycenter(directed,signed):
         if squared:
             self._preproc = lambda x : x**2
             self.identifier += f'-sq'
-            
+
         if statistic == 'mean':
             self._statfn = lambda x : np.nanmean(self._preproc(x))
         elif statistic == 'max':
@@ -263,5 +261,5 @@ class barycenter(directed,signed):
             except KeyError:
                 data.barycenter[self._mode] = {(i,j): bc}
             data.barycenter[self._mode][(j,i)] = data.barycenter[self._mode][(i,j)]
-        
+
         return self._statfn(bc)

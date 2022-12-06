@@ -1,10 +1,10 @@
 import mne.connectivity as mnec
-from pyspi.base import directed, parse_bivariate, undirected, parse_multivariate, unsigned
+from pyspi.base import Directed, Undirected, Unsigned, parse_bivariate, parse_multivariate
 import numpy as np
 import warnings
 from functools import partial
 
-class mne(unsigned):
+class mne(Unsigned):
 
     def __init__(self,fs=1,fmin=0,fmax=None,statistic='mean'):
         if fmax is None:
@@ -21,7 +21,7 @@ class mne(unsigned):
             self._statfn = np.nanmax
         else:
             raise NameError(f'Unknown statistic {statistic}')
-        
+
         self._statistic = statistic
 
         paramstr = f'_wavelet_{statistic}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}'.replace('.','-')
@@ -48,7 +48,7 @@ class mne(unsigned):
                     fmin=5/data.n_observations,fmax=self._fs/2,
                     cwt_freqs=cwt_freqs,
                     cwt_n_cycles=cwt_n_cycles, verbose='WARNING')
-                
+
             try:
                 data.mne[self.measure] = (conn,freq)
             except AttributeError:
@@ -75,7 +75,7 @@ def modify_stats(statfn,modifier):
         return statfn(modifier(stats),**kwargs)
     return partial(parsed_stats, statfn=statfn, modifier=modifier)
 
-class coherence_magnitude(mne,undirected):
+class coherence_magnitude(mne, Undirected):
     name = 'Coherence magnitude (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
@@ -84,7 +84,7 @@ class coherence_magnitude(mne,undirected):
         self._measure = 'coh'
         super().__init__(**kwargs)
 
-class coherence_phase(mne,undirected):
+class coherence_phase(mne, Undirected):
     name = 'Coherence phase (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
@@ -96,7 +96,7 @@ class coherence_phase(mne,undirected):
         # Take the angle before computing the statistic
         self._statfn = modify_stats(self._statfn,np.angle)
 
-class icoherence(mne,undirected):
+class icoherence(mne, Undirected):
     name = 'Imaginary coherency (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
@@ -105,7 +105,7 @@ class icoherence(mne,undirected):
         self._measure = 'imcoh'
         super().__init__(**kwargs)
 
-class phase_locking_value(mne,undirected):
+class phase_locking_value(mne, Undirected):
     name = 'Phase locking value (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
@@ -114,7 +114,7 @@ class phase_locking_value(mne,undirected):
         self._measure = 'plv'
         super().__init__(**kwargs)
 
-class pairwise_phase_consistency(mne,undirected):
+class pairwise_phase_consistency(mne, Undirected):
     name = 'Pairwise phase consistency (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
@@ -123,7 +123,7 @@ class pairwise_phase_consistency(mne,undirected):
         self._measure = 'ppc'
         super().__init__(**kwargs)
 
-class phase_lag_index(mne,undirected):
+class phase_lag_index(mne, Undirected):
     name = 'Phase lag index (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
@@ -132,7 +132,7 @@ class phase_lag_index(mne,undirected):
         self._measure = 'pli'
         super().__init__(**kwargs)
 
-class debiased_squared_phase_lag_index(mne,undirected):
+class debiased_squared_phase_lag_index(mne, Undirected):
     name = 'Debiased squared phase lag index (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
@@ -141,7 +141,7 @@ class debiased_squared_phase_lag_index(mne,undirected):
         self._measure = 'pli2_unbiased'
         super().__init__(**kwargs)
 
-class weighted_phase_lag_index(mne,undirected):
+class weighted_phase_lag_index(mne, Undirected):
     name = 'Weighted squared phase lag index (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
@@ -150,7 +150,7 @@ class weighted_phase_lag_index(mne,undirected):
         self._measure = 'wpli'
         super().__init__(**kwargs)
 
-class debiased_weighted_squared_phase_lag_index(mne,undirected):
+class debiased_weighted_squared_phase_lag_index(mne, Undirected):
     name = 'Debiased weighted squared phase lag index (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 
@@ -159,7 +159,7 @@ class debiased_weighted_squared_phase_lag_index(mne,undirected):
         self._measure = 'wpli2_debiased'
         super().__init__(**kwargs)
 
-class phase_slope_index(mne,undirected):
+class phase_slope_index(mne, Undirected):
     name = 'Phase slope index (wavelet)'
     labels = ['unsigned','wavelet','undirected']
 

@@ -1,12 +1,11 @@
-from cdt.causality.pairwise import ANM, CDS, GNN, IGCI, RECI
-import pyEDM
-
 import numpy as np
 import pandas as pd
+from cdt.causality.pairwise import ANM, CDS, IGCI, RECI
+import pyEDM
 
-from pyspi.base import directed, undirected, parse_bivariate, parse_multivariate, unsigned, signed
+from pyspi.base import Directed, Unsigned, Signed, parse_bivariate, parse_multivariate
 
-class anm(directed,unsigned):
+class anm(Directed, Unsigned):
 
     name = "Additive noise model"
     identifier = 'anm'
@@ -17,8 +16,8 @@ class anm(directed,unsigned):
         z = data.to_numpy()
         return ANM().anm_score(z[i], z[j])
 
-class cds(directed,unsigned):
-    
+class cds(Directed, Unsigned):
+
     name = 'Conditional distribution similarity statistic'
     identifier = 'cds'
     labels = ['unsigned','causal','unordered','nonlinear','directed']
@@ -28,7 +27,7 @@ class cds(directed,unsigned):
         z = data.to_numpy()
         return CDS().cds_score(z[i], z[j])
 
-class reci(directed,unsigned):
+class reci(Directed, Unsigned):
 
     name = 'Regression error-based causal inference'
     identifier = 'reci'
@@ -39,7 +38,7 @@ class reci(directed,unsigned):
         z = data.to_numpy()
         return RECI().b_fit_score(z[i], z[j])
 
-class igci(directed,unsigned):
+class igci(Directed, Unsigned):
 
     name = 'Information-geometric conditional independence'
     identifier = 'igci'
@@ -50,7 +49,7 @@ class igci(directed,unsigned):
         z = data.to_numpy()
         return IGCI().predict_proba((z[i],z[j]))
 
-class ccm(directed,signed):
+class ccm(Directed, Signed):
 
     name = "Convergent cross-maping"
     identifier = "ccm"

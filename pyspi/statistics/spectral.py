@@ -1,8 +1,8 @@
 import numpy as np
 from copy import deepcopy
 
-import spectral_connectivity as sc # For directed spectral statistics (excl. spectral GC) 
-from pyspi.base import directed, parse_bivariate, undirected, parse_multivariate, unsigned
+import spectral_connectivity as sc # For directed spectral statistics (excl. spectral GC)
+from pyspi.base import Directed, Undirected, Unsigned, parse_bivariate, parse_multivariate
 import nitime.analysis as nta
 import nitime.timeseries as ts
 import warnings
@@ -13,12 +13,12 @@ import warnings
     - non-parametric Spectral GC still comes from EK lab
 """
 
-class kramer(unsigned):
+class kramer(Unsigned):
 
     def __init__(self,fs=1,fmin=0,fmax=None,statistic='mean'):
         if fmax is None:
             fmax = fs/2
-            
+
         self._fs = fs
         if fs != 1:
             warnings.warn('Multiple sampling frequencies not yet handled.')
@@ -124,7 +124,7 @@ class kramer_bv(kramer):
 
         return self._statfn(bv_freq[0,freq_id,0,1])
 
-class coherence_magnitude(kramer_mv,undirected):
+class coherence_magnitude(kramer_mv, Undirected):
     name = 'Coherence magnitude'
     labels = ['unsigned','spectral','undirected']
 
@@ -133,7 +133,7 @@ class coherence_magnitude(kramer_mv,undirected):
         super().__init__(**kwargs)
         self._measure = 'coherence_magnitude'
 
-class coherence_phase(kramer_mv,undirected):
+class coherence_phase(kramer_mv, Undirected):
     name = 'Coherence phase'
     labels = ['unsigned','spectral','undirected']
 
@@ -142,7 +142,7 @@ class coherence_phase(kramer_mv,undirected):
         super().__init__(**kwargs)
         self._measure = 'coherence_phase'
 
-class icoherence(kramer_mv,undirected):
+class icoherence(kramer_mv, Undirected):
     name = 'Imaginary coherence'
     labels = ['unsigned','spectral','undirected']
 
@@ -151,7 +151,7 @@ class icoherence(kramer_mv,undirected):
         super().__init__(**kwargs)
         self._measure = 'imaginary_coherence'
 
-class phase_locking_value(kramer_mv,undirected):
+class phase_locking_value(kramer_mv, Undirected):
     name = 'Phase locking value'
     labels = ['unsigned','spectral','undirected']
 
@@ -163,7 +163,7 @@ class phase_locking_value(kramer_mv,undirected):
         myfn = deepcopy(self._statfn)
         self._statfn = lambda x, **kwargs : myfn(np.absolute(x),**kwargs)
 
-class phase_lag_index(kramer_mv,undirected):
+class phase_lag_index(kramer_mv, Undirected):
     name = 'Phase lag index'
     labels = ['unsigned','spectral','undirected']
 
@@ -172,7 +172,7 @@ class phase_lag_index(kramer_mv,undirected):
         super().__init__(**kwargs)
         self._measure = 'phase_lag_index'
 
-class weighted_phase_lag_index(kramer_mv,undirected):
+class weighted_phase_lag_index(kramer_mv, Undirected):
     name = 'Weighted phase lag index'
     labels = ['unsigned','spectral','undirected']
 
@@ -181,7 +181,7 @@ class weighted_phase_lag_index(kramer_mv,undirected):
         super().__init__(**kwargs)
         self._measure = 'weighted_phase_lag_index'
 
-class debiased_squared_phase_lag_index(kramer_mv,undirected):
+class debiased_squared_phase_lag_index(kramer_mv, Undirected):
     name = 'Debiased squared phase lag index'
     labels = ['unsigned','spectral','undirected']
 
@@ -190,7 +190,7 @@ class debiased_squared_phase_lag_index(kramer_mv,undirected):
         super().__init__(**kwargs)
         self._measure = 'debiased_squared_phase_lag_index'
 
-class debiased_squared_weighted_phase_lag_index(kramer_mv,undirected):
+class debiased_squared_weighted_phase_lag_index(kramer_mv, Undirected):
     name = 'Debiased squared weighted phase-lag index'
     labels = ['unsigned','spectral','undirected']
 
@@ -199,7 +199,7 @@ class debiased_squared_weighted_phase_lag_index(kramer_mv,undirected):
         super().__init__(**kwargs)
         self._measure = 'debiased_squared_weighted_phase_lag_index'
 
-class pairwise_phase_consistency(kramer_mv,undirected):
+class pairwise_phase_consistency(kramer_mv, Undirected):
     name = 'Pairwise phase consistency'
     labels = ['unsigned','spectral','undirected']
 
@@ -212,7 +212,7 @@ class pairwise_phase_consistency(kramer_mv,undirected):
     These next several seem to segfault for large vector autoregressive processes (something to do with np.linalg solver).
     Switched them to bivariate for now until the issue is resolved
 """
-class directed_coherence(kramer_bv,directed):
+class directed_coherence(kramer_bv, Directed):
     name = 'Directed coherence'
     labels = ['unsigned','spectral','directed']
 
@@ -221,7 +221,7 @@ class directed_coherence(kramer_bv,directed):
         super().__init__(**kwargs)
         self._measure = 'directed_coherence'
 
-class partial_directed_coherence(kramer_bv,directed):
+class partial_directed_coherence(kramer_bv, Directed):
     name = 'Partial directed coherence'
     labels = ['unsigned','spectral','directed']
 
@@ -230,7 +230,7 @@ class partial_directed_coherence(kramer_bv,directed):
         super().__init__(**kwargs)
         self._measure = 'partial_directed_coherence'
 
-class generalized_partial_directed_coherence(kramer_bv,directed):
+class generalized_partial_directed_coherence(kramer_bv, Directed):
     name = 'Generalized partial directed coherence'
     labels = ['unsigned','spectral','directed']
 
@@ -239,7 +239,7 @@ class generalized_partial_directed_coherence(kramer_bv,directed):
         super().__init__(**kwargs)
         self._measure = 'generalized_partial_directed_coherence'
 
-class directed_transfer_function(kramer_bv,directed):
+class directed_transfer_function(kramer_bv, Directed):
     name = 'Directed transfer function'
     labels = ['unsigned','spectral','directed','lagged']
 
@@ -248,7 +248,7 @@ class directed_transfer_function(kramer_bv,directed):
         super().__init__(**kwargs)
         self._measure = 'directed_transfer_function'
 
-class direct_directed_transfer_function(kramer_bv,directed):
+class direct_directed_transfer_function(kramer_bv, Directed):
     name = 'Direct directed transfer function'
     labels = ['unsigned','spectral','directed','lagged']
 
@@ -257,7 +257,7 @@ class direct_directed_transfer_function(kramer_bv,directed):
         super().__init__(**kwargs)
         self._measure = 'direct_directed_transfer_function'
 
-class phase_slope_index(kramer_mv,undirected):
+class phase_slope_index(kramer_mv, Undirected):
     name = 'Phase slope index'
     labels = ['unsigned','spectral','undirected']
 
@@ -265,12 +265,12 @@ class phase_slope_index(kramer_mv,undirected):
         self.identifier = 'psi'
         super().__init__(**kwargs)
         self._measure = 'phase_slope_index'
-    
+
     def _get_statistic(self,C):
         return C.phase_slope_index(frequencies_of_interest=[self._fmin,self._fmax],
                                     frequency_resolution=(self._fmax-self._fmin)/50)
 
-class group_delay(kramer_mv,directed):
+class group_delay(kramer_mv, Directed):
     name = 'Group delay'
     labels = ['unsigned','spectral','directed','lagged']
 
@@ -278,12 +278,12 @@ class group_delay(kramer_mv,directed):
         self.identifier = 'gd'
         super().__init__(**kwargs)
         self._measure = 'group_delay'
-    
+
     def _get_statistic(self,C):
         return C.group_delay(frequencies_of_interest=[self._fmin,self._fmax],
                             frequency_resolution=(self._fmax-self._fmin)/50)
 
-class spectral_granger(kramer_mv,directed,unsigned):
+class spectral_granger(kramer_mv, Directed, Unsigned):
     name = 'Spectral Granger causality'
     identifier = 'sgc'
     labels = ['unsigned','embedding','spectral','directed','lagged']

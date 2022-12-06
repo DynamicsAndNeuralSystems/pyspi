@@ -1,15 +1,17 @@
+import warnings
+import numpy as np
+
 from statsmodels.tsa import stattools
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from sklearn.gaussian_process import kernels, GaussianProcessRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn import linear_model
-from pyspi.base import directed, undirected, parse_bivariate, parse_multivariate, unsigned
-import numpy as np
 import mne.connectivity as mnec
-import warnings
 
-class coint(undirected,unsigned):
-    
+from pyspi.base import Directed, Undirected, Unsigned, parse_bivariate, parse_multivariate
+
+class coint(Undirected, Unsigned):
+
     name = "Cointegration"
     identifier = "coint"
     labels = ['misc','unsigned','temporal','undirected','nonlinear']
@@ -67,7 +69,7 @@ class coint(undirected,unsigned):
         ci = self._from_cache(data,i,j)
         return ci[self._statistic]
 
-class linearmodel(directed,unsigned):
+class linearmodel(Directed, Unsigned):
     name = 'Linear model regression'
     identifier = 'lmfit'
     labels = ['misc','unsigned','unordered','normal','linear','directed']
@@ -85,7 +87,7 @@ class linearmodel(directed,unsigned):
         y_predict = mdl.predict(z[i])
         return mean_squared_error(y_predict, np.ravel(z[j]))
 
-class gpmodel(directed,unsigned):    
+class gpmodel(Directed, Unsigned):
     name = 'Gaussian process regression'
     identifier = 'gpfit'
     labels = ['misc','unsigned','unordered','normal','nonlinear','directed']
@@ -98,14 +100,14 @@ class gpmodel(directed,unsigned):
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         z = data.to_numpy()
-        
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             gp = GaussianProcessRegressor(kernel=self._kernel).fit(z[i], np.ravel(z[j]))
         y_predict = gp.predict(z[i])
         return mean_squared_error(y_predict, np.ravel(z[j]))
 
-class envelope_correlation(undirected,unsigned):
+class envelope_correlation(Undirected, Unsigned):
     humanname = 'Power envelope correlation'
     identifier = 'pec'
     labels = ['unsigned','misc','undirected']

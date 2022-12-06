@@ -56,7 +56,7 @@
 
     - statistic: 'max'
       squared: True
-  
+
     - statistic: 'mean'
 
     - statistic: 'mean'
@@ -120,7 +120,7 @@
 # Information-theoretic statistics
 .statistics.infotheory:
 
-  joint_entropy: # No theiler window yet
+  JointEntropy: # No theiler window yet
 
     - estimator: gaussian
 
@@ -128,13 +128,13 @@
 
     - estimator: kernel
 
-  conditional_entropy: # No theiler window yet
+  ConditionalEntropy: # No theiler window yet
 
     - estimator: gaussian
 
     - estimator: kernel
 
-  crossmap_entropy: # No theiler window yet
+  CrossmapEntropy: # No theiler window yet
 
     - estimator: gaussian
       history_length: 1
@@ -156,7 +156,7 @@
       history_length: 10
 
 
-  stochastic_interaction: # No theiler window
+  StochasticInteraction: # No theiler window
 
     - estimator: gaussian
 
@@ -165,7 +165,7 @@
     - estimator: kernel
 
   # Mutual information
-  mutual_info:
+  MutualInfo:
     - estimator: gaussian
 
     - estimator: kraskov
@@ -179,7 +179,7 @@
       kernel_width: 0.25
 
 # Mutual information
-  time_lagged_mutual_info:
+  TimeLaggedMutualInfo:
     - estimator: gaussian
 
     - estimator: kraskov
@@ -193,7 +193,7 @@
       kernel_width: 0.25
 
   # Transfer entropy
-  transfer_entropy:
+  TransferEntropy:
 
     # Kraskov estimator with fixed embedding of 1 for source/target and DCE
     - estimator: kraskov
@@ -201,7 +201,7 @@
       k_history: 1
       l_history: 1
       dyn_corr_excl: AUTO
-    
+
     - estimator: gaussian
       k_history: 1
       l_history: 1
@@ -419,7 +419,7 @@
     - fmin: 0.25
       fmax: 0.5
       statistic: max
-      
+
   # partial_coherence:
   #   - fs: 1
 

@@ -73,7 +73,7 @@
 
     - statistic: 'max'
       squared: True
-  
+
     - statistic: 'mean'
 
     - statistic: 'mean'
@@ -109,7 +109,7 @@
     - biased: False
     - biased: True
 
-  # Heller-Heller-Gorfine (HHG) test  
+  # Heller-Heller-Gorfine (HHG) test
   hhg:
 
 
@@ -132,7 +132,7 @@
     - global_constraint: null
     - global_constraint: itakura
     - global_constraint: sakoe_chiba
-  
+
   longest_common_subsequence:
     - global_constraint: null
     - global_constraint: itakura
@@ -223,7 +223,7 @@
 # Information-theoretic statistics
 .statistics.infotheory:
 
-  joint_entropy: # No theiler window yet
+  JointEntropy: # No theiler window yet
 
     - estimator: gaussian
 
@@ -231,7 +231,7 @@
 
     - estimator: kernel
 
-  conditional_entropy: # No theiler window yet
+  ConditionalEntropy: # No theiler window yet
 
     - estimator: gaussian
 
@@ -239,7 +239,7 @@
 
     - estimator: kernel
 
-  causal_entropy: # No theiler window yet
+  CausalEntropy: # No theiler window yet
 
     - estimator: gaussian
 
@@ -247,7 +247,7 @@
 
     - estimator: kernel
 
-  crossmap_entropy: # No theiler window yet
+  CrossmapEntropy: # No theiler window yet
 
     - estimator: gaussian
       history_length: 1
@@ -268,7 +268,7 @@
     - estimator: kernel
       history_length: 10
 
-  directed_info: # No theiler window yet
+  DirectedInfo: # No theiler window yet
 
     - estimator: gaussian
 
@@ -276,7 +276,7 @@
 
     - estimator: kernel
 
-  stochastic_interaction: # No theiler window
+  StochasticInteraction: # No theiler window
 
     - estimator: gaussian
 
@@ -285,7 +285,7 @@
     - estimator: kernel
 
   # Mutual information
-  mutual_info:
+  MutualInfo:
     - estimator: gaussian
 
     - estimator: kraskov
@@ -299,7 +299,7 @@
       kernel_width: 0.25
 
 # Mutual information
-  time_lagged_mutual_info:
+  TimeLaggedMutualInfo:
     - estimator: gaussian
 
     - estimator: kraskov
@@ -313,7 +313,7 @@
       kernel_width: 0.25
 
   # Transfer entropy
-  transfer_entropy:
+  TransferEntropy:
 
     # Kraskov estimator with auto-embedding on source/target and DCE
     - estimator: kraskov
@@ -342,7 +342,7 @@
       k_history: 1
       l_history: 1
       dyn_corr_excl: AUTO
-    
+
     # Same as above with no DCE
     - estimator: kraskov
       prop_k: 4
@@ -380,7 +380,7 @@
       k_history: 10
       l_history: 1
 
-  integrated_information:
+  IntegratedInfo:
     - phitype: 'star'
 
     - phitype: 'star'
@@ -604,7 +604,7 @@
     - fmin: 0.25
       fmax: 0.5
       statistic: max
-      
+
   # partial_coherence:
   #   - fs: 1
 

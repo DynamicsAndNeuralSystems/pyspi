@@ -1,12 +1,13 @@
-import sklearn.covariance as cov
-from scipy import stats, spatial, signal
-import numpy as np
-from pyspi.base import undirected, directed, parse_bivariate, parse_multivariate, signed, unsigned
 import warnings
+import sklearn.covariance as cov
+from scipy import stats, signal
+import numpy as np
 
-class covariance_estimators(undirected,signed):
-    """ Base class for (functional) connectivity-based statistics 
-    
+from pyspi.base import Undirected, Signed, parse_bivariate, parse_multivariate
+
+class covariance_estimators(Undirected, Signed):
+    """ Base class for (functional) connectivity-based statistics
+
     Information on covariance estimators at: https://scikit-learn.org/stable/modules/covariance.html
     """
 
@@ -31,7 +32,7 @@ class covariance_estimators(undirected,signed):
             mycov = data.covariance[self._estimator]
         except (AttributeError,KeyError):
             z = data.to_numpy(squeeze=True).T
-            
+
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 mycov = getattr(cov,self._estimator)().fit(z)
@@ -67,7 +68,7 @@ class precision(covariance_estimators):
     def __init__(self,estimator='EmpiricalCovariance',squared=False):
         super().__init__(kind='precision',squared=squared,estimator=estimator)
 
-class xcorr(undirected,signed):
+class xcorr(Undirected, Signed):
 
     name = "Cross correlation"
     labels = ['basic','linear','undirected','temporal']
@@ -85,12 +86,12 @@ class xcorr(undirected,signed):
         else:
             self.labels = xcorr.labels + ['signed']
         self.identifier += f'_{statistic}_sig-{sigonly}'
-    
+
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
 
         T = data.n_observations
-        try: 
+        try:
             r_ij = data.xcorr[(i,j)]
         except (KeyError,AttributeError):
             x, y = data.to_numpy()[[i,j]]
@@ -125,9 +126,9 @@ class xcorr(undirected,signed):
             else:
                 return np.mean(r_ij)
         else:
-            raise TypeError(f'Unknown statistic: {self._statistic}') 
+            raise TypeError(f'Unknown statistic: {self._statistic}')
 
-class spearmanr(undirected,signed):
+class spearmanr(Undirected, Signed):
 
     name = "Spearman's correlation coefficient"
     identifier = "spearmanr"
@@ -141,7 +142,7 @@ class spearmanr(undirected,signed):
             self.labels += ['unsigned']
         else:
             self.labels += ['signed']
-    
+
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         x, y = data.to_numpy()[[i,j]]
@@ -150,7 +151,7 @@ class spearmanr(undirected,signed):
         else:
             return stats.spearmanr(x,y).correlation
 
-class kendalltau(undirected,signed):
+class kendalltau(Undirected, Signed):
 
     name = "Kendall's tau"
     identifier = "kendalltau"

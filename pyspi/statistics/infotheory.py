@@ -1,12 +1,12 @@
 import jpype as jp
 import numpy as np
 from pyspi import utils
-from pyspi.base import directed, undirected, parse_univariate, parse_bivariate, unsigned
-
 from oct2py import octave, Struct
 import copy
 import os
 import logging
+
+from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_bivariate
 
 """
 Contains relevant dependence statistics from the information theory community.
@@ -17,8 +17,8 @@ if not jp.isJVMStarted():
     logging.debug(f'Starting JVM with java class {jarloc}.')
     jp.startJVM(jp.getDefaultJVMPath(), '-ea', '-Djava.class.path=' + jarloc)
 
-class jidt_base(unsigned):
-    
+class JIDTBase(Unsigned):
+
     # List of (currently) modifiable parameters
     _NNK_PROP_NAME = 'k'
     _AUTO_EMBED_METHOD_PROP_NAME = 'AUTO_EMBED_METHOD'
@@ -54,7 +54,7 @@ class jidt_base(unsigned):
             self.identifier = self.identifier + '_W-{}'.format(kernel_width)
             self.labels = self.labels + ['nonlinear']
         elif estimator == 'symbolic':
-            if not isinstance(self,transfer_entropy):
+            if not isinstance(self,TransferEntropy):
                 raise NotImplementedError('Symbolic estimator is only available for transfer entropy.')
             self.labels = self.labels + ['symbolic']
             self._dyn_corr_excl = None
@@ -121,14 +121,14 @@ class jidt_base(unsigned):
                 calc = self._base_class.kozachenko.EntropyCalculatorMultiVariateKozachenko()
             else:
                 calc = self._base_class.gaussian.EntropyCalculatorMultiVariateGaussian()
-        elif measure == 'mutual_info':
+        elif measure == 'MutualInfo':
             if self._estimator == 'kernel':
                 calc = self._base_class.kernel.MutualInfoCalculatorMultiVariateKernel()
             elif self._estimator == 'kraskov':
                 calc = self._base_class.kraskov.MutualInfoCalculatorMultiVariateKraskov1()
             else:
                 calc = self._base_class.gaussian.MutualInfoCalculatorMultiVariateGaussian()
-        elif measure == 'transfer_entropy':
+        elif measure == 'TransferEntropy':
             if self._estimator == 'kernel':
                 calc = self._base_class.kernel.TransferEntropyCalculatorKernel()
             elif self._estimator == 'kraskov':
@@ -160,23 +160,23 @@ class jidt_base(unsigned):
 
     # No Theiler window yet (can it be done?)
     @parse_bivariate
-    def _compute_joint_entropy(self,data,i,j):
-        if not hasattr(data,'joint_entropy'):
-            data.joint_entropy = {}
+    def _compute_JointEntropy(self,data,i,j):
+        if not hasattr(data,'JointEntropy'):
+            data.JointEntropy = {}
 
         key = self._getkey()
-        if key not in data.joint_entropy:
-            data.joint_entropy[key] = np.full((data.n_processes,data.n_processes), -np.inf)
+        if key not in data.JointEntropy:
+            data.JointEntropy[key] = np.full((data.n_processes,data.n_processes), -np.inf)
 
-        if data.joint_entropy[key][i,j] == -np.inf:
+        if data.JointEntropy[key][i,j] == -np.inf:
             x,y = data.to_numpy()[[i,j]]
 
             self._entropy_calc.initialise(2)
-            self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 2)(np.concatenate([x,y],axis=1)))
-            data.joint_entropy[key][i,j] = self._entropy_calc.computeAverageLocalOfObservations()
-            data.joint_entropy[key][j,i] = data.joint_entropy[key][i,j]
-        
-        return data.joint_entropy[key][i,j]
+            self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 2)(np.concatenate([x,y], axis=1)))
+            data.JointEntropy[key][i,j] = self._entropy_calc.computeAverageLocalOfObservations()
+            data.JointEntropy[key][j,i] = data.JointEntropy[key][i,j]
+
+        return data.JointEntropy[key][i,j]
 
     # No Theiler window yet (can it be done?)
     """
@@ -216,7 +216,7 @@ class jidt_base(unsigned):
             self._calc.setProperty(self._DYN_CORR_EXCL_PROP_NAME,
                                     str(int(self._dyn_corr_excl)))
 
-class joint_entropy(jidt_base,undirected):
+class JointEntropy(JIDTBase, Undirected):
 
     name = 'Joint entropy'
     identifier = 'je'
@@ -227,9 +227,9 @@ class joint_entropy(jidt_base,undirected):
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        return self._compute_joint_entropy(data,i=i,j=j)
+        return self._compute_JointEntropy(data,i=i,j=j)
 
-class conditional_entropy(jidt_base,directed):
+class ConditionalEntropy(JIDTBase, Directed):
 
     name = 'Conditional entropy'
     identifier = 'ce'
@@ -240,21 +240,21 @@ class conditional_entropy(jidt_base,directed):
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        return self._compute_joint_entropy(data,i=i,j=j) - self._compute_entropy(data,i=i)
-        
-class mutual_info(jidt_base,undirected):
+        return self._compute_JointEntropy(data,i=i,j=j) - self._compute_entropy(data,i=i)
+
+class MutualInfo(JIDTBase, Undirected):
     name = "Mutual information"
     identifier = 'mi'
     labels = ['unsigned','infotheory','unordered','undirected']
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
-        self._calc = self._getcalc('mutual_info')
+        self._calc = self._getcalc('MutualInfo')
 
     def __setstate__(self,state):
         super().__setstate__(state)
         self.__dict__.update(state)
-        self._calc = self._getcalc('mutual_info')
+        self._calc = self._getcalc('MutualInfo')
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):
@@ -262,7 +262,7 @@ class mutual_info(jidt_base,undirected):
         """
         self._set_theiler_window(data,i,j)
         self._calc.initialise(1, 1)
-        
+
         try:
             src, targ = data.to_numpy(squeeze=True)[[i,j]]
             self._calc.setObservations(jp.JArray(jp.JDouble)(src),jp.JArray(jp.JDouble)(targ))
@@ -271,21 +271,21 @@ class mutual_info(jidt_base,undirected):
             logging.warning('MI calcs failed. Maybe check input data for Cholesky factorisation?')
             return np.NaN
 
-class time_lagged_mutual_info(mutual_info):
+class TimeLaggedMutualInfo(MutualInfo):
     name = "Time-lagged mutual information"
     identifier = 'tlmi'
     labels = ['unsigned','infotheory','temporal','undirected']
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
-        self._calc = self._getcalc('mutual_info')
+        self._calc = self._getcalc('MutualInfo')
 
     def __setstate__(self,state):
         """ Re-initialise the calculator
         """
         super().__setstate__(state)
         self.__dict__.update(state)
-        self._calc = self._getcalc('mutual_info')
+        self._calc = self._getcalc('MutualInfo')
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):
@@ -301,7 +301,7 @@ class time_lagged_mutual_info(mutual_info):
             logging.warning('Time-lagged MI calcs failed. Maybe check input data for Cholesky factorisation?')
             return np.NaN
 
-class transfer_entropy(jidt_base,directed):
+class TransferEntropy(JIDTBase, Directed):
 
     name = "Transfer entropy"
     identifier = 'te'
@@ -313,7 +313,7 @@ class transfer_entropy(jidt_base,directed):
         if 'estimator' not in kwargs.keys() or kwargs['estimator'] == 'gaussian':
             self.identifier = 'gc'
         super().__init__(**kwargs)
-        self._calc = self._getcalc('transfer_entropy')
+        self._calc = self._getcalc('TransferEntropy')
 
         # Auto-embedding
         if auto_embed_method is not None:
@@ -341,7 +341,7 @@ class transfer_entropy(jidt_base,directed):
         # Re-initialise
         super().__setstate__(state)
         self.__dict__.update(state)
-        self._calc = self._getcalc('transfer_entropy')
+        self._calc = self._getcalc('TransferEntropy')
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):
@@ -358,7 +358,7 @@ class transfer_entropy(jidt_base,directed):
             logging.warning(f'TE calcs failed: {err}.')
             return np.NaN
 
-class crossmap_entropy(jidt_base,directed):
+class CrossmapEntropy(JIDTBase, Directed):
 
     name = 'Cross-map entropy'
     identifier = 'xme'
@@ -383,14 +383,14 @@ class crossmap_entropy(jidt_base,directed):
         self._entropy_calc.initialise(joint.shape[1])
         self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 2)(joint))
         H_xy = self._entropy_calc.computeAverageLocalOfObservations()
-        
+
         self._entropy_calc.initialise(src_past.shape[1])
         self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 2)(src_past))
         H_y = self._entropy_calc.computeAverageLocalOfObservations()
 
         return H_xy - H_y
 
-class causal_entropy(jidt_base,directed):
+class CausalEntropy(JIDTBase, Directed):
 
     name = 'Causally conditioned entropy'
     identifier = 'cce'
@@ -415,24 +415,24 @@ class causal_entropy(jidt_base,directed):
         return H
 
     def _getkey(self):
-        return super(causal_entropy,self)._getkey() + (self._n,)
+        return super(CausalEntropy,self)._getkey() + (self._n,)
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        if not hasattr(data,'causal_entropy'):
-            data.causal_entropy = {}
+        if not hasattr(data,'CausalEntropy'):
+            data.CausalEntropy = {}
 
         key = self._getkey()
-        if key not in data.causal_entropy:
-            data.causal_entropy[key] = np.full((data.n_processes,data.n_processes), -np.inf)
+        if key not in data.CausalEntropy:
+            data.CausalEntropy[key] = np.full((data.n_processes,data.n_processes), -np.inf)
 
-        if data.causal_entropy[key][i,j] == -np.inf:
+        if data.CausalEntropy[key][i,j] == -np.inf:
             z = data.to_numpy(squeeze=True)
-            data.causal_entropy[key][i,j] = self._compute_causal_entropy(z[i],z[j])
+            data.CausalEntropy[key][i,j] = self._compute_causal_entropy(z[i],z[j])
 
-        return data.causal_entropy[key][i,j]
+        return data.CausalEntropy[key][i,j]
 
-class directed_info(causal_entropy,directed):
+class DirectedInfo(CausalEntropy, Directed):
 
     name = 'Directed information'
     identifier = 'di'
@@ -443,16 +443,16 @@ class directed_info(causal_entropy,directed):
         self._n = n
 
     @parse_bivariate
-    def bivariate(self,data,i=None,j=None):
+    def bivariate(self, data, i=None, j=None):
         """ Compute directed information from i to j
         """
         # Would prefer to match these two calls
         entropy = self._compute_entropy(data,j)
-        causal_entropy = super(directed_info,self).bivariate(data,i=i,j=j)
+        CausalEntropy = super(DirectedInfo, self).bivariate(data, i=i, j=j)
 
-        return entropy - causal_entropy
+        return entropy - CausalEntropy
 
-class stochastic_interaction(jidt_base,undirected):
+class StochasticInteraction(JIDTBase, Undirected):
 
     name = "Stochastic interaction"
     identifier = 'si'
@@ -475,8 +475,8 @@ class stochastic_interaction(jidt_base,undirected):
 
         return H_src + H_targ - H_joint
 
-class integrated_information(undirected,unsigned):
-    
+class IntegratedInfo(Undirected, Unsigned):
+
     name = "Integrated information"
     identifier = "phi"
     labels = ['linear','unsigned','infotheory','temporal','undirected']
@@ -489,15 +489,15 @@ class integrated_information(undirected,unsigned):
         self._options['type_of_dist'] = 'Gauss'
         self._options['normalization'] = normalization
         self.identifier += f'_{phitype}_t-{delay}_norm-{normalization}'
-    
+
     @parse_bivariate
-    def bivariate(self,data,i=None,j=None,verbose=False):
-        
+    def bivariate(self,data, i=None, j=None, verbose=False):
+
         if not octave.exist('phi_comp'):
             path = os.path.dirname(os.path.abspath(__file__)) + '/../lib/PhiToolbox/'
             octave.addpath(octave.genpath(path))
 
         P = [1, 2]
         Z = data.to_numpy(squeeze=True)[[i,j]]
-        
+
         return octave.phi_comp(Z, P, self._params, self._options)
