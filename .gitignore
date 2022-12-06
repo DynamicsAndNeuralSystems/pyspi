@@ -8,5 +8,3 @@ dist
 .vscode
 octave-workspace
 readme.html
-build/*
-setup.py
