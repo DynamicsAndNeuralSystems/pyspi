@@ -227,9 +227,9 @@ class Calculator():
         self._group_name = None
 
         # Ensure this is a list of lists
-        for i, cls in enumerate(classes):
-            if not isinstance(cls,list):
-                classes[i] = [cls]
+        for i, c in enumerate(classes):
+            if not isinstance(c,list):
+                classes[i] = [c]
 
         for i, i_cls in enumerate(classes):
             for j, j_cls in enumerate(classes):
@@ -438,6 +438,15 @@ class CalculatorFrame():
     def compute(calc):
         calc.compute()
 
+    @property
+    def groups(self):
+        groups = []
+        for i in self._calculators.index:
+            calc_ser = self._calculators.loc[i]
+            for calc in calc_ser:
+                groups.append(calc.group)
+        return groups
+    
     @forall
     def set_group(calc,*args):
         calc.set_group(*args)

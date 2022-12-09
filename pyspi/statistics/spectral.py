@@ -1,4 +1,6 @@
 import numpy as np
+from copy import deepcopy
+
 import spectral_connectivity as sc # For directed spectral statistics (excl. spectral GC) 
 from pyspi.base import directed, parse_bivariate, undirected, parse_multivariate, unsigned
 import nitime.analysis as nta
@@ -157,6 +159,9 @@ class phase_locking_value(kramer_mv,undirected):
         self.identifier = 'plv'
         super().__init__(**kwargs)
         self._measure = 'phase_locking_value'
+
+        myfn = deepcopy(self._statfn)
+        self._statfn = lambda x, **kwargs : myfn(np.absolute(x),**kwargs)
 
 class phase_lag_index(kramer_mv,undirected):
     name = 'Phase lag index'
