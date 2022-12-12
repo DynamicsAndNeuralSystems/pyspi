@@ -8,12 +8,12 @@ from tslearn.barycenters import (
     softdtw_barycenter,
 )
 from hyppo.independence import (
-    MultiscaleGraphCorrelation,
-    DistanceCorrelation,
+    MGC,
+    Dcorr,
     HHG,
-    HSIC,
+    Hsic,
 )
-from hyppo.time_series import CrossMultiscaleGraphCorrelation, CrossDistanceCorrelation
+from hyppo.time_series import MGCX, DcorrX
 
 from pyspi.base import (
     Directed,
@@ -59,7 +59,7 @@ class HSIC(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        stat = HSIC(bias=self._biased).statistic(x, y)
+        stat = Hsic(bias=self._biased).statistic(x, y)
         return stat
 
 
@@ -93,7 +93,7 @@ class DistanceCorrelation(Undirected, Unsigned):
     def bivariate(self, data, i=None, j=None):
         """ """
         x, y = data.to_numpy()[[i, j]]
-        stat = DistanceCorrelation(bias=self._biased).statistic(x, y)
+        stat = Dcorr(bias=self._biased).statistic(x, y)
         return stat
 
 
@@ -107,7 +107,7 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        stat = MultiscaleGraphCorrelation().statistic(x, y)
+        stat = MGC().statistic(x, y)
         return stat
 
 
@@ -127,7 +127,7 @@ class CrossDistanceCorrelation(Directed, Unsigned):
         z = data.to_numpy()
         x = z[i]
         y = z[j]
-        stat, _ = CrossDistanceCorrelation(max_lag=self._max_lag).statistic(x, y)
+        stat, _ = DcorrX(max_lag=self._max_lag).statistic(x, y)
         return stat
 
 
@@ -147,7 +147,7 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
         z = data.to_numpy()
         x = z[i]
         y = z[j]
-        stat, _, _ = CrossMultiscaleGraphCorrelation(max_lag=self._max_lag).statistic(
+        stat, _, _ = MGCX(max_lag=self._max_lag).statistic(
             x, y
         )
         return stat
