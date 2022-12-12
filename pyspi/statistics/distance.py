@@ -147,9 +147,7 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
         z = data.to_numpy()
         x = z[i]
         y = z[j]
-        stat, _, _ = MGCX(max_lag=self._max_lag).statistic(
-            x, y
-        )
+        stat, _, _ = MGCX(max_lag=self._max_lag).statistic(x, y)
         return stat
 
 
