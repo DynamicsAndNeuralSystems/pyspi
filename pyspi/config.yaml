@@ -1,7 +1,7 @@
 # Basic statistics
 .statistics.basic:
   # Covariance
-  covariance:
+  Covariance:
     - estimator: EmpiricalCovariance
     - estimator: EllipticEnvelope
     - estimator: GraphicalLasso
@@ -28,7 +28,7 @@
       squared: True
 
   # Precision
-  precision:
+  Precision:
     - estimator: EmpiricalCovariance
     - estimator: EllipticEnvelope
     - estimator: GraphicalLasso
@@ -55,19 +55,19 @@
       squared: True
 
   # Spearman's correlation coefficient
-  spearmanr:
+  SpearmanR:
     - squared: True
 
     - squared: False
 
   # Kendall's rank correlation coefficient
-  kendalltau:
+  KendallTau:
     - squared: True
 
     - squared: False
 
   # statistics based on cross-correlation (squared means we square the xcorr, not the output)
-  xcorr:
+  CrossCorrelation:
     - statistic: "max"
 
     - statistic: "max"
@@ -1118,7 +1118,7 @@
       trend: ct
 
   # Power envelope correlation
-  envelope_correlation:
+  PowerEnvelopeCorrelation:
     - orth: False
       log: False
       absolute: False
