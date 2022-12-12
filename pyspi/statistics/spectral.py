@@ -323,21 +323,34 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
 
     def __init__(
         self,
-        fs=1,
-        fmin=0.0,
-        fmax=0.5,
-        method="nonparametric",
-        order=None,
-        max_order=50,
-        statistic="mean",
-    ):
+         fs = 1,
+         fmin = 1e-5,
+         fmax = 0.5,
+         method = "nonparametric",
+         order = None,
+         max_order = 50,
+         statistic = "mean",
+    , ignore_nan = True, nan_threshold = 0.5):
         self._fs = fs  # Not yet implemented
         self._fmin = fmin
         self._fmax = fmax
+        self.ignore_nan = ignore_nan
+        self.nan_threshold = nan_threshold
+
+        if self._fmin <= 0.:
+            warnings.warn(f"Frequency minimum set to {self._fmin}; overriding to 1e-5.")
+            self._fmin = 1e-5
+
         if statistic == "mean":
-            self._statfn = np.mean
+            if self.ignore_nan:
+                self._statfn = np.nanmean
+            else:
+                self._statfn = np.mean
         elif statistic == "max":
-            self._statfn = np.max
+            if self.ignore_nan:
+                self._statfn = np.nanmax
+            else:
+                self._statfn = np.max
         else:
             raise NameError(f"Unknown statistic {statistic}")
 
@@ -353,52 +366,71 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             paramstr = f"_parametric_{statistic}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}_order-{order}".replace(
                 ".", "-"
             )
+
         self.identifier = self.identifier + paramstr
 
     def _getkey(self):
         if self._method == "nonparametric":
-            return (self._method, -1, -1)
+            return (self._method,  -1,  -1)
         else:
             return (self._method, self._order, self._max_order)
 
     def _get_cache(self, data):
         key = self._getkey()
+
         try:
-            F = data.SpectralGrangerCausality[key]["F"]
-            freq = data.SpectralGrangerCausality[key]["freq"]
+            F = data.spectral_gc[key]["F"]
+            freq = data.spectral_gc[key]["freq"]
         except (AttributeError, KeyError):
 
             if self._method == "nonparametric":
                 F, freq = super()._get_cache(data)
             else:
                 z = data.to_numpy(squeeze=True)
-                time_series = ts.TimeSeries(z, sampling_interval=1)
+                time_series = ts.TimeSeries(z,  sampling_interval=1)
                 GA = nta.GrangerAnalyzer(
                     time_series, order=self._order, max_order=self._max_order
                 )
 
                 triu_id = np.triu_indices(data.n_processes)
-                F = np.full(GA.causality_xy.shape, np.nan)
-                F[triu_id[0], triu_id[1], :] = GA.causality_xy[
-                    triu_id[0], triu_id[1], :
+
+                F = np.full(GA.causality_xy.shape,  np.nan)
+                F[triu_id[0],  triu_id[1],  :] = GA.causality_xy[
+                    triu_id[0],  triu_id[1],  :
                 ]
-                F[triu_id[1], triu_id[0], :] = GA.causality_yx[
-                    triu_id[0], triu_id[1], :
+                F[triu_id[1],  triu_id[0],  :] = GA.causality_yx[
+                    triu_id[0],  triu_id[1],  :
                 ]
-                F = np.transpose(np.expand_dims(F, axis=3), axes=[3, 2, 1, 0])
+
+                F = np.transpose(np.expand_dims(F,  axis=3),  axes=[3,  2,  1,  0])
                 freq = GA.frequencies
             try:
-                data.SpectralGrangerCausality[key] = {"freq": freq, "F": F}
+                data.spectral_gc[key] = {"freq": freq, "F": F}
             except AttributeError:
-                data.SpectralGrangerCausality = {key: {"freq": freq, "F": F}}
+                data.spectral_gc = {key: {"freq": freq, "F": F}}
+
         return F, freq
 
     @parse_multivariate
-    def multivariate(self, data):
+    def multivariate(self,  data):
         try:
-            F, freq = self._get_cache(data)
+            cache, freq = self._get_cache(data)
             freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
-            return self._statfn(F[0, freq_id, :, :], axis=0)
+
+            result = self._statfn(cache[0,  freq_id,  :,  :], axis=0)
+
+            nan_pct = np.isnan(cache[0, freq_id, :, :]).mean(axis=0)
+            np.fill_diagonal(nan_pct, 0.0)
+
+            isna = nan_pct > self.nan_threshold
+            if isna.any():
+                warnings.warn(f"Spectral GC: the following processes have >{self.nan_threshold*100:.1f}% " \
+                                f"NaN values:\n{np.transpose(np.where(isna))}\nThese indices will be set to NaN. " \
+                                "Set ignore_nan to False or modify nan_threshold parameter if required.")
+                result[isna] = np.nan
+
+            return result
         except ValueError as err:
             warnings.warn(err)
             return np.full((data.n_processes, data.n_processes), np.nan)
+s
