@@ -204,7 +204,7 @@ class PhaseSlopeIndex(mne, Undirected):
             z = np.moveaxis(data.to_numpy(), 2, 0)
 
             freqs = np.linspace(0.2, 0.5, 10)
-            psi, freq, _, _, _ = mnec.PhaseSlopeIndex(
+            psi, freq, _, _, _ = mnec.phase_slope_index(
                 data=z,
                 mode="cwt_morlet",
                 sfreq=self._fs,

@@ -216,7 +216,7 @@ class DebiasedSquaredWeightedPhaseLagIndex(
     def __init__(self, **kwargs):
         self.identifier = "dswpli"
         super().__init__(**kwargs)
-        self._measure = "DebiasedSquaredWeightedPhaseLagIndex"
+        self._measure = "debiased_squared_weighted_phase_lag_index"
 
 
 class PairwisePhaseConsistency(NonparametricSpectralMultivariate, Undirected):
