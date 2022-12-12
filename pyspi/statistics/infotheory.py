@@ -18,7 +18,7 @@ if not jp.isJVMStarted():
     jp.startJVM(jp.getDefaultJVMPath(), '-ea', '-Djava.class.path=' + jarloc)
 
 class jidt_base(unsigned):
-    
+
     # List of (currently) modifiable parameters
     _NNK_PROP_NAME = 'k'
     _AUTO_EMBED_METHOD_PROP_NAME = 'AUTO_EMBED_METHOD'
@@ -175,7 +175,7 @@ class jidt_base(unsigned):
             self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 2)(np.concatenate([x,y],axis=1)))
             data.joint_entropy[key][i,j] = self._entropy_calc.computeAverageLocalOfObservations()
             data.joint_entropy[key][j,i] = data.joint_entropy[key][i,j]
-        
+
         return data.joint_entropy[key][i,j]
 
     # No Theiler window yet (can it be done?)
@@ -241,7 +241,7 @@ class conditional_entropy(jidt_base,directed):
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
         return self._compute_joint_entropy(data,i=i,j=j) - self._compute_entropy(data,i=i)
-        
+
 class mutual_info(jidt_base,undirected):
     name = "Mutual information"
     identifier = 'mi'
@@ -262,7 +262,7 @@ class mutual_info(jidt_base,undirected):
         """
         self._set_theiler_window(data,i,j)
         self._calc.initialise(1, 1)
-        
+
         try:
             src, targ = data.to_numpy(squeeze=True)[[i,j]]
             self._calc.setObservations(jp.JArray(jp.JDouble)(src),jp.JArray(jp.JDouble)(targ))
@@ -383,7 +383,7 @@ class crossmap_entropy(jidt_base,directed):
         self._entropy_calc.initialise(joint.shape[1])
         self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 2)(joint))
         H_xy = self._entropy_calc.computeAverageLocalOfObservations()
-        
+
         self._entropy_calc.initialise(src_past.shape[1])
         self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 2)(src_past))
         H_y = self._entropy_calc.computeAverageLocalOfObservations()
@@ -405,12 +405,15 @@ class causal_entropy(jidt_base,directed):
         H = 0
         src = np.squeeze(src)
         targ = np.squeeze(targ)
-        for i in range(2,self._n):
-            Yp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(targ), i-1)[1:]
+        print(f"targ[-2:]: {targ[-2:]}")
+        for i in range(1, self._n):
+            Yp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(targ), i-1)[:-1]
             Xp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(src), i)
-            XYp = np.concatenate([Yp,Xp],axis=1)
+            XYp = np.concatenate([Yp, Xp],axis=1)
 
             Yf = np.expand_dims(targ[i-1:],1)
+            print(f"Yp[-2:]: {Yp[-1]}")
+            print(f"Yf[-2:]: {Yf[-1]}")
             H = H + self._compute_conditional_entropy(Yf,XYp)
         return H
 
@@ -438,7 +441,7 @@ class directed_info(causal_entropy,directed):
     identifier = 'di'
     labels = ['unsigned','infotheory','temporal','directed']
 
-    def __init__(self,n=10,**kwargs):
+    def __init__(self,n=5,**kwargs):
         super().__init__(**kwargs)
         self._n = n
 
@@ -447,7 +450,7 @@ class directed_info(causal_entropy,directed):
         """ Compute directed information from i to j
         """
         # Would prefer to match these two calls
-        entropy = self._compute_entropy(data,j)
+        entropy = self._compute_entropy(data, j)
         causal_entropy = super(directed_info,self).bivariate(data,i=i,j=j)
 
         return entropy - causal_entropy
@@ -476,7 +479,7 @@ class stochastic_interaction(jidt_base,undirected):
         return H_src + H_targ - H_joint
 
 class integrated_information(undirected,unsigned):
-    
+
     name = "Integrated information"
     identifier = "phi"
     labels = ['linear','unsigned','infotheory','temporal','undirected']
@@ -489,15 +492,15 @@ class integrated_information(undirected,unsigned):
         self._options['type_of_dist'] = 'Gauss'
         self._options['normalization'] = normalization
         self.identifier += f'_{phitype}_t-{delay}_norm-{normalization}'
-    
+
     @parse_bivariate
     def bivariate(self,data,i=None,j=None,verbose=False):
-        
+
         if not octave.exist('phi_comp'):
             path = os.path.dirname(os.path.abspath(__file__)) + '/../lib/PhiToolbox/'
             octave.addpath(octave.genpath(path))
 
         P = [1, 2]
         Z = data.to_numpy(squeeze=True)[[i,j]]
-        
+
         return octave.phi_comp(Z, P, self._params, self._options)
