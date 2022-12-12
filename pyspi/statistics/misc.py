@@ -139,7 +139,7 @@ class GPModel(Directed, Unsigned):
         return mean_squared_error(y_predict, np.ravel(z[j]))
 
 
-class EnvelopeCorrelation(Undirected, Unsigned):
+class PowerEnvelopeCorrelation(Undirected, Unsigned):
     humanname = "Power envelope correlation"
     identifier = "pec"
     labels = ["unsigned", "misc", "undirected"]
