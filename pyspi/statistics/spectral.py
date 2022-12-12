@@ -288,22 +288,24 @@ class spectral_granger(kramer_mv,directed,unsigned):
     identifier = 'sgc'
     labels = ['unsigned','embedding','spectral','directed','lagged']
 
-    def __init__(self, fs = 1, fmin = 1e-5, fmax = 0.5, method = 'nonparametric', order = None, max_order = 50, statistic = 'mean', ignore_nan = True):
+    def __init__(self, fs = 1, fmin = 1e-5, fmax = 0.5, method = 'nonparametric', order = None, max_order = 50, statistic = 'mean', ignore_nan = True, nan_threshold = 0.5):
         self._fs = fs # Not yet implemented
         self._fmin = fmin
         self._fmax = fmax
+        self.ignore_nan = ignore_nan
+        self.nan_threshold = nan_threshold
 
         if self._fmin <= 0.:
             warnings.warn(f"Frequency minimum set to {self._fmin}; overriding to 1e-5.")
             self._fmin = 1e-5
 
         if statistic == 'mean':
-            if ignore_nan:
+            if self.ignore_nan:
                 self._statfn = np.nanmean
             else:
                 self._statfn = np.mean
         elif statistic == 'max':
-            if ignore_nan:
+            if self.ignore_nan:
                 self._statfn = np.nanmax
             else:
                 self._statfn = np.max
@@ -318,6 +320,7 @@ class spectral_granger(kramer_mv,directed,unsigned):
             self._order = order
             self._max_order = max_order
             paramstr = f'_parametric_{statistic}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}_order-{order}'.replace('.','-')
+
         self.identifier = self.identifier + paramstr
 
     def _getkey(self):
@@ -338,16 +341,16 @@ class spectral_granger(kramer_mv,directed,unsigned):
                 F, freq = super()._get_cache(data)
             else:
                 z = data.to_numpy(squeeze=True)
-                time_series = ts.TimeSeries(z,sampling_interval=1)
+                time_series = ts.TimeSeries(z, sampling_interval=1)
                 GA = nta.GrangerAnalyzer(time_series, order=self._order, max_order=self._max_order)
 
                 triu_id = np.triu_indices(data.n_processes)
 
                 F = np.full(GA.causality_xy.shape, np.nan)
-                F[triu_id[0],triu_id[1],:] = GA.causality_xy[triu_id[0], triu_id[1], :]
-                F[triu_id[1],triu_id[0],:] = GA.causality_yx[triu_id[0], triu_id[1], :]
+                F[triu_id[0], triu_id[1], :] = GA.causality_xy[triu_id[0], triu_id[1], :]
+                F[triu_id[1], triu_id[0], :] = GA.causality_yx[triu_id[0], triu_id[1], :]
 
-                F = np.transpose(np.expand_dims(F, axis=3), axes=[3,2,1,0])
+                F = np.transpose(np.expand_dims(F, axis=3), axes=[3, 2, 1, 0])
                 freq = GA.frequencies
             try:
                 data.spectral_granger[key] = {'freq': freq, 'F': F}
@@ -365,12 +368,15 @@ class spectral_granger(kramer_mv,directed,unsigned):
 
             result = self._statfn(cache[0, freq_id, :, :], axis=0)
 
-            nan_pct = np.isnan(cache[0, freq_id, :, :]).mean()
+            nan_pct = np.isnan(cache[0, freq_id, :, :]).mean(axis=0)
+            np.fill_diagonal(nan_pct, 0.0)
 
-            insa = (nan_pct > self.nan_threshold).any()
-            if insa.any():
-                warnings.warn(f"Spectral GC: the following processes have >{self.nan_threshold*100:.1f}% nan values: {insa}")
-                result[insa] = np.nan
+            isna = nan_pct > self.nan_threshold
+            if isna.any():
+                warnings.warn(f"Spectral GC: the following processes have >{self.nan_threshold*100:.1f}% " \
+                                f"NaN values:\n{np.transpose(np.where(isna))}\nThese indices will be set to NaN. " \
+                                "Set ignore_nan to False, or modify nan_threshold parameter if needed.")
+                result[isna] = np.nan
 
             return result
         except ValueError as err:
