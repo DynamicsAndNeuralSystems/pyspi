@@ -375,7 +375,7 @@ class spectral_granger(kramer_mv,directed,unsigned):
             if isna.any():
                 warnings.warn(f"Spectral GC: the following processes have >{self.nan_threshold*100:.1f}% " \
                                 f"NaN values:\n{np.transpose(np.where(isna))}\nThese indices will be set to NaN. " \
-                                "Set ignore_nan to False, or modify nan_threshold parameter if needed.")
+                                "Set ignore_nan to False or modify nan_threshold parameter if required.")
                 result[isna] = np.nan
 
             return result
