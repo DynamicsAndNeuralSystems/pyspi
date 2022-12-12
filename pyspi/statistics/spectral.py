@@ -1,7 +1,7 @@
 import numpy as np
 from copy import deepcopy
 
-import spectral_connectivity as sc # For directed spectral statistics (excl. spectral GC) 
+import spectral_connectivity as sc # For directed spectral statistics (excl. spectral GC)
 from pyspi.base import directed, parse_bivariate, undirected, parse_multivariate, unsigned
 import nitime.analysis as nta
 import nitime.timeseries as ts
@@ -18,7 +18,7 @@ class kramer(unsigned):
     def __init__(self,fs=1,fmin=0,fmax=None,statistic='mean'):
         if fmax is None:
             fmax = fs/2
-            
+
         self._fs = fs
         if fs != 1:
             warnings.warn('Multiple sampling frequencies not yet handled.')
@@ -265,7 +265,7 @@ class phase_slope_index(kramer_mv,undirected):
         self.identifier = 'psi'
         super().__init__(**kwargs)
         self._measure = 'phase_slope_index'
-    
+
     def _get_statistic(self,C):
         return C.phase_slope_index(frequencies_of_interest=[self._fmin,self._fmax],
                                     frequency_resolution=(self._fmax-self._fmin)/50)
@@ -278,7 +278,7 @@ class group_delay(kramer_mv,directed):
         self.identifier = 'gd'
         super().__init__(**kwargs)
         self._measure = 'group_delay'
-    
+
     def _get_statistic(self,C):
         return C.group_delay(frequencies_of_interest=[self._fmin,self._fmax],
                             frequency_resolution=(self._fmax-self._fmin)/50)
@@ -288,17 +288,24 @@ class spectral_granger(kramer_mv,directed,unsigned):
     identifier = 'sgc'
     labels = ['unsigned','embedding','spectral','directed','lagged']
 
-    def __init__(self,fs=1,fmin=0.0,fmax=0.5,method='nonparametric',order=None,max_order=50,statistic='mean',ignore_NaN=True):
+    def __init__(self, fs = 1, fmin = 1e-5, fmax = 0.5, method = 'nonparametric', order = None, max_order = 50, statistic = 'mean', ignore_nan = True, nan_threshold = 0.5):
         self._fs = fs # Not yet implemented
         self._fmin = fmin
         self._fmax = fmax
+        self.ignore_nan = ignore_nan
+        self.nan_threshold = nan_threshold
+
+        if self._fmin <= 0.:
+            warnings.warn(f"Frequency minimum set to {self._fmin}; overriding to 1e-5.")
+            self._fmin = 1e-5
+
         if statistic == 'mean':
-            if ignore_NaN:
+            if self.ignore_nan:
                 self._statfn = np.nanmean
             else:
                 self._statfn = np.mean
         elif statistic == 'max':
-            if ignore_NaN:
+            if self.ignore_nan:
                 self._statfn = np.nanmax
             else:
                 self._statfn = np.max
@@ -313,16 +320,18 @@ class spectral_granger(kramer_mv,directed,unsigned):
             self._order = order
             self._max_order = max_order
             paramstr = f'_parametric_{statistic}_fs-{fs}_fmin-{fmin:.3g}_fmax-{fmax:.3g}_order-{order}'.replace('.','-')
+
         self.identifier = self.identifier + paramstr
 
     def _getkey(self):
         if self._method == 'nonparametric':
-            return (self._method,-1,-1)
+            return (self._method, -1, -1)
         else:
             return (self._method,self._order,self._max_order)
 
     def _get_cache(self,data):
         key = self._getkey()
+
         try:
             F = data.spectral_granger[key]['F']
             freq = data.spectral_granger[key]['freq']
@@ -332,52 +341,42 @@ class spectral_granger(kramer_mv,directed,unsigned):
                 F, freq = super()._get_cache(data)
             else:
                 z = data.to_numpy(squeeze=True)
-                time_series = ts.TimeSeries(z,sampling_interval=1)
+                time_series = ts.TimeSeries(z, sampling_interval=1)
                 GA = nta.GrangerAnalyzer(time_series, order=self._order, max_order=self._max_order)
 
                 triu_id = np.triu_indices(data.n_processes)
-                F = np.full(GA.causality_xy.shape,np.nan)
-                F[triu_id[0],triu_id[1],:] = GA.causality_xy[triu_id[0],triu_id[1],:]
-                F[triu_id[1],triu_id[0],:] = GA.causality_yx[triu_id[0],triu_id[1],:]
-                F = np.transpose(np.expand_dims(F,axis=3),axes=[3,2,1,0])
+
+                F = np.full(GA.causality_xy.shape, np.nan)
+                F[triu_id[0], triu_id[1], :] = GA.causality_xy[triu_id[0], triu_id[1], :]
+                F[triu_id[1], triu_id[0], :] = GA.causality_yx[triu_id[0], triu_id[1], :]
+
+                F = np.transpose(np.expand_dims(F, axis=3), axes=[3, 2, 1, 0])
                 freq = GA.frequencies
             try:
                 data.spectral_granger[key] = {'freq': freq, 'F': F}
             except AttributeError:
                 data.spectral_granger = {key: {'freq': freq, 'F': F}}
+
         return F, freq
 
     @parse_multivariate
-    def multivariate(self,data):
+    def multivariate(self, data):
         try:
-            F, freq = self._get_cache(data)
-            # Restrict frequencies to those greater than 0
-            if self._fmin == 0:
-                freq_id = np.where((freq > self._fmin) * (freq <= self._fmax))[0]
-            else:
-                freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
+            cache, freq = self._get_cache(data)
 
-            result = self._statfn(F[0,freq_id,:,:], axis=0)
+            freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
 
-            # extract proc0 to proc1 SGC F values
-            proc0_proc1_SGC = F[0,freq_id,0,1]
-            # extract proc0 to proc1 SGC F values
-            proc1_proc0_SGC = F[0,freq_id,1,0]
+            result = self._statfn(cache[0, freq_id, :, :], axis=0)
 
-            # Get number of frequency values
-            num_freqs = len(proc0_proc1_SGC)
-            
-            # If more than 10% of values are NaN in either direction, 
-            # set the SGC result to NaN
-            perc_proc0_proc1_NaN = np.count_nonzero(np.isnan(proc0_proc1_SGC))/num_freqs
-            perc_proc1_proc0_NaN = np.count_nonzero(np.isnan(proc1_proc0_SGC))/num_freqs
+            nan_pct = np.isnan(cache[0, freq_id, :, :]).mean(axis=0)
+            np.fill_diagonal(nan_pct, 0.0)
 
-            if perc_proc0_proc1_NaN > 0.1:
-                warnings.warn("More than 10% NaN from proc0 to proc1, setting to NaN.")
-                result[0,1] = float('NaN')
-            if perc_proc1_proc0_NaN > 0.1:
-                warnings.warn("More than 10% NaN from proc0 to proc1, setting to NaN.")
-                result[1,0] = float('NaN')
+            isna = nan_pct > self.nan_threshold
+            if isna.any():
+                warnings.warn(f"Spectral GC: the following processes have >{self.nan_threshold*100:.1f}% " \
+                                f"NaN values:\n{np.transpose(np.where(isna))}\nThese indices will be set to NaN. " \
+                                "Set ignore_nan to False, or modify nan_threshold parameter if needed.")
+                result[isna] = np.nan
 
             return result
         except ValueError as err:
