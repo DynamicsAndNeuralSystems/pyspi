@@ -380,7 +380,7 @@
 
 # statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
 .statistics.spectral:
-  coherence_phase:
+  CoherencePhase:
     - fs: 1
 
     - fmin: 0
@@ -400,7 +400,7 @@
       fmax: 0.5
       statistic: max
 
-  coherence_magnitude:
+  CoherenceMagnitude:
     - fs: 1
 
     - fmin: 0
@@ -421,7 +421,7 @@
       statistic: max
 
   # Coherence (ordinal or squared? imaginary components of the coherence)
-  icoherence:
+  ImaginaryCoherence:
     - fs: 1
 
     - fmin: 0
@@ -441,7 +441,7 @@
       fmax: 0.5
       statistic: max
 
-  phase_slope_index:
+  PhaseSlopeIndex:
     - fmin: 0
       fmax: 0.5
 
@@ -451,7 +451,7 @@
     - fmin: 0.25
       fmax: 0.5
 
-  phase_locking_value:
+  PhaseLockingValue:
     - fs: 1
 
     - fmin: 0
@@ -471,7 +471,7 @@
       fmax: 0.5
       statistic: max
 
-  phase_lag_index:
+  PhaseLagIndex:
     - fs: 1
 
     - fmin: 0
@@ -491,7 +491,7 @@
       fmax: 0.5
       statistic: max
 
-  weighted_phase_lag_index:
+  WeightedPhaseLagIndex:
     - fs: 1
 
     - fmin: 0
@@ -511,7 +511,7 @@
       fmax: 0.5
       statistic: max
 
-  debiased_squared_phase_lag_index:
+  DebiasedSquaredPhaseLagIndex:
     - fs: 1
 
     - fmin: 0
@@ -531,7 +531,7 @@
       fmax: 0.5
       statistic: max
 
-  debiased_squared_weighted_phase_lag_index:
+  DebiasedSquaredWeightedPhaseLagIndex:
     - fs: 1
 
     - fmin: 0
@@ -551,7 +551,7 @@
       fmax: 0.5
       statistic: max
 
-  pairwise_phase_consistency:
+  PairwisePhaseConsistency:
     - fs: 1
 
     - fmin: 0
@@ -571,7 +571,7 @@
       fmax: 0.5
       statistic: max
 
-  directed_transfer_function:
+  DirectedTransferFunction:
     - fs: 1
 
     - fmin: 0
@@ -611,7 +611,7 @@
   #     fmax: 0.5
   #     statistic: max
 
-  directed_coherence:
+  DirectedCoherence:
     - fs: 1
 
     - fmin: 0
@@ -631,7 +631,7 @@
       fmax: 0.5
       statistic: max
 
-  partial_directed_coherence:
+  PartialDirectedCoherence:
     - fs: 1
 
     - fmin: 0
@@ -651,7 +651,7 @@
       fmax: 0.5
       statistic: max
 
-  generalized_partial_directed_coherence:
+  GeneralizedPartialDirectedCoherence:
     - fs: 1
 
     - fmin: 0
@@ -671,7 +671,7 @@
       fmax: 0.5
       statistic: max
 
-  direct_directed_transfer_function:
+  DirectDirectedTransferFunction:
     - fs: 1
 
     - fmin: 0
@@ -691,7 +691,7 @@
       fmax: 0.5
       statistic: max
 
-  group_delay:
+  GroupDelay:
     - fmin: 0
       fmax: 0.5
       statistic: delay
@@ -704,7 +704,7 @@
       fmax: 0.5
       statistic: delay
 
-  spectral_granger:
+  SpectralGrangerCausality:
     # Non-parametric Granger causality (no VAR model)
     - method: nonparametric
       fmin: 0
@@ -841,190 +841,9 @@
       method: parametric
       statistic: max
 
-# statistics that analyse in the wavlet-domain (only Mortlet wavelet's at the moment)
+# statistics that analyse in the wavelet-domain (only Mortlet wavelet's at the moment)
 .statistics.wavelet:
-  # coherence_magnitude:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # coherence_phase:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # # Coherence (ordinal or squared? imaginary components of the coherence)
-  # icoherence:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # phase_locking_value:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # pairwise_phase_consistency:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # phase_lag_index:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # debiased_squared_phase_lag_index:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # weighted_phase_lag_index:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # debiased_weighted_squared_phase_lag_index:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  phase_slope_index:
+  PhaseSlopeIndex:
     - fs: 1
 
     - fmin: 0
