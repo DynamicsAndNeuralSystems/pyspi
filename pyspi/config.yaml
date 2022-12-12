@@ -86,7 +86,7 @@
       sigonly: False
 
 .statistics.distance:
-  pdist:
+  PairwiseDistance:
     - metric: "euclidean"
     - metric: "cityblock"
     - metric: "cosine"
@@ -95,47 +95,47 @@
     - metric: "braycurtis"
 
   # Distance correlation
-  dcorr:
+  DistanceCorrelation:
     - biased: False
     - biased: True
 
   # Multi-scale graph correlation
-  mgc:
+  MultiscaleGraphCorrelation:
 
   # Hilbert-Schmidt independence criterion
-  hsic:
+  HSIC:
     - biased: False
     - biased: True
 
   # Heller-Heller-Gorfine (HHG) test
-  hhg:
+  HHG:
 
   # Multi-scale graph correlation for time series
-  mgcx:
+  CrossMultiscaleGraphCorrelation:
     - max_lag: 1
     - max_lag: 10
 
   # Distance correlation for time series
-  dcorrx:
+  CrossDistanceCorrelation:
     - max_lag: 1
     - max_lag: 10
 
-  dynamic_time_warping:
+  DynamicTimeWarping:
     - global_constraint: null
     - global_constraint: itakura
     - global_constraint: sakoe_chiba
 
-  soft_dynamic_time_warping:
+  SoftDynamicTimeWarping:
     - global_constraint: null
     - global_constraint: itakura
     - global_constraint: sakoe_chiba
 
-  longest_common_subsequence:
+  LongestCommonSubsequence:
     - global_constraint: null
     - global_constraint: itakura
     - global_constraint: sakoe_chiba
 
-  barycenter:
+  Barycenter:
     - mode: euclidean
       statistic: mean
     - mode: euclidean

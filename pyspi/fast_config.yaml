@@ -69,7 +69,7 @@
       sigonly: False
 
 .statistics.distance:
-  pdist:
+  PairwiseDistance:
     - metric: "euclidean"
     - metric: "cityblock"
     - metric: "cosine"
@@ -78,16 +78,16 @@
     - metric: "braycurtis"
 
   # Distance correlation
-  dcorr:
+  DistanceCorrelation:
     - biased: False
     - biased: True
 
   # Hilbert-Schmidt independence criterion
-  hsic:
+  HSIC:
     - biased: False
     - biased: True
 
-  barycenter:
+  Barycenter:
     - mode: euclidean
       statistic: mean
     - mode: euclidean
