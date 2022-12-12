@@ -1,6 +1,5 @@
 # Basic statistics
 .statistics.basic:
-
   # Covariance
   covariance:
     - estimator: EmpiricalCovariance
@@ -52,32 +51,31 @@
 
   # statistics based on cross-correlation (squared means we square the xcorr, not the output)
   xcorr:
-    - statistic: 'max'
+    - statistic: "max"
 
-    - statistic: 'max'
+    - statistic: "max"
       squared: True
 
-    - statistic: 'mean'
+    - statistic: "mean"
 
-    - statistic: 'mean'
+    - statistic: "mean"
       squared: True
 
-    - statistic: 'mean'
+    - statistic: "mean"
       sigonly: False
 
-    - statistic: 'mean'
+    - statistic: "mean"
       squared: True
       sigonly: False
 
 .statistics.distance:
-
   pdist:
-    - metric: 'euclidean'
-    - metric: 'cityblock'
-    - metric: 'cosine'
-    - metric: 'chebyshev'
-    - metric: 'canberra'
-    - metric: 'braycurtis'
+    - metric: "euclidean"
+    - metric: "cityblock"
+    - metric: "cosine"
+    - metric: "chebyshev"
+    - metric: "canberra"
+    - metric: "braycurtis"
 
   # Distance correlation
   dcorr:
@@ -90,21 +88,20 @@
     - biased: True
 
   barycenter:
-  - mode: euclidean
-    statistic: mean
-  - mode: euclidean
-    statistic: max
+    - mode: euclidean
+      statistic: mean
+    - mode: euclidean
+      statistic: max
 
-  - mode: euclidean
-    statistic: mean
-    squared: True
+    - mode: euclidean
+      statistic: mean
+      squared: True
 
-  - mode: euclidean
-    statistic: max
-    squared: True
+    - mode: euclidean
+      statistic: max
+      squared: True
 
 .statistics.causal:
-
   # Additive noise model
   anm:
 
@@ -119,9 +116,7 @@
 
 # Information-theoretic statistics
 .statistics.infotheory:
-
   JointEntropy: # No theiler window yet
-
     - estimator: gaussian
 
     - estimator: kozachenko
@@ -129,13 +124,11 @@
     - estimator: kernel
 
   ConditionalEntropy: # No theiler window yet
-
     - estimator: gaussian
 
     - estimator: kernel
 
   CrossmapEntropy: # No theiler window yet
-
     - estimator: gaussian
       history_length: 1
 
@@ -145,7 +138,6 @@
     - estimator: kernel
       history_length: 1
 
-
     - estimator: gaussian
       history_length: 10
 
@@ -154,10 +146,8 @@
 
     - estimator: kernel
       history_length: 10
-
 
   StochasticInteraction: # No theiler window
-
     - estimator: gaussian
 
     - estimator: kozachenko
@@ -178,7 +168,7 @@
     - estimator: kernel
       kernel_width: 0.25
 
-# Mutual information
+  # Mutual information
   TimeLaggedMutualInfo:
     - estimator: gaussian
 
@@ -194,7 +184,6 @@
 
   # Transfer entropy
   TransferEntropy:
-
     # Kraskov estimator with fixed embedding of 1 for source/target and DCE
     - estimator: kraskov
       prop_k: 4
@@ -208,7 +197,6 @@
 
 # statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
 .statistics.spectral:
-
   coherence_phase:
     - fs: 1
 
@@ -534,7 +522,7 @@
       statistic: delay
 
   spectral_granger:
-      # Non-parametric Granger causality (no VAR model)
+    # Non-parametric Granger causality (no VAR model)
     - method: nonparametric
       fmin: 0
       fmax: 0.5
@@ -672,7 +660,6 @@
 
 # statistics that analyse in the wavlet-domain (only Mortlet wavelet's at the moment)
 .statistics.wavelet:
-
   # coherence_magnitude:
   #   - fs: 1
 
@@ -876,8 +863,7 @@
       statistic: max
 
 .statistics.misc:
-
-  linearmodel:
+  LinearModel:
     - model: Ridge
     - model: Lasso
     - model: SGDRegressor
@@ -885,7 +871,7 @@
     - model: BayesianRidge
 
   # Cointegration
-  coint:
+  Cointegration:
     - method: johansen
       statistic: max_eig_stat
       det_order: 0 # Constant trend
@@ -943,7 +929,6 @@
       autolag: bic
       maxlag: 10
       trend: ct
-
 
   # Power envelope correlation
   envelope_correlation:
