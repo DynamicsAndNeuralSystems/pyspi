@@ -187,19 +187,19 @@
 
 .statistics.causal:
   # Additive noise model
-  anm:
+  AdditiveNoiseModel:
 
   # Conditional distribution similarity statistic
-  cds:
+  ConditionalDistributionSimilarity:
 
   # Regression error-based causal inference
-  reci:
+  RegressionErrorCausalInference:
 
   # Information-geometric conditional independence
-  igci:
+  InformationGeometricConditionalIndependence:
 
   # Convergent-cross mapping
-  ccm:
+  ConvergentCrossMapping:
     - statistic: mean
     - statistic: max
     - statistic: diff
