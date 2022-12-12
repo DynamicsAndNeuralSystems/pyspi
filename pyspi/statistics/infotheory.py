@@ -400,21 +400,23 @@ class causal_entropy(jidt_base,directed):
         super().__init__(**kwargs)
         self._n = n
 
-    def _compute_causal_entropy(self,src,targ):
-        mUtils = jp.JPackage('infodynamics.utils').MatrixUtils
-        H = 0
+    def _compute_causal_entropy(self, src, targ):
+        m_utils = jp.JPackage('infodynamics.utils').MatrixUtils
+
         src = np.squeeze(src)
         targ = np.squeeze(targ)
+
         print(f"targ[-2:]: {targ[-2:]}")
+        H = 0
         for i in range(1, self._n):
-            Yp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(targ), i-1)[:-1]
-            Xp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(src), i)
+            Yp = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(targ), i-1)[:-1]
+            Xp = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble,1)(src), i)
             XYp = np.concatenate([Yp, Xp],axis=1)
 
             Yf = np.expand_dims(targ[i-1:],1)
             print(f"Yp[-2:]: {Yp[-1]}")
             print(f"Yf[-2:]: {Yf[-1]}")
-            H = H + self._compute_conditional_entropy(Yf,XYp)
+            H = H + self._compute_conditional_entropy(Yf, XYp) / (self._n - 1)
         return H
 
     def _getkey(self):
@@ -449,9 +451,8 @@ class directed_info(causal_entropy,directed):
     def bivariate(self,data,i=None,j=None):
         """ Compute directed information from i to j
         """
-        # Would prefer to match these two calls
         entropy = self._compute_entropy(data, j)
-        causal_entropy = super(directed_info,self).bivariate(data,i=i,j=j)
+        causal_entropy = super(directed_info,self).bivariate(data, i=i, j=j)
 
         return entropy - causal_entropy
 
