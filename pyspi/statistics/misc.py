@@ -72,11 +72,13 @@ class Cointegration(Undirected, Unsigned):
                     maxlag=self._maxlag,
                     trend=self._trend,
                 )
+
                 ci = {"tstat": stats[0]}
             else:
                 stats = coint_johansen(
                     z[[i, j]].T, det_order=self._det_order, k_ar_diff=self._k_ar_diff
                 )
+
                 ci = {
                     "max_eig_stat": stats.max_eig_stat[0],
                     "trace_stat": stats.trace_stat[0],
