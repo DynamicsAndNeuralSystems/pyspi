@@ -165,7 +165,9 @@ class JIDTBase(Unsigned):
             self._entropy_calc.initialise(1)
             self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 1)(x))
 
-            data.entropy[key][i] = self._entropy_calc.computeAverageLocalOfObservations()
+            data.entropy[key][
+                i
+            ] = self._entropy_calc.computeAverageLocalOfObservations()
 
         return data.entropy[key][i]
 
@@ -189,7 +191,9 @@ class JIDTBase(Unsigned):
                 jp.JArray(jp.JDouble, 2)(np.concatenate([x, y], axis=1))
             )
 
-            data.JointEntropy[key][i, j] = self._entropy_calc.computeAverageLocalOfObservations()
+            data.JointEntropy[key][
+                i, j
+            ] = self._entropy_calc.computeAverageLocalOfObservations()
             data.JointEntropy[key][j, i] = data.JointEntropy[key][i, j]
 
         return data.JointEntropy[key][i, j]
@@ -454,20 +458,22 @@ class CausalEntropy(JIDTBase, Directed):
         super().__init__(**kwargs)
         self._n = n
 
-    def _compute_causal_entropy(self,  src,  targ):
+    def _compute_causal_entropy(self, src, targ):
         m_utils = jp.JPackage("infodynamics.utils").MatrixUtils
 
         src = np.squeeze(src)
         targ = np.squeeze(targ)
 
         H = 0
-        for i in range(1,  self._n):
-            Yp = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i - 1)[:-1]
+        for i in range(1, self._n + 1):
+            Yp = m_utils.makeDelayEmbeddingVector(
+                jp.JArray(jp.JDouble, 1)(targ), i - 1
+            )[:-1]
             Xp = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(src), i)
-            XYp = np.concatenate([Yp,  Xp], axis=1)
+            XYp = np.concatenate([Yp, Xp], axis=1)
 
             Yf = np.expand_dims(targ[i - 1 :], 1)
-            H = H + self._compute_conditional_entropy(Yf,  XYp) / (self._n - 1)
+            H = H + self._compute_conditional_entropy(Yf, XYp) / self._n
         return H
 
     def _getkey(self):
@@ -500,12 +506,13 @@ class DirectedInfo(CausalEntropy, Directed):
     def __init__(self, n=5, **kwargs):
         super().__init__(**kwargs)
         self._n = n
+        self._causal_entropy = super(DirectedInfo, self)
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         """Compute directed information from i to j"""
-        entropy = self._compute_entropy(data,  j)
-        causal_entropy = super(DirectedInfo, self).bivariate(data,  i=i,  j=j)
+        entropy = self._compute_entropy(data, j)
+        causal_entropy = self._causal_entropy.bivariate(data, i=i, j=j)
 
         return entropy - causal_entropy
 
@@ -533,6 +540,7 @@ class StochasticInteraction(JIDTBase, Undirected):
 
         return H_src + H_targ - H_joint
 
+
 class IntegratedInformation(Undirected, Unsigned):
 
     name = "Integrated information"
@@ -556,6 +564,6 @@ class IntegratedInformation(Undirected, Unsigned):
             octave.addpath(octave.genpath(path))
 
         P = [1, 2]
-        Z = data.to_numpy(squeeze=True)[[i,j]]
+        Z = data.to_numpy(squeeze=True)[[i, j]]
 
         return octave.phi_comp(Z, P, self._params, self._options)
