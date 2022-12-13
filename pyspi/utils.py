@@ -1,4 +1,4 @@
-"""Provide _nats_ utility functions."""
+"""pyspi utility functions."""
 import numpy as np
 from scipy.stats import zscore
 import warnings
@@ -46,9 +46,11 @@ def acf(x,mode='positive'):
     """
     if x.ndim > 1:
         x = np.squeeze(x)
+
     x = zscore(x)
     acf = np.correlate(x,x,mode='full')
     acf = acf / acf[acf.size//2]
+
     if mode == 'positive':
         return acf[acf.size//2:]
     else:
@@ -92,13 +94,14 @@ def standardise(a, dimension=0, df=1):
         numpy array
             standardised data
     """
-    # Don't divide by standard devitation if process is constant.
+    # Avoid division by standard devitation if the process is constant.
     a_sd = a.std(axis=dimension, ddof=df)
+
     if np.isclose(a_sd, 0):
         return a - a.mean(axis=dimension)
     else:
         return (a - a.mean(axis=dimension)) / a_sd
 
 def convert_mdf_to_ddf(df):
-    ddf = pd.pivot_table(data=df.stack(dropna=False).reset_index(),index='Dataset',columns=['SPI-1','SPI-2'],dropna=False).T.droplevel(0)
+    ddf = pd.pivot_table(data=df.stack(dropna=False).reset_index(),index='Dataset',columns=['SPI-1', 'SPI-2'],dropna=False).T.droplevel(0)
     return ddf
