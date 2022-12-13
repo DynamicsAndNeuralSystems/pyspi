@@ -1,4 +1,4 @@
-""" This simple demo will show you how to quickly get started with evaluating all SPIs.
+""" This simple demo will show you how to quickly get started with PySPI.
 """
 import numpy as np
 from pyspi.calculator import Calculator
