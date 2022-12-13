@@ -161,17 +161,17 @@ class JIDTBase(Unsigned):
 
         if data.entropy[key][i] == -np.inf:
             x = np.squeeze(data.to_numpy()[i])
+
             self._entropy_calc.initialise(1)
             self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 1)(x))
-            data.entropy[key][
-                i
-            ] = self._entropy_calc.computeAverageLocalOfObservations()
+
+            data.entropy[key][i] = self._entropy_calc.computeAverageLocalOfObservations()
 
         return data.entropy[key][i]
 
-    # No Theiler window yet (can it be done?)
+    # No Theiler window is available in the JIDT estimator
     @parse_bivariate
-    def _compute_JointEntropy(self, data, i, j):
+    def _compute_joint_entropy(self, data, i, j):
         if not hasattr(data, "JointEntropy"):
             data.JointEntropy = {}
 
@@ -188,27 +188,24 @@ class JIDTBase(Unsigned):
             self._entropy_calc.setObservations(
                 jp.JArray(jp.JDouble, 2)(np.concatenate([x, y], axis=1))
             )
-            data.JointEntropy[key][
-                i, j
-            ] = self._entropy_calc.computeAverageLocalOfObservations()
+
+            data.JointEntropy[key][i, j] = self._entropy_calc.computeAverageLocalOfObservations()
             data.JointEntropy[key][j, i] = data.JointEntropy[key][i, j]
 
         return data.JointEntropy[key][i, j]
 
-    # No Theiler window yet (can it be done?)
-    """
-    TODO: match this function with previous ones (perhaps always allow multiple i's and j's)
-    """
-
+    # No Theiler window is available in the JIDT estimator
     def _compute_conditional_entropy(self, X, Y):
         XY = np.concatenate([X, Y], axis=1)
 
         self._entropy_calc.initialise(XY.shape[1])
         self._entropy_calc.setObservations(jp.JArray(jp.JDouble, XY.ndim)(XY))
+
         H_XY = self._entropy_calc.computeAverageLocalOfObservations()
 
         self._entropy_calc.initialise(Y.shape[1])
         self._entropy_calc.setObservations(jp.JArray(jp.JDouble, Y.ndim)(Y))
+
         H_Y = self._entropy_calc.computeAverageLocalOfObservations()
 
         return H_XY - H_Y
@@ -218,12 +215,14 @@ class JIDTBase(Unsigned):
             if not hasattr(data, "theiler"):
                 z = data.to_numpy()
                 theiler_window = -np.ones((data.n_processes, data.n_processes))
+
                 # Compute effective sample size for each pair
                 for _i in range(data.n_processes):
                     targ = z[_i]
                     for _j in range(_i + 1, data.n_processes):
                         src = z[_j]
-                        # Init the Theiler window using Bartlett's formula
+
+                        # Initialize the Theiler window using Bartlett's formula
                         theiler_window[_i, _j] = 2 * np.dot(
                             utils.acf(src), utils.acf(targ)
                         )
@@ -250,7 +249,7 @@ class JointEntropy(JIDTBase, Undirected):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        return self._compute_JointEntropy(data, i=i, j=j)
+        return self._compute_joint_entropy(data, i=i, j=j)
 
 
 class ConditionalEntropy(JIDTBase, Directed):
@@ -264,7 +263,7 @@ class ConditionalEntropy(JIDTBase, Directed):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        return self._compute_JointEntropy(data, i=i, j=j) - self._compute_entropy(
+        return self._compute_joint_entropy(data, i=i, j=j) - self._compute_entropy(
             data, i=i
         )
 
