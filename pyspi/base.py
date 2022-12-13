@@ -3,14 +3,7 @@ from pyspi.data import Data
 import warnings, copy
 
 """
-Base class for pairwise statistics.
-
-The child classes should either overload the mpi method (if it computes the full mpi)
-or the bivariate method if it computes only pairwise statisticss
-"""
-
-"""
-Some parsing functions for decorating so that we can either input the processes directly or use the data structure
+Some parsing functions for decorating so that we can either input the time series directly or use the data structure
 """
 def parse_univariate(function):
     def parsed_function(self,data,i=None,inplace=True):
@@ -20,7 +13,7 @@ def parse_univariate(function):
         elif not inplace:
             # Ensure we don't write over the original
             data = copy.deepcopy(data)
-    
+
         if i is None:
             if data.n_processes == 1:
                 i = 0
@@ -36,7 +29,7 @@ def parse_bivariate(function):
         if not isinstance(data,Data):
             if data2 is None:
                 raise TypeError('Input must be either a pyspi.data object or two 1D-array inputs.'
-                                    f' Received {type(data)} and {type(data2)}.')                        
+                                    f' Received {type(data)} and {type(data2)}.')
             data1 = data
             data = Data()
             data.add_process(data1)
@@ -44,7 +37,7 @@ def parse_bivariate(function):
         elif not inplace:
             # Ensure we don't write over the original
             data = copy.deepcopy(data)
-    
+
         if i is None and j is None:
             if data.n_processes == 2:
                 i,j = 0,1
@@ -74,8 +67,8 @@ def parse_multivariate(function):
 
     return parsed_function
 
-class directed:
-    """ Directed statistics
+class Directed:
+    """ Base class for directed statistics
     """
 
     name = 'Bivariate base class'
@@ -125,7 +118,9 @@ class directed:
                 pass
         return None
 
-class undirected(directed):
+class Undirected(Directed):
+    """ Base class for directed statistics
+    """
 
     name = 'Base class'
     identifier = 'base'
@@ -136,17 +131,20 @@ class undirected(directed):
 
     @parse_multivariate
     def multivariate(self,data):
-        A = super(undirected,self).multivariate(data)
-        
+        A = super(Undirected,self).multivariate(data)
+
         li = np.tril_indices(data.n_processes,-1)
         A[li] = A.T[li]
         return A
 
-# Maybe this would be more pythonic as decorators or something?
-class signed:
+class Signed:
+    """ Base class for signed SPIs
+    """
     def issigned(self):
         return True
-        
-class unsigned:
+
+class Unsigned:
+    """ Base class for unsigned SPIs
+    """
     def issigned(self):
         return False
