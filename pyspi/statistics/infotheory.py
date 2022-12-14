@@ -174,29 +174,23 @@ class JIDTBase(Unsigned):
     # No Theiler window is available in the JIDT estimator
     @parse_bivariate
     def _compute_joint_entropy(self, data, i, j):
-        if not hasattr(data, "JointEntropy"):
-            data.JointEntropy = {}
+        if not hasattr(data, "joint_entropy"):
+            data.joint_entropy = {}
 
         key = self._getkey()
-        if key not in data.JointEntropy:
-            data.JointEntropy[key] = np.full(
-                (data.n_processes, data.n_processes), -np.inf
-            )
+        if key not in data.joint_entropy:
+            data.joint_entropy[key] = np.full((data.n_processes, data.n_processes), -np.infty)
 
-        if data.JointEntropy[key][i, j] == -np.inf:
+        if data.joint_entropy[key][i, j] == -np.inf:
             x, y = data.to_numpy()[[i, j]]
 
             self._entropy_calc.initialise(2)
-            self._entropy_calc.setObservations(
-                jp.JArray(jp.JDouble, 2)(np.concatenate([x, y], axis=1))
-            )
+            self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 2)(np.concatenate([x, y], axis=1)))
 
-            data.JointEntropy[key][
-                i, j
-            ] = self._entropy_calc.computeAverageLocalOfObservations()
-            data.JointEntropy[key][j, i] = data.JointEntropy[key][i, j]
+            data.joint_entropy[key][i, j] = self._entropy_calc.computeAverageLocalOfObservations()
+            data.joint_entropy[key][j, i] = data.joint_entropy[key][i, j]
 
-        return data.JointEntropy[key][i, j]
+        return data.joint_entropy[key][i, j]
 
     # No Theiler window is available in the JIDT estimator
     def _compute_conditional_entropy(self, X, Y):
@@ -457,24 +451,22 @@ class CausalEntropy(JIDTBase, Directed):
     def __init__(self, n=5, **kwargs):
         super().__init__(**kwargs)
         self._n = n
+        self.m_utils = jp.JPackage("infodynamics.utils").MatrixUtils
 
     def _compute_causal_entropy(self, src, targ):
-        m_utils = jp.JPackage("infodynamics.utils").MatrixUtils
 
         src = np.squeeze(src)
         targ = np.squeeze(targ)
 
-        H = 0
+        causal_entropy = 0
         for i in range(1, self._n + 1):
-            Yp = m_utils.makeDelayEmbeddingVector(
-                jp.JArray(jp.JDouble, 1)(targ), i - 1
-            )[:-1]
-            Xp = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(src), i)
+            Yp = self.m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i - 1)[:-1]
+            Xp = self.m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(src), i)
             XYp = np.concatenate([Yp, Xp], axis=1)
 
             Yf = np.expand_dims(targ[i - 1 :], 1)
-            H = H + self._compute_conditional_entropy(Yf, XYp) / self._n
-        return H
+            causal_entropy = causal_entropy + self._compute_conditional_entropy(Yf, XYp)
+        return causal_entropy
 
     def _getkey(self):
         return super(CausalEntropy, self)._getkey() + (self._n,)
@@ -508,13 +500,29 @@ class DirectedInfo(CausalEntropy, Directed):
         self._n = n
         self._causal_entropy = super(DirectedInfo, self)
 
+    def _compute_entropy_rates(self, targ):
+
+        targ = np.squeeze(targ)
+
+        entropy_rate_sum = 0
+        for i in range(1, self._n + 1):
+            # Compute entropy for an i-dimensional embedding
+            self._entropy_calc.initialise(i)
+
+            Yi = self.m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i)
+            self._entropy_calc.setObservations(Yi)
+            entropy_rate_sum = entropy_rate_sum + self._entropy_calc.computeAverageLocalOfObservations() / i
+
+        return entropy_rate_sum
+
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         """Compute directed information from i to j"""
-        entropy = self._compute_entropy(data, j)
+
+        entropy_rates = self._compute_entropy_rates(data.to_numpy(squeeze=True)[j])
         causal_entropy = self._causal_entropy.bivariate(data, i=i, j=j)
 
-        return entropy - causal_entropy
+        return entropy_rates - causal_entropy
 
 
 class StochasticInteraction(JIDTBase, Undirected):
