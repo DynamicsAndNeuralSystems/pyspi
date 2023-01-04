@@ -72,17 +72,13 @@ class JIDTBase(Unsigned):
 
     def __getstate__(self):
         state = dict(self.__dict__)
-        try:
-            del state["_entropy_calc"]
-        except KeyError:
-            pass
-        try:
-            del state["_calc"]
-        except KeyError:
-            pass
 
-        if "_entropy_calc" in state.keys() or "_calc" in state.keys():
-            logging.info(f"{self.identifier} contains a calculator still")
+        unserializable_objects = ["_entropy_calc", "_calc"]
+
+        for k in unserializable_objects:
+            if k in state.keys():
+                del state[k]
+
         return state
 
     def __setstate__(self, state):
@@ -498,7 +494,6 @@ class DirectedInfo(CausalEntropy, Directed):
     def __init__(self, n=5, **kwargs):
         super().__init__(**kwargs)
         self._n = n
-        self._causal_entropy = super(DirectedInfo, self)
 
     def _compute_entropy_rates(self, targ):
 
@@ -511,7 +506,7 @@ class DirectedInfo(CausalEntropy, Directed):
 
             Yi = self.m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i)
             self._entropy_calc.setObservations(Yi)
-            entropy_rate_sum = entropy_rate_sum + self._entropy_calc.computeAverageLocalOfObservations() / i
+            entropy_rate_sum = entropy_rate_sum + super(DirectedInfo, self).computeAverageLocalOfObservations() / i
 
         return entropy_rate_sum
 
