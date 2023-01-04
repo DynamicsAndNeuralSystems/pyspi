@@ -367,7 +367,7 @@
       k_history: 10
       l_history: 1
 
-  IntegratedInfo:
+  IntegratedInformation:
     - phitype: "star"
 
     - phitype: "star"
