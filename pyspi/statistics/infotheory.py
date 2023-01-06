@@ -447,17 +447,18 @@ class CausalEntropy(JIDTBase, Directed):
     def __init__(self, n=5, **kwargs):
         super().__init__(**kwargs)
         self._n = n
-        self.m_utils = jp.JPackage("infodynamics.utils").MatrixUtils
 
     def _compute_causal_entropy(self, src, targ):
 
         src = np.squeeze(src)
         targ = np.squeeze(targ)
 
+        m_utils = jp.JPackage("infodynamics.utils").MatrixUtils
+
         causal_entropy = 0
         for i in range(1, self._n + 1):
-            Yp = self.m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i - 1)[:-1]
-            Xp = self.m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(src), i)
+            Yp = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i - 1)[:-1]
+            Xp = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(src), i)
             XYp = np.concatenate([Yp, Xp], axis=1)
 
             Yf = np.expand_dims(targ[i - 1 :], 1)
