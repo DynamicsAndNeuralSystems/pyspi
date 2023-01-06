@@ -2,12 +2,12 @@
 
 # -- Project information
 
-project = 'PySPI'
+project = 'pyspi'
 copyright = '2022, Oliver M. Cliff'
 author = 'Oliver M. Cliff'
 
-release = '0.3'
-version = '0.3.0'
+release = '0.4'
+version = '0.4.0'
 
 # -- General configuration
 
