@@ -499,15 +499,16 @@ class DirectedInfo(CausalEntropy, Directed):
     def _compute_entropy_rates(self, targ):
 
         targ = np.squeeze(targ)
+        m_utils = jp.JPackage("infodynamics.utils").MatrixUtils
 
         entropy_rate_sum = 0
         for i in range(1, self._n + 1):
             # Compute entropy for an i-dimensional embedding
             self._entropy_calc.initialise(i)
 
-            Yi = self.m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i)
+            Yi = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i)
             self._entropy_calc.setObservations(Yi)
-            entropy_rate_sum = entropy_rate_sum + super(DirectedInfo, self).computeAverageLocalOfObservations() / i
+            entropy_rate_sum = entropy_rate_sum + self._entropy_calc.computeAverageLocalOfObservations() / i
 
         return entropy_rate_sum
 
@@ -516,7 +517,7 @@ class DirectedInfo(CausalEntropy, Directed):
         """Compute directed information from i to j"""
 
         entropy_rates = self._compute_entropy_rates(data.to_numpy(squeeze=True)[j])
-        causal_entropy = self._causal_entropy.bivariate(data, i=i, j=j)
+        causal_entropy = super().bivariate(data, i=i, j=j)
 
         return entropy_rates - causal_entropy
 
