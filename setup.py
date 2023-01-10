@@ -66,7 +66,7 @@ setup(
                         'data/cml.npy',
                         'data/forex.npy']},
     include_package_data=True,
-    version='0.2.2',
+    version='0.4.0',
     description='Network analysis for time series',
     author='Oliver M. Cliff',
     author_email='oliver.m.cliff@gmail.com',

@@ -8,8 +8,6 @@ from pyspi import utils
 from scipy.stats import zscore
 from scipy.signal import detrend
 import os
-from sktime.utils.data_io import load_from_tsfile_to_dataframe
-from sktime.datatypes._panel._convert import from_nested_to_3d_numpy
 
 VERBOSE = False
 
@@ -131,7 +129,10 @@ class Data:
             elif ext == ".csv":
                 npdat = np.genfromtxt(data, ",")
             elif ext == ".ts":
-                tsdat, tsclasses = load_from_tsfile_to_dataframe(data)
+                from sktime.utils.data_io import load_from_tsfile_to_dataframe
+                from sktime.datatypes._panel._convert import from_nested_to_3d_numpy
+
+                tsdat, _ = load_from_tsfile_to_dataframe(data)
                 npdat = from_nested_to_3d_numpy(tsdat)
             else:
                 raise TypeError(f"Unknown filename extension: {ext}")

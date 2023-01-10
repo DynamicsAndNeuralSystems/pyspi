@@ -72,17 +72,13 @@ class JIDTBase(Unsigned):
 
     def __getstate__(self):
         state = dict(self.__dict__)
-        try:
-            del state["_entropy_calc"]
-        except KeyError:
-            pass
-        try:
-            del state["_calc"]
-        except KeyError:
-            pass
 
-        if "_entropy_calc" in state.keys() or "_calc" in state.keys():
-            logging.info(f"{self.identifier} contains a calculator still")
+        unserializable_objects = ["_entropy_calc", "_calc"]
+
+        for k in unserializable_objects:
+            if k in state.keys():
+                del state[k]
+
         return state
 
     def __setstate__(self, state):
@@ -161,54 +157,49 @@ class JIDTBase(Unsigned):
 
         if data.entropy[key][i] == -np.inf:
             x = np.squeeze(data.to_numpy()[i])
+
             self._entropy_calc.initialise(1)
             self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 1)(x))
+
             data.entropy[key][
                 i
             ] = self._entropy_calc.computeAverageLocalOfObservations()
 
         return data.entropy[key][i]
 
-    # No Theiler window yet (can it be done?)
+    # No Theiler window is available in the JIDT estimator
     @parse_bivariate
-    def _compute_JointEntropy(self, data, i, j):
-        if not hasattr(data, "JointEntropy"):
-            data.JointEntropy = {}
+    def _compute_joint_entropy(self, data, i, j):
+        if not hasattr(data, "joint_entropy"):
+            data.joint_entropy = {}
 
         key = self._getkey()
-        if key not in data.JointEntropy:
-            data.JointEntropy[key] = np.full(
-                (data.n_processes, data.n_processes), -np.inf
-            )
+        if key not in data.joint_entropy:
+            data.joint_entropy[key] = np.full((data.n_processes, data.n_processes), -np.infty)
 
-        if data.JointEntropy[key][i, j] == -np.inf:
+        if data.joint_entropy[key][i, j] == -np.inf:
             x, y = data.to_numpy()[[i, j]]
 
             self._entropy_calc.initialise(2)
-            self._entropy_calc.setObservations(
-                jp.JArray(jp.JDouble, 2)(np.concatenate([x, y], axis=1))
-            )
-            data.JointEntropy[key][
-                i, j
-            ] = self._entropy_calc.computeAverageLocalOfObservations()
-            data.JointEntropy[key][j, i] = data.JointEntropy[key][i, j]
+            self._entropy_calc.setObservations(jp.JArray(jp.JDouble, 2)(np.concatenate([x, y], axis=1)))
 
-        return data.JointEntropy[key][i, j]
+            data.joint_entropy[key][i, j] = self._entropy_calc.computeAverageLocalOfObservations()
+            data.joint_entropy[key][j, i] = data.joint_entropy[key][i, j]
 
-    # No Theiler window yet (can it be done?)
-    """
-    TODO: match this function with previous ones (perhaps always allow multiple i's and j's)
-    """
+        return data.joint_entropy[key][i, j]
 
+    # No Theiler window is available in the JIDT estimator
     def _compute_conditional_entropy(self, X, Y):
         XY = np.concatenate([X, Y], axis=1)
 
         self._entropy_calc.initialise(XY.shape[1])
         self._entropy_calc.setObservations(jp.JArray(jp.JDouble, XY.ndim)(XY))
+
         H_XY = self._entropy_calc.computeAverageLocalOfObservations()
 
         self._entropy_calc.initialise(Y.shape[1])
         self._entropy_calc.setObservations(jp.JArray(jp.JDouble, Y.ndim)(Y))
+
         H_Y = self._entropy_calc.computeAverageLocalOfObservations()
 
         return H_XY - H_Y
@@ -218,12 +209,14 @@ class JIDTBase(Unsigned):
             if not hasattr(data, "theiler"):
                 z = data.to_numpy()
                 theiler_window = -np.ones((data.n_processes, data.n_processes))
+
                 # Compute effective sample size for each pair
                 for _i in range(data.n_processes):
                     targ = z[_i]
                     for _j in range(_i + 1, data.n_processes):
                         src = z[_j]
-                        # Init the Theiler window using Bartlett's formula
+
+                        # Initialize the Theiler window using Bartlett's formula
                         theiler_window[_i, _j] = 2 * np.dot(
                             utils.acf(src), utils.acf(targ)
                         )
@@ -250,7 +243,7 @@ class JointEntropy(JIDTBase, Undirected):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        return self._compute_JointEntropy(data, i=i, j=j)
+        return self._compute_joint_entropy(data, i=i, j=j)
 
 
 class ConditionalEntropy(JIDTBase, Directed):
@@ -264,7 +257,7 @@ class ConditionalEntropy(JIDTBase, Directed):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        return self._compute_JointEntropy(data, i=i, j=j) - self._compute_entropy(
+        return self._compute_joint_entropy(data, i=i, j=j) - self._compute_entropy(
             data, i=i
         )
 
@@ -456,40 +449,41 @@ class CausalEntropy(JIDTBase, Directed):
         self._n = n
 
     def _compute_causal_entropy(self, src, targ):
-        mUtils = jp.JPackage("infodynamics.utils").MatrixUtils
-        H = 0
+
         src = np.squeeze(src)
         targ = np.squeeze(targ)
-        for i in range(2, self._n):
-            Yp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i - 1)[
-                1:
-            ]
-            Xp = mUtils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(src), i)
+
+        m_utils = jp.JPackage("infodynamics.utils").MatrixUtils
+
+        causal_entropy = 0
+        for i in range(1, self._n + 1):
+            Yp = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i - 1)[:-1]
+            Xp = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(src), i)
             XYp = np.concatenate([Yp, Xp], axis=1)
 
             Yf = np.expand_dims(targ[i - 1 :], 1)
-            H = H + self._compute_conditional_entropy(Yf, XYp)
-        return H
+            causal_entropy = causal_entropy + self._compute_conditional_entropy(Yf, XYp)
+        return causal_entropy
 
     def _getkey(self):
         return super(CausalEntropy, self)._getkey() + (self._n,)
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        if not hasattr(data, "CausalEntropy"):
-            data.CausalEntropy = {}
+        if not hasattr(data, "causal_entropy"):
+            data.causal_entropy = {}
 
         key = self._getkey()
-        if key not in data.CausalEntropy:
-            data.CausalEntropy[key] = np.full(
+        if key not in data.causal_entropy:
+            data.causal_entropy[key] = np.full(
                 (data.n_processes, data.n_processes), -np.inf
             )
 
-        if data.CausalEntropy[key][i, j] == -np.inf:
+        if data.causal_entropy[key][i, j] == -np.inf:
             z = data.to_numpy(squeeze=True)
-            data.CausalEntropy[key][i, j] = self._compute_causal_entropy(z[i], z[j])
+            data.causal_entropy[key][i, j] = self._compute_causal_entropy(z[i], z[j])
 
-        return data.CausalEntropy[key][i, j]
+        return data.causal_entropy[key][i, j]
 
 
 class DirectedInfo(CausalEntropy, Directed):
@@ -498,18 +492,34 @@ class DirectedInfo(CausalEntropy, Directed):
     identifier = "di"
     labels = ["unsigned", "infotheory", "temporal", "directed"]
 
-    def __init__(self, n=10, **kwargs):
+    def __init__(self, n=5, **kwargs):
         super().__init__(**kwargs)
         self._n = n
+
+    def _compute_entropy_rates(self, targ):
+
+        targ = np.squeeze(targ)
+        m_utils = jp.JPackage("infodynamics.utils").MatrixUtils
+
+        entropy_rate_sum = 0
+        for i in range(1, self._n + 1):
+            # Compute entropy for an i-dimensional embedding
+            self._entropy_calc.initialise(i)
+
+            Yi = m_utils.makeDelayEmbeddingVector(jp.JArray(jp.JDouble, 1)(targ), i)
+            self._entropy_calc.setObservations(Yi)
+            entropy_rate_sum = entropy_rate_sum + self._entropy_calc.computeAverageLocalOfObservations() / i
+
+        return entropy_rate_sum
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         """Compute directed information from i to j"""
-        # Would prefer to match these two calls
-        entropy = self._compute_entropy(data, j)
-        CausalEntropy = super(DirectedInfo, self).bivariate(data, i=i, j=j)
 
-        return entropy - CausalEntropy
+        entropy_rates = self._compute_entropy_rates(data.to_numpy(squeeze=True)[j])
+        causal_entropy = super().bivariate(data, i=i, j=j)
+
+        return entropy_rates - causal_entropy
 
 
 class StochasticInteraction(JIDTBase, Undirected):
@@ -536,7 +546,7 @@ class StochasticInteraction(JIDTBase, Undirected):
         return H_src + H_targ - H_joint
 
 
-class IntegratedInfo(Undirected, Unsigned):
+class IntegratedInformation(Undirected, Unsigned):
 
     name = "Integrated information"
     identifier = "phi"
@@ -552,7 +562,7 @@ class IntegratedInfo(Undirected, Unsigned):
         self.identifier += f"_{phitype}_t-{delay}_norm-{normalization}"
 
     @parse_bivariate
-    def bivariate(self, data, i=None, j=None, verbose=False):
+    def bivariate(self, data, i=None, j=None):
 
         if not octave.exist("phi_comp"):
             path = os.path.dirname(os.path.abspath(__file__)) + "/../lib/PhiToolbox/"

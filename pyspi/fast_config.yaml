@@ -83,7 +83,7 @@
     - biased: True
 
   # Hilbert-Schmidt independence criterion
-  HSIC:
+  HilbertSchmidtIndependenceCriterion:
     - biased: False
     - biased: True
 

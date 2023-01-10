@@ -44,7 +44,7 @@ class PairwiseDistance(Undirected, Unsigned):
 """
 
 
-class HSIC(Undirected, Unsigned):
+class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
     """Hilbert-Schmidt Independence Criterion (HSIC)"""
 
     name = "Hilbert-Schmidt Independence Criterion"
@@ -63,7 +63,7 @@ class HSIC(Undirected, Unsigned):
         return stat
 
 
-class HHG(Directed, Unsigned):
+class HellerHellerGorfine(Directed, Unsigned):
     """Heller-Heller-Gorfine independence criterion"""
 
     name = "Heller-Heller-Gorfine Independence Criterion"
