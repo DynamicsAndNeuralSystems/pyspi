@@ -1,7 +1,7 @@
-Welcome to PySPI's documentation!
+Welcome to pyspi's documentation!
 ===================================
 
-**PySPI** (/pie'spy/) is a Python library for simultaneously evaluating hundreds of pairwise interactions directly from multivariate time-series data.
+**pyspi** (/pie'spy/) is a Python library for simultaneously evaluating hundreds of pairwise interactions directly from multivariate time-series data.
 
 It provides easy access to over 250 methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation coefficients) to advanced multi-step algorithms (like Granger causality).
 
@@ -16,6 +16,8 @@ Contents
 
 .. toctree::
 
+   installation
    usage
    advanced
    api
+   faq
