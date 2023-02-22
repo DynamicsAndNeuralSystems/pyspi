@@ -1,5 +1,15 @@
 FROM python:3.9-buster
 
+# Octave install
+RUN apt-get update \
+    && apt-get install -y octave less python-scipy libblas-dev liblapack-dev gfortran redis-server \
+    && apt-get autoclean && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Java install
+RUN apt-get update && \
+    apt-get install -y default-jdk && \ rm -rf /var/lib/apt/lists/
+
 # Set the working directory
 WORKDIR /pyspi_project
 
