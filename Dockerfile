@@ -1,29 +1,25 @@
-FROM python:3.9-buster
+FROM --platform=linux/amd64 python:3.9-slim-buster
 
-# Octave install
-RUN apt-get update \
-    && apt-get install -y octave less python-scipy libblas-dev liblapack-dev gfortran redis-server \
-    && apt-get autoclean && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Java install
-RUN apt-get update && \
-    apt-get install -y default-jdk && \ rm -rf /var/lib/apt/lists/
-
-# Set the working directory
+# Set the working directory 
 WORKDIR /pyspi_project
 
-# Copy the current directory contents into the container at /app
-COPY requirements.txt requirements.txt
+# Copy the current directory contents into the container 
+COPY . .
+
+# Update the package index and install essential packages 
+RUN apt-get update && apt-get install -y build-essential octave 
+
 
 # Install any needed packages specified in requirements.txt
-RUN pip install -r requirements.txt
+RUN pip install --upgrade pip setuptools
+RUN pip install --no-cache-dir -r requirements.txt && \
+    python setup.py install
 
-# Make port 80 available to the world outside this container
-EXPOSE 80
+# Make port 80 available to communicate with other containters if needed 
+# EXPOSE 80
 
 # Define environment variable
-#ENV NAME Wold
+#ENV NAME 
 
 # Run app.py when the container launches
-CMD ["python3", "setup.py"]
+CMD ["python"]
