@@ -40,7 +40,7 @@ You can confirm that `pyspi` and dependencies installed properly with the follow
 Docker Image
 ------------
 
-Alternatively, you can use the `pyspi Docker image <https://hub.docker.com/r/arianguyen/pyspi>`, which contains all the dependencies and the toolkit itself.
+Alternatively, you can use the `pyspi Docker image <https://hub.docker.com/r/arianguyen/pyspi>`_, which contains all the dependencies and the toolkit itself.
 After downloading Docker Desktop and creating an account, you can run the following commands to pull and run the image:
 
 .. code-block:: console
