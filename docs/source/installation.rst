@@ -27,7 +27,7 @@ Next, download or clone the `latest version <https://github.com/olivercliff/pysp
 
 .. code-block:: console
 
-   $ git clone https://github.com/olivercliff/pyspi.git 
+   $ git clone https://github.com/olivercliff/pyspi.git
    $ cd pyspi
    $ pip install .
 
@@ -36,3 +36,16 @@ You can confirm that `pyspi` and dependencies installed properly with the follow
 .. code-block:: console
 
    $ setup.py test
+
+Docker Image
+------------
+
+Alternatively, you can use the `pyspi Docker image <https://hub.docker.com/r/arianguyen/pyspi>`_, which contains all the dependencies and the toolkit itself.
+After downloading Docker Desktop and creating an account, you can run the following commands to pull and run the image:
+
+.. code-block:: console
+
+   $ docker pull arianguyen/pyspi:v1.0
+   $ docker run -it arianguyen/pyspi:v1.0
+
+This should start a python session with `pyspi` installed and ready to import.
