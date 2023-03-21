@@ -18,16 +18,20 @@ If you use this code, please cite the following preprint:
 
 Oliver M. Cliff, Joseph T. Lizier, Naotsugu Tsuchiya, Ben D. Fulcher, "Unifying Pairwise Interactions in Complex Dynamics," _arXiv_ preprint, [arXiv:2201.11941](https://arxiv.org/abs/2201.11941) (2022).
 
-## Getting started
+## Getting Started
 
 See the [documentation](https://pyspi-toolkit.readthedocs.io/en/latest/) for installing and setting up _pyspi_.
-Once you're done, check out the [tutorial](https://github.com/olivercliff/pyspi/blob/main/demos/tutorial.ipynb) and [simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py) to learn how to use the package.
+Once you're done, you can learn how to use the package by checking out the:
+
+- [Simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py)
+- [Tutorial (finance: stock price time series)](https://github.com/olivercliff/pyspi/blob/main/demos/tutorial.ipynb)
+- [Tutorial (neuroimaging: fMRI time series)](https://github.com/anniegbryant/CNS_2022/blob/main/pyspi_tutorial/CNS2022_pyspi_demo.ipynb).
 
 If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the [_pyspi_ distribute](https://github.com/olivercliff/pyspi-distribute) repository helpful.
 
-If your data is quite large (i.e., there are many processes or observations), you can use a reduced set of statistics by instantiating the calculator with the `fast=True` parameter (see the [simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py)).
+If your dataset is large (containing many processes and/or observations), you can use a reduced set of statistics by instantiating the calculator with the `fast=True` parameter (cf. the [simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py)).
 
-## Related resources
+## Other highly comparative toolboxes
 
 ### _hctsa_
 
