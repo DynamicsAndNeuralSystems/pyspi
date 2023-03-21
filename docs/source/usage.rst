@@ -52,4 +52,4 @@ For instance, the following code will extract the covariance matrix computed wit
 
    print(calc.table['cov_EmpiricalCovariance'])
 
-The identifiers for many of the statistics are outlined in the Supplementary Material of our `preprint <https://arxiv.org/abs/2201.11941>`_, and an up-to-date list of included statistics will be provided in this documentation shortly.
+The identifiers for many of the statistics are outlined in the Supplementary Material of our `preprint <https://arxiv.org/abs/2201.11941>`_.
