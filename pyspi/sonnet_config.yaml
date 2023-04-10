@@ -1,0 +1,79 @@
+# Basic statistics
+.statistics.basic:
+  # Covariance
+  Covariance:
+    - estimator: EmpiricalCovariance
+
+.statistics.distance:
+  DynamicTimeWarping:
+    - global_constraint: itakura
+
+  Barycenter:
+  - mode: dtw
+    statistic: mean
+
+.statistics.causal:
+
+  # Additive noise model
+  AdditiveNoiseModel:
+
+
+# Information-theoretic statistics
+.statistics.infotheory:
+  DirectedInfo: # No theiler window yet
+    - estimator: gaussian
+
+  # Transfer entropy
+  TransferEntropy:
+    - estimator: kraskov
+      prop_k: 4
+      auto_embed_method: MAX_CORR_AIS
+      k_search_max: 10
+      tau_search_max: 4
+      dyn_corr_excl: AUTO
+  
+  # Integrated information
+  IntegratedInformation:
+    - phitype: 'star'
+
+# statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
+.statistics.spectral:
+
+  CoherenceMagnitude:
+    - fs: 1
+
+  PhaseSlopeIndex:
+    - fmin: 0
+      fmax: 0.5
+
+  PhaseLagIndex:
+
+    - fs: 1
+      statistic: max
+
+  SpectralGrangerCausality:
+      # Non-parametric Granger causality (no VAR model)
+    - method: nonparametric
+      fmin: 0
+      fmax: 0.5
+      statistic: mean
+
+# statistics that analyse in the wavlet-domain (only Mortlet wavelet's at the moment)
+.statistics.wavelet:
+  PhaseSlopeIndex:
+    - fs: 1
+
+.statistics.misc:
+  # Cointegration
+  Cointegration:
+    - method: aeg
+      statistic: tstat
+      autolag: aic
+      maxlag: 10
+      trend: ct
+
+  # Power envelope correlation
+  PowerEnvelopeCorrelation:
+    - orth: False
+      log: False
+      absolute: False

@@ -32,12 +32,14 @@ class Calculator:
             Any set of strings by which you want to label the calculator. This can be useful later for classification purposes, defaults to None.
         fast (bool, optional):
             If True, use a hand-picked set of ~210 SPIs that compute quickly but are still relatively comprehensive, defaults to False.
+        sonnet (bool, optional):
+            If True, use a hand-picked set of 14 SPIs that represent the set of 14 hierarchical clusters of SPIs detailed in the preprint, defaults to False.
         configfile (str, optional):
             The location of the YAML configuration file. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
     """
 
     def __init__(
-        self, dataset=None, name=None, labels=None, fast=False, configfile=None
+        self, dataset=None, name=None, labels=None, fast=False, sonnet=False, configfile=None
     ):
         self._spis = {}
 
@@ -45,6 +47,10 @@ class Calculator:
             if fast is True:
                 configfile = (
                     os.path.dirname(os.path.abspath(__file__)) + "/fast_config.yaml"
+                )
+            elif sonnet is True:
+                configfile = (
+                    os.path.dirname(os.path.abspath(__file__)) + "/sonnet_config.yaml"
                 )
             else:
                 configfile = os.path.dirname(os.path.abspath(__file__)) + "/config.yaml"
