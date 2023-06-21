@@ -5,7 +5,51 @@ Issues & FAQ
 FAQ
 ########
 
-Issues 
+How long does pyspi take to run?
+**********************
+
+In short, this depends on the number of processes in your multivariate time series (MTS) and the number of time points in your MTS. 
+We experimented with simulated NumPy arrays with either a fixed number of processes (2) or fixed number of time points (100) to see how timing scales with the array size.
+
+Here are the results when we fix the number of processes to 2, and increase the number of time points from 10^1 to 10^4 by increments of 0.5:
+
+.. figure:: img/fixed_num_procs.png
+   :scale: 100 %
+   :alt: Line plot showing the log10-seconds versus log10-number of time points for fixed number of processes (2).
+
+   This graph shows the log10-seconds versus log10-number of time points for fixed number of processes (2). 
+   The colors indicate the computing resources used for each job on a high-performing computing cluster for comparison: pink corresponds to 2 nodes, 2 MPI, 40GB memory.
+   Teal corresponds to 8 nodes, 8 MPI, 120GB memory.
+   The black box outlines the stable linear range of the graph, to which we fit an ordinary least squares regression and report the equations for the lines of best fit.
+
+
+As the above figure indicates, the time to run `pyspi` scales linearly with the number of time points -- beyond a certain number of time points (>10^2.5, ~= 316).
+We note there is a dropoff in computation time going from 10^1 to 10^1.5, which arises from errors for certain SPIs that require more than 10 points to compute; side note, we recommend using pyspi for MTS with > 10 time points.
+If you have a dataset with more than 10^4 (10,000) time points, you can use the linear regression equation that more closely matches your computing resources to estimate the time to run pyspi.
+For example, if you have 20,000 (10^4.3) time points, you can use the equation for the pink line to estimate the time to run pyspi:
+y = -4.15 + 2.27x
+log10(seconds) = -4.15 + 2.27*log10(20,000) --> 4.1 * 10^5 seconds --> 4.7 days
+
+Given that, we recommend that users try downsampling their MTS data if they have substantially more than 10,000 time points.
+
+Here are the results when we fix the number of time points to 100, and increase the number of processes from 2^1 to 2^6 by increments of 1:
+
+.. figure:: img/fixed_num_timepoints.png
+   :scale: 100 %
+   :alt: Line plot showing the log2-seconds versus log2-number of processes for fixed number of timepoints (100).
+
+   This graph shows the log2-seconds versus log2-number of processes for afixed number of timepoints (100). 
+   The colors indicate the computing resources used for each job on a high-performing computing cluster for comparison: pink corresponds to 2 nodes, 2 MPI, 40GB memory.
+   Teal corresponds to 8 nodes, 8 MPI, 120GB memory.
+   The black box outlines the stable linear range of the graph, to which we fit an ordinary least squares regression and report the equations for the lines of best fit.
+
+
+This indicates that the time to run `pyspi` scales linearly with the number of processes -- beyond a certain number of processes (>4).
+If you have a dataset with more than 2^6 (64) processes and want to compute all 283 SPIs for all pairs of processes, you can use the linear regression equation that more closely matches your computing resources to estimate the time to run pyspi.
+For example, if you have 100 (2^6.32) processes, you can use the equation for the pink line to estimate the time to run pyspi:
+y = 1.68 + 1.93x
+log2(seconds) = 1.68 + 1.93*log2(100) --> 2.3 * 10^4 seconds --> 6.4 hours
+
 ########
 
 
