@@ -18,8 +18,8 @@ Here are the results when we fix the number of processes to 2, and increase the 
    :alt: Line plot showing the log10-seconds versus log10-number of time points for fixed number of processes (2).
 
    This graph shows the log10-seconds versus log10-number of time points for fixed number of processes (2). 
-   The colors indicate the computing resources used for each job on a high-performing computing cluster for comparison: pink corresponds to 2 nodes, 2 MPI, 40GB memory.
-   Teal corresponds to 8 nodes, 8 MPI, 120GB memory.
+   The colors indicate the computing resources used for each job on a high-performing computing cluster for comparison: pink corresponds to 2 cores, 2 MPI, 40GB memory.
+   Teal corresponds to 8 cores, 8 MPI, 120GB memory.
    The black box outlines the stable linear range of the graph, to which we fit an ordinary least squares regression and report the equations for the lines of best fit.
 
 
@@ -39,8 +39,8 @@ Here are the results when we fix the number of time points to 100, and increase 
    :alt: Line plot showing the log2-seconds versus log2-number of processes for fixed number of timepoints (100).
 
    This graph shows the log2-seconds versus log2-number of processes for afixed number of timepoints (100). 
-   The colors indicate the computing resources used for each job on a high-performing computing cluster for comparison: pink corresponds to 2 nodes, 2 MPI, 40GB memory.
-   Teal corresponds to 8 nodes, 8 MPI, 120GB memory.
+   The colors indicate the computing resources used for each job on a high-performing computing cluster for comparison: pink corresponds to 2 cores, 2 MPI, 40GB memory.
+   Teal corresponds to 8 cores, 8 MPI, 120GB memory.
    The black box outlines the stable linear range of the graph, to which we fit an ordinary least squares regression and report the equations for the lines of best fit.
 
 
