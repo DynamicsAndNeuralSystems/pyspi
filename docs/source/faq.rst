@@ -50,8 +50,38 @@ For example, if you have 100 (2^6.32) processes, you can use the equation for th
 y = 1.68 + 1.93x
 log2(seconds) = 1.68 + 1.93*log2(100) --> 2.3 * 10^4 seconds --> 6.4 hours
 
+Issues
 ########
 
+Not locating system's octave and/or Java paths (specific to Windows)
+**********************
+
+If you are using Windows and you get an error that `pyspi` cannot locate your system's octave and/or Java paths, you can manually set these paths prior to importing `pyspi`: 
+
+.. code-block:: 
+    import os
+    pathToExecutable = "C:/Program Files/GNU Octave/Octave-8.2.0/mingw64/bin/octave-cli.exe" # Change if your octave client is installed elsewhere
+    pathToJAVA_HOME = "C:/Program Files/Java/jdk-20" # Change if you use a different Java JDK
+    os.environ['OCTAVE_EXECUTABLE'] = pathToExecutable
+    os.environ['JAVA_HOME'] = pathToJAVA_HOME
+
+Thank you to GitHub user \href{https://github.com/rmzargar}{rmzargar} for reporting this issue and providing the solution.
+
+Error with Int64Index with pandas
+**********************
+
+If you encounter the following error:
+.. code-block:: 
+    ImportError: cannot import name 'Int64Index' from 'pandas'
+
+You can fix this by manually removing `numpy` and `pandas`, and manually reinstalling the below specific versions with the following code:
+.. code-block:: 
+    pip uninstall numpy
+    pip uninstall pandas
+    pip install numpy==1.21.1
+    pip install pandas==1.3.3
+
+Thank you to GitHub user \href{https://github.com/rmzargar}{rmzargar} for reporting this issue and providing the solution.
 
 Java JVM DLL not found (specific to Mac)
 **********************
