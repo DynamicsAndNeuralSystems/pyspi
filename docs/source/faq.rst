@@ -5,50 +5,50 @@ Issues & FAQ
 FAQ
 ########
 
+How many SPIs should I measure for my dataset?
+**********************
+
+When first starting out, we recommend that users start with a smaller subset of available SPIs first, so they get a sense of computation times and working with the output in a lower-dimensional space.
+Users have the option to pass in a customized configuration `.yaml` file as described in the `Using a reduced SPI set<https://pyspi-toolkit.readthedocs.io/en/latest/advanced.html#using-a-reduced-spi-set>`_ documentation.
+
+Alternatively, we provide two pre-defined subsets of SPIs that can serve as good starting points: `sonnet` and `fast`.
+The `sonnet` subset includes 14 SPIs selected to represent the 14 modules identified through hierarchical clustering in the original paper.
+To retain as many SPIs as possible while minimizing computation time, we also offer a `fast` option that omits the most computationally expensive SPIs.
+Either SPI subset can be toggled by setting the corresponding flag in the `Calculator()` function call as follows: 
+
+.. code_block:: 
+
+    from pyspi import Calculator
+    calc = Calculator(sonnet=True) # or calc = Calculator(fast=True)
+
+
 How long does pyspi take to run?
 **********************
 
-In short, this depends on the number of processes in your multivariate time series (MTS) and the number of time points in your MTS. 
-We experimented with simulated NumPy arrays with either a fixed number of processes (2) or fixed number of time points (100) to see how timing scales with the array size.
+This depends on the size of your multivariate time series (MTS) data -- both the number of processes and the number of time points.
+In general, we recommend that users try running `pyspi` first with a small representative sample from their dataset to assess time and computing requirements, and scaling up accordingly.
+The amount of time also depends on the feature set you're using -- whether it's the full set of all SPIs or a reduced set (like `sonnet` or `fast` described above).
 
-Here are the results when we fix the number of processes to 2, and increase the number of time points from 10^1 to 10^4 by increments of 0.5:
+To give users a sense of how long `pyspi` takes to run, we ran a series of experiments on a high-performing computing cluster with 2 cores, 2 MPI, and 40GB memory.
+We ran `pyspi` on simulated NumPy arrays with either a fixed number of processes (2) or fixed number of time points (100) to see how timing scales with the array size.
+Here are the results:
 
-.. figure:: img/fixed_num_procs.png
-   :scale: 100 %
-   :alt: Line plot showing the log10-seconds versus log10-number of time points for fixed number of processes (2).
+.. figure:: img/pyspi_scaling_line_plots.png
+    :width: 550px
+    :height: 400px
+    :alt: Line plot showing the log10-seconds versus log10-number of time points for fixed number of processes (2) or fixed number of timepoints (100).
 
-   This graph shows the log10-seconds versus log10-number of time points for fixed number of processes (2). 
-   The colors indicate the computing resources used for each job on a high-performing computing cluster for comparison: pink corresponds to 2 cores, 2 MPI, 40GB memory.
-   Teal corresponds to 8 cores, 8 MPI, 120GB memory.
-   The black box outlines the stable linear range of the graph, to which we fit an ordinary least squares regression and report the equations for the lines of best fit.
+The above figure shows how the time to run `pyspi` scales with the number of time points (left) or number of processes (right).
+We note that computation times for the `sonnet` and `fast` subset are roughly equivalent, and the full set of SPIs requires increasingly large amounts of time to compute with increasing time series lengths.
+The computation time for the full set of SPIs increases with a consistent slope to that of the `sonnet` and `fast` subsets with increasing number of processes (right).
 
+Here are the timing values for each condition, which can help users estimate the computation time requirements for their dataset:
 
-As the above figure indicates, the time to run `pyspi` scales linearly with the number of time points -- beyond a certain number of time points (>10^2.5, ~= 316).
-We note there is a dropoff in computation time going from 10^1 to 10^1.5, which arises from errors for certain SPIs that require more than 10 points to compute; side note, we recommend using pyspi for MTS with > 10 time points.
-If you have a dataset with more than 10^4 (10,000) time points, you can use the linear regression equation that more closely matches your computing resources to estimate the time to run pyspi.
-For example, if you have 20,000 (10^4.3) time points, you can use the equation for the pink line to estimate the time to run pyspi:
-y = -4.15 + 2.27x
-log10(seconds) = -4.15 + 2.27*log10(20,000) --> 4.1 * 10^5 seconds --> 4.7 days
+.. figure:: img/pyspi_scaling_heatmaps.png
+    :width: 600px
+    :height: 400px
+    :alt: Heatmaps
 
-Given that, we recommend that users try downsampling their MTS data if they have substantially more than 10,000 time points.
-
-Here are the results when we fix the number of time points to 100, and increase the number of processes from 2^1 to 2^6 by increments of 1:
-
-.. figure:: img/fixed_num_timepoints.png
-   :scale: 100 %
-   :alt: Line plot showing the log2-seconds versus log2-number of processes for fixed number of timepoints (100).
-
-   This graph shows the log2-seconds versus log2-number of processes for afixed number of timepoints (100). 
-   The colors indicate the computing resources used for each job on a high-performing computing cluster for comparison: pink corresponds to 2 cores, 2 MPI, 40GB memory.
-   Teal corresponds to 8 cores, 8 MPI, 120GB memory.
-   The black box outlines the stable linear range of the graph, to which we fit an ordinary least squares regression and report the equations for the lines of best fit.
-
-
-This indicates that the time to run `pyspi` scales linearly with the number of processes -- beyond a certain number of processes (>4).
-If you have a dataset with more than 2^6 (64) processes and want to compute all 283 SPIs for all pairs of processes, you can use the linear regression equation that more closely matches your computing resources to estimate the time to run pyspi.
-For example, if you have 100 (2^6.32) processes, you can use the equation for the pink line to estimate the time to run pyspi:
-y = 1.68 + 1.93x
-log2(seconds) = 1.68 + 1.93*log2(100) --> 2.3 * 10^4 seconds --> 6.4 hours
 
 Issues
 ########
@@ -59,23 +59,26 @@ Not locating system's octave and/or Java paths (specific to Windows)
 If you are using Windows and you get an error that `pyspi` cannot locate your system's octave and/or Java paths, you can manually set these paths prior to importing `pyspi`: 
 
 .. code-block:: 
+
     import os
     pathToExecutable = "C:/Program Files/GNU Octave/Octave-8.2.0/mingw64/bin/octave-cli.exe" # Change if your octave client is installed elsewhere
     pathToJAVA_HOME = "C:/Program Files/Java/jdk-20" # Change if you use a different Java JDK
     os.environ['OCTAVE_EXECUTABLE'] = pathToExecutable
     os.environ['JAVA_HOME'] = pathToJAVA_HOME
 
-Thank you to GitHub user \href{https://github.com/rmzargar}{rmzargar} for reporting this issue and providing the solution.
+Thank you to GitHub user `rmzargar <https://github.com/rmzargar>`_ for reporting this issue and providing the solution.
 
 Error with Int64Index with pandas
 **********************
 
 If you encounter the following error:
 .. code-block:: 
+
     ImportError: cannot import name 'Int64Index' from 'pandas'
 
 You can fix this by manually removing `numpy` and `pandas`, and manually reinstalling the below specific versions with the following code:
 .. code-block:: 
+
     pip uninstall numpy
     pip uninstall pandas
     pip install numpy==1.21.1
