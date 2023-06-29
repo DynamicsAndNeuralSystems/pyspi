@@ -9,14 +9,14 @@ How many SPIs should I measure for my dataset?
 **********************
 
 When first starting out, we recommend that users start with a smaller subset of available SPIs first, so they get a sense of computation times and working with the output in a lower-dimensional space.
-Users have the option to pass in a customized configuration `.yaml` file as described in the `Using a reduced SPI set<https://pyspi-toolkit.readthedocs.io/en/latest/advanced.html#using-a-reduced-spi-set>`_ documentation.
+Users have the option to pass in a customized configuration `.yaml` file as described in the `Using a reduced SPI set <https://pyspi-toolkit.readthedocs.io/en/latest/advanced.html#using-a-reduced-spi-set>`_ documentation.
 
 Alternatively, we provide two pre-defined subsets of SPIs that can serve as good starting points: `sonnet` and `fast`.
 The `sonnet` subset includes 14 SPIs selected to represent the 14 modules identified through hierarchical clustering in the original paper.
 To retain as many SPIs as possible while minimizing computation time, we also offer a `fast` option that omits the most computationally expensive SPIs.
 Either SPI subset can be toggled by setting the corresponding flag in the `Calculator()` function call as follows: 
 
-.. code_block:: 
+.. code-block:: 
 
     from pyspi import Calculator
     calc = Calculator(sonnet=True) # or calc = Calculator(fast=True)
@@ -84,7 +84,7 @@ You can fix this by manually removing `numpy` and `pandas`, and manually reinsta
     pip install numpy==1.21.1
     pip install pandas==1.3.3
 
-Thank you to GitHub user \href{https://github.com/rmzargar}{rmzargar} for reporting this issue and providing the solution.
+Thank you to GitHub user `rmzargar <https://github.com/rmzargar>`_ for reporting this issue and providing the solution.
 
 Java JVM DLL not found (specific to Mac)
 **********************
