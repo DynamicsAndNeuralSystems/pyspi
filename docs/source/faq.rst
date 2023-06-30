@@ -72,11 +72,13 @@ Error with Int64Index with pandas
 **********************
 
 If you encounter the following error:
+
 .. code-block:: 
 
     ImportError: cannot import name 'Int64Index' from 'pandas'
 
 You can fix this by manually removing `numpy` and `pandas`, and manually reinstalling the below specific versions with the following code:
+
 .. code-block:: 
 
     pip uninstall numpy
