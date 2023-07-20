@@ -1,0 +1,21 @@
+# Pearson and Spearman correlation statistics
+.statistics.basic:
+  # Covariance
+  Covariance:
+    - estimator: EmpiricalCovariance
+
+  # Spearman's correlation coefficient
+  SpearmanR:
+    - squared: True
+
+# Directed information with a Gaussian density estimator
+.statistics.infotheory:
+  DirectedInfo:
+    - estimator: gaussian
+
+# Power envelope correlation
+.statistics.misc:
+  PowerEnvelopeCorrelation:
+    - orth: False
+      log: False
+      absolute: False

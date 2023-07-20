@@ -39,7 +39,7 @@ class Calculator:
     """
 
     def __init__(
-        self, dataset=None, name=None, labels=None, fast=False, sonnet=False, configfile=None
+        self, dataset=None, name=None, labels=None, fast=False, sonnet=False, fabfour=False, configfile=None
     ):
         self._spis = {}
 
@@ -51,6 +51,10 @@ class Calculator:
             elif sonnet is True:
                 configfile = (
                     os.path.dirname(os.path.abspath(__file__)) + "/sonnet_config.yaml"
+                )
+            elif fabfour is True:
+                configfile = (
+                    os.path.dirname(os.path.abspath(__file__)) + "/fabfour_config.yaml"
                 )
             else:
                 configfile = os.path.dirname(os.path.abspath(__file__)) + "/config.yaml"
