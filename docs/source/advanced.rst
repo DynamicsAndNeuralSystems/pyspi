@@ -28,7 +28,21 @@ If you want more control over how the MTS are treated upon input, you can direct
 Using a reduced SPI set
 -----------------------
 
-You can easily use a subset of the SPIs by copying a version of the :code:`config.yaml` file to a local directory and removing those you don't want the calculator to compute.
+The :class:`~pyspi.calculator.Calculator` object computes 283 SPIs by default, but you may only be interested in a subset of these.
+We provide three pre-configured reduced SPI subsets that you may wish to try:
+
+* :code:`fast`: Most SPIs (excluding those that are computationally expensive)
+* :code:`sonnet` - 14 SPIs, one from each of the data-driven clusters as described in `Cliff et al. (2023) <https://arxiv.org/abs/2201.11941>`_
+* :code:`fabfour` - 4 SPIs that are simple and computationally efficient: Pearson correlation, Spearman correlation, directed information with a Gaussian density estimator, and the power envelope correlation.
+
+You may specify any one of these subsets when you instantiate the :code:`Calculator` object:
+
+.. code-block::
+
+    from pyspi.calculator import Calculator
+    calc = Calculator(dataset=dataset, subset='sonnet')
+
+Alternatively, if you would like to use your own bespoke set of SPIs, you can copy a version of the :code:`config.yaml` file to your workspace and edit it to remove any SPIs that you would not like the :code:`Calculator` to compute.
 First, copy the :code:`config.yaml` file to your workspace:
 
 .. code-block:: console

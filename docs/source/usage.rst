@@ -36,8 +36,8 @@ And, using only the :meth:`~pyspi.calculator.Calculator.compute` method, we can 
 
 .. note::
    While we tried to make the calculator as efficient as possible, computing all statistics can take a while (depending on the size of your dataset).
-   You can use a faster set of statistics by instantiating the calculator with :code:`fast=True`, see :class:`~pyspi.calculator.Calculator`.
-   Alternatively, design your own subset of the statistics by following the instructions in :ref:`Using a reduced SPI set`.
+   You can use a faster set of statistics by instantiating the calculator with :code:`subset=fast`, see :class:`~pyspi.calculator.Calculator`.
+   We also provide a reduced set of statistics that are useful for many applications, with the option for users to design their own subset of statistics; see :ref:`Using a reduced SPI set`.
 
 Once the calculator has computed each of the statistics, you can access all values using the :attr:`~pyspi.calculator.Calculator.table` property:
 

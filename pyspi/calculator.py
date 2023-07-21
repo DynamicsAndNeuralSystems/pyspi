@@ -30,29 +30,27 @@ class Calculator:
             The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances, defaults to None.
         labels (array_like, optional):
             Any set of strings by which you want to label the calculator. This can be useful later for classification purposes, defaults to None.
-        fast (bool, optional):
-            If True, use a hand-picked set of ~210 SPIs that compute quickly but are still relatively comprehensive, defaults to False.
-        sonnet (bool, optional):
-            If True, use a hand-picked set of 14 SPIs that represent the set of 14 hierarchical clusters of SPIs detailed in the preprint, defaults to False.
+        subset (str, optional):
+            A pre-configured subset of SPIs to use. Options are "all", "fast", "sonnet", or "fabfour", defaults to "all".
         configfile (str, optional):
-            The location of the YAML configuration file. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
+            The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
     """
 
     def __init__(
-        self, dataset=None, name=None, labels=None, fast=False, sonnet=False, fabfour=False, configfile=None
+        self, dataset=None, name=None, labels=None, subset="all", configfile=None
     ):
         self._spis = {}
 
         if configfile is None:
-            if fast is True:
+            if subset == "fast":
                 configfile = (
                     os.path.dirname(os.path.abspath(__file__)) + "/fast_config.yaml"
                 )
-            elif sonnet is True:
+            elif subset == "sonnet":
                 configfile = (
                     os.path.dirname(os.path.abspath(__file__)) + "/sonnet_config.yaml"
                 )
-            elif fabfour is True:
+            elif subset == "fabfour":
                 configfile = (
                     os.path.dirname(os.path.abspath(__file__)) + "/fabfour_config.yaml"
                 )
