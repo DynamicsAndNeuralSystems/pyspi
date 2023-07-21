@@ -16,7 +16,7 @@ Feedback is much appreciated through email, [issues](https://github.com/olivercl
 
 If you use this code, please cite the following preprint:
 
-Oliver M. Cliff, Joseph T. Lizier, Naotsugu Tsuchiya, Ben D. Fulcher, "Unifying Pairwise Interactions in Complex Dynamics," _arXiv_ preprint, [arXiv:2201.11941](https://arxiv.org/abs/2201.11941) (2022).
+Oliver M. Cliff, Annie G. Bryant, Joseph T. Lizier, Naotsugu Tsuchiya, Ben D. Fulcher, "Unifying Pairwise Interactions in Complex Dynamics," _arXiv_ preprint, [arXiv:2201.11941v2](https://arxiv.org/abs/2201.11941v2) (2023).
 
 ## Getting Started
 
@@ -29,7 +29,7 @@ Once you're done, you can learn how to use the package by checking out the:
 
 If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the [_pyspi_ distribute](https://github.com/olivercliff/pyspi-distribute) repository helpful.
 
-If your dataset is large (containing many processes and/or observations), you can use a reduced set of statistics by instantiating the calculator with the `fast=True` parameter (cf. the [simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py)).
+If your dataset is large (containing many processes and/or observations), you can use a pre-configured set of reduced statistics or create your own subsets (cf. the [documentation guide](https://pyspi-toolkit.readthedocs.io/en/latest/advanced.html#using-a-reduced-spi-set)).
 
 ## Other highly comparative toolboxes
 
@@ -40,3 +40,10 @@ If your dataset is large (containing many processes and/or observations), you ca
 ### _hcga_
 
 [_hcga_](https://github.com/barahona-research-group/hcga), a *highly comparative graph analysis* toolkit, computes several thousands of graph features directly from any given network.
+
+## SPI Wishlist
+
+As _pyspi_ is under active development, we maintain a list of statistics that we wish to add to the library going forward -- and welcome suggestions from users by submitting an Issue.
+At the moment, here are some SPIs we hope to incorporate in the future: 
+
+* Gromov-Wasserstain distance for time series (*GW<sub>τ</sub>*), as described in [Kravtsova et al. (2023)](https://doi.org/10.1007/s11538-023-01175-y)
