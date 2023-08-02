@@ -43,7 +43,4 @@ If your dataset is large (containing many processes and/or observations), you ca
 
 ## SPI Wishlist
 
-As _pyspi_ is under active development, we maintain a list of statistics that we wish to add to the library going forward -- and welcome suggestions from users by submitting an Issue.
-At the moment, here are some SPIs we hope to incorporate in the future: 
-
-* Gromov-Wasserstain distance for time series (*GW<sub>τ</sub>*), as described in [Kravtsova et al. (2023)](https://doi.org/10.1007/s11538-023-01175-y)
+As _pyspi_ is under active development, we are always open to suggestions for new SPIs to be added via the [projects tab](https://github.com/DynamicsAndNeuralSystems/pyspi/projects) in this repo. 
