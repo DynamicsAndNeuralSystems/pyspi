@@ -41,6 +41,7 @@ class Calculator:
     ):
         self._spis = {}
 
+        # Define configfile by subset if it was not specified
         if configfile is None:
             if subset == "fast":
                 configfile = (
@@ -54,12 +55,11 @@ class Calculator:
                 configfile = (
                     os.path.dirname(os.path.abspath(__file__)) + "/fabfour_config.yaml"
                 )
-            elif subset == "fabfive":
-                # Raise error as this subset does not exist
+            # If no configfile was provided but the subset was not one of the above (or the default 'all'), raise an error
+            elif subset != "all":
                 raise ValueError(
-                    f"Subset 'fabfive' does not exist. Try 'fast', 'sonnet', or 'fabfour'."
+                    f"Subset '{subset}' does not exist. Try 'all' (default), 'fast', 'sonnet', or 'fabfour'."
                 )
-
             else:
                 configfile = os.path.dirname(os.path.abspath(__file__)) + "/config.yaml"
         self._load_yaml(configfile)
