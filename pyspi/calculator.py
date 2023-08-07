@@ -54,6 +54,12 @@ class Calculator:
                 configfile = (
                     os.path.dirname(os.path.abspath(__file__)) + "/fabfour_config.yaml"
                 )
+            elif subset == "fabfive":
+                # Raise error as this subset does not exist
+                raise ValueError(
+                    f"Subset 'fabfive' does not exist. Try 'fast', 'sonnet', or 'fabfour'."
+                )
+
             else:
                 configfile = os.path.dirname(os.path.abspath(__file__)) + "/config.yaml"
         self._load_yaml(configfile)
