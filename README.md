@@ -2,7 +2,7 @@
 
 ![](img/pyspi_logo.png)
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6541022.svg)](https://doi.org/10.5281/zenodo.6541022)
+[![DOI](https://zenodo.org/badge/601919618.svg)](https://zenodo.org/badge/latestdoi/601919618)
 
 _pyspi_ is a comprehensive python library for computing statistics of pairwise interactions (SPIs) from multivariate time-series (MTS) data.
 
