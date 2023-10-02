@@ -59,7 +59,7 @@ Then use the calculator as normal (see :ref:`Usage`).
 
 .. note::
     We have provided a detailed list of many of the statistics included in this toolkit (and the configuration file) in the Supplementary Material of our `preprint <https://arxiv.org/abs/2201.11941>`_, and will include an up-to-date list of statistics in this documentation shortly.
-    However, if you have any questions about a particular implementation, do not hesitate to `contact me <mailto:oliver.cliff@sydney.edu.au>`_ for any assistance.
+    However, if you have any questions about a particular implementation, do not hesitate to `contact us <mailto:ben.fulcher@sydney.edu.au>`_ for any assistance.
 
 Using the toolkit without Octave
 --------------------------------

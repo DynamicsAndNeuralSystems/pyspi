@@ -9,27 +9,27 @@ _pyspi_ is a comprehensive python library for computing statistics of pairwise i
 The code provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation) to advanced multi-step algorithms (like Granger causality).
 The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/gpl-3.0.html) (or later).
 
-**Feel free to [email me](mailto:oliver.m.cliff@gmail.com) for help with real-world applications.**
-Feedback is much appreciated through email, [issues](https://github.com/olivercliff/pyspi/issues), or [pull requests](https://github.com/olivercliff/pyspi/pulls).
+**Feel free to [email us](ben.fulcher@sydney.edu.au) for help with real-world applications.**
+Feedback is much appreciated through email, [issues](https://github.com/DynamicsAndNeuralSystems/pyspi/issues), or [pull requests](https://github.com/DynamicsAndNeuralSystems/pyspi/pulls).
 
 ## Acknowledgement
 
-If you use this code, please cite the following preprint:
+If you use this code, please cite the following publication:
 
-Oliver M. Cliff, Joseph T. Lizier, Naotsugu Tsuchiya, Ben D. Fulcher, "Unifying Pairwise Interactions in Complex Dynamics," _arXiv_ preprint, [arXiv:2201.11941](https://arxiv.org/abs/2201.11941) (2022).
+Oliver M. Cliff, Annie G. Bryant Joseph T. Lizier, Naotsugu Tsuchiya, Ben D. Fulcher, "Unifying Pairwise Interactions in Complex Dynamics," _Nature Computational Science_, [doi:10.1038/s43588-023-00519-x](https://doi.org/10.1038/s43588-023-00519-x1) (2023).
 
 ## Getting Started
 
 See the [documentation](https://pyspi-toolkit.readthedocs.io/en/latest/) for installing and setting up _pyspi_.
 Once you're done, you can learn how to use the package by checking out the:
 
-- [Simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py)
-- [Tutorial (finance: stock price time series)](https://github.com/olivercliff/pyspi/blob/main/demos/tutorial.ipynb)
+- [Simple demo](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/simple_demo.py)
+- [Tutorial (finance: stock price time series)](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/tutorial.ipynb)
 - [Tutorial (neuroimaging: fMRI time series)](https://github.com/anniegbryant/CNS_2022/blob/main/pyspi_tutorial/CNS2022_pyspi_demo.ipynb).
 
-If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the [_pyspi_ distribute](https://github.com/olivercliff/pyspi-distribute) repository helpful.
+If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the [_pyspi_ distribute](https://github.com/DynamicsAndNeuralSystems/pyspi-distribute) repository helpful.
 
-If your dataset is large (containing many processes and/or observations), you can use a reduced set of statistics by instantiating the calculator with the `fast=True` parameter (cf. the [simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py)).
+If your dataset is large (containing many processes and/or observations), you can use a reduced set of statistics by instantiating the calculator with the `fast=True` parameter (cf. the [simple demo](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/simple_demo.py)).
 
 ## Other highly comparative toolboxes
 
