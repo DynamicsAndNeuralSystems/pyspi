@@ -69,10 +69,10 @@ setup(
                         'data/forex.npy']},
     include_package_data=True,
     version='0.4.0',
-    description='Network analysis for time series',
+    description='Library for pairwise analysis of time series data.',
     author='Oliver M. Cliff',
     author_email='oliver.m.cliff@gmail.com',
-    url='https://github.com/olivercliff/pyspi',
+    url='https://github.com/DynamicsAndNeuralSystems/pyspi',
     long_description=long_description,
     classifiers=[
         "Programming Language :: Python",
