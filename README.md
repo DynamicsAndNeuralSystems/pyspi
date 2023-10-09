@@ -12,12 +12,6 @@ The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/
 **Feel free to reach out for help with real-world applications.**
 Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeuralSystems/pyspi/issues), or [pull requests](https://github.com/DynamicsAndNeuralSystems/pyspi/pulls).
 
-## Acknowledgement
-
-If you use this code, please cite the following preprint:
-
-, "Unifying Pairwise Interactions in Complex Dynamics," _arXiv_ preprint, [arXiv:2201.11941](https://arxiv.org/abs/2201.11941) (2023).
-
 ## Acknowledgement :+1:
 
 If you use this software, please read and cite this article:
