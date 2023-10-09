@@ -50,6 +50,7 @@ setup(
     package_data={'': ['config.yaml',
                        'sonnet_config.yaml',
                         'fast_config.yaml',
+                        'fabfour_config.yaml',
                         'lib/jidt/infodynamics.jar',
                         'lib/PhiToolbox/Phi/phi_comp.m',
                         'lib/PhiToolbox/Phi/phi_star_Gauss.m',

@@ -1,7 +1,6 @@
 Issues & FAQ
 ===================================
 
-
 FAQ
 ########
 
@@ -14,15 +13,15 @@ Users have the option to pass in a customized configuration `.yaml` file as desc
 Alternatively, we provide two pre-defined subsets of SPIs that can serve as good starting points: `sonnet` and `fast`.
 The `sonnet` subset includes 14 SPIs selected to represent the 14 modules identified through hierarchical clustering in the original paper.
 To retain as many SPIs as possible while minimizing computation time, we also offer a `fast` option that omits the most computationally expensive SPIs.
-Either SPI subset can be toggled by setting the corresponding flag in the `Calculator()` function call as follows: 
+Either SPI subset can be toggled by setting the corresponding flag in the `Calculator()` function call as follows:
 
-.. code-block:: 
+.. code-block::
 
     from pyspi import Calculator
     calc = Calculator(sonnet=True) # or calc = Calculator(fast=True)
 
 
-How long does pyspi take to run?
+How long does `pyspi` take to run?
 **********************
 
 This depends on the size of your multivariate time series (MTS) data -- both the number of processes and the number of time points.
@@ -56,9 +55,9 @@ Issues
 Not locating system's octave and/or Java paths (specific to Windows)
 **********************
 
-If you are using Windows and you get an error that `pyspi` cannot locate your system's octave and/or Java paths, you can manually set these paths prior to importing `pyspi`: 
+If you are using Windows and you get an error that `pyspi` cannot locate your system's octave and/or Java paths, you can manually set these paths prior to importing `pyspi`:
 
-.. code-block:: 
+.. code-block::
 
     import os
     pathToExecutable = "C:/Program Files/GNU Octave/Octave-8.2.0/mingw64/bin/octave-cli.exe" # Change if your octave client is installed elsewhere
@@ -73,13 +72,13 @@ Error with Int64Index with pandas
 
 If you encounter the following error:
 
-.. code-block:: 
+.. code-block::
 
     ImportError: cannot import name 'Int64Index' from 'pandas'
 
 You can fix this by manually removing `numpy` and `pandas`, and manually reinstalling the below specific versions with the following code:
 
-.. code-block:: 
+.. code-block::
 
     pip uninstall numpy
     pip uninstall pandas
@@ -88,7 +87,7 @@ You can fix this by manually removing `numpy` and `pandas`, and manually reinsta
 
 Thank you to GitHub user `rmzargar <https://github.com/rmzargar>`_ for reporting this issue and providing the solution.
 
-Java JVM DLL not found (specific to Mac)
+Java JVM DLL not found (specific to Apple Silicon)
 **********************
 
 One user reported the following error when installing `pyspi` on a MacBook Air an M2 chip and Catalina OS:
@@ -100,7 +99,8 @@ One user reported the following error when installing `pyspi` on a MacBook Air a
 
 This issue is similar to those reported `here <https://stackoverflow.com/questions/71504214/jvm-dll-not-found-but-i-can-clearly-see-the-file>`_ and `here <https://github.com/jpype-project/jpype/issues/994>`_; it can arise from the version of OpenJDK identified as the system default. Some Java versions don't include all of the binary (DLL) files that `pyspi` looks for.
 
-We recommend following this `helpful tutorial <https://blog.bigoodyssey.com/how-to-manage-multiple-java-version-in-macos-e5421345f6d0>`_ by Chamika Kasun to install `AdoptOpenJDK <https://adoptopenjdk.net/index.html>`_. In a nutshell, here are the steps you should run:
+We recommend following this `helpful tutorial <https://blog.bigoodyssey.com/how-to-manage-multiple-java-version-in-macos-e5421345f6d0>`_ by Chamika Kasun to install `AdoptOpenJDK <https://adoptopenjdk.net/index.html>`_.
+In a nutshell, here are the steps you should run:
 
 Install homebrew if you don't already have it:
 
@@ -111,21 +111,20 @@ Install homebrew if you don't already have it:
 
 Install `jenv` as your Java version manager:
 
-.. code-block:: 
+.. code-block::
 
     $ brew install jenv
 
-
 Add `jenv` to your shell's configuration file (e.g. `.bashrc` if you use `bash`):
 
-.. code-block:: 
+.. code-block::
 
     $ export PATH="$HOME/.jenv/bin:$PATH"
     $ eval "$(jenv init -)"
 
 Source your shell's configuration file:
 
-.. code-block:: 
+.. code-block::
 
     $ source ~/.bashrc # If you use bash
 
@@ -137,13 +136,13 @@ Confirm proper installation of `jEnv`:
 
 Even if this returns some errors, as long as you see `Jenv is correctly loaded`, you're all set. We recommend using `AdoptOpenJDK` version 11, which you can install with the following command:
 
-.. code-block:: 
+.. code-block::
 
     $ brew install AdoptOpenJDK/openjdk/adoptopenjdk11
 
 Now, you will need to add your `AdoptOpenJDK` path to your `jEnv` environments. First, you can find where your jdk files are installed with the following command:
 
-.. code-block:: 
+.. code-block::
 
     $ /usr/libexec/java_home -V
 
@@ -155,14 +154,24 @@ This will list all your installed java JDK versions. Locate the one for `AdoptOp
 
 Confirm `AdoptOpenJDK` version 11 was added to `jEnv`:
 
-.. code-block:: 
+.. code-block::
 
     $ jenv versions
 
 You can set `AdoptOpenJDK` version 11 as your global Java version with the following:
 
-.. code-block:: 
+.. code-block::
 
     $ jenv global <AdoptOpenJDK version>
     $ # example:
     $ jenv global 11.0
+
+Setting a conda environment for Mac (with Apple Silicon) users
+**********************
+
+As described `here <https://towardsdatascience.com/how-to-manage-conda-environments-on-an-apple-silicon-m1-mac-1e29cb3bad12>`_, users with Apple Silicon can create an environment for `pyspi` with an x86 (Intel) Python executable:
+
+.. code-block::
+    CONDA_SUBDIR=osx-64 conda create -n pyspi python=3.9.0
+    conda activate pyspi
+    conda config --env --set subdir osx-64
