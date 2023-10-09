@@ -25,11 +25,11 @@ After `installing conda <https://docs.conda.io/projects/conda/en/latest/user-gui
 Installation
 ------------
 
-Download or clone the `latest version of pyspi <https://github.com/olivercliff/pyspi>`_ from GitHub, unpack and install:
+Download or clone the `latest version of pyspi <https://github.com/DynamicsAndNeuralSystems/pyspi>`_ from GitHub, unpack and install:
 
 .. code-block:: console
 
-   $ git clone https://github.com/olivercliff/pyspi.git
+   $ git clone https://github.com/DynamicsAndNeuralSystems/pyspi
    $ cd pyspi
    $ pip install .
 

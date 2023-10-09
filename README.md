@@ -16,15 +16,23 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 
 If you use this code, please cite the following preprint:
 
-Oliver M. Cliff, Annie G. Bryant, Joseph T. Lizier, Naotsugu Tsuchiya, Ben D. Fulcher, "Unifying Pairwise Interactions in Complex Dynamics," _arXiv_ preprint, [arXiv:2201.11941](https://arxiv.org/abs/2201.11941) (2023).
+, "Unifying Pairwise Interactions in Complex Dynamics," _arXiv_ preprint, [arXiv:2201.11941](https://arxiv.org/abs/2201.11941) (2023).
+
+## Acknowledgement :+1:
+
+If you use this software, please read and cite this article:
+
+- &#x1F4D7; O.M. Cliff, A.G. Bryant, J.T. Lizier, N. Tsuchiya, B.D. Fulcher [Unifying pairwise interactions in complex dynamics](https://doi.org/10.1038/s43588-023-00519-x), _Nature Computational Science_ (2023).
+
+Note that [preprint](https://arxiv.org/abs/2201.11941) and [free-to-read](https://rdcu.be/dn3JB) versions of this article are available.
 
 ## Getting Started
 
 See the [documentation](https://pyspi-toolkit.readthedocs.io/en/latest/) for installing and setting up _pyspi_.
 Once you're done, you can learn how to use the package by checking out the:
 
-- [Simple demo](https://github.com/olivercliff/pyspi/blob/main/demos/simple_demo.py)
-- [Tutorial (finance: stock price time series)](https://github.com/olivercliff/pyspi/blob/main/demos/tutorial.ipynb)
+- [Simple demo](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/simple_demo.py)
+- [Tutorial (finance: stock price time series)](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/tutorial.ipynb)
 - [Tutorial (neuroimaging: fMRI time series)](https://github.com/anniegbryant/CNS_2022/blob/main/pyspi_tutorial/CNS2022_pyspi_demo.ipynb).
 
 If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the [_pyspi_ distribute](https://github.com/DynamicsAndNeuralSystems/pyspi-distribute) repository helpful.
@@ -43,4 +51,4 @@ If your dataset is large (containing many processes and/or observations), you ca
 
 ## SPI Wishlist
 
-As _pyspi_ is under active development, we are always open to suggestions for new SPIs to be added via the [projects tab](https://github.com/DynamicsAndNeuralSystems/pyspi/projects) in this repo. 
+As _pyspi_ is under active development, we are always open to suggestions for new SPIs to be added via the [projects tab](https://github.com/DynamicsAndNeuralSystems/pyspi/projects) in this repo.
