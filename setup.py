@@ -22,7 +22,7 @@ install_requires = [
         'sktime==0.8.0',
         'dill==0.3.2',
         'spectral-connectivity==0.2.4.dev0',
-        'torch==1.10.0',
+        'torch==1.13.1',
         'cdt==0.5.23',
         'oct2py==5.2.0',
         'tslearn==0.5.2',
