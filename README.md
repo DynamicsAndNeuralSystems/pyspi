@@ -31,7 +31,14 @@ Once you're done, you can learn how to use the package by checking out the:
 
 If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the [_pyspi_ distribute](https://github.com/DynamicsAndNeuralSystems/pyspi-distribute) repository helpful.
 
-If your dataset is large (containing many processes and/or observations), you can use a pre-configured set of reduced statistics or create your own subsets (cf. the [documentation guide](https://pyspi-toolkit.readthedocs.io/en/latest/advanced.html#using-a-reduced-spi-set)).
+If your dataset is large (containing many processes and/or observations), you may wish to start with a pre-configured set of reduced statistics or create your own subsets (cf. the [documentation guide](https://pyspi-toolkit.readthedocs.io/en/latest/advanced.html#using-a-reduced-spi-set)).
+
+### Distributed computation on a high-performance computing (HPC) cluster
+
+Alternatively, _pyspi_ can be configured to distribute individual jobs across an HPC cluster using the [pyspi-distribute](https://github.com/DynamicsAndNeuralSystems/pyspi-distribute) repository.
+We provide some [benchmark estimates](https://pyspi-toolkit.readthedocs.io/en/latest/faq.html#how-long-does-pyspi-take-to-run) for how long a given MTS dataset will take to compute across a variety of parameters for HPC resource request purposes.
+For more information about this functionality, check out the [repository readme](https://github.com/DynamicsAndNeuralSystems/pyspi-distribute#distribute-pyspi-jobs-across-a-pbs-cluster) and the [_pyspi_ documentation](https://pyspi-toolkit.readthedocs.io/en/latest/index.html).
+
 
 ## Other highly comparative toolboxes
 

@@ -53,3 +53,41 @@ For instance, the following code will extract the covariance matrix computed wit
    print(calc.table['cov_EmpiricalCovariance'])
 
 The identifiers for many of the statistics are outlined in the Supplementary Material of our `paper <https://doi.org/10.1038/s43588-023-00519-x>`_.
+
+The Data object
+---------------------
+
+The MTS data is contained within the :class:`~pyspi.data.Data` object, along with preprocessed properties of the MTS that allows us to efficiently compute the methods.
+If you want more control over how the MTS are treated upon input, you can directly instantiate a :class:`~pyspi.data.Data` object for inputting to the calculator:
+
+.. code-block::
+
+    from pyspi.data import Data
+    from pyspi.calculator import Calculator
+    import numpy as np
+
+    M = 10 # Number of processes
+    T = 1000 # Number of observations
+
+    z = np.random.rand(M,T)
+
+    # The dim_order argument specifies which dimension is a process (p) and an observation (s).
+    # The normalise argument specifies if we should z-score the data.
+    dataset = Data(data=z,dim_order='ps',normalise=False)
+
+    calc = Calculator(dataset=dataset)
+
+
+Working with directed statistics
+---------------------
+
+Some of the SPIs are directed, meaning that the value from process A to process B will be computed separately to the value from process B to process A.
+This generally results in asymmetric matrices, which can be useful for analysing the directionality of interactions.
+Consider the SPI :code:`di_gaussian`, which measures the directed information from process A to process B using a Gaussian density estimator, and an MTS consisting of three processes (here reflecting three brain regions).
+The resulting :code:`calc.table` object will contain a 3x3 matrix, where the entry :code:`calc.table['di_gaussian'][0,1]` will be the directed information from process 0 to process 1.
+The rows in this table reflect sources while the columns in this table reflect targets, as schematically depicted below:
+
+.. figure:: img/pyspi_DI_figure.png
+    :width: 550px
+    :height: 300px
+    :alt: Schematic depicting how to interpret the resulting calc.table object for a directed SPI, like di_gaussian.
