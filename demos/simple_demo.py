@@ -9,7 +9,7 @@ dataset = np.random.randn(
 )  # Generate multivariate data with 3 processes and 100 observations
 
 calc = Calculator(
-    dataset=dataset, fast=True
+    dataset=dataset, subset="fast"
 )  # Instantiate the calculator with only fast SPIs (set fast=False to compute all SPIs)
 
 calc.compute()  # Compute all SPIs
