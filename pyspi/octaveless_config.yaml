@@ -1,0 +1,963 @@
+# Basic statistics
+.statistics.basic:
+  # Covariance
+  Covariance:
+    - estimator: EmpiricalCovariance
+    - estimator: EllipticEnvelope
+    - estimator: GraphicalLasso
+    - estimator: GraphicalLassoCV
+    - estimator: LedoitWolf
+    - estimator: MinCovDet
+    - estimator: OAS
+    - estimator: ShrunkCovariance
+    - estimator: EmpiricalCovariance
+      squared: True
+    - estimator: EllipticEnvelope
+      squared: True
+    - estimator: GraphicalLasso
+      squared: True
+    - estimator: GraphicalLassoCV
+      squared: True
+    - estimator: LedoitWolf
+      squared: True
+    - estimator: MinCovDet
+      squared: True
+    - estimator: OAS
+      squared: True
+    - estimator: ShrunkCovariance
+      squared: True
+
+  # Precision
+  Precision:
+    - estimator: EmpiricalCovariance
+    - estimator: EllipticEnvelope
+    - estimator: GraphicalLasso
+    - estimator: GraphicalLassoCV
+    - estimator: LedoitWolf
+    - estimator: MinCovDet
+    - estimator: OAS
+    - estimator: ShrunkCovariance
+    - estimator: EmpiricalCovariance
+      squared: True
+    - estimator: EllipticEnvelope
+      squared: True
+    - estimator: GraphicalLasso
+      squared: True
+    - estimator: GraphicalLassoCV
+      squared: True
+    - estimator: LedoitWolf
+      squared: True
+    - estimator: MinCovDet
+      squared: True
+    - estimator: OAS
+      squared: True
+    - estimator: ShrunkCovariance
+      squared: True
+
+  # Spearman's correlation coefficient
+  SpearmanR:
+    - squared: True
+
+    - squared: False
+
+  # Kendall's rank correlation coefficient
+  KendallTau:
+    - squared: True
+
+    - squared: False
+
+  # statistics based on cross-correlation (squared means we square the xcorr, not the output)
+  CrossCorrelation:
+    - statistic: "max"
+
+    - statistic: "max"
+      squared: True
+
+    - statistic: "mean"
+
+    - statistic: "mean"
+      squared: True
+
+    - statistic: "mean"
+      sigonly: False
+
+    - statistic: "mean"
+      squared: True
+      sigonly: False
+
+.statistics.distance:
+  PairwiseDistance:
+    - metric: "euclidean"
+    - metric: "cityblock"
+    - metric: "cosine"
+    - metric: "chebyshev"
+    - metric: "canberra"
+    - metric: "braycurtis"
+
+  # Distance correlation
+  DistanceCorrelation:
+    - biased: False
+    - biased: True
+
+  # Multi-scale graph correlation
+  MultiscaleGraphCorrelation:
+
+  # Hilbert-Schmidt independence criterion
+  HilbertSchmidtIndependenceCriterion:
+    - biased: False
+    - biased: True
+
+  # Heller-Heller-Gorfine (HHG) test
+  HellerHellerGorfine:
+
+  # Multi-scale graph correlation for time series
+  CrossMultiscaleGraphCorrelation:
+    - max_lag: 1
+    - max_lag: 10
+
+  # Distance correlation for time series
+  CrossDistanceCorrelation:
+    - max_lag: 1
+    - max_lag: 10
+
+  DynamicTimeWarping:
+    - global_constraint: null
+    - global_constraint: itakura
+    - global_constraint: sakoe_chiba
+
+  SoftDynamicTimeWarping:
+    - global_constraint: null
+    - global_constraint: itakura
+    - global_constraint: sakoe_chiba
+
+  LongestCommonSubsequence:
+    - global_constraint: null
+    - global_constraint: itakura
+    - global_constraint: sakoe_chiba
+
+  Barycenter:
+    - mode: euclidean
+      statistic: mean
+    - mode: euclidean
+      statistic: max
+    - mode: dtw
+      statistic: mean
+    - mode: dtw
+      statistic: max
+    - mode: sgddtw
+      statistic: mean
+    - mode: sgddtw
+      statistic: max
+    - mode: softdtw
+      statistic: mean
+    - mode: softdtw
+      statistic: max
+
+    - mode: euclidean
+      statistic: mean
+      squared: True
+
+    - mode: euclidean
+      statistic: max
+      squared: True
+
+    - mode: dtw
+      statistic: mean
+      squared: True
+
+    - mode: dtw
+      statistic: max
+      squared: True
+
+    - mode: sgddtw
+      statistic: mean
+      squared: True
+
+    - mode: sgddtw
+      statistic: max
+      squared: True
+
+    - mode: softdtw
+      statistic: mean
+      squared: True
+
+    - mode: softdtw
+      statistic: max
+      squared: True
+
+.statistics.causal:
+  # Additive noise model
+  AdditiveNoiseModel:
+
+  # Conditional distribution similarity statistic
+  ConditionalDistributionSimilarity:
+
+  # Regression error-based causal inference
+  RegressionErrorCausalInference:
+
+  # Information-geometric conditional independence
+  InformationGeometricConditionalIndependence:
+
+  # Convergent-cross mapping
+  ConvergentCrossMapping:
+    - statistic: mean
+    - statistic: max
+    - statistic: diff
+    - statistic: mean
+      embedding_dimension: 1
+    - statistic: max
+      embedding_dimension: 1
+    - statistic: diff
+      embedding_dimension: 1
+    - statistic: mean
+      embedding_dimension: 10
+    - statistic: max
+      embedding_dimension: 10
+    - statistic: diff
+      embedding_dimension: 10
+
+# Information-theoretic statistics
+# .statistics.infotheory:
+#   JointEntropy: # No theiler window yet
+#     - estimator: gaussian
+
+#     - estimator: kozachenko
+
+#     - estimator: kernel
+
+#   ConditionalEntropy: # No theiler window yet
+#     - estimator: gaussian
+
+#     - estimator: kozachenko
+
+#     - estimator: kernel
+
+#   CausalEntropy: # No theiler window yet
+#     - estimator: gaussian
+
+#     - estimator: kozachenko
+
+#     - estimator: kernel
+
+#   CrossmapEntropy: # No theiler window yet
+#     - estimator: gaussian
+#       history_length: 1
+
+#     - estimator: kozachenko
+#       history_length: 1
+
+#     - estimator: kernel
+#       history_length: 1
+
+#     - estimator: gaussian
+#       history_length: 10
+
+#     - estimator: kozachenko
+#       history_length: 10
+
+#     - estimator: kernel
+#       history_length: 10
+
+#   DirectedInfo: # No theiler window yet
+#     - estimator: gaussian
+
+#     - estimator: kozachenko
+
+#     - estimator: kernel
+
+#   StochasticInteraction: # No theiler window
+#     - estimator: gaussian
+
+#     - estimator: kozachenko
+
+#     - estimator: kernel
+
+#   # Mutual information
+#   MutualInfo:
+#     - estimator: gaussian
+
+#     - estimator: kraskov
+#       prop_k: 4
+
+#     - estimator: kraskov
+#       prop_k: 4
+#       dyn_corr_excl: AUTO
+
+#     - estimator: kernel
+#       kernel_width: 0.25
+
+#   # Mutual information
+#   TimeLaggedMutualInfo:
+#     - estimator: gaussian
+
+#     - estimator: kraskov
+#       prop_k: 4
+
+#     - estimator: kraskov
+#       prop_k: 4
+#       dyn_corr_excl: AUTO
+
+#     - estimator: kernel
+#       kernel_width: 0.25
+
+#   # Transfer entropy
+#   TransferEntropy:
+#     # Kraskov estimator with auto-embedding on source/target and DCE
+#     - estimator: kraskov
+#       prop_k: 4
+#       auto_embed_method: MAX_CORR_AIS
+#       k_search_max: 10
+#       tau_search_max: 4
+
+#     - estimator: kraskov
+#       prop_k: 4
+#       auto_embed_method: MAX_CORR_AIS
+#       k_search_max: 10
+#       tau_search_max: 4
+#       dyn_corr_excl: AUTO
+
+#     # Kraskov estimator with auto-embedding on target-only, src history of 1, and DCE
+#     - estimator: kraskov
+#       prop_k: 4
+#       k_history: 2
+#       l_history: 1
+#       dyn_corr_excl: AUTO
+
+#     # Kraskov estimator with fixed embedding of 1 for source/target and DCE
+#     - estimator: kraskov
+#       prop_k: 4
+#       k_history: 1
+#       l_history: 1
+#       dyn_corr_excl: AUTO
+
+#     # Same as above with no DCE
+#     - estimator: kraskov
+#       prop_k: 4
+#       k_history: 1
+#       l_history: 1
+
+#     # Currently the Kernel method has an overload issue with the AIS calculator..
+#     # Kernel estimator with auto-embedding on source/target and DCE
+#     # - estimator: kernel
+#     #   auto_embed_method: MAX_CORR_AIS
+#     #   k_search_max: 4
+#     #   kernel_width: 0.25
+
+#     # Kernel estimator with no auto-embedding on source/target and DCE
+#     - estimator: kernel
+#       kernel_width: 0.25
+#       k_history: 1
+#       l_history: 1
+
+#     # Gaussian estimator doesn't have DCE (aka Bartlett corrections) yet
+#     - estimator: gaussian
+#       auto_embed_method: MAX_CORR_AIS
+#       k_search_max: 10
+#       tau_search_max: 2
+
+#     - estimator: gaussian
+#       k_history: 1
+#       l_history: 1
+
+#     - estimator: symbolic
+#       k_history: 1
+#       l_history: 1
+
+#     - estimator: symbolic
+#       k_history: 10
+#       l_history: 1
+
+#   IntegratedInformation:
+#     - phitype: "star"
+
+#     - phitype: "star"
+#       normalization: 1
+
+#     - phitype: "Geo"
+
+#     - phitype: "Geo"
+#       normalization: 1
+
+# statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
+.statistics.spectral:
+  CoherencePhase:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  CoherenceMagnitude:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  # Coherence (ordinal or squared? imaginary components of the coherence)
+  ImaginaryCoherence:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  PhaseSlopeIndex:
+    - fmin: 0
+      fmax: 0.5
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+  PhaseLockingValue:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  PhaseLagIndex:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  WeightedPhaseLagIndex:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  DebiasedSquaredPhaseLagIndex:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  DebiasedSquaredWeightedPhaseLagIndex:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  PairwisePhaseConsistency:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  DirectedTransferFunction:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  # partial_coherence:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  #   - fs: 1
+  #     statistic: max
+
+  #   - fmin: 0
+  #     fmax: 0.25
+  #     statistic: max
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+  #     statistic: max
+
+  DirectedCoherence:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  PartialDirectedCoherence:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  GeneralizedPartialDirectedCoherence:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  DirectDirectedTransferFunction:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fs: 1
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+  GroupDelay:
+    - fmin: 0
+      fmax: 0.5
+      statistic: delay
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: delay
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: delay
+
+  SpectralGrangerCausality:
+    # Non-parametric Granger causality (no VAR model)
+    - method: nonparametric
+      fmin: 0
+      fmax: 0.5
+      statistic: mean
+
+    - method: nonparametric
+      fmin: 0
+      fmax: 0.25
+      statistic: mean
+
+    - method: nonparametric
+      fmin: 0.25
+      fmax: 0.5
+      statistic: mean
+
+    - method: nonparametric
+      fmin: 0
+      fmax: 0.5
+      statistic: max
+
+    - method: nonparametric
+      fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - method: nonparametric
+      fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+      # Parametric Granger causality (VAR model with inferred or predefined order)
+
+      # AR order optimised by BIC
+    - method: parametric
+      fmin: 0
+      fmax: 0.5
+      statistic: mean
+
+    - method: parametric
+      fmin: 0
+      fmax: 0.25
+      statistic: mean
+
+    - fmin: 0.25
+      fmax: 0.5
+      method: parametric
+      statistic: mean
+
+      # AR order 1
+    - fs: 1
+      order: 1
+      method: parametric
+      statistic: mean
+
+    - fmin: 0
+      fmax: 0.25
+      order: 1
+      method: parametric
+      statistic: mean
+
+    - fmin: 0.25
+      fmax: 0.5
+      order: 1
+      method: parametric
+      statistic: mean
+
+      # AR order 20
+    - fs: 1
+      order: 20
+      method: parametric
+      statistic: mean
+
+    - fmin: 0
+      fmax: 0.25
+      order: 20
+      method: parametric
+      statistic: mean
+
+    - fmin: 0.25
+      fmax: 0.5
+      order: 20
+      method: parametric
+      statistic: mean
+
+      # AR order optimised by BIC
+    - fs: 1
+      method: parametric
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      method: parametric
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      method: parametric
+      statistic: max
+
+      # AR order 1
+    - fs: 1
+      order: 1
+      method: parametric
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      order: 1
+      method: parametric
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      order: 1
+      method: parametric
+      statistic: max
+
+      # AR order 20
+    - fs: 1
+      order: 20
+      method: parametric
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      order: 20
+      method: parametric
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      order: 20
+      method: parametric
+      statistic: max
+
+# statistics that analyse in the wavelet-domain (only Mortlet wavelet's at the moment)
+.statistics.wavelet:
+  PhaseSlopeIndex:
+    - fs: 1
+
+    - fmin: 0
+      fmax: 0.25
+
+    - fmin: 0.25
+      fmax: 0.5
+
+    - fmin: 0
+      fmax: 0.5
+      statistic: max
+
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+
+.statistics.misc:
+  LinearModel:
+    - model: Ridge
+    - model: Lasso
+    - model: SGDRegressor
+    - model: ElasticNet
+    - model: BayesianRidge
+
+  GPModel:
+    - kernel: DotProduct
+    - kernel: RBF
+
+  # Cointegration
+  Cointegration:
+    - method: johansen
+      statistic: max_eig_stat
+      det_order: 0 # Constant trend
+      k_ar_diff: 10
+
+    - method: johansen
+      statistic: trace_stat
+      det_order: 0
+      k_ar_diff: 10
+
+    - method: johansen
+      statistic: max_eig_stat
+      det_order: 0 # Constant trend
+      k_ar_diff: 1
+
+    - method: johansen
+      statistic: trace_stat
+      det_order: 0
+      k_ar_diff: 1
+
+    - method: johansen
+      statistic: max_eig_stat
+      det_order: 1 # Linear trend
+      k_ar_diff: 10
+
+    - method: johansen
+      statistic: trace_stat
+      det_order: 1
+      k_ar_diff: 10
+
+    - method: johansen
+      statistic: max_eig_stat
+      det_order: 1
+      k_ar_diff: 1
+
+    - method: johansen
+      statistic: trace_stat
+      det_order: 1
+      k_ar_diff: 1
+
+    - method: aeg
+      statistic: tstat
+      autolag: aic
+      maxlag: 10
+      trend: c
+
+    - method: aeg
+      statistic: tstat
+      autolag: aic
+      maxlag: 10
+      trend: ct
+
+    - method: aeg
+      statistic: tstat
+      autolag: bic
+      maxlag: 10
+      trend: ct
+
+  # Power envelope correlation
+  PowerEnvelopeCorrelation:
+    - orth: False
+      log: False
+      absolute: False
+
+    - orth: True
+      log: False
+      absolute: False
+
+    - orth: False
+      log: True
+      absolute: False
+
+    - orth: True
+      log: True
+      absolute: False
+
+    - orth: True
+      log: False
+      absolute: True
+
+    - orth: True
+      log: True
+      absolute: True
