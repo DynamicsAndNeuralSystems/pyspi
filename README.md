@@ -28,13 +28,13 @@ Note that [preprint](https://arxiv.org/abs/2201.11941) and [free-to-read](https:
 See the [documentation](https://time-series-features.gitbook.io/pyspi/) for installing and setting up _pyspi_.
 Once you're done, you can learn how to use the package by checking out the:
 
-- [Simple demo](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/simple_demo.py)
-- [Tutorial (finance: stock price time series)](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/tutorial.ipynb)
-- [Tutorial (neuroimaging: fMRI time series)](https://github.com/anniegbryant/CNS_2022/blob/main/pyspi_tutorial/CNS2022_pyspi_demo.ipynb).
+- [Simple demo](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/getting-started-a-simple-demonstration)
+- [Tutorial (finance: stock price time series)](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/finance-stock-price-time-series)
+- [Tutorial (neuroimaging: fMRI time series)](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/neuroimaging-fmri-time-series).
 
 If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the [_pyspi_ distribute](https://github.com/DynamicsAndNeuralSystems/pyspi-distribute) repository helpful.
 
-If your dataset is large (containing many processes and/or observations), you can use a pre-configured set of reduced statistics or create your own subsets (cf. the [documentation guide](https://pyspi-toolkit.readthedocs.io/en/latest/advanced.html#using-a-reduced-spi-set)).
+If your dataset is large (containing many processes and/or observations), you can use a pre-configured set of reduced statistics or create your own subsets (cf. the [documentation guide](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/using-a-reduced-spi-set)).
 
 ## Other highly comparative toolboxes
 
