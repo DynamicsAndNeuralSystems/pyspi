@@ -25,7 +25,7 @@ Note that [preprint](https://arxiv.org/abs/2201.11941) and [free-to-read](https:
 
 ## Getting Started
 
-See the [documentation](https://pyspi-toolkit.readthedocs.io/en/latest/) for installing and setting up _pyspi_.
+See the [documentation](https://time-series-features.gitbook.io/pyspi/) for installing and setting up _pyspi_.
 Once you're done, you can learn how to use the package by checking out the:
 
 - [Simple demo](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/simple_demo.py)
