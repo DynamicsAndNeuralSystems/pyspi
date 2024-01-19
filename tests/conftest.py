@@ -4,6 +4,11 @@ import dill
 from pyspi.calculator import Calculator
 import numpy as np
 from copy import deepcopy
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+#warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", message="Mean of empty slice", category=RuntimeWarning)
+warnings.filterwarnings("ignore", message="All-NaN slice encountered", category=RuntimeWarning)
 
 def load_benchmark_calcs():
     benchmark_calcs = dict()
@@ -58,22 +63,33 @@ def compute_new_tables():
 
     return new_calcs
 
-def generate_basicSPI_test_params():
+# def generate_SPI_test_params():
+#     benchmark_calcs = load_benchmark_calcs()
+#     new_calcs = compute_new_tables()
+#     basic_spis = ['Covariance', 'Precision', 'SpearmanR', 'KendallTau', 'CrossCorrelation']
+#     params = []
+#     for calc_name, benchmark_calc in benchmark_calcs.items():
+#         spi_dict = benchmark_calc.spis
+#         for spi_name in basic_spis:
+#             spi_to_check = getattr(pyspi.statistics.basic, spi_name)
+#             spi_estimators = [key for key, value in spi_dict.items() if isinstance(value, spi_to_check)]
+#             for est in spi_estimators:
+#                 params.append((calc_name, est, benchmark_calc.table[est], new_calcs[calc_name].table[est]))
+#     return params
+
+def generate_SPI_test_params():
     benchmark_calcs = load_benchmark_calcs()
     new_calcs = compute_new_tables()
-    basic_spis = ['Covariance', 'Precision', 'SpearmanR', 'KendallTau', 'CrossCorrelation']
     params = []
     for calc_name, benchmark_calc in benchmark_calcs.items():
         spi_dict = benchmark_calc.spis
-        for spi_name in basic_spis:
-            spi_to_check = getattr(pyspi.statistics.basic, spi_name)
-            spi_estimators = [key for key, value in spi_dict.items() if isinstance(value, spi_to_check)]
-            for est in spi_estimators:
-                params.append((calc_name, est, benchmark_calc.table[est], new_calcs[calc_name].table[est]))
+        for spi_est in spi_dict.keys():
+            params.append((calc_name, spi_est, benchmark_calc.table[spi_est], new_calcs[calc_name].table[spi_est]))
+    
     return params
 
 
-params = generate_basicSPI_test_params()
+params = generate_SPI_test_params()
 def pytest_generate_tests(metafunc):
     if "calc_name" in metafunc.fixturenames:
         metafunc.parametrize("calc_name,est,mpi_benchmark,mpi_new", params)
