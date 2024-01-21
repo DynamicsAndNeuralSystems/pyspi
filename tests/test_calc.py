@@ -1,11 +1,27 @@
 from pyspi.calculator import Calculator
 import numpy as np 
 import os
+import yaml
 import pytest
 
-def test_calculator_works():
+def test_whether_calculator_loads():
     calc = Calculator()
     assert isinstance(calc, Calculator), "Calculator failed to instantiate"
+
+def test_default_calculator_instantiates_with_correct_num_spis():
+    calc = Calculator()
+    n_spis_actual = calc.n_spis
+    # get expected number of spis based on yaml
+    with open('../pyspi/config.yaml', 'rb') as y:
+        yaml_file = yaml.full_load(y)
+    count = 0
+    for module in yaml_file.keys():
+        for base_spi in yaml_file[module].keys():
+            if yaml_file[module][base_spi] == None:
+                count += 1
+            else:
+                count += len(yaml_file[module][base_spi])
+    assert count == n_spis_actual, f"Number of SPIs loaded from the calculator ({n_spis_actual}) does not matched exepcted amount {count}"
 
 @pytest.mark.parametrize("yaml_filename", [
     'fabfour_config', 
