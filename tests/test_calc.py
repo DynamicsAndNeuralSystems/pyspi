@@ -8,6 +8,7 @@ def test_whether_calculator_loads():
     calc = Calculator()
     assert isinstance(calc, Calculator), "Calculator failed to instantiate"
 
+
 def test_default_calculator_instantiates_with_correct_num_spis():
     calc = Calculator()
     n_spis_actual = calc.n_spis
@@ -21,11 +22,26 @@ def test_default_calculator_instantiates_with_correct_num_spis():
                 count += 1
             else:
                 count += len(yaml_file[module][base_spi])
-    assert count == n_spis_actual, f"Number of SPIs loaded from the calculator ({n_spis_actual}) does not matched exepcted amount {count}"
+    assert count == n_spis_actual, f"Number of SPIs loaded from the calculator ({n_spis_actual}) does not matched expected amount {count}"
+
+@pytest.mark.parametrize("subset", [
+    'fabfour',
+    'fast',
+    'sonnet',
+    'octaveless'
+])
+def test_whether_calculator_instantiates_with_subsets(subset):
+    calc = Calculator(subset=subset)
+    assert isinstance(calc, Calculator), "Calculator failed to instantiate"
+
+def test_whether_invalid_subset_throws_error():
+    with pytest.raises(ValueError) as excinfo:
+        calc = Calculator(subset='nviutw')
+    assert "Subset 'nviutw' does not exist" in str(excinfo.value), "Subset not found error does not properly display."
+
 
 @pytest.mark.parametrize("yaml_filename", [
     'fabfour_config', 
-    'config', 
     'fast_config', 
     'octaveless_config', 
     'sonnet_config'])
@@ -34,14 +50,3 @@ def test_whether_config_files_exist(yaml_filename):
     expected_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'pyspi', f'{yaml_filename}.yaml'))
     assert os.path.isfile(expected_file), f"{yaml_filename}.yaml file was not found."
 
-# def test_whether_calculator_instantiates_with_defaults():
-#     """Attempt to create an instance of the calculator object with no arguments"""
-
-#     calc = Calculator()
-
-#     assert isinstance(calc, Calculator), "Calculator instance was not created properly"
-
-#     # asssert the initial state of key attributes, given their assumed defaults
-#     assert calc.name is None, "Default calculator name should be None"
-#     assert calc.labels is None, "Default calculator labels should be None"
-#     assert calc.n_spis == 283, "Default calculator instance does not contain 283 SPIs"
