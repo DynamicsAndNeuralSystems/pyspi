@@ -11,8 +11,7 @@ jobs:
         python-version: ["3.8"]
     steps:
       - name: Hello World
-        run: |
-          echo "Hello World!""
+        run: 
           python -v
     # steps:
     #   - uses: actions/checkout@v3
