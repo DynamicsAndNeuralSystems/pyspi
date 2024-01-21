@@ -26,5 +26,5 @@ jobs:
           pip install .
       - name: Run pyspi unit test
         run: |
-          pytest
+          pytest -v
 
