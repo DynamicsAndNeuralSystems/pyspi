@@ -12,7 +12,7 @@ def test_default_calculator_instantiates_with_correct_num_spis():
     calc = Calculator()
     n_spis_actual = calc.n_spis
     # get expected number of spis based on yaml
-    with open('../pyspi/config.yaml', 'rb') as y:
+    with open('pyspi/config.yaml', 'rb') as y:
         yaml_file = yaml.full_load(y)
     count = 0
     for module in yaml_file.keys():
