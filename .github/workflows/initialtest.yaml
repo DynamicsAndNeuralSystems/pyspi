@@ -23,7 +23,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-    #   run: |
-    #     python -m pip install --upgrade pip
-    #     pip install -r requirements.txt
+      - name: Run pyspi unit test
+        run: |
+          pytest
 
