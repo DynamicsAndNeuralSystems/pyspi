@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Hello World
         run: echo "Hello World!"
+        run: |
+          python -v
     # steps:
     #   - uses: actions/checkout@v3
     #   - name: Setup python ${{ matrix.python-version }}
