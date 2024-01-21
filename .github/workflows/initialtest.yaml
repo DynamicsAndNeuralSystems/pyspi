@@ -10,11 +10,7 @@ jobs:
       matrix:
         python-version: ["3.8"]
     steps:
-      - name: Hello World
-        run: 
-          python -v
-    # steps:
-    #   - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
     #   - name: Setup python ${{ matrix.python-version }}
     #     uses: actions/setup-python@v4
     #     with:
