@@ -1,4 +1,4 @@
-name: Run Unit Tests via PyTest
+name: Unit Testing Pipeline
 
 on: 
   push:
