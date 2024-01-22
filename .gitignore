@@ -5,6 +5,7 @@ dist
 *.pkl
 *.log
 *.bkp
+.DS_Store
 .vscode
 build
 octave-workspace
