@@ -1,12 +1,14 @@
 from pyspi.calculator import Calculator
+from pyspi.calculator import Data
 import numpy as np 
 import os
 import yaml
 import pytest
 
-def test_whether_calculator_loads():
+############################# Test Calculator Object ########################
+def test_whether_calculator_instatiates():
     calc = Calculator()
-    assert isinstance(calc, Calculator), "Calculator failed to instantiate"
+    assert isinstance(calc, Calculator), "Calculator failed to instantiate."
 
 def test_default_calculator_instantiates_with_correct_num_spis():
     calc = Calculator()
@@ -123,4 +125,66 @@ def test_whether_table_shape_correct_before_compute(subset, procs, obs):
     num_spis = calc.n_spis
     expected_table_shape = (procs, num_spis*procs)
     assert calc.table.shape == expected_table_shape, f"Calculator table ({subset}) shape: ({calc.table.shape}) does not match expected shape: {expected_table_shape}"
+
+
+############################# Test Data Object ########################
+def test_data_object_has_been_converted_to_numpyfloat64():
+    dat = np.random.randn(5, 10)
+    calc = Calculator(dataset=dat)
+    assert calc.dataset.data_type == np.float64, "Dataset was not converted into a numpy array when loaded into Calculator."
+
+def test_whether_data_instantiates():
+    data_obj = Data()
+    assert isinstance(data_obj, Data), "Data object failed to instantiate!"
+
+def test_whether_data_throws_error_when_retrieving_nonexistent_dataset():
+    data_obj = Data()
+    with pytest.raises(AttributeError) as excinfo:
+        dataset = data_obj.data
+    assert "'Data' object has no attribute 'data'" in str(excinfo), "Unexpected error message when trying to retrieve non-existent dataset!"
+
+def test_whether_data_throws_error_when_incorrect_dataset_type():
+    with pytest.raises(TypeError) as excinfo:
+        d = Data(data=3)
+    assert f"Unknown data type" in str(excinfo), "Incorrect error message thrown when invalid dataset loaded into data object."
+
+@pytest.mark.parametrize("order, shape, n_procs_expected, n_obs_expected", [
+    ("ps", (3, 100), 3, 100),
+    ("sp", (100, 3), 3, 100)
+])
+def test_whether_dim_order_works(order, shape, n_procs_expected, n_obs_expected):
+    """Check that ps and sp correctly specify order of process/obseravtions"""
+    dataset = np.random.randn(shape[0], shape[1])
+    d = Data(data=dataset, dim_order=order)
+    assert d.n_processes == n_procs_expected, f"Number of processes does not match expected for specified dim order: {order}"
+    assert d.n_observations == n_obs_expected, f"Number of observations does not match expected for specified dim order: {order}"
+
+def test_whether_data_name_assigned_only_with_dataset():
+    """If no dataset is provided, there is no name for the data object (N/A)"""
+    d = Data(name='test')
+    assert d.name == 'N/A', "Data object name is not N/A when no dataset provided."
+
+def test_whether_data_object_has_name_with_dataset():
+    """If dataset is provided, the name will be returned"""
+    dataset = np.random.randn(4, 100)
+    d = Data(data=dataset, name='test')
+    assert d.name == "test", f"Data object name 'test' is not being returned. Instead, {d.name} is returned."
+
+def test_whether_data_normalise_works():
+    """Check whether the data is being normalised by default when loading into data object"""
+    dataset = 4 * np.random.randn(10, 500)
+    d = Data(data=dataset, normalise=True)
+    returned_dataset = d.to_numpy(squeeze=True)
+    assert returned_dataset.mean() == pytest.approx(0, 1e-8), f"Returned dataset mean is not close to zero: {returned_dataset.mean()}"
+    assert returned_dataset.std() == pytest.approx(1, 0.01), f"Returned dataset std is not close to one: {returned_dataset.std()}"
+
+def test_whether_set_data_works():
+    """Check whether existing dataset is overwritten by new dataset"""
+    old_dataset = np.random.randn(1, 100)
+    d = Data(data=old_dataset) # start with empty data object
+    new_dataset = np.random.randn(5, 100)
+    d.set_data(data=new_dataset)
+    # just check the shapes since new datast will be normalised and not equal to the dataset passed in
+    assert d.to_numpy(squeeze=True).shape[0] == 5, "Unexpected dataset returned when overwriting existing dataset!"
+    
 
