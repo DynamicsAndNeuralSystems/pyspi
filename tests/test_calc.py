@@ -1,5 +1,6 @@
 from pyspi.calculator import Calculator
 from pyspi.calculator import Data
+from pyspi.data import load_dataset
 import numpy as np 
 import os
 import yaml
@@ -186,5 +187,45 @@ def test_whether_set_data_works():
     d.set_data(data=new_dataset)
     # just check the shapes since new datast will be normalised and not equal to the dataset passed in
     assert d.to_numpy(squeeze=True).shape[0] == 5, "Unexpected dataset returned when overwriting existing dataset!"
-    
 
+
+def test_add_univariate_process_to_existing_data_object():
+    # start with initial data object
+    dataset = np.random.randn(5, 100)
+    orig_data_object = Data(data=dataset)
+    # now add additional proc to existing data object
+    new_univariate_proc = np.random.randn(1, 100)
+    orig_data_object.add_process(proc=new_univariate_proc)
+    assert orig_data_object.n_processes == 6, "New dataset number of processes not equal to expected number of processes."
+
+def test_add_multivariate_process_to_existing_data_object():
+    """Should not work, can only add univariate process with add_process function"""
+    dataset = np.random.randn(5, 100)
+    orig_data_object = Data(data=dataset)
+    # now add additional procs to existing data object
+    new_multivariate_proc = np.random.randn(2, 100)
+    with pytest.raises(TypeError) as excinfo:
+        orig_data_object.add_process(proc=new_multivariate_proc)
+    assert "Process must be a 1D numpy array" in str(excinfo.value), "Expected 1D array error NOT thrown."
+
+@pytest.mark.parametrize("index", 
+                         [[1], [1, 3], [1, 2, 3]])
+def test_remove_valid_process_from_existing_dataset(index):
+    dataset = np.random.randn(5, 100)
+    d = Data(data=dataset, normalise=False)
+    rows_to_remove = index
+    expected_dataset = np.delete(dataset, rows_to_remove, axis=0)
+    d.remove_process(index)
+    out = d.to_numpy(squeeze=True)
+    assert out.shape[0] == (5 - len(index)), f"Dataset shape after removing {len(index)} proc(s) not equal to {(5 - len(index))}"
+    assert np.array_equal(expected_dataset, out), f"Expected dataset after removing proc(s): {index} not equal to dataset returned."
+
+@pytest.mark.parametrize("dataset_name", ["forex", "cml"])
+def test_load_valid_dataset(dataset_name):
+    dataset = load_dataset(dataset_name)
+    assert isinstance(dataset, Data), f"Could not load dataset: {dataset_name}"
+
+def test_load_invalid_dataset():
+    with pytest.raises(NameError) as excinfo:
+        dataset = load_dataset(name="test")
+    assert "Unknown dataset: test" in str(excinfo.value), "Did not get expected error when loading invalid dataset."
