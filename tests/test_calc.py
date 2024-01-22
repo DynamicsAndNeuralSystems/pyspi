@@ -1,5 +1,4 @@
-from pyspi.calculator import Calculator
-from pyspi.calculator import Data
+from pyspi.calculator import Calculator, Data
 from pyspi.data import load_dataset
 import numpy as np 
 import os
@@ -8,10 +7,12 @@ import pytest
 
 ############################# Test Calculator Object ########################
 def test_whether_calculator_instatiates():
+    """Basic test to check whether or not the calculator will instantiate."""
     calc = Calculator()
     assert isinstance(calc, Calculator), "Calculator failed to instantiate."
 
 def test_default_calculator_instantiates_with_correct_num_spis():
+    """Test whether the default calculator instantiates with the full SPI set"""
     calc = Calculator()
     n_spis_actual = calc.n_spis
     # get expected number of spis based on yaml
@@ -33,35 +34,42 @@ def test_default_calculator_instantiates_with_correct_num_spis():
     'octaveless'
 ])
 def test_whether_calculator_instantiates_with_subsets(subset):
+    """Test whether the calculator instantiates with each of the available subsets"""
     calc = Calculator(subset=subset)
     assert isinstance(calc, Calculator), "Calculator failed to instantiate"
 
 def test_whether_invalid_subset_throws_error():
+    """Test whether the calculator fails to instantiate with an invalid subset"""
     with pytest.raises(ValueError) as excinfo:
         calc = Calculator(subset='nviutw')
     assert "Subset 'nviutw' does not exist" in str(excinfo.value), "Subset not found error not displaying."
 
 def test_whether_calculator_compute_fails_with_no_dataset():
+    """Test whether the calculator fails to compute SPIs when no dataset is provided."""
     calc = Calculator()
     with pytest.raises(AttributeError) as excinfo:
         calc.compute()
     assert "Dataset not loaded yet" in str(excinfo.value), "Dataset not loaded yet error not displaying."
 
 def test_calculator_name():
+    """Test whether the calculator name is retrieved correctly."""
     calc = Calculator(name="test name")
     assert calc.name == "test name", "Calculator name property did not return the expected string 'test name'"
 
 def test_calculator_labels():
+    """Test whether the calculator labels are retreived correctly, when provided."""
     test_labels = ['label1', 'label2']
     calc = Calculator(labels = test_labels)
     assert calc.labels == ['label1', 'label2'], f"Calculator labels property did not return the expected list: {test_labels} "
 
 def test_pass_single_integer_as_dataset():
+    """Test whether correct error is thrown when incorrect data type passed into calculator."""
     with pytest.raises(TypeError) as excinfo:
         calc = Calculator(dataset=42)
     assert "Unknown data type" in str(excinfo.value), "Incorrect data type error not displaying for integer dataset."
 
 def test_pass_incorrect_shape_dataset_into_calculator():
+    """Test whether an error is thrown when incorrect dataset shape is passed into calculator."""
     dataset_with_wrong_dim = np.random.randn(3, 5, 10)
     with pytest.raises(RuntimeError) as excinfo:
         calc = Calculator(dataset=dataset_with_wrong_dim)
@@ -120,6 +128,7 @@ def test_whether_config_files_exist(yaml_filename):
     ("sonnet", 3, 100)
 ])
 def test_whether_table_shape_correct_before_compute(subset, procs, obs):
+    """Test whether the pre-configured table is the correct shape prior to computing SPIs."""
     dat = np.random.randn(procs, obs)
     calc = Calculator(dataset=dat, subset=subset)
     num_spis = calc.n_spis
@@ -128,21 +137,25 @@ def test_whether_table_shape_correct_before_compute(subset, procs, obs):
 
 ############################# Test Data Object ########################
 def test_data_object_has_been_converted_to_numpyfloat64():
+    """Test whether the data object converts passed dataset to numpy array by default."""
     dat = np.random.randn(5, 10)
     calc = Calculator(dataset=dat)
     assert calc.dataset.data_type == np.float64, "Dataset was not converted into a numpy array when loaded into Calculator."
 
 def test_whether_data_instantiates():
+    """Test whether the data object instantiates without issue."""
     data_obj = Data()
     assert isinstance(data_obj, Data), "Data object failed to instantiate!"
 
 def test_whether_data_throws_error_when_retrieving_nonexistent_dataset():
+    """Test whether the data object throws correct message when trying to access a non-existent dataset."""
     data_obj = Data()
     with pytest.raises(AttributeError) as excinfo:
         dataset = data_obj.data
     assert "'Data' object has no attribute 'data'" in str(excinfo), "Unexpected error message when trying to retrieve non-existent dataset!"
 
 def test_whether_data_throws_error_when_incorrect_dataset_type():
+    """Test if correct message is shown when passing invalid dataset data type into data object."""
     with pytest.raises(TypeError) as excinfo:
         d = Data(data=3)
     assert f"Unknown data type" in str(excinfo), "Incorrect error message thrown when invalid dataset loaded into data object."
@@ -208,6 +221,8 @@ def test_add_multivariate_process_to_existing_data_object():
 @pytest.mark.parametrize("index", 
                          [[1], [1, 3], [1, 2, 3]])
 def test_remove_valid_process_from_existing_dataset(index):
+    """Try to remove valid processes from existing dataset by specifying one or more indices. 
+    Check if correct indices are being used."""
     dataset = np.random.randn(5, 100)
     d = Data(data=dataset, normalise=False)
     rows_to_remove = index
@@ -219,10 +234,12 @@ def test_remove_valid_process_from_existing_dataset(index):
 
 @pytest.mark.parametrize("dataset_name", ["forex", "cml"])
 def test_load_valid_dataset(dataset_name):
+    """Test whether the load_dataset function will load all available datasets."""
     dataset = load_dataset(dataset_name)
     assert isinstance(dataset, Data), f"Could not load dataset: {dataset_name}"
 
 def test_load_invalid_dataset():
+    """Test whether the load_dataset function throws the correct error/message when trying to load non-existent dataset."""
     with pytest.raises(NameError) as excinfo:
         dataset = load_dataset(name="test")
     assert "Unknown dataset: test" in str(excinfo.value), "Did not get expected error when loading invalid dataset."
