@@ -26,7 +26,7 @@ jobs:
           pip install -r requirements.txt
           pip install .
           pip install pandas==1.3.3 numpy==1.22.0
-      - name: Run pyspi unit test
+      - name: Run pyspi unit tests
         run: |
           pytest -v
 
