@@ -67,7 +67,6 @@ def test_pass_incorrect_shape_dataset_into_calculator():
         calc = Calculator(dataset=dataset_with_wrong_dim)
     assert "Data array dimension (3)" in str(excinfo.value), "Incorrect dimension error message not displaying for incorrect shape dataset."
 
-
 @pytest.mark.parametrize("nan_loc, expected_output", [
     ([1], "[1]"),
     ([1, 2], "[1 2]"),
@@ -126,7 +125,6 @@ def test_whether_table_shape_correct_before_compute(subset, procs, obs):
     num_spis = calc.n_spis
     expected_table_shape = (procs, num_spis*procs)
     assert calc.table.shape == expected_table_shape, f"Calculator table ({subset}) shape: ({calc.table.shape}) does not match expected shape: {expected_table_shape}"
-
 
 ############################# Test Data Object ########################
 def test_data_object_has_been_converted_to_numpyfloat64():
@@ -187,7 +185,6 @@ def test_whether_set_data_works():
     d.set_data(data=new_dataset)
     # just check the shapes since new datast will be normalised and not equal to the dataset passed in
     assert d.to_numpy(squeeze=True).shape[0] == 5, "Unexpected dataset returned when overwriting existing dataset!"
-
 
 def test_add_univariate_process_to_existing_data_object():
     # start with initial data object
