@@ -58,7 +58,9 @@ setup(
                         'lib/PhiToolbox/utility/Gauss/H_gauss.m',
                         'lib/PhiToolbox/utility/Gauss/logdet.m',
                         'data/cml.npy',
-                        'data/forex.npy']},
+                        'data/forex.npy',
+                        'data/standard_normal.npy'
+                        '']},
     include_package_data=True,
     version='0.4.0',
     description='Library for pairwise analysis of time series data.',
