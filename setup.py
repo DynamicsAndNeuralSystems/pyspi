@@ -34,15 +34,6 @@ testing_extras = [
     'pytest==5.4.2',  # unittest.TestCase funkyness, see commit 77c1505ab
 ]
 
-docs_extras = [
-    'Sphinx >= 3.0.0',  # Force RTD to use >= 3.0.0
-    'docutils',
-    'pylons-sphinx-themes >= 1.0.8',  # Ethical Ads
-    'pylons_sphinx_latesturl',
-    'repoze.sphinx.autointerface',
-    'sphinx-copybutton',
-    'sphinxcontrib-autoprogram',
-]
 
 setup(
     name='pyspi',
@@ -89,5 +80,5 @@ setup(
         "Topic :: Scientific/Engineering :: Medical Science Apps.",
     ],
     install_requires=install_requires,
-    extras_require={'testing': testing_extras, 'docs': docs_extras}
+    extras_require={'testing': testing_extras}
 )
