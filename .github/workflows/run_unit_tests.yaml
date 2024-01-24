@@ -28,8 +28,8 @@ jobs:
           pip install pandas==1.3.3 numpy==1.22.0
       - name: Run pyspi calculator unit tests
         run: |
-          pytest -v test_calc.py
+          pytest -v ./tests/test_calc.py
       - name: Run pyspi SPI unit tests
         run: |
-          pytest -v test_SPIs.py
+          pytest -v ./tests/test_SPIs.py
         
