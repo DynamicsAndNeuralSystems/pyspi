@@ -22,7 +22,7 @@ install_requires = [
         'sktime==0.8.0',
         'dill==0.3.2',
         'spectral-connectivity==0.2.4.dev0',
-        'torch==1.10.0',
+        'torch==1.13.1',
         'cdt==0.5.23',
         'oct2py==5.2.0',
         'tslearn==0.5.2',
@@ -34,15 +34,6 @@ testing_extras = [
     'pytest==5.4.2',  # unittest.TestCase funkyness, see commit 77c1505ab
 ]
 
-docs_extras = [
-    'Sphinx >= 3.0.0',  # Force RTD to use >= 3.0.0
-    'docutils',
-    'pylons-sphinx-themes >= 1.0.8',  # Ethical Ads
-    'pylons_sphinx_latesturl',
-    'repoze.sphinx.autointerface',
-    'sphinx-copybutton',
-    'sphinxcontrib-autoprogram',
-]
 
 setup(
     name='pyspi',
@@ -67,7 +58,8 @@ setup(
                         'lib/PhiToolbox/utility/Gauss/H_gauss.m',
                         'lib/PhiToolbox/utility/Gauss/logdet.m',
                         'data/cml.npy',
-                        'data/forex.npy']},
+                        'data/forex.npy',
+                        'data/standard_normal.npy']},
     include_package_data=True,
     version='0.4.0',
     description='Library for pairwise analysis of time series data.',
@@ -89,5 +81,5 @@ setup(
         "Topic :: Scientific/Engineering :: Medical Science Apps.",
     ],
     install_requires=install_requires,
-    extras_require={'testing': testing_extras, 'docs': docs_extras}
+    extras_require={'testing': testing_extras}
 )
