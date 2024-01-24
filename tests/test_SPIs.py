@@ -68,12 +68,22 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("calc_name,est,mpi_benchmark,mpi_new", params)
 
 def test_mpi(calc_name, est, mpi_benchmark, mpi_new):
-    """Run the test"""
-    # check for mismatched NaNs first
+    """Run the benchmarking tests."""
+
+    """First check to see if any SPIs are 'broken', as would be the case if
+     the benchmark table contains values for certain SPIs whereas the new table for the same
+      SPI does not (NaN). Also, if all values are NaNs for one SPI and not for the same SPI in the
+       newly computed table. """
+    
     mismatched_nans = (mpi_benchmark.isna() != mpi_new.isna())
     assert not mismatched_nans.any().any(), f"SPI: {est} | Dataset: {calc_name}. Mismatched NaNs."
 
+    # check that the shapes are equal
+    assert mpi_benchmark.shape == mpi_new.shape, f"SPI: {est}| Dataset: {calc_name}. Different table shapes. "
+
+    # Now quantify the difference between tables (if a diff exists)
     epsilon = np.finfo(float).eps
+
     if not mpi_benchmark.equals(mpi_new):
         diff = abs(mpi_benchmark - mpi_new)
         max_diff = diff.max().max()
