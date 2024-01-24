@@ -88,7 +88,7 @@ def test_mpi(calc_name, est, mpi_benchmark, mpi_new):
         diff = abs(mpi_benchmark - mpi_new)
         max_diff = diff.max().max()
         if max_diff > epsilon:
-            warnings.warn(f"SPI: {est}. Dataset: {calc_name}. Max difference: {max_diff}")
+            warnings.warn(f"SPI: {est} | Dataset: {calc_name} | Max difference: {max_diff}")
     
     
 
