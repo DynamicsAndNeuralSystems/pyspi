@@ -26,7 +26,7 @@ def load_benchmark_datasets():
     benchmark_datasets = dict()
     dataset_names = ['standard_normal.npy']
     for dname in dataset_names:
-        dataset = np.load(f"pyspi/data/{dname}")
+        dataset = np.load(f"./../data/{dname}")
         dataset = dataset.T 
         benchmark_datasets[dname.strip('.npy')] = dataset
 
