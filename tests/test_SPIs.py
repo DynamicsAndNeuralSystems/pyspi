@@ -17,7 +17,7 @@ def load_benchmark_calcs():
             calc_name = calc[len("calc_"):-len(".pkl")]
 
             # Load the calculator
-            with open(f"pyspi/tests/{calc}", "rb") as f:
+            with open(f"tests/{calc}", "rb") as f:
                 loaded_calc = dill.load(f)
                 benchmark_calcs[calc_name] = loaded_calc
     
