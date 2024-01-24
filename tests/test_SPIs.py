@@ -16,7 +16,7 @@ def load_benchmark_calcs():
             calc_name = calc[len("calc_"):-len(".pkl")]
 
             # Load the calculator
-            with open(f"../pyspi/tests/{calc}", "rb") as f:
+            with open(f"./{calc}", "rb") as f:
                 loaded_calc = dill.load(f)
                 benchmark_calcs[calc_name] = loaded_calc
     
@@ -26,7 +26,7 @@ def load_benchmark_datasets():
     benchmark_datasets = dict()
     dataset_names = ['standard_normal.npy']
     for dname in dataset_names:
-        dataset = np.load(f"./../data/{dname}")
+        dataset = np.load(f"../pyspi/data/{dname}")
         dataset = dataset.T 
         benchmark_datasets[dname.strip('.npy')] = dataset
 
