@@ -3,6 +3,7 @@ pyspi/__pycache__
 **/__pycache__/**
 dist
 *.pkl
+!tests/*.pkl
 *.log
 *.bkp
 .DS_Store
