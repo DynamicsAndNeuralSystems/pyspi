@@ -16,7 +16,7 @@ install_requires = [
         'pyyaml==5.4',
         'tqdm==4.50.2',
         'nitime==0.9',
-        'hyppo==0.2.1',
+        'hyppo==0.3.0',
         'pyEDM==1.9.3',
         'jpype1==1.2.0',
         'sktime==0.8.0',
