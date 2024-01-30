@@ -27,7 +27,8 @@ install_requires = [
         'oct2py==5.2.0',
         'tslearn==0.5.2',
         'mne==0.23.0',
-        'seaborn==0.11.0'
+        'seaborn==0.11.0',
+        'autograd==1.3'
 ]
 
 testing_extras = [
