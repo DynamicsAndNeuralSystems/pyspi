@@ -11,7 +11,7 @@ import warnings
 
 def load_benchmark_calcs():
     benchmark_calcs = dict()
-    calcs = ['calc_standard_normal.pkl'] # follow this naming convention -> calc_{name}.pkl
+    calcs = ['calc_VAR1.pkl'] # follow this naming convention -> calc_{name}.pkl
     for calc in calcs:
             # extract the calculator name from the filename
             calc_name = calc[len("calc_"):-len(".pkl")]
@@ -25,7 +25,7 @@ def load_benchmark_calcs():
 
 def load_benchmark_datasets():
     benchmark_datasets = dict()
-    dataset_names = ['standard_normal.npy']
+    dataset_names = ['VAR1.npy']
     for dname in dataset_names:
         dataset = np.load(f"pyspi/data/{dname}")
         dataset = dataset.T 
