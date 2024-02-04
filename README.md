@@ -16,15 +16,56 @@ The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/
 **Feel free to reach out for help with real-world applications.**
 Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeuralSystems/pyspi/issues), or [pull requests](https://github.com/DynamicsAndNeuralSystems/pyspi/pulls).
 
-## Acknowledgement :+1:
+| Section       | Description           |
+| ------------- |:-------------:| 
+| [Installation](#installation)         | Installing _pyspi_ and its dependencies      |  
+| [Getting Started](#getting-started)     | A quick introduction on how to get started with _pyspi_      | 
+| [SPI Descriptions](#spi-descriptions)     | A link to the full table of SPIs and detailed descriptions      | 
+| [Documentation](#documentation)     | A link to our API reference and full documentation on GitBooks      | 
+| [Contributing to _pyspi_](#contributing-to-pyspi) | A guide for community members willing to contribute to _pyspi_      | 
+| [Acknowledgement](#acknowledgement)      | A citation for _pyspi_ for scholarly articles. | 
+| [Our Contributors](#our-contributors) | A summary of our primary countributers      | 
 
-If you use this software, please read and cite this article:
+## Installation
+The simplest way to get the _pyspi_ package up and running is to install the package locally using `pip`. 
+For access to the full library of SPIs, the code requires GNU's [Octave](https://octave.org/download) be installed on your system.
 
-- &#x1F4D7; O.M. Cliff, A.G. Bryant, J.T. Lizier, N. Tsuchiya, B.D. Fulcher. [Unifying pairwise interactions in complex dynamics](https://doi.org/10.1038/s43588-023-00519-x), _Nature Computational Science_ (2023).
+#### 1. Pre-Install Octave (Optional)
+While you can safely install _pyspi_ without first installing `Octave`, you will not have access to the full library of SPIs
 
-Note that [preprint](https://arxiv.org/abs/2201.11941) and [free-to-read](https://rdcu.be/dn3JB) versions of this article are available.
+#### 2. Create a conda environment (Optional, Recommended)
+While you can also install _pyspi_ outside of a conda environment, it depends on a lot of user packages that may make managing dependencies quite difficult. 
+So, we would also recommend installing pyspi in a conda environment. Firstly, create a fresh conda evironment:
+```
+conda create -n pyspi python=3.9.0
+```
+Once you have created the environment, activate it using `conda activate pyspi`.
+
+#### 3. Install with pip
+To install _pypi_ using a local pip install, download or clone the latest version from the repository:
+```
+git clone https://github.com/DynamicsAndNeuralSystems/pyspi
+```
+
+Once you have navigated to the main folder (`pyspi`), you can install using:
+```
+pip install .
+```
+
+
+For a more detailed guide on how to install _pyspi_, as well as how you can use _pyspi_ without first installing Octave, 
+please see the [full documentation](https://time-series-features.gitbook.io/pyspi/installation/installing-pyspi).
+Additionally, we provide a comprehensive [troubleshooting guide](https://app.gitbook.com/o/-MfehZqaCWnsSRDIdUG8/s/Iw3ORxNbDkeyBcdB5svU/installation/troubleshooting) for users who encounter issues installing _pyspi_ on their system,
+as well as [alterantive installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options). 
 
 ## Getting Started
+
+Once you have installed _pyspi_, you can apply the toolkit
+
+### Walkthrough Tutorials
+Now that you have
+
+
 
 See the [documentation](https://time-series-features.gitbook.io/pyspi/) for installing and setting up _pyspi_.
 Once you're done, you can learn how to use the package by checking out the:
@@ -37,11 +78,67 @@ If you have access to a PBS cluster and are processing MTS with many processes (
 
 If your dataset is large (containing many processes and/or observations), you can use a pre-configured set of reduced statistics or create your own subsets (cf. the [documentation guide](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/using-a-reduced-spi-set)).
 
+## SPI Descriptions
+To access a table with a high-level overview of the _pyspi_ library of SPIs, including their associated identifiers, see the [table of SPIs](https://time-series-features.gitbook.io/pyspi/spis/table-of-spis) in the full documentation.
+For detailed descriptions of each SPI, as well as its associated estimators, we provide a full breakdown in the [SPI descriptions](https://time-series-features.gitbook.io/pyspi/spis/spi-descriptions) page of our documentation. 
+
+## Documentation
+The full documentation is hosted on [GitBooks](https://time-series-features.gitbook.io/pyspi/). It includes the following sections:
+- [Full installation guide](https://time-series-features.gitbook.io/pyspi/installation)
+- [Troubleshooting](https://time-series-features.gitbook.io/pyspi/installation/troubleshooting)
+- [Alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options)
+- [Usage guide](https://time-series-features.gitbook.io/pyspi/usage)
+- [Distributing pyspi computations](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/distributing-calculations-on-a-cluster)
+- [Table of SPIs and descriptions](https://time-series-features.gitbook.io/pyspi/spis)
+- [FAQ](https://time-series-features.gitbook.io/pyspi/usage/faq)
+- [API Reference](https://time-series-features.gitbook.io/pyspi/api-reference)
+- [Development guide](https://time-series-features.gitbook.io/pyspi/development)
+
+## Contributing to _pyspi_
+Contributions play a vital role in the continual development and enhancement of _pyspi_, a project built and enriched through community collaboration.
+If you would like to contribute to _pyspi_, or explore the many ways in which you can participate in the project, please have a look at our 
+detailed [contribution guidelines](https://time-series-features.gitbook.io/pyspi/development/contributing-to-pyspi).
+In contributing to _pyspi_, all participants are expected to adhere to our [code of conduct](https://app.gitbook.com/o/-MfehZqaCWnsSRDIdUG8/s/Iw3ORxNbDkeyBcdB5svU/development/code-of-conduct).
+
+### SPI Wishlist
+We strive to provide the most comprehensive toolkit of SPIs. If you have ideas for new SPIs or suggestions for improvements to exisitng ones, we are eager to hear from and collaborate with you! 
+Any pairwise dependence measure, provided it is accompanied by a published research paper, typically falls within the scope for consideration in the 
+_pyspi_ library.
+You can access our SPI wishlist via the [projects tab](https://github.com/DynamicsAndNeuralSystems/pyspi/projects) in this repo to open a request.
+
+## Acknowledgement
+
+If you use this software, please read and cite this article:
+
+- &#x1F4D7; O.M. Cliff, A.G. Bryant, J.T. Lizier, N. Tsuchiya, B.D. Fulcher. [Unifying pairwise interactions in complex dynamics](https://doi.org/10.1038/s43588-023-00519-x), _Nature Computational Science_ (2023).
+
+Note that [preprint](https://arxiv.org/abs/2201.11941) and [free-to-read](https://rdcu.be/dn3JB) versions of this article are available.
+
+```
+The bibtex reference:
+
+@article{Cliff2023:UnifyingPairwiseInteractions,
+	title = {Unifying pairwise interactions in complex dynamics},
+	volume = {3},
+	issn = {2662-8457},
+	url = {https://www.nature.com/articles/s43588-023-00519-x},
+	doi = {10.1038/s43588-023-00519-x},
+	number = {10},
+	journal = {Nature Computational Science},
+	author = {Cliff, Oliver M. and Bryant, Annie G. and Lizier, Joseph T. and Tsuchiya, Naotsugu and Fulcher, Ben D.},
+	month = oct,
+	year = {2023},
+	pages = {883--893},
+}
+```
+
 ## Other highly comparative toolboxes
 
 - [_hctsa_](https://github.com/benfulcher/hctsa), the _highly comparative time-series analysis_ toolkit, computes over 7000 time-series features from univariate time series.
 - [_hcga_](https://github.com/barahona-research-group/hcga), a _highly comparative graph analysis_ toolkit, computes several thousands of graph features directly from any given network.
 
-## SPI Wishlist
 
-As _pyspi_ is under active development, we are always open to suggestions for new SPIs to be added via the [projects tab](https://github.com/DynamicsAndNeuralSystems/pyspi/projects) in this repo.
+## Our Contributors
+<a href="https://github.com/DynamicsAndNeuralSystems/pyspi/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=DynamicsAndNeuralSystems/pyspi" />
+</a>
