@@ -16,8 +16,8 @@ The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/
 **Feel free to reach out for help with real-world applications.**
 Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeuralSystems/pyspi/issues), or [pull requests](https://github.com/DynamicsAndNeuralSystems/pyspi/pulls).
 
-|               Section               |                         Description                          |
-|:-----------------------------------:|:------------------------------------------------------------:|
+| Section       | Description           |
+|:--------------|:----------------------|
 | [Installation](#installation)       | Installing _pyspi_ and its dependencies                      |
 | [Getting Started](#getting-started) | A quick introduction on how to get started with _pyspi_      |
 | [SPI Descriptions](#spi-descriptions) | A link to the full table of SPIs and detailed descriptions   |
@@ -25,6 +25,7 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 | [Contributing to _pyspi_](#contributing-to-pyspi) | A guide for community members willing to contribute to _pyspi_ |
 | [Acknowledgement](#acknowledgement) | A citation for _pyspi_ for scholarly articles.                |
 | [Our Contributors](#our-contributors) | A summary of our primary contributors                        |
+
 
 ## Installation
 The simplest way to get the _pyspi_ package up and running is to install the package locally using `pip`. 
@@ -97,7 +98,7 @@ The full documentation is hosted on [GitBooks](https://time-series-features.gitb
 ## Contributing to _pyspi_
 Contributions play a vital role in the continual development and enhancement of _pyspi_, a project built and enriched through community collaboration.
 If you would like to contribute to _pyspi_, or explore the many ways in which you can participate in the project, please have a look at our 
-detailed [contribution guidelines](https://time-series-features.gitbook.io/pyspi/development/contributing-to-pyspi).
+detailed [contribution guidelines](https://time-series-features.gitbook.io/pyspi/development/contributing-to-pyspi) about how to proceed.
 In contributing to _pyspi_, all participants are expected to adhere to our [code of conduct](https://app.gitbook.com/o/-MfehZqaCWnsSRDIdUG8/s/Iw3ORxNbDkeyBcdB5svU/development/code-of-conduct).
 
 ### SPI Wishlist
@@ -114,9 +115,10 @@ If you use this software, please read and cite this article:
 
 Note that [preprint](https://arxiv.org/abs/2201.11941) and [free-to-read](https://rdcu.be/dn3JB) versions of this article are available.
 
-```
-The bibtex reference:
+<details closed>
+    <summary>BibTex Reference</summary>
 
+```
 @article{Cliff2023:UnifyingPairwiseInteractions,
 	title = {Unifying pairwise interactions in complex dynamics},
 	volume = {3},
@@ -132,6 +134,8 @@ The bibtex reference:
 }
 ```
 
+</details>
+
 ## Other highly comparative toolboxes
 
 - [_hctsa_](https://github.com/benfulcher/hctsa), the _highly comparative time-series analysis_ toolkit, computes over 7000 time-series features from univariate time series.
@@ -139,11 +143,16 @@ The bibtex reference:
 
 
 ## Our Contributors 🌟
+
+### Lead Developer
+We are thankful for the contributions of each and everyone who has helped make this project better. 
+Whether you've added a line of code, improved our documentation, or reported an issue, your contributions are greatly appreciated! 
+Below are some of the leading contributors to _pyspi_:
+
 <a href="https://github.com/DynamicsAndNeuralSystems/pyspi/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=DynamicsAndNeuralSystems/pyspi" />
 </a>
 
-
-
 ## License 🧾
 _pyspi_ is released under the [GNU General Public License](https://www.gnu.org/licenses/gpl-3.0).
+
