@@ -26,7 +26,7 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 | [SPI Descriptions](#spi-descriptions-) | A link to the full table of SPIs and detailed descriptions   |
 | [Documentation](#documentation)     | A link to our API reference and full documentation on GitBooks |
 | [Contributing to _pyspi_](#contributing-to-pyspi-) | A guide for community members willing to contribute to _pyspi_ |
-| [Acknowledgement](#acknowledgement-) | A citation for _pyspi_ for scholarly articles.                |
+| [Acknowledgement](#acknowledgement-) | A citation for _pyspi_ for scholarly articles                |
 | [Our Contributors](#our-contributors-) | A summary of our primary contributors                        |
 <hr style="border-top: 3px solid #bbb;">
 
