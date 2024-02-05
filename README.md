@@ -9,11 +9,7 @@
     <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" height="20"/></a>
     <a href="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml"><img src="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml/badge.svg" height="20"/></a>
     <a href="https://twitter.com/compTimeSeries"><img src="https://img.shields.io/twitter/url/https/twitter.com/compTimeSeries.svg?style=social&label=Follow%20%40compTimeSeries" height="20"/></a>
-    <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/DynamicsAndNeuralSystems/pyspi/total">
-
-
-
-   
+ 
 </p>
 
 _pyspi_ is a comprehensive python library for computing statistics of pairwise interactions (SPIs) from multivariate time-series (MTS) data.
@@ -49,8 +45,8 @@ conda create -n pyspi python=3.9.0
 ```
 Once you have created the environment, activate it using `conda activate pyspi`.
 
-#### 3. Install with pip
-To install _pypi_ using a local pip install, download or clone the latest version from the repository:
+#### 3. Install with _pip_
+To install _pyspi_ using a local pip install, download or clone the latest version from the repository:
 ```
 git clone https://github.com/DynamicsAndNeuralSystems/pyspi
 ```
@@ -64,27 +60,38 @@ pip install .
 For a more detailed guide on how to install _pyspi_, as well as how you can use _pyspi_ without first installing Octave, 
 please see the [full documentation](https://time-series-features.gitbook.io/pyspi/installation/installing-pyspi).
 Additionally, we provide a comprehensive [troubleshooting guide](https://app.gitbook.com/o/-MfehZqaCWnsSRDIdUG8/s/Iw3ORxNbDkeyBcdB5svU/installation/troubleshooting) for users who encounter issues installing _pyspi_ on their system,
-as well as [alterantive installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options). 
+as well as [alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options). 
 
 ## Getting Started
 
-Once you have installed _pyspi_, you can apply the toolkit
+Once you have installed _pyspi_, you can learn how to apply the package by checking out the [walkthrough tutorials](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials) in our documentation.  
+We currently offer three usage examples which cover the typical _pyspi_ pipeline, including real-world data from the fiels of computational neuroscience and finance.
+Click any of the examples below to access the tutorials in our full documentation.
 
-### Walkthrough Tutorials
-Now that you have
+- [Simple demonstration](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/getting-started-a-simple-demonstration): 
+Learn how to quickly get up and running with _pyspi_ with this simple tutorial covering the basic functionality of the package such as how to load your dataset and compute SPIs. 
 
+- [Finance: stock price time series)](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/finance-stock-price-time-series)
+Apply _pyspi_ to real-world financial time series data and train a machine learning classifier to delineate between forex and stock market data.
 
+- [Neuroimaging: fMRI time series)](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/neuroimaging-fmri-time-series): Using BOLD time series obtained from fMRI, apply _pyspi_ to derive a table of SPIs and learn how to export your data to other languages (such as R) for the purposes of data wrangling and visualisation.
 
-See the [documentation](https://time-series-features.gitbook.io/pyspi/) for installing and setting up _pyspi_.
-Once you're done, you can learn how to use the package by checking out the:
+### Advanced Usage
+For advanced users, we offer several additional guides in the [full documentation](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage) on how you can distribute your _pyspi_ jobs across PBS clusters, as well as how you can construct your own subsets of SPIs. 
+Click one of the following dropdowns for more information:
 
-- [Simple demo](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/getting-started-a-simple-demonstration)
-- [Tutorial (finance: stock price time series)](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/finance-stock-price-time-series)
-- [Tutorial (neuroimaging: fMRI time series)](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/neuroimaging-fmri-time-series).
+<details closed>
+    <summary>Distributing pyspi calculations</summary>
+If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the [_pyspi distribute_](https://github.com/DynamicsAndNeuralSystems/pyspi-distribute) repository helpful.
+In the documentation, we provide a full guide on how you can distribute _pyspi_ calculations on a PBS cluster, along with the necessary scripts and commands to get started!
+</details >
 
-If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the [_pyspi_ distribute](https://github.com/DynamicsAndNeuralSystems/pyspi-distribute) repository helpful.
+<details closed>
+    <summary>Reduced subsets</summary>
+    If your dataset is large (containing many processes and/or observations), you can use a pre-configured set of reduced statistics or create your own subsets (cf. the [documentation guide](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/using-a-reduced-spi-set)).
 
-If your dataset is large (containing many processes and/or observations), you can use a pre-configured set of reduced statistics or create your own subsets (cf. the [documentation guide](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/using-a-reduced-spi-set)).
+</details>
+
 
 ## SPI Descriptions
 To access a table with a high-level overview of the _pyspi_ library of SPIs, including their associated identifiers, see the [table of SPIs](https://time-series-features.gitbook.io/pyspi/spis/table-of-spis) in the full documentation.
