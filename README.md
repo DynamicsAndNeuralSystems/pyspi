@@ -30,7 +30,7 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 | [Our Contributors](#our-contributors) | A summary of our primary contributors                        |
 <hr style="border-top: 3px solid #bbb;">
 
-## Installation
+## Installation 📥
 The simplest way to get the _pyspi_ package up and running is to install the package locally using `pip`. 
 For access to the full library of SPIs, the code requires GNU's [Octave](https://octave.org/download) be installed on your system.
 
@@ -62,7 +62,7 @@ please see the [full documentation](https://time-series-features.gitbook.io/pysp
 Additionally, we provide a comprehensive [troubleshooting guide](https://app.gitbook.com/o/-MfehZqaCWnsSRDIdUG8/s/Iw3ORxNbDkeyBcdB5svU/installation/troubleshooting) for users who encounter issues installing _pyspi_ on their system,
 as well as [alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options). 
 
-## Getting Started
+## Getting Started 🚀
 
 Once you have installed _pyspi_, you can learn how to apply the package by checking out the [walkthrough tutorials](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials) in our documentation.  
 We currently offer three usage examples which cover the typical _pyspi_ pipeline, including real-world data from the fiels of computational neuroscience and finance.
@@ -94,12 +94,14 @@ Follow the guide in the <a href="https://time-series-features.gitbook.io/pyspi/u
 
 
 
-## SPI Descriptions
+## SPI Descriptions 📋
 To access a table with a high-level overview of the _pyspi_ library of SPIs, including their associated identifiers, see the [table of SPIs](https://time-series-features.gitbook.io/pyspi/spis/table-of-spis) in the full documentation.
 For detailed descriptions of each SPI, as well as its associated estimators, we provide a full breakdown in the [SPI descriptions](https://time-series-features.gitbook.io/pyspi/spis/spi-descriptions) page of our documentation. 
 
 ## Documentation
-The full documentation is hosted on [GitBooks](https://time-series-features.gitbook.io/pyspi/). It includes the following sections:
+The full documentation is hosted on [GitBooks](https://time-series-features.gitbook.io/pyspi/). 
+Use the following links to quickly access some of the key sections:
+
 - [Full installation guide](https://time-series-features.gitbook.io/pyspi/installation)
 - [Troubleshooting](https://time-series-features.gitbook.io/pyspi/installation/troubleshooting)
 - [Alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options)
@@ -110,14 +112,14 @@ The full documentation is hosted on [GitBooks](https://time-series-features.gitb
 - [API Reference](https://time-series-features.gitbook.io/pyspi/api-reference)
 - [Development guide](https://time-series-features.gitbook.io/pyspi/development)
 
-## Contributing to _pyspi_
+## Contributing to _pyspi_ 👨‍👨‍👦‍👦
 Contributions play a vital role in the continual development and enhancement of _pyspi_, a project built and enriched through community collaboration.
 If you would like to contribute to _pyspi_, or explore the many ways in which you can participate in the project, please have a look at our 
 detailed [contribution guidelines](https://time-series-features.gitbook.io/pyspi/development/contributing-to-pyspi) about how to proceed.
 In contributing to _pyspi_, all participants are expected to adhere to our [code of conduct](https://app.gitbook.com/o/-MfehZqaCWnsSRDIdUG8/s/Iw3ORxNbDkeyBcdB5svU/development/code-of-conduct).
 
 ### SPI Wishlist
-We strive to provide the most comprehensive toolkit of SPIs. If you have ideas for new SPIs or suggestions for improvements to exisitng ones, we are eager to hear from and collaborate with you! 
+We strive to provide the most comprehensive toolkit of SPIs. If you have ideas for new SPIs or suggestions for improvements to existing ones, we are eager to hear from and collaborate with you! 
 Any pairwise dependence measure, provided it is accompanied by a published research paper, typically falls within the scope for consideration in the 
 _pyspi_ library.
 You can access our SPI wishlist via the [projects tab](https://github.com/DynamicsAndNeuralSystems/pyspi/projects) in this repo to open a request.
@@ -151,15 +153,14 @@ Note that [preprint](https://arxiv.org/abs/2201.11941) and [free-to-read](https:
 
 </details>
 
-## Other highly comparative toolboxes
+## Other highly comparative toolboxes 🧰
+If you are interested in trying other highly comparative toolboxes like _pyspi_, see the below list:
 
 - [_hctsa_](https://github.com/benfulcher/hctsa), the _highly comparative time-series analysis_ toolkit, computes over 7000 time-series features from univariate time series.
 - [_hcga_](https://github.com/barahona-research-group/hcga), a _highly comparative graph analysis_ toolkit, computes several thousands of graph features directly from any given network.
 
 
 ## Our Contributors 🌟
-
-### Lead Developer
 We are thankful for the contributions of each and everyone who has helped make this project better. 
 Whether you've added a line of code, improved our documentation, or reported an issue, your contributions are greatly appreciated! 
 Below are some of the leading contributors to _pyspi_:
