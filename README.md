@@ -1,8 +1,5 @@
 <p align="center"><img src="img/pyspi_logo.png" alt="pyspi logo" height="200"/></p>
 
-<style>
-  h1 { border-bottom: none !important; }
-</style>
 <h1 align="center"><em>pyspi</em>: Python Toolkit of Statistics for Pairwise Interactions</h1>
 <hr style="border-top: 3px solid #bbb;">
 
