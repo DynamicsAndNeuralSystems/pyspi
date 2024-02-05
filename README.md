@@ -1,7 +1,7 @@
 <p align="center"><img src="img/pyspi_logo.png" alt="pyspi logo" height="200"/></p>
 
 <h1 align="center"><em>pyspi</em>: Python Toolkit of Statistics for Pairwise Interactions</h1>
-<hr style="border-top: 3px solid #bbb;">
+
 
 
 <p align="center">
@@ -28,7 +28,7 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 | [Contributing to _pyspi_](#contributing-to-pyspi) | A guide for community members willing to contribute to _pyspi_ |
 | [Acknowledgement](#acknowledgement) | A citation for _pyspi_ for scholarly articles.                |
 | [Our Contributors](#our-contributors) | A summary of our primary contributors                        |
-
+<hr style="border-top: 3px solid #bbb;">
 
 ## Installation
 The simplest way to get the _pyspi_ package up and running is to install the package locally using `pip`. 
