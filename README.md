@@ -16,15 +16,15 @@ The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/
 **Feel free to reach out for help with real-world applications.**
 Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeuralSystems/pyspi/issues), or [pull requests](https://github.com/DynamicsAndNeuralSystems/pyspi/pulls).
 
-| Section       | Description           |
-| ------------- |:-------------:| 
-| [Installation](#installation)         | Installing _pyspi_ and its dependencies      |  
-| [Getting Started](#getting-started)     | A quick introduction on how to get started with _pyspi_      | 
-| [SPI Descriptions](#spi-descriptions)     | A link to the full table of SPIs and detailed descriptions      | 
-| [Documentation](#documentation)     | A link to our API reference and full documentation on GitBooks      | 
-| [Contributing to _pyspi_](#contributing-to-pyspi) | A guide for community members willing to contribute to _pyspi_      | 
-| [Acknowledgement](#acknowledgement)      | A citation for _pyspi_ for scholarly articles. | 
-| [Our Contributors](#our-contributors) | A summary of our primary countributers      | 
+|               Section               |                         Description                          |
+|:-----------------------------------:|:------------------------------------------------------------:|
+| [Installation](#installation)       | Installing _pyspi_ and its dependencies                      |
+| [Getting Started](#getting-started) | A quick introduction on how to get started with _pyspi_      |
+| [SPI Descriptions](#spi-descriptions) | A link to the full table of SPIs and detailed descriptions   |
+| [Documentation](#documentation)     | A link to our API reference and full documentation on GitBooks |
+| [Contributing to _pyspi_](#contributing-to-pyspi) | A guide for community members willing to contribute to _pyspi_ |
+| [Acknowledgement](#acknowledgement) | A citation for _pyspi_ for scholarly articles.                |
+| [Our Contributors](#our-contributors) | A summary of our primary contributors                        |
 
 ## Installation
 The simplest way to get the _pyspi_ package up and running is to install the package locally using `pip`. 
@@ -106,7 +106,7 @@ Any pairwise dependence measure, provided it is accompanied by a published resea
 _pyspi_ library.
 You can access our SPI wishlist via the [projects tab](https://github.com/DynamicsAndNeuralSystems/pyspi/projects) in this repo to open a request.
 
-## Acknowledgement
+## Acknowledgement 👍
 
 If you use this software, please read and cite this article:
 
@@ -138,7 +138,12 @@ The bibtex reference:
 - [_hcga_](https://github.com/barahona-research-group/hcga), a _highly comparative graph analysis_ toolkit, computes several thousands of graph features directly from any given network.
 
 
-## Our Contributors
+## Our Contributors 🌟
 <a href="https://github.com/DynamicsAndNeuralSystems/pyspi/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=DynamicsAndNeuralSystems/pyspi" />
 </a>
+
+
+
+## License 🧾
+_pyspi_ is released under the [GNU General Public License](https://www.gnu.org/licenses/gpl-3.0).
