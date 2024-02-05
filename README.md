@@ -21,25 +21,25 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 
 | Section       | Description           |
 |:--------------|:----------------------|
-| [Installation](#installation)       | Installing _pyspi_ and its dependencies                      |
-| [Getting Started](#getting-started) | A quick introduction on how to get started with _pyspi_      |
-| [SPI Descriptions](#spi-descriptions) | A link to the full table of SPIs and detailed descriptions   |
+| [Installation](#installation-📥)       | Installing _pyspi_ and its dependencies                      |
+| [Getting Started](#getting-started-🚀) | A quick introduction on how to get started with _pyspi_      |
+| [SPI Descriptions](#spi-descriptions-📋) | A link to the full table of SPIs and detailed descriptions   |
 | [Documentation](#documentation)     | A link to our API reference and full documentation on GitBooks |
-| [Contributing to _pyspi_](#contributing-to-pyspi) | A guide for community members willing to contribute to _pyspi_ |
-| [Acknowledgement](#acknowledgement) | A citation for _pyspi_ for scholarly articles.                |
-| [Our Contributors](#our-contributors) | A summary of our primary contributors                        |
+| [Contributing to _pyspi_](#contributing-to-pyspi-👨‍👨‍👦‍👦) | A guide for community members willing to contribute to _pyspi_ |
+| [Acknowledgement](#acknowledgement-👍) | A citation for _pyspi_ for scholarly articles.                |
+| [Our Contributors](#our-contributors-🌟) | A summary of our primary contributors                        |
 <hr style="border-top: 3px solid #bbb;">
 
 ## Installation 📥
 The simplest way to get the _pyspi_ package up and running is to install the package locally using `pip`. 
-For access to the full library of SPIs, the code requires GNU's [Octave](https://octave.org/download) be installed on your system.
+For access to the full library of SPIs, the code requires GNU's [Octave](https://octave.org/download) to be installed on your system.
 
 #### 1. Pre-Install Octave (Optional)
 While you can safely install _pyspi_ without first installing `Octave`, you will not have access to the full library of SPIs
 
 #### 2. Create a conda environment (Optional, Recommended)
 While you can also install _pyspi_ outside of a conda environment, it depends on a lot of user packages that may make managing dependencies quite difficult. 
-So, we would also recommend installing pyspi in a conda environment. Firstly, create a fresh conda evironment:
+So, we would also recommend installing pyspi in a conda environment. Firstly, create a fresh conda environment:
 ```
 conda create -n pyspi python=3.9.0
 ```
@@ -65,7 +65,7 @@ as well as [alternative installation options](https://time-series-features.gitbo
 ## Getting Started 🚀
 
 Once you have installed _pyspi_, you can learn how to apply the package by checking out the [walkthrough tutorials](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials) in our documentation.  
-We currently offer three usage examples which cover the typical _pyspi_ pipeline, including real-world data from the fiels of computational neuroscience and finance.
+We currently offer three usage examples which cover the typical _pyspi_ pipeline, including real-world data from the fields of computational neuroscience and finance.
 Click any of the examples below to access the tutorials in our full documentation.
 
 - [Simple demonstration](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/getting-started-a-simple-demonstration): 
