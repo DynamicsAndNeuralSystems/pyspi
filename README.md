@@ -83,7 +83,7 @@ Click one of the following dropdowns for more information:
 <details closed>
 <summary>Distributing pyspi calculations</summary>
 <p>If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the <a href="https://github.com/DynamicsAndNeuralSystems/pyspi-distribute"><em>pyspi distribute</em></a> repository helpful.
-In the full documentation, we provide a comprehensiv guide on how you can distribute <em>pyspi</em> calculations on a PBS cluster, along with the necessary scripts and commands to get started!</p>
+In the full <a href="https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/distributing-calculations-on-a-cluster">documentation </a>, we provide a comprehensive guide on how you can distribute <em>pyspi</em> calculations on a PBS cluster, along with the necessary scripts and commands to get started!</p>
 </details>
 
 <details closed>
