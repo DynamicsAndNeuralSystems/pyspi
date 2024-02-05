@@ -81,16 +81,17 @@ For advanced users, we offer several additional guides in the [full documentatio
 Click one of the following dropdowns for more information:
 
 <details closed>
-    <summary>Distributing pyspi calculations</summary>
-If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the [_pyspi distribute_](https://github.com/DynamicsAndNeuralSystems/pyspi-distribute) repository helpful.
-In the documentation, we provide a full guide on how you can distribute _pyspi_ calculations on a PBS cluster, along with the necessary scripts and commands to get started!
-</details >
+<summary>Distributing pyspi calculations</summary>
+<p>If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the <a href="https://github.com/DynamicsAndNeuralSystems/pyspi-distribute"><em>pyspi distribute</em></a> repository helpful.
+In the full documentation, we provide a comprehensiv guide on how you can distribute <em>pyspi</em> calculations on a PBS cluster, along with the necessary scripts and commands to get started!</p>
+</details>
 
 <details closed>
-    <summary>Reduced subsets</summary>
-    If your dataset is large (containing many processes and/or observations), you can use a pre-configured set of reduced statistics or create your own subsets (cf. the [documentation guide](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/using-a-reduced-spi-set)).
-
+<summary>Reduced subsets</summary>
+<p>If your dataset is large (containing many processes and/or observations), you can use a pre-configured set of reduced statistics or create your own subsets.
+Follow the guide in the <a href="https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/using-a-reduced-spi-set">documentation </a> to learn how you can create your own reduced subsets.</p>
 </details>
+
 
 
 ## SPI Descriptions
