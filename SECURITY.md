@@ -6,4 +6,13 @@ To report a security issue, please use the GitHub Security Advisory ["Report a V
 
 The _pyspi_ team will send a response indicating the next steps in handling your report. After the initial reply to your report, the security team will keep you informed of the progress towards a fix and full announcement, and may ask for additional information or guidance.
 
+## Supported Versions
+
+The following versions of _pyspi_ are
+currently being supported with security updates.
+
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.4   | :white_check_mark: |
+
 
