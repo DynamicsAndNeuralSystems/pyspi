@@ -59,22 +59,19 @@ pip install .
 
 For a more detailed guide on how to install _pyspi_, as well as how you can use _pyspi_ without first installing Octave, 
 please see the [full documentation](https://time-series-features.gitbook.io/pyspi/installation/installing-pyspi).
-Additionally, we provide a comprehensive [troubleshooting guide](https://app.gitbook.com/o/-MfehZqaCWnsSRDIdUG8/s/Iw3ORxNbDkeyBcdB5svU/installation/troubleshooting) for users who encounter issues installing _pyspi_ on their system,
+Additionally, we provide a comprehensive [troubleshooting guide](https://time-series-features.gitbook.io/pyspi/installation/troubleshooting) for users who encounter issues installing _pyspi_ on their system,
 as well as [alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options). 
 
 ## Getting Started 🚀
 
-Once you have installed _pyspi_, you can learn how to apply the package by checking out the [walkthrough tutorials](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials) in our documentation.  
-We currently offer three usage examples which cover the typical _pyspi_ pipeline, including real-world data from the fields of computational neuroscience and finance.
-Click any of the examples below to access the tutorials in our full documentation.
+Once you have installed _pyspi_, you can learn how to apply the package by checking out the [walkthrough tutorials](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials) in our documentation.  Click any of the examples below to access the tutorials in our full documentation:
 
-- [Simple demonstration](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/getting-started-a-simple-demonstration): 
-Learn how to quickly get up and running with _pyspi_ with this simple tutorial covering the basic functionality of the package such as how to load your dataset and compute SPIs. 
+- [Simple demonstration](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/getting-started-a-simple-demonstration)
 
-- [Finance: stock price time series)](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/finance-stock-price-time-series)
-Apply _pyspi_ to real-world financial time series data and train a machine learning classifier to delineate between forex and stock market data.
+- [Finance: stock price time series](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/finance-stock-price-time-series)
 
-- [Neuroimaging: fMRI time series)](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/neuroimaging-fmri-time-series): Using BOLD time series obtained from fMRI, apply _pyspi_ to derive a table of SPIs and learn how to export your data to other languages (such as R) for the purposes of data wrangling and visualisation.
+
+- [Neuroimaging: fMRI time series)](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/neuroimaging-fmri-time-series)
 
 ### Advanced Usage
 For advanced users, we offer several additional guides in the [full documentation](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage) on how you can distribute your _pyspi_ jobs across PBS clusters, as well as how you can construct your own subsets of SPIs. 
@@ -106,7 +103,7 @@ Use the following links to quickly access some of the key sections:
 - [Troubleshooting](https://time-series-features.gitbook.io/pyspi/installation/troubleshooting)
 - [Alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options)
 - [Usage guide](https://time-series-features.gitbook.io/pyspi/usage)
-- [Distributing pyspi computations](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/distributing-calculations-on-a-cluster)
+- [Distributing _pyspi_ computations](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/distributing-calculations-on-a-cluster)
 - [Table of SPIs and descriptions](https://time-series-features.gitbook.io/pyspi/spis)
 - [FAQ](https://time-series-features.gitbook.io/pyspi/usage/faq)
 - [API Reference](https://time-series-features.gitbook.io/pyspi/api-reference)
@@ -116,7 +113,7 @@ Use the following links to quickly access some of the key sections:
 Contributions play a vital role in the continual development and enhancement of _pyspi_, a project built and enriched through community collaboration.
 If you would like to contribute to _pyspi_, or explore the many ways in which you can participate in the project, please have a look at our 
 detailed [contribution guidelines](https://time-series-features.gitbook.io/pyspi/development/contributing-to-pyspi) about how to proceed.
-In contributing to _pyspi_, all participants are expected to adhere to our [code of conduct](https://app.gitbook.com/o/-MfehZqaCWnsSRDIdUG8/s/Iw3ORxNbDkeyBcdB5svU/development/code-of-conduct).
+In contributing to _pyspi_, all participants are expected to adhere to our [code of conduct](https://time-series-features.gitbook.io/pyspi/development/code-of-conduct).
 
 ### SPI Wishlist
 We strive to provide the most comprehensive toolkit of SPIs. If you have ideas for new SPIs or suggestions for improvements to existing ones, we are eager to hear from and collaborate with you! 
