@@ -1,4 +1,9 @@
-<p align="center"><img src="img/pyspi_logo.png" alt="pyspi logo" height="200"/></p>
+<p align="center">
+  <picture>
+    <source srcset="img/pyspi_logo_dark.png" media="(prefers-color-scheme: dark)">
+    <img src="img/pyspi_logo.png" alt="pyspi logo" height="200"/>
+  </picture>
+</p>
 
 <h1 align="center"><em>pyspi</em>: Python Toolkit of Statistics for Pairwise Interactions</h1>
 

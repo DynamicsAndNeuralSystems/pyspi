@@ -61,7 +61,7 @@ setup(
                         'data/forex.npy',
                         'data/standard_normal.npy']},
     include_package_data=True,
-    version='0.4.0',
+    version='0.4.1',
     description='Library for pairwise analysis of time series data.',
     author='Oliver M. Cliff',
     author_email='oliver.m.cliff@gmail.com',
