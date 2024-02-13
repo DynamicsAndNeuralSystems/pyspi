@@ -3,8 +3,7 @@ import pytest
 import dill
 import pyspi
 import numpy as np
-from copy import deepcopy
-import warnings
+
 
 
 ############# Fixtures and helper functions #########
