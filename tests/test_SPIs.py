@@ -6,6 +6,7 @@ import numpy as np
 
 
 
+
 ############# Fixtures and helper functions #########
 
 def load_benchmark_tables():
