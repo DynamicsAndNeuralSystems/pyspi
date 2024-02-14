@@ -1,6 +1,6 @@
 <p align="center">
   <picture>
-    <source srcset="img/pyspi_logo_dark.png" media="(prefers-color-scheme: dark)">
+    <source srcset="img/pyspi_logo_darkmode.png" media="(prefers-color-scheme: dark)">
     <img src="img/pyspi_logo.png" alt="pyspi logo" height="200"/>
   </picture>
 </p>
