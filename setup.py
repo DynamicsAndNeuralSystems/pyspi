@@ -36,7 +36,7 @@ testing_extras = [
 
 
 setup(
-    name='pySPI',
+    name='pyspi-lib',
     packages=find_packages(),
     package_data={'': ['config.yaml',
                        'sonnet_config.yaml',

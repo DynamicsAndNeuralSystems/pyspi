@@ -3,7 +3,7 @@ requires      = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pySPI"
+name = "pyspi-lib"
 version = "0.4.2"
 authors = [
     { name ="Oliver M. Cliff", email="oliver.m.cliff@gmail.com"},
