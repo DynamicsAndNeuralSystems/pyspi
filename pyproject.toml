@@ -1,0 +1,36 @@
+[build-system]
+requires      = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyspi-lib"
+version = "0.4.2"
+authors = [
+    { name ="Oliver M. Cliff", email="oliver.m.cliff@gmail.com"},
+]
+maintainers = [
+    {name = "Joshua B. Moore"},
+    {email = "joshua.moore@sydney.edu.au"},
+]
+description = "Library for pairwise analysis of time series data."
+readme = "README.md"
+license = {text = "GNU General Public License v3 (GPLv3)"}
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Development Status :: 1 - Planning",
+    "Operating System :: POSIX :: Linux",
+    "Intended Audience :: Science/Research",
+    "Environment :: Console",
+    "Environment :: Other Environment",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+dynamic = ["dependencies", "optional-dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/DynamicsAndNeuralSystems/pyspi"
+Documentation = "https://time-series-features.gitbook.io/pyspi/"
