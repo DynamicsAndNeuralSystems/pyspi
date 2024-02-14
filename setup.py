@@ -3,15 +3,15 @@ from setuptools import setup, find_packages
 # http://www.diveintopython3.net/packaging.html
 # https://pypi.python.org/pypi?:action=list_classifiers
 
-with open('README.md') as file:
+with open('README.md', 'r', encoding='utf-8') as file:
     long_description = file.read()
 
 
 install_requires = [
-        'scikit-learn==0.24.1',
+        'scikit-learn==1.0.1',
         'scipy==1.7.3',
         'numpy>=1.21.1',
-        'pandas>=1.3.3',
+        'pandas==1.5.0',
         'statsmodels==0.12.1',
         'pyyaml==5.4',
         'tqdm==4.50.2',
@@ -59,9 +59,10 @@ setup(
                         'lib/PhiToolbox/utility/Gauss/logdet.m',
                         'data/cml.npy',
                         'data/forex.npy',
-                        'data/standard_normal.npy']},
+                        'data/standard_normal.npy',
+                        'data/cml7.npy']},
     include_package_data=True,
-    version='0.4.1',
+    version='0.4.2',
     description='Library for pairwise analysis of time series data.',
     author='Oliver M. Cliff',
     author_email='oliver.m.cliff@gmail.com',
