@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 # http://www.diveintopython3.net/packaging.html
 # https://pypi.python.org/pypi?:action=list_classifiers
 
-with open('README.md') as file:
+with open('README.md', 'r', encoding='utf-8') as file:
     long_description = file.read()
 
 
