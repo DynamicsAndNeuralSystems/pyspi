@@ -1,7 +1,10 @@
 import jpype as jp
 import numpy as np
 from pyspi import utils
-from oct2py import octave, Struct
+try:
+    from oct2py import octave, Struct
+except Exception:
+    pass
 import copy
 import os
 import logging

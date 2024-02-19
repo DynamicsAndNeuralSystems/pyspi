@@ -8,7 +8,7 @@ from scipy import stats
 
 # From this package
 from .data import Data
-from .utils import convert_mdf_to_ddf
+from .utils import convert_mdf_to_ddf, is_jpype_jvm_available, is_octave_available
 
 
 class Calculator:
@@ -35,11 +35,13 @@ class Calculator:
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
     """
+    _optional_dependencies  = {}
 
     def __init__(
         self, dataset=None, name=None, labels=None, subset="all", configfile=None
     ):
         self._spis = {}
+        self._excluded_spis = list()
 
         # Define configfile by subset if it was not specified
         if configfile is None:
@@ -66,6 +68,13 @@ class Calculator:
                 )
             else:
                 configfile = os.path.dirname(os.path.abspath(__file__)) + "/config.yaml"
+
+        # add dependency checks here if first time
+        if not Calculator._optional_dependencies:
+            # check if optional dependencies exist
+            print("Checking if optional dependencies exist...")
+            Calculator._optional_dependencies['octave'] = is_octave_available()
+
         self._load_yaml(configfile)
 
         duplicates = [
@@ -80,6 +89,10 @@ class Calculator:
         self._labels = labels
 
         print("Number of SPIs: {}".format(len(self.spis)))
+        if len(self._excluded_spis) > 0:
+            print(f"\n\n {len(self._excluded_spis)} SPIs were excluded due to missing dependencies:")
+            for spi in self._excluded_spis:
+                print(spi)
 
         if dataset is not None:
             self.load_dataset(dataset)
@@ -180,8 +193,24 @@ class Calculator:
                 print("*** Importing module {}".format(module_name))
                 module = importlib.import_module(module_name, __package__)
                 for fcn in yf[module_name]:
+                    all_fcn_params = yf[module_name][fcn]
+                    if isinstance(yf[module_name][fcn], dict):
+                        deps = yf[module_name][fcn].get('dependencies')
+                        # check if all depdencies are met
+                        all_deps_met = all(Calculator._optional_dependencies.get(dep, False) for dep in deps)
+                        configs = yf[module_name][fcn].get('configs')
+                        if all_deps_met:
+                            # due to nesting structure, params are stored as values for the configs key
+                            all_fcn_params = configs
+                        else:
+                            # deps not met, skip SPI
+                            print(f"Optional dependencies: {deps} not met. Skipping {len(configs)} SPI(s):")
+                            for params in configs:
+                                print(f"*SKIPPING SPI: {module_name}.{fcn}(x,y,{params})...")
+                                self._excluded_spis.append(f"{module_name}.{fcn}(x,y,{params})...")
+                            continue
                     try:
-                        for params in yf[module_name][fcn]:
+                        for params in all_fcn_params:
                             print(
                                 f"[{self.n_spis}] Adding SPI {module_name}.{fcn}(x,y,{params})..."
                             )

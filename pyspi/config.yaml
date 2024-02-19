@@ -368,15 +368,17 @@
       l_history: 1
 
   IntegratedInformation:
-    - phitype: "star"
+    dependencies: ["octave"]
+    configs:
+      - phitype: "star"
 
-    - phitype: "star"
-      normalization: 1
+      - phitype: "star"
+        normalization: 1
 
-    - phitype: "Geo"
+      - phitype: "Geo"
 
-    - phitype: "Geo"
-      normalization: 1
+      - phitype: "Geo"
+        normalization: 1
 
 # statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
 .statistics.spectral:

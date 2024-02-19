@@ -3,6 +3,7 @@ import numpy as np
 from scipy.stats import zscore
 import warnings
 import pandas as pd
+import os
 
 def _contains_nan(a, nan_policy='propagate'):
     policies = ['propagate', 'raise', 'omit']
@@ -94,7 +95,7 @@ def standardise(a, dimension=0, df=1):
         numpy array
             standardised data
     """
-    # Avoid division by standard devitation if the process is constant.
+    # Avoid division by standard deviation if the process is constant.
     a_sd = a.std(axis=dimension, ddof=df)
 
     if np.isclose(a_sd, 0):
@@ -105,3 +106,28 @@ def standardise(a, dimension=0, df=1):
 def convert_mdf_to_ddf(df):
     ddf = pd.pivot_table(data=df.stack(dropna=False).reset_index(),index='Dataset',columns=['SPI-1', 'SPI-2'],dropna=False).T.droplevel(0)
     return ddf
+
+def is_jpype_jvm_available():
+    """Check whether a JVM is accessible via Jpype"""
+    try:
+        import jpype as jp
+        if not jp.isJVMStarted():
+            jarloc = (os.path.dirname(os.path.abspath(__file__)) + "/lib/jidt/infodynamics.jar")
+            # if JVM not started, start a session
+            print(f"Starting JVM with java class {jarloc}.")
+            jp.startJVM(jp.getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarloc)
+        return True
+    except Exception as e:
+        print(f"Jpype JVM not available: {e}")
+        return False
+
+def is_octave_available():
+    """Check whether octave is available"""
+    try:
+        from oct2py import Oct2Py
+        oc = Oct2Py()
+        oc.exit()
+        return True
+    except Exception as e:
+        print(f"Octave not available: {e}")
+        return False
