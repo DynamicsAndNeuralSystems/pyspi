@@ -11,13 +11,31 @@ def test_whether_calculator_instantiates():
     calc = Calculator()
     assert isinstance(calc, Calculator), "Calculator failed to instantiate."
 
-def test_whether_calculator_instantiates_without_octave():
+def test_whether_calc_instantiates_without_octave():
     # set octave to false to emulate a system without octave (i.e., fails the check)
     Calculator._optional_dependencies['octave'] = False
     calc = Calculator()
     is_initialised = isinstance(calc, Calculator)
     Calculator._optional_dependencies = {}
     assert is_initialised, "Calculator failed to instantiate without Octave."
+
+def test_whether_calc_instantiates_without_java():
+    # set java to false and all other deps to true
+    Calculator._optional_dependencies['java'] = False
+    Calculator._optional_dependencies['octave'] = True
+    calc = Calculator()
+    is_initialised = isinstance(calc, Calculator)
+    Calculator._optional_dependencies = {}
+    assert is_initialised, "Calculator failed to instantiate without Java."
+
+def test_whether_calc_instantiates_wo_optional_deps():
+    # set all optional deps to false
+    Calculator._optional_dependencies['java'] = False
+    Calculator._optional_dependencies['octave'] = False
+    calc = Calculator()
+    is_initialised = isinstance(calc, Calculator)
+    Calculator._optional_dependencies = {}
+    assert is_initialised, "Calculator failed to instantiate without optional dependencies."
 
 @pytest.mark.parametrize("subset", [
     'fabfour',

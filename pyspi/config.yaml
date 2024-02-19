@@ -219,153 +219,171 @@
 # Information-theoretic statistics
 .statistics.infotheory:
   JointEntropy: # No theiler window yet
-    - estimator: gaussian
+    dependencies: ["java"]
+    configs:
+      - estimator: gaussian
 
-    - estimator: kozachenko
+      - estimator: kozachenko
 
-    - estimator: kernel
+      - estimator: kernel
 
   ConditionalEntropy: # No theiler window yet
-    - estimator: gaussian
+    dependencies: ["java"]
+    configs:
+      - estimator: gaussian
 
-    - estimator: kozachenko
+      - estimator: kozachenko
 
-    - estimator: kernel
+      - estimator: kernel
 
   CausalEntropy: # No theiler window yet
-    - estimator: gaussian
+    dependencies: ["java"]
+    configs:
+      - estimator: gaussian
 
-    - estimator: kozachenko
+      - estimator: kozachenko
 
-    - estimator: kernel
+      - estimator: kernel
 
   CrossmapEntropy: # No theiler window yet
-    - estimator: gaussian
-      history_length: 1
+    dependencies: ["java"]
+    configs:
+      - estimator: gaussian
+        history_length: 1
 
-    - estimator: kozachenko
-      history_length: 1
+      - estimator: kozachenko
+        history_length: 1
 
-    - estimator: kernel
-      history_length: 1
+      - estimator: kernel
+        history_length: 1
 
-    - estimator: gaussian
-      history_length: 10
+      - estimator: gaussian
+        history_length: 10
 
-    - estimator: kozachenko
-      history_length: 10
+      - estimator: kozachenko
+        history_length: 10
 
-    - estimator: kernel
-      history_length: 10
+      - estimator: kernel
+        history_length: 10
 
   DirectedInfo: # No theiler window yet
-    - estimator: gaussian
+    dependencies: ["java"]
+    configs:
+      - estimator: gaussian
 
-    - estimator: kozachenko
+      - estimator: kozachenko
 
-    - estimator: kernel
+      - estimator: kernel
 
   StochasticInteraction: # No theiler window
-    - estimator: gaussian
+    dependencies: ["java"]
+    configs:
+      - estimator: gaussian
 
-    - estimator: kozachenko
+      - estimator: kozachenko
 
-    - estimator: kernel
+      - estimator: kernel
 
   # Mutual information
   MutualInfo:
-    - estimator: gaussian
+    dependencies: ["java"]
+    configs:
+      - estimator: gaussian
 
-    - estimator: kraskov
-      prop_k: 4
+      - estimator: kraskov
+        prop_k: 4
 
-    - estimator: kraskov
-      prop_k: 4
-      dyn_corr_excl: AUTO
+      - estimator: kraskov
+        prop_k: 4
+        dyn_corr_excl: AUTO
 
-    - estimator: kernel
-      kernel_width: 0.25
+      - estimator: kernel
+        kernel_width: 0.25
 
   # Mutual information
   TimeLaggedMutualInfo:
-    - estimator: gaussian
+    dependencies: ["java"]
+    configs:
+      - estimator: gaussian
 
-    - estimator: kraskov
-      prop_k: 4
+      - estimator: kraskov
+        prop_k: 4
 
-    - estimator: kraskov
-      prop_k: 4
-      dyn_corr_excl: AUTO
+      - estimator: kraskov
+        prop_k: 4
+        dyn_corr_excl: AUTO
 
-    - estimator: kernel
-      kernel_width: 0.25
+      - estimator: kernel
+        kernel_width: 0.25
 
   # Transfer entropy
   TransferEntropy:
-    # Kraskov estimator with auto-embedding on source/target and DCE
-    - estimator: kraskov
-      prop_k: 4
-      auto_embed_method: MAX_CORR_AIS
-      k_search_max: 10
-      tau_search_max: 4
+    dependencies: ["java"]
+    configs:
+      # Kraskov estimator with auto-embedding on source/target and DCE
+      - estimator: kraskov
+        prop_k: 4
+        auto_embed_method: MAX_CORR_AIS
+        k_search_max: 10
+        tau_search_max: 4
 
-    - estimator: kraskov
-      prop_k: 4
-      auto_embed_method: MAX_CORR_AIS
-      k_search_max: 10
-      tau_search_max: 4
-      dyn_corr_excl: AUTO
+      - estimator: kraskov
+        prop_k: 4
+        auto_embed_method: MAX_CORR_AIS
+        k_search_max: 10
+        tau_search_max: 4
+        dyn_corr_excl: AUTO
 
-    # Kraskov estimator with auto-embedding on target-only, src history of 1, and DCE
-    - estimator: kraskov
-      prop_k: 4
-      k_history: 2
-      l_history: 1
-      dyn_corr_excl: AUTO
+      # Kraskov estimator with auto-embedding on target-only, src history of 1, and DCE
+      - estimator: kraskov
+        prop_k: 4
+        k_history: 2
+        l_history: 1
+        dyn_corr_excl: AUTO
 
-    # Kraskov estimator with fixed embedding of 1 for source/target and DCE
-    - estimator: kraskov
-      prop_k: 4
-      k_history: 1
-      l_history: 1
-      dyn_corr_excl: AUTO
+      # Kraskov estimator with fixed embedding of 1 for source/target and DCE
+      - estimator: kraskov
+        prop_k: 4
+        k_history: 1
+        l_history: 1
+        dyn_corr_excl: AUTO
 
-    # Same as above with no DCE
-    - estimator: kraskov
-      prop_k: 4
-      k_history: 1
-      l_history: 1
+      # Same as above with no DCE
+      - estimator: kraskov
+        prop_k: 4
+        k_history: 1
+        l_history: 1
 
-    # Currently the Kernel method has an overload issue with the AIS calculator..
-    # Kernel estimator with auto-embedding on source/target and DCE
-    # - estimator: kernel
-    #   auto_embed_method: MAX_CORR_AIS
-    #   k_search_max: 4
-    #   kernel_width: 0.25
+      # Currently the Kernel method has an overload issue with the AIS calculator..
+      # Kernel estimator with auto-embedding on source/target and DCE
+      # - estimator: kernel
+      #   auto_embed_method: MAX_CORR_AIS
+      #   k_search_max: 4
+      #   kernel_width: 0.25
 
-    # Kernel estimator with no auto-embedding on source/target and DCE
-    - estimator: kernel
-      kernel_width: 0.25
-      k_history: 1
-      l_history: 1
+      # Kernel estimator with no auto-embedding on source/target and DCE
+      - estimator: kernel
+        kernel_width: 0.25
+        k_history: 1
+        l_history: 1
 
-    # Gaussian estimator doesn't have DCE (aka Bartlett corrections) yet
-    - estimator: gaussian
-      auto_embed_method: MAX_CORR_AIS
-      k_search_max: 10
-      tau_search_max: 2
+      # Gaussian estimator doesn't have DCE (aka Bartlett corrections) yet
+      - estimator: gaussian
+        auto_embed_method: MAX_CORR_AIS
+        k_search_max: 10
+        tau_search_max: 2
 
-    - estimator: gaussian
-      k_history: 1
-      l_history: 1
+      - estimator: gaussian
+        k_history: 1
+        l_history: 1
 
-    - estimator: symbolic
-      k_history: 1
-      l_history: 1
+      - estimator: symbolic
+        k_history: 1
+        l_history: 1
 
-    - estimator: symbolic
-      k_history: 10
-      l_history: 1
+      - estimator: symbolic
+        k_history: 10
+        l_history: 1
 
   IntegratedInformation:
     dependencies: ["octave"]

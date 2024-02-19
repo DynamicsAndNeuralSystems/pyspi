@@ -74,6 +74,7 @@ class Calculator:
             # check if optional dependencies exist
             print("Checking if optional dependencies exist...")
             Calculator._optional_dependencies['octave'] = is_octave_available()
+            Calculator._optional_dependencies['java'] = is_jpype_jvm_available()
 
         self._load_yaml(configfile)
 
@@ -90,11 +91,11 @@ class Calculator:
 
         print("Number of SPIs: {}".format(len(self.spis)))
         if len(self._excluded_spis) > 0:
-            print(f"\n\n {len(self._excluded_spis)} SPI(s) were excluded due to missing dependencies:")
+            print(f"\n WARNING! \n\n {len(self._excluded_spis)} SPI(s) were excluded due to missing dependencies:")
             for spi in self._excluded_spis:
-                print(spi)
+                print(f"SPI: {spi[0]} REQUIRES: {', '.join(spi[1])}")
             print("\n")
-            print(f"Run .compute() to continue with a reduced set of {len(self.spis)} SPIs.")
+            print(f"Run .compute() to continue with a reduced set of {len(self.spis)} SPIs.\n")
 
         if dataset is not None:
             self.load_dataset(dataset)
