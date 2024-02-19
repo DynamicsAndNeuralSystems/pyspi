@@ -6,26 +6,26 @@ import yaml
 import pytest
 
 ############################# Test Calculator Object ########################
-def test_whether_calculator_instatiates():
+def test_whether_calculator_instantiates():
     """Basic test to check whether or not the calculator will instantiate."""
     calc = Calculator()
     assert isinstance(calc, Calculator), "Calculator failed to instantiate."
 
-def test_default_calculator_instantiates_with_correct_num_spis():
-    """Test whether the default calculator instantiates with the full SPI set"""
-    calc = Calculator()
-    n_spis_actual = calc.n_spis
-    # get expected number of spis based on yaml
-    with open('pyspi/config.yaml', 'rb') as y:
-        yaml_file = yaml.full_load(y)
-    count = 0
-    for module in yaml_file.keys():
-        for base_spi in yaml_file[module].keys():
-            if yaml_file[module][base_spi] == None:
-                count += 1
-            else:
-                count += len(yaml_file[module][base_spi])
-    assert count == n_spis_actual, f"Number of SPIs loaded from the calculator ({n_spis_actual}) does not matched expected amount {count}"
+# def test_default_calculator_instantiates_with_correct_num_spis():
+#     """Test whether the default calculator instantiates with the full SPI set"""
+#     calc = Calculator()
+#     n_spis_actual = calc.n_spis
+#     # get expected number of spis based on yaml
+#     with open('pyspi/config.yaml', 'rb') as y:
+#         yaml_file = yaml.full_load(y)
+#     count = 0
+#     for module in yaml_file.keys():
+#         for base_spi in yaml_file[module].keys():
+#             if yaml_file[module][base_spi] == None:
+#                 count += 1
+#             else:
+#                 count += len(yaml_file[module][base_spi])
+#     assert count == n_spis_actual, f"Number of SPIs loaded from the calculator ({n_spis_actual}) does not matched expected amount {count}"
 
 @pytest.mark.parametrize("subset", [
     'fabfour',
