@@ -90,9 +90,11 @@ class Calculator:
 
         print("Number of SPIs: {}".format(len(self.spis)))
         if len(self._excluded_spis) > 0:
-            print(f"\n\n {len(self._excluded_spis)} SPIs were excluded due to missing dependencies:")
+            print(f"\n\n {len(self._excluded_spis)} SPI(s) were excluded due to missing dependencies:")
             for spi in self._excluded_spis:
                 print(spi)
+            print("\n")
+            print(f"Run .compute() to continue with a reduced set of {len(self.spis)} SPIs.")
 
         if dataset is not None:
             self.load_dataset(dataset)
@@ -207,7 +209,7 @@ class Calculator:
                             print(f"Optional dependencies: {deps} not met. Skipping {len(configs)} SPI(s):")
                             for params in configs:
                                 print(f"*SKIPPING SPI: {module_name}.{fcn}(x,y,{params})...")
-                                self._excluded_spis.append(f"{module_name}.{fcn}(x,y,{params})...")
+                                self._excluded_spis.append([f"{module_name}.{fcn}(x,y,{params})...", deps])
                             continue
                     try:
                         for params in all_fcn_params:

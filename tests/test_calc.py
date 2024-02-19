@@ -11,7 +11,7 @@ def test_whether_calculator_instantiates():
     calc = Calculator()
     assert isinstance(calc, Calculator), "Calculator failed to instantiate."
 
-def test_whether_calculator_runs_without_octave():
+def test_whether_calculator_instantiates_without_octave():
     # set octave to false to emulate a system without octave (i.e., fails the check)
     Calculator._optional_dependencies['octave'] = False
     calc = Calculator()
