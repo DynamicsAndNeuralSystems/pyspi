@@ -11,21 +11,13 @@ def test_whether_calculator_instantiates():
     calc = Calculator()
     assert isinstance(calc, Calculator), "Calculator failed to instantiate."
 
-# def test_default_calculator_instantiates_with_correct_num_spis():
-#     """Test whether the default calculator instantiates with the full SPI set"""
-#     calc = Calculator()
-#     n_spis_actual = calc.n_spis
-#     # get expected number of spis based on yaml
-#     with open('pyspi/config.yaml', 'rb') as y:
-#         yaml_file = yaml.full_load(y)
-#     count = 0
-#     for module in yaml_file.keys():
-#         for base_spi in yaml_file[module].keys():
-#             if yaml_file[module][base_spi] == None:
-#                 count += 1
-#             else:
-#                 count += len(yaml_file[module][base_spi])
-#     assert count == n_spis_actual, f"Number of SPIs loaded from the calculator ({n_spis_actual}) does not matched expected amount {count}"
+def test_whether_calculator_runs_without_octave():
+    # set octave to false to emulate a system without octave (i.e., fails the check)
+    Calculator._optional_dependencies['octave'] = False
+    calc = Calculator()
+    is_initialised = isinstance(calc, Calculator)
+    Calculator._optional_dependencies = {}
+    assert is_initialised, "Calculator failed to instantiate without Octave."
 
 @pytest.mark.parametrize("subset", [
     'fabfour',
