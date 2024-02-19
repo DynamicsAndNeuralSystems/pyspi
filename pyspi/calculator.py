@@ -89,13 +89,31 @@ class Calculator:
         self._name = name
         self._labels = labels
 
-        print("Number of SPIs: {}".format(len(self.spis)))
+        print(f"="*100)
+        print(f"Number of SPIs: {len(self.spis)}\n")
         if len(self._excluded_spis) > 0:
-            print(f"\n WARNING! \n\n {len(self._excluded_spis)} SPI(s) were excluded due to missing dependencies:")
+            missing_deps = [dep for dep, is_met in self._optional_dependencies.items() if not is_met]
+            print("**** SPI Initialisation Warning ****")
+            print("\nSome dependencies were not detected, which has led to the exclusion of certain SPIs:")
+            print("\nMissing Dependencies:")
+            for dep in missing_deps:
+                print(f"- {dep}")
+            print(f"\nAs a result, {len(self._excluded_spis)} SPI(s) have been excluded:")
+            dependency_groups = {}
             for spi in self._excluded_spis:
-                print(f"SPI: {spi[0]} REQUIRES: {', '.join(spi[1])}")
-            print("\n")
-            print(f"Run .compute() to continue with a reduced set of {len(self.spis)} SPIs.\n")
+                for dep in spi[1]: 
+                    if dep not in dependency_groups:
+                        dependency_groups[dep] = []
+                    dependency_groups[dep].append(spi[0])
+
+            for dep, spis in dependency_groups.items():
+                print(f"\nDependency: {dep} (Affects {len(spis)} SPI(s))")
+                print("Excluded SPIs:")
+                for spi in spis:
+                    print(f"  - {spi}")
+            print("\nOptions to Proceed:")
+            print(f"  1) Install the following dependencies to access all SPIs: [{', '.join(missing_deps)}]")
+            print(f"  2) Continue with a reduced set of {self.n_spis} SPIs by running .compute() as usual. \n")
 
         if dataset is not None:
             self.load_dataset(dataset)
@@ -210,12 +228,12 @@ class Calculator:
                             print(f"Optional dependencies: {deps} not met. Skipping {len(configs)} SPI(s):")
                             for params in configs:
                                 print(f"*SKIPPING SPI: {module_name}.{fcn}(x,y,{params})...")
-                                self._excluded_spis.append([f"{module_name}.{fcn}(x,y,{params})...", deps])
+                                self._excluded_spis.append([f"{fcn}(x,y,{params})", deps])
                             continue
                     try:
                         for params in all_fcn_params:
                             print(
-                                f"[{self.n_spis}] Adding SPI {module_name}.{fcn}(x,y,{params})..."
+                                f"[{self.n_spis}] Adding SPI {module_name}.{fcn}(x,y,{params})"
                             )
                             spi = getattr(module, fcn)(**params)
                             self._spis[spi.identifier] = spi
