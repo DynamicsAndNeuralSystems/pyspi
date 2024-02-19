@@ -34,7 +34,9 @@
   
   # Integrated information
   IntegratedInformation:
-    - phitype: 'star'
+    dependencies: ["octave"]
+    configs:
+      - phitype: 'star'
 
 # statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
 .statistics.spectral:
