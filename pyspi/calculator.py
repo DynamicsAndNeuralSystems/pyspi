@@ -31,7 +31,7 @@ class Calculator:
         labels (array_like, optional):
             Any set of strings by which you want to label the calculator. This can be useful later for classification purposes, defaults to None.
         subset (str, optional):
-            A pre-configured subset of SPIs to use. Options are "all", "fast", "sonnet", "octaveless", or "fabfour", defaults to "all".
+            A pre-configured subset of SPIs to use. Options are "all", "fast", "sonnet", or "fabfour", defaults to "all".
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
     """
@@ -57,14 +57,10 @@ class Calculator:
                 configfile = (
                     os.path.dirname(os.path.abspath(__file__)) + "/fabfour_config.yaml"
                 )
-            elif subset == "octaveless":
-                configfile = (
-                    os.path.dirname(os.path.abspath(__file__)) + "/octaveless_config.yaml"
-                )
             # If no configfile was provided but the subset was not one of the above (or the default 'all'), raise an error
             elif subset != "all":
                 raise ValueError(
-                    f"Subset '{subset}' does not exist. Try 'all' (default), 'fast', 'sonnet', 'octaveless', or 'fabfour'."
+                    f"Subset '{subset}' does not exist. Try 'all' (default), 'fast', 'sonnet', or 'fabfour'."
                 )
             else:
                 configfile = os.path.dirname(os.path.abspath(__file__)) + "/config.yaml"
