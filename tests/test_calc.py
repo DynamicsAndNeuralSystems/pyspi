@@ -40,8 +40,7 @@ def test_whether_calc_instantiates_wo_optional_deps():
 @pytest.mark.parametrize("subset", [
     'fabfour',
     'fast',
-    'sonnet',
-    'octaveless'
+    'sonnet'
 ])
 def test_whether_calculator_instantiates_with_subsets(subset):
     """Test whether the calculator instantiates with each of the available subsets"""
@@ -122,11 +121,10 @@ def test_data_object_process_and_observations(shape, n_procs_expected, n_obs_exp
 
 @pytest.mark.parametrize("yaml_filename", [
     'fabfour_config', 
-    'fast_config', 
-    'octaveless_config', 
+    'fast_config',
     'sonnet_config'])
 def test_whether_config_files_exist(yaml_filename):
-    """Check whether the config, fabfour, fast, octaveless, sonnet_config files exist"""
+    """Check whether the config, fabfour, fast, sonnet_config files exist"""
     expected_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'pyspi', f'{yaml_filename}.yaml'))
     assert os.path.isfile(expected_file), f"{yaml_filename}.yaml file was not found."
 
