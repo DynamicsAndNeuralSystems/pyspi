@@ -214,24 +214,17 @@ class Calculator:
                 print("*** Importing module {}".format(module_name))
                 module = importlib.import_module(module_name, __package__)
                 for fcn in yf[module_name]:
-                    all_fcn_params = yf[module_name][fcn]
-                    if isinstance(yf[module_name][fcn], dict):
-                        deps = yf[module_name][fcn].get('dependencies')
-                        # check if all depdencies are met
+                    deps = yf[module_name][fcn].get('dependencies')
+                    if deps is not None:
                         all_deps_met = all(Calculator._optional_dependencies.get(dep, False) for dep in deps)
-                        configs = yf[module_name][fcn].get('configs')
-                        if all_deps_met:
-                            # due to nesting structure, params are stored as values for the configs key
-                            all_fcn_params = configs
-                        else:
-                            # deps not met, skip SPI
-                            print(f"Optional dependencies: {deps} not met. Skipping {len(configs)} SPI(s):")
-                            for params in configs:
+                        if not all_deps_met:
+                            print(f"Optional dependencies: {deps} not met. Skipping {len(fcn.get('configs'))} SPI(s):")
+                            for params in fcn.get('configs'):
                                 print(f"*SKIPPING SPI: {module_name}.{fcn}(x,y,{params})...")
                                 self._excluded_spis.append([f"{fcn}(x,y,{params})", deps])
                             continue
                     try:
-                        for params in all_fcn_params:
+                        for params in yf[module_name][fcn].get('configs'):
                             print(
                                 f"[{self.n_spis}] Adding SPI {module_name}.{fcn}(x,y,{params})"
                             )
