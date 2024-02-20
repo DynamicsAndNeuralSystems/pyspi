@@ -218,8 +218,9 @@ class Calculator:
                     if deps is not None:
                         all_deps_met = all(Calculator._optional_dependencies.get(dep, False) for dep in deps)
                         if not all_deps_met:
-                            print(f"Optional dependencies: {deps} not met. Skipping {len(fcn.get('configs'))} SPI(s):")
-                            for params in fcn.get('configs'):
+                            current_base_spi = yf[module_name][fcn]
+                            print(f"Optional dependencies: {deps} not met. Skipping {len(current_base_spi.get('configs'))} SPI(s):")
+                            for params in current_base_spi.get('configs'):
                                 print(f"*SKIPPING SPI: {module_name}.{fcn}(x,y,{params})...")
                                 self._excluded_spis.append([f"{fcn}(x,y,{params})", deps])
                             continue
