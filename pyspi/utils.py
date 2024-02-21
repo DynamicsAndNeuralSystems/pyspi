@@ -139,25 +139,40 @@ def filter_spis(configfile, keywords, name="filtered_config"):
     directory."""
     
     # check that keywords is a list
-    if type(keywords) is not list:
+    if not isinstance(keywords, list):
         raise TypeError("Keywords must be passed as a list.")
-    
     # load in the original YAML
     with open(configfile) as f:
         yf = yaml.load(f, Loader=yaml.FullLoader)
     
+    # new dictonary to be converted to final YAML
     filtered_subset = {}
-    # loop through each module and check for keyword(s) membership
+    spis_found = 0
+    
     for module in yf:
         module_spis = {}
         for spi in yf[module]:
             spi_labels = yf[module][spi].get('labels')
             if all(keyword in spi_labels for keyword in keywords):
                 module_spis[spi] = yf[module][spi]
-        filtered_subset[module] = module_spis
+                spis_found += len(yf[module][spi].get('configs'))
+        if module_spis:
+            filtered_subset[module] = module_spis
     
-    # write to a new YAML
-    with open(f"{name}.yaml", "w") as outfile:
+    # check that > 0 SPIs found
+    if spis_found == 0:
+        raise ValueError(f"0 SPIs were found with the specific keywords: {keywords}.")
+    
+    # write to YAML
+    with open(f"pyspi/{name}.yaml", "w") as outfile:
         yaml.dump(filtered_subset, outfile, default_flow_style=False, sort_keys=False)
 
-    print(f"Saved new yaml as `{name}.yaml' in the current directory.")
+    # output relevant information
+      # output relevant information
+    print(f"""\nOperation Summary:
+-----------------
+- Total SPIs Matched: {spis_found} SPI(s) were found with the specific keywords: {keywords}.
+- New File Created: A YAML file named `{name}.yaml` has been saved in the current directory: `pyspi/{name}.yaml'
+- Next Steps: To utilise the filtered set of SPIs, please initialise a new Calculator instance with the following command:
+`Calculator(configfile='pyspi/{name}.yaml')`
+""")
