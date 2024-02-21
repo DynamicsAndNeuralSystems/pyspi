@@ -4,6 +4,7 @@ from scipy.stats import zscore
 import warnings
 import pandas as pd
 import os
+import yaml 
 
 def _contains_nan(a, nan_policy='propagate'):
     policies = ['propagate', 'raise', 'omit']
@@ -131,3 +132,32 @@ def is_octave_available():
     except Exception as e:
         print(f"Octave not available: {e}")
         return False
+
+def filter_spis(configfile, keywords, name="filtered_config"):
+    """Filter a YAML using a list of keywords, and save the reduced
+    set as a new YAML with a user-specified name in the current
+    directory."""
+    
+    # check that keywords is a list
+    if type(keywords) is not list:
+        raise TypeError("Keywords must be passed as a list.")
+    
+    # load in the original YAML
+    with open(configfile) as f:
+        yf = yaml.load(f, Loader=yaml.FullLoader)
+    
+    filtered_subset = {}
+    # loop through each module and check for keyword(s) membership
+    for module in yf:
+        module_spis = {}
+        for spi in yf[module]:
+            spi_labels = yf[module][spi].get('labels')
+            if all(keyword in spi_labels for keyword in keywords):
+                module_spis[spi] = yf[module][spi]
+        filtered_subset[module] = module_spis
+    
+    # write to a new YAML
+    with open(f"{name}.yaml", "w") as outfile:
+        yaml.dump(filtered_subset, outfile, default_flow_style=False, sort_keys=False)
+
+    print(f"Saved new yaml as `{name}.yaml' in the current directory.")
