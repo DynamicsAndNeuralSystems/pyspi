@@ -38,7 +38,7 @@ def test_filter_spis_normal_operation():
     filter_spis("mock_config.yaml", keywords, name="mock_filterd_config")
 
     # load in the output
-    with open("/pyspi/mock_filterd_config.yaml", "r") as f:
+    with open("pyspi/mock_filterd_config.yaml", "r") as f:
         actual_output = yaml.load(f, Loader=yaml.FullLoader)
     
     assert actual_output == expected_output_yaml, "Expected filtered YAML does not match actual filtered YAML."
