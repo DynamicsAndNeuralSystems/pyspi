@@ -25,9 +25,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install .
-      - name: Run pyspi calculator unit tests
+      - name: Run pyspi calculator/utils unit tests
         run: |
           pytest -v ./tests/test_calc.py
+          pytest -v ./tests/test_utils.py
       - name: Run pyspi SPI unit tests
         run: |
           pytest -v ./tests/test_SPIs.py
