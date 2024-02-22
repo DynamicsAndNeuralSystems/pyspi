@@ -39,7 +39,7 @@ def test_filter_spis_normal_operation():
     # create a temporary output YAML name
     tmp_output_yaml_name = tmp_input_yaml_name + "_output"
 
-    filter_spis(f"{tmp_input_yaml_name}", keywords, name=tmp_output_yaml_name)
+    filter_spis(f"{tmp_input_yaml_name[1:]}", keywords, name=tmp_output_yaml_name)
 
     # load in the output
     with open(f"{tmp_output_yaml_name}.yaml", "r") as f:
@@ -47,7 +47,7 @@ def test_filter_spis_normal_operation():
     
     assert actual_output == expected_output_yaml, "Expected filtered YAML does not match actual filtered YAML."
 
-    
+
 
 
 
