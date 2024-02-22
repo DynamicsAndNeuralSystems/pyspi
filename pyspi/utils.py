@@ -164,7 +164,7 @@ def filter_spis(configfile, keywords, name="filtered_config"):
         raise ValueError(f"0 SPIs were found with the specific keywords: {keywords}.")
     
     # write to YAML
-    with open(f"{name}.yaml", "w") as outfile:
+    with open(f"pyspi/{name}.yaml", "w") as outfile:
         yaml.dump(filtered_subset, outfile, default_flow_style=False, sort_keys=False)
 
     # output relevant information
@@ -172,7 +172,7 @@ def filter_spis(configfile, keywords, name="filtered_config"):
     print(f"""\nOperation Summary:
 -----------------
 - Total SPIs Matched: {spis_found} SPI(s) were found with the specific keywords: {keywords}.
-- New File Created: A YAML file named `{name}.yaml` has been saved in the current directory: `./{name}.yaml'
+- New File Created: A YAML file named `{name}.yaml` has been saved in the current directory: `pyspi/{name}.yaml'
 - Next Steps: To utilise the filtered set of SPIs, please initialise a new Calculator instance with the following command:
-`Calculator(configfile='./{name}.yaml')`
+`Calculator(configfile='pyspi/{name}.yaml')`
 """)

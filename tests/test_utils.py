@@ -1,5 +1,4 @@
 from pyspi.utils import filter_spis
-from tempfile import NamedTemporaryFile
 import os
 import pytest
 import yaml
@@ -32,17 +31,14 @@ def test_filter_spis_normal_operation():
     }
 
     # create temporary YAML to load into the function
-    with NamedTemporaryFile('w', delete=False) as tmp_input_yaml:
-        yaml.dump(mock_yaml_content, tmp_input_yaml)
-        tmp_input_yaml_name = tmp_input_yaml.name # get the temp file location
-    
-    # create a temporary output YAML name
-    tmp_output_yaml_name = tmp_input_yaml_name + "_output"
+    with open("pyspi/mock_config.yaml", "w") as f:
+        yaml.dump(mock_yaml_content, f)
 
-    filter_spis(f"{tmp_input_yaml_name}", keywords, name=tmp_output_yaml_name)
+    
+    filter_spis("pyspi/mock_config.yaml", keywords, name="mock_filterd_config")
 
     # load in the output
-    with open(f"{tmp_output_yaml_name}.yaml", "r") as f:
+    with open("/pyspi/mock_filterd_config.yaml", "r") as f:
         actual_output = yaml.load(f, Loader=yaml.FullLoader)
     
     assert actual_output == expected_output_yaml, "Expected filtered YAML does not match actual filtered YAML."
