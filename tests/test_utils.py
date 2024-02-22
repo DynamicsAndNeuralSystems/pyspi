@@ -35,7 +35,7 @@ def test_filter_spis_normal_operation():
         yaml.dump(mock_yaml_content, f)
 
     
-    filter_spis("pyspi/mock_config.yaml", keywords, name="mock_filterd_config")
+    filter_spis("mock_config.yaml", keywords, name="mock_filterd_config")
 
     # load in the output
     with open("/pyspi/mock_filterd_config.yaml", "r") as f:
