@@ -14,6 +14,24 @@ def test_filter_spis_with_invalid_config():
     with pytest.raises(FileNotFoundError):
         filter_spis("invalid_config.yaml", ["test"])
 
+def test_filter_spis_no_matches():
+    """Pass in keywords that return no spis and check for ValuError"""
+    mock_yaml_content = {
+        "module1": {
+            "spi1": {"labels": ["keyword1", "keyword2"], "configs": [1, 2]},
+            "spi2": {"labels": ["keyword1"], "configs": [3]}
+        }
+    }
+    keywords = ["random_keyword"]
+
+    # create temporary YAML to load into the function
+    with open("pyspi/mock_config2.yaml", "w") as f:
+        yaml.dump(mock_yaml_content, f)
+    
+    with pytest.raises(ValueError) as excinfo:
+        filter_spis("pyspi/mock_config2.yaml", keywords, name="mock_filtered_config")
+    assert "0 SPIs were found" in str(excinfo.value), "Incorrect error message returned when no keywords match found."
+
 def test_filter_spis_normal_operation():
     """Test whether the filter spis function works as expected"""
     # create some mock content to filter
@@ -35,10 +53,10 @@ def test_filter_spis_normal_operation():
         yaml.dump(mock_yaml_content, f)
 
     
-    filter_spis("pyspi/mock_config.yaml", keywords, name="mock_filterd_config")
+    filter_spis("pyspi/mock_config.yaml", keywords, name="mock_filtered_config")
 
     # load in the output
-    with open("pyspi/mock_filterd_config.yaml", "r") as f:
+    with open("pyspi/mock_filtered_config.yaml", "r") as f:
         actual_output = yaml.load(f, Loader=yaml.FullLoader)
     
     assert actual_output == expected_output_yaml, "Expected filtered YAML does not match actual filtered YAML."
