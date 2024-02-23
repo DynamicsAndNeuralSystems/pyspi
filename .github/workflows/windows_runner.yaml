@@ -1,0 +1,15 @@
+name: Windows Runner
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install Octave
+      run: |
+        curl -L -o octave-installer.exe https://ftpmirror.gnu.org/octave/windows/octave-8.4.0-w64-installer.exe /S /D=C:\Octave
