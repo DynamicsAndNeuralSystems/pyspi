@@ -12,4 +12,4 @@ jobs:
 
     - name: Install Octave
       run: |
-        curl -L -o octave-installer.exe https://ftpmirror.gnu.org/octave/windows/octave-8.4.0-w64-installer.exe /S /D=C:\Octave
+        choco install octave
