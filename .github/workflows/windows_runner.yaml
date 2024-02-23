@@ -12,4 +12,4 @@ jobs:
 
     - name: Install Octave
       run: |
-        choco install octave
+        choco install octave --version 8.3.0.20230817 -y
