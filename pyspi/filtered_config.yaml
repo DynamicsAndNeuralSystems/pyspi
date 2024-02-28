@@ -1,0 +1,624 @@
+.statistics.basic:
+  Covariance:
+    labels:
+    - undirected
+    - linear
+    - signed
+    - multivariate
+    - contemporaneous
+    dependencies: null
+    configs:
+    - estimator: EmpiricalCovariance
+    - estimator: EllipticEnvelope
+    - estimator: GraphicalLasso
+    - estimator: GraphicalLassoCV
+    - estimator: LedoitWolf
+    - estimator: MinCovDet
+    - estimator: OAS
+    - estimator: ShrunkCovariance
+    - estimator: EmpiricalCovariance
+      squared: true
+    - estimator: EllipticEnvelope
+      squared: true
+    - estimator: GraphicalLasso
+      squared: true
+    - estimator: GraphicalLassoCV
+      squared: true
+    - estimator: LedoitWolf
+      squared: true
+    - estimator: MinCovDet
+      squared: true
+    - estimator: OAS
+      squared: true
+    - estimator: ShrunkCovariance
+      squared: true
+  Precision:
+    labels:
+    - undirected
+    - linear
+    - signed
+    - multivariate
+    - contemporaneous
+    dependencies: null
+    configs:
+    - estimator: EmpiricalCovariance
+    - estimator: EllipticEnvelope
+    - estimator: GraphicalLasso
+    - estimator: GraphicalLassoCV
+    - estimator: LedoitWolf
+    - estimator: MinCovDet
+    - estimator: OAS
+    - estimator: ShrunkCovariance
+    - estimator: EmpiricalCovariance
+      squared: true
+    - estimator: EllipticEnvelope
+      squared: true
+    - estimator: GraphicalLasso
+      squared: true
+    - estimator: GraphicalLassoCV
+      squared: true
+    - estimator: LedoitWolf
+      squared: true
+    - estimator: MinCovDet
+      squared: true
+    - estimator: OAS
+      squared: true
+    - estimator: ShrunkCovariance
+      squared: true
+  CrossCorrelation:
+    labels:
+    - undirected
+    - linear
+    - signed/unsigned
+    - bivariate
+    - time-dependent
+    dependencies: null
+    configs:
+    - statistic: max
+    - statistic: max
+      squared: true
+    - statistic: mean
+    - statistic: mean
+      squared: true
+    - statistic: mean
+      sigonly: false
+    - statistic: mean
+      squared: true
+      sigonly: false
+.statistics.spectral:
+  CoherencePhase:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  CoherenceMagnitude:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  ImaginaryCoherence:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  PhaseLockingValue:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  PhaseLagIndex:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  WeightedPhaseLagIndex:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  DebiasedSquaredPhaseLagIndex:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  DebiasedSquaredWeightedPhaseLagIndex:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  PairwisePhaseConsistency:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  DirectedTransferFunction:
+    labels:
+    - directed
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  DirectedCoherence:
+    labels:
+    - directed
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  PartialDirectedCoherence:
+    labels:
+    - directed
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  GeneralizedPartialDirectedCoherence:
+    labels:
+    - unsigned
+    - directed
+    - linear
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  DirectDirectedTransferFunction:
+    labels:
+    - directed
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+    - fs: 1
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: max
+  GroupDelay:
+    labels:
+    - directed
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - fmin: 0
+      fmax: 0.5
+      statistic: delay
+    - fmin: 0
+      fmax: 0.25
+      statistic: delay
+    - fmin: 0.25
+      fmax: 0.5
+      statistic: delay
+  SpectralGrangerCausality:
+    labels:
+    - directed
+    - linear
+    - unsigned
+    - bivariate
+    - frequency-dependent
+    dependencies: null
+    configs:
+    - method: nonparametric
+      fmin: 0
+      fmax: 0.5
+      statistic: mean
+    - method: nonparametric
+      fmin: 0
+      fmax: 0.25
+      statistic: mean
+    - method: nonparametric
+      fmin: 0.25
+      fmax: 0.5
+      statistic: mean
+    - method: nonparametric
+      fmin: 0
+      fmax: 0.5
+      statistic: max
+    - method: nonparametric
+      fmin: 0
+      fmax: 0.25
+      statistic: max
+    - method: nonparametric
+      fmin: 0.25
+      fmax: 0.5
+      statistic: max
+    - method: parametric
+      fmin: 0
+      fmax: 0.5
+      statistic: mean
+    - method: parametric
+      fmin: 0
+      fmax: 0.25
+      statistic: mean
+    - fmin: 0.25
+      fmax: 0.5
+      method: parametric
+      statistic: mean
+    - fs: 1
+      order: 1
+      method: parametric
+      statistic: mean
+    - fmin: 0
+      fmax: 0.25
+      order: 1
+      method: parametric
+      statistic: mean
+    - fmin: 0.25
+      fmax: 0.5
+      order: 1
+      method: parametric
+      statistic: mean
+    - fs: 1
+      order: 20
+      method: parametric
+      statistic: mean
+    - fmin: 0
+      fmax: 0.25
+      order: 20
+      method: parametric
+      statistic: mean
+    - fmin: 0.25
+      fmax: 0.5
+      order: 20
+      method: parametric
+      statistic: mean
+    - fs: 1
+      method: parametric
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      method: parametric
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      method: parametric
+      statistic: max
+    - fs: 1
+      order: 1
+      method: parametric
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      order: 1
+      method: parametric
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      order: 1
+      method: parametric
+      statistic: max
+    - fs: 1
+      order: 20
+      method: parametric
+      statistic: max
+    - fmin: 0
+      fmax: 0.25
+      order: 20
+      method: parametric
+      statistic: max
+    - fmin: 0.25
+      fmax: 0.5
+      order: 20
+      method: parametric
+      statistic: max
+.statistics.misc:
+  LinearModel:
+    labels:
+    - directed
+    - linear
+    - unsigned
+    - bivariate
+    - contemporaneous
+    dependencies: null
+    configs:
+    - model: Ridge
+    - model: Lasso
+    - model: SGDRegressor
+    - model: ElasticNet
+    - model: BayesianRidge
+  Cointegration:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - time-dependent
+    dependencies: null
+    configs:
+    - method: johansen
+      statistic: max_eig_stat
+      det_order: 0
+      k_ar_diff: 10
+    - method: johansen
+      statistic: trace_stat
+      det_order: 0
+      k_ar_diff: 10
+    - method: johansen
+      statistic: max_eig_stat
+      det_order: 0
+      k_ar_diff: 1
+    - method: johansen
+      statistic: trace_stat
+      det_order: 0
+      k_ar_diff: 1
+    - method: johansen
+      statistic: max_eig_stat
+      det_order: 1
+      k_ar_diff: 10
+    - method: johansen
+      statistic: trace_stat
+      det_order: 1
+      k_ar_diff: 10
+    - method: johansen
+      statistic: max_eig_stat
+      det_order: 1
+      k_ar_diff: 1
+    - method: johansen
+      statistic: trace_stat
+      det_order: 1
+      k_ar_diff: 1
+    - method: aeg
+      statistic: tstat
+      autolag: aic
+      maxlag: 10
+      trend: c
+    - method: aeg
+      statistic: tstat
+      autolag: aic
+      maxlag: 10
+      trend: ct
+    - method: aeg
+      statistic: tstat
+      autolag: bic
+      maxlag: 10
+      trend: ct
+  PowerEnvelopeCorrelation:
+    labels:
+    - undirected
+    - linear
+    - unsigned
+    - bivariate
+    - time-dependent
+    dependencies: null
+    configs:
+    - orth: false
+      log: false
+      absolute: false
+    - orth: true
+      log: false
+      absolute: false
+    - orth: false
+      log: true
+      absolute: false
+    - orth: true
+      log: true
+      absolute: false
+    - orth: true
+      log: false
+      absolute: true
+    - orth: true
+      log: true
+      absolute: true

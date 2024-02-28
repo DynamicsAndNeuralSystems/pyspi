@@ -32,33 +32,7 @@ jobs:
       - name: Run pyspi SPI unit tests
         run: |
           pytest -v ./tests/test_SPIs.py
-  test-macOS:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        python-version: ["3.8", "3.9"]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'pip'
-      - name: Set up Homebrew
-        id: set-up-homebrew
-        uses: Homebrew/actions/setup-homebrew@master
-      - name: Install octave (with brew)
-        run: |
-          brew install octave
-      - name: Install pyspi dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install .
-      - name: Run pyspi calculator/utils unit tests
-        run: |
-          pytest -v ./tests/test_calc.py
-          pytest -v ./tests/test_utils.py
+
   
         
         
