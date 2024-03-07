@@ -133,6 +133,15 @@ def is_octave_available():
         print(f"Octave not available: {e}")
         return False
 
+def check_optional_deps():
+    """Bundle all of the optional
+    dependency checks together."""
+    isAvailable = {}
+    isAvailable['octave'] = is_octave_available()
+    isAvailable['java'] = is_jpype_jvm_available()
+
+    return isAvailable
+
 def spi_filter(configfile, keywords, name="filtered_config"):
     """Filter a YAML using a list of keywords, and save the reduced
     set as a new YAML with a user-specified name in the current

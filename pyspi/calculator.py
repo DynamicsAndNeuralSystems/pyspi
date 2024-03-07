@@ -8,7 +8,7 @@ from scipy import stats
 
 # From this package
 from .data import Data
-from .utils import convert_mdf_to_ddf, is_jpype_jvm_available, is_octave_available
+from .utils import convert_mdf_to_ddf, check_optional_deps
 
 
 class Calculator:
@@ -35,7 +35,7 @@ class Calculator:
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
     """
-    _optional_dependencies  = {}
+    _optional_dependencies = None
 
     def __init__(
         self, dataset=None, name=None, labels=None, subset="all", configfile=None
@@ -69,8 +69,7 @@ class Calculator:
         if not Calculator._optional_dependencies:
             # check if optional dependencies exist
             print("Checking if optional dependencies exist...")
-            Calculator._optional_dependencies['octave'] = is_octave_available()
-            Calculator._optional_dependencies['java'] = is_jpype_jvm_available()
+            Calculator._optional_dependencies = check_optional_deps()
 
         self._load_yaml(configfile)
 
