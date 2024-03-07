@@ -36,7 +36,7 @@ testing_extras = [
 
 
 setup(
-    name='pyspi-lib',
+    name='pyspi',
     packages=find_packages(),
     package_data={'': ['config.yaml',
                        'sonnet_config.yaml',
@@ -61,7 +61,7 @@ setup(
                         'data/standard_normal.npy',
                         'data/cml7.npy']},
     include_package_data=True,
-    version='0.4.2',
+    version='0.5.0',
     description='Library for pairwise analysis of time series data.',
     author='Oliver M. Cliff',
     author_email='oliver.m.cliff@gmail.com',
