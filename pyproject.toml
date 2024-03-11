@@ -3,7 +3,7 @@ requires      = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyspi-lib"
+name = "pyspi"
 version = "0.4.2"
 authors = [
     { name ="Oliver M. Cliff", email="oliver.m.cliff@gmail.com"},
@@ -15,7 +15,7 @@ maintainers = [
 description = "Library for pairwise analysis of time series data."
 readme = "README.md"
 license = {text = "GNU General Public License v3 (GPLv3)"}
-requires-python = ">=3.8"
+requires-python = ">=3.8,<3.10"
 classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
