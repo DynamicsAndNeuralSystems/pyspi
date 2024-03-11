@@ -5,8 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pyspi"
 <<<<<<< HEAD
+<<<<<<< HEAD
 version = "0.5.0"
 =======
+=======
+>>>>>>> 6168c27 (Change project name and python requires in setup and toml files)
 version = "0.4.2"
 >>>>>>> 6168c27 (Change project name and python requires in setup and toml files)
 authors = [
