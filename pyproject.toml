@@ -4,7 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyspi"
+<<<<<<< HEAD
 version = "0.5.0"
+=======
+version = "0.4.2"
+>>>>>>> 6168c27 (Change project name and python requires in setup and toml files)
 authors = [
     { name ="Oliver M. Cliff", email="oliver.m.cliff@gmail.com"},
 ]
@@ -15,7 +19,7 @@ maintainers = [
 description = "Library for pairwise analysis of time series data."
 readme = "README.md"
 license = {text = "GNU General Public License v3 (GPLv3)"}
-requires-python = ">=3.8"
+requires-python = ">=3.8,<3.10"
 classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
