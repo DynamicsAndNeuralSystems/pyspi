@@ -36,7 +36,7 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 <hr style="border-top: 3px solid #bbb;">
 
 ## Installation 📥
-The simplest way to get the _pyspi_ package up and running is to install the package locally using `pip`. 
+The simplest way to get the _pyspi_ package up and running is to install the package using `pip install`. 
 For access to the full library of SPIs, the code requires GNU's [Octave](https://octave.org/download) to be installed on your system.
 
 #### 1. Pre-Install Octave (Optional)
@@ -51,16 +51,10 @@ conda create -n pyspi python=3.9.0
 Once you have created the environment, activate it using `conda activate pyspi`.
 
 #### 3. Install with _pip_
-To install _pyspi_ using a local pip install, download or clone the latest version from the repository:
+Using `pip` for [`pyspi`](https://pypi.org/project/pyspi/):
 ```
-git clone https://github.com/DynamicsAndNeuralSystems/pyspi
+pip install pyspi
 ```
-
-Once you have navigated to the main folder (`pyspi`), you can install using:
-```
-pip install .
-```
-
 
 For a more detailed guide on how to install _pyspi_, as well as how you can use _pyspi_ without first installing Octave, 
 please see the [full documentation](https://time-series-features.gitbook.io/pyspi/installation/installing-pyspi).
