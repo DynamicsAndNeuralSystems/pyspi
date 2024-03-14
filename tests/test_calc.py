@@ -1,4 +1,4 @@
-from pyspi.calculator import Calculator, Data
+from pyspi.calculator import Calculator, Data, CalculatorFrame
 from pyspi.data import load_dataset
 import numpy as np 
 import os
@@ -10,6 +10,13 @@ def test_whether_calculator_instantiates():
     """Basic test to check whether or not the calculator will instantiate."""
     calc = Calculator()
     assert isinstance(calc, Calculator), "Calculator failed to instantiate."
+
+def test_whether_calculator_computes():
+    # check whether the calculator runs
+    data = np.random.randn(3, 100)
+    calc = Calculator()
+    with pytest.raises(Exception):
+        calc.compute()
 
 def test_whether_calc_instantiates_without_octave():
     # set octave to false to emulate a system without octave (i.e., fails the check)
@@ -251,3 +258,34 @@ def test_load_invalid_dataset():
     with pytest.raises(NameError) as excinfo:
         dataset = load_dataset(name="test")
     assert "Unknown dataset: test" in str(excinfo.value), "Did not get expected error when loading invalid dataset."
+
+def test_calculator_frame_normal_operation():
+    """Test whether the calculator frame instantiates as expected."""
+    datasets = [np.random.randn(3, 100) for _ in range(3)]
+    dataset_names = ['d1', 'd2', 'd3']
+    dataset_labels = ['label1', 'label2', 'label3']
+
+    # create calculator frame
+    calc_frame = CalculatorFrame(name="MyCalcFrame", datasets=[Data(data=data, dim_order='ps') for data in datasets], 
+                                 names=dataset_names, labels=dataset_labels)
+    assert(isinstance(calc_frame, CalculatorFrame)), "CalculatorFrame failed to instantiate."
+
+    # check the properties of the frame
+    # check expected number of calcs in frame - 3 for 3 datasets
+    num_calcs_in_frame = calc_frame.n_calculators
+    assert num_calcs_in_frame == 3, f"Unexpected number ({num_calcs_in_frame}) of calculators in the frame. Expected 3."
+    
+    # get the frame name
+    assert calc_frame.name == "MyCalcFrame", "Calculator frame has unexpected name."
+
+    # ensure dataset names, labels passed along to inidividual calculators
+    for (index, calc) in enumerate(calc_frame.calculators[0]):
+        assert calc.name == dataset_names[index], "Indiviudal calculator has unexpected name."
+        assert calc.labels == dataset_labels[index], "Indiviudal calculator has unexpected label."
+    
+    # check that compute runs
+    with pytest.raises(Exception):
+        calc_frame.compute()
+
+
+
