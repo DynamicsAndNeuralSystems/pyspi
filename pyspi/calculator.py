@@ -65,7 +65,7 @@ class Calculator:
             else:
                 configfile = os.path.dirname(os.path.abspath(__file__)) + "/config.yaml"
 
-        # add dependency checks here if first time
+        # add dependency checks here if the calculator is being instantiated for the first time
         if not Calculator._optional_dependencies:
             # check if optional dependencies exist
             print("Checking if optional dependencies exist...")
