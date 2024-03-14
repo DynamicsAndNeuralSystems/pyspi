@@ -14,7 +14,7 @@ def test_whether_calculator_instantiates():
 def test_whether_calculator_computes():
     # check whether the calculator runs
     data = np.random.randn(3, 100)
-    calc = Calculator()
+    calc = Calculator(dataset=data)
     calc.compute()
 
 def test_whether_calc_instantiates_without_octave():
@@ -295,6 +295,6 @@ def test_correlation_frame_normal_operation():
                                  names=dataset_names, labels=dataset_labels, subset='fabfour')
     
     cf = calc_frame.get_correlation_df(calc_frame)
-    
+
     assert not(cf[0].empty), "Correlation frame is empty."
 
