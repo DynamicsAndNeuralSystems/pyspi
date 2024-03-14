@@ -4,9 +4,6 @@ import dill
 import pyspi
 import numpy as np
 
-
-
-
 ############# Fixtures and helper functions #########
 
 def load_benchmark_tables():
@@ -103,7 +100,3 @@ def test_mpi(est, est_ob, mpi_benchmark, mpi_new, spi_warning_logger):
                 num_iteractions /= 2
 
             spi_warning_logger(est, module_name, max_z, int(num_exceed), int(num_iteractions))
-
-    
-    
-
