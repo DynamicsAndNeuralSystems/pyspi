@@ -2,7 +2,6 @@ from pyspi.calculator import Calculator, Data, CalculatorFrame
 from pyspi.data import load_dataset
 import numpy as np 
 import os
-import yaml
 import pytest
 
 ############################# Test Calculator Object ########################
@@ -294,7 +293,7 @@ def test_correlation_frame_normal_operation():
     calc_frame = CalculatorFrame(name="MyCalcFrame", datasets=[Data(data=data, dim_order='ps') for data in datasets], 
                                  names=dataset_names, labels=dataset_labels, subset='fabfour')
     
-    cf = calc_frame.get_correlation_df(calc_frame)
+    calc_frame.compute()
+    cf = calc_frame.get_correlation_df()
 
     assert not(cf[0].empty), "Correlation frame is empty."
-
