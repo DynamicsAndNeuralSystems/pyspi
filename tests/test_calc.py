@@ -15,8 +15,7 @@ def test_whether_calculator_computes():
     # check whether the calculator runs
     data = np.random.randn(3, 100)
     calc = Calculator()
-    with pytest.raises(Exception):
-        calc.compute()
+    calc.compute()
 
 def test_whether_calc_instantiates_without_octave():
     # set octave to false to emulate a system without octave (i.e., fails the check)
@@ -267,7 +266,7 @@ def test_calculator_frame_normal_operation():
 
     # create calculator frame
     calc_frame = CalculatorFrame(name="MyCalcFrame", datasets=[Data(data=data, dim_order='ps') for data in datasets], 
-                                 names=dataset_names, labels=dataset_labels)
+                                 names=dataset_names, labels=dataset_labels, subset='fabfour')
     assert(isinstance(calc_frame, CalculatorFrame)), "CalculatorFrame failed to instantiate."
 
     # check the properties of the frame
@@ -284,8 +283,18 @@ def test_calculator_frame_normal_operation():
         assert calc.labels == dataset_labels[index], "Indiviudal calculator has unexpected label."
     
     # check that compute runs
-    with pytest.raises(Exception):
-        calc_frame.compute()
+    calc_frame.compute()
 
 
+def test_correlation_frame_normal_operation():
+    """Test whether the correlation frame instantiates as expected.""" 
+    datasets = [np.random.randn(3, 100) for _ in range(3)]
+    dataset_names = ['d1', 'd2', 'd3']
+    dataset_labels = ['label1', 'label2', 'label3']
+    calc_frame = CalculatorFrame(name="MyCalcFrame", datasets=[Data(data=data, dim_order='ps') for data in datasets], 
+                                 names=dataset_names, labels=dataset_labels, subset='fabfour')
+    
+    cf = calc_frame.get_correlation_df(calc_frame)
+    
+    assert not(cf[0].empty), "Correlation frame is empty."
 
