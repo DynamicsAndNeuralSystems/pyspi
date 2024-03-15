@@ -141,7 +141,7 @@ def check_optional_deps():
 
     return isAvailable
 
-def filter_spis(keywords: list[str], output_name: str = None, configfile: str = None) -> None:
+def filter_spis(keywords, output_name = None, configfile= None):
     """
     Filter a YAML using a list of keywords, and save the reduced set as a new
     YAML with a user-specified name (or a random one if not provided) in the
