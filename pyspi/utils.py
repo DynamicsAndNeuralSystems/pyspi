@@ -158,6 +158,11 @@ def filter_spis(keywords, output_name=None, configfile=None):
         FileNotFoundError: If the specified `configfile` or the default `config.yaml` is not found.
         IOError: If there's an error reading the YAML file.
     """
+    # handle invalid keyword input
+    if not keywords:
+        raise ValueError("At least one keyword must be provided.")
+    if not all(isinstance(keyword, str) for keyword in keywords):
+        raise ValueError("All keywords must be strings.")
     if not isinstance(keywords, list):
         raise ValueError("Keywords must be provided as a list of strings.")
 

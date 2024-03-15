@@ -17,8 +17,16 @@ def mock_yaml_content():
 
 def test_filter_spis_invalid_keywords():
     """Pass in a dataype other than a list for the keywords"""
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError) as excinfo:
         filter_spis(keywords="linear", configfile="pyspi/config.yaml")
+    assert "Keywords must be provided as a list of strings" in str(excinfo.value)
+    # check for passing in an empty list
+    with pytest.raises(ValueError) as excinfo:
+        filter_spis(keywords=[], configfile="pyspi/config.yaml")
+    assert "At least one keyword must be provided" in str(excinfo.value)
+    with pytest.raises(ValueError) as excinfo:
+        filter_spis(keywords=[4], configfile="pyspi/config.yaml")
+    assert "All keywords must be strings" in str(excinfo.value)  
 
 def test_filter_spis_with_invalid_config():
     """Pass in an invalid/missing config file"""
