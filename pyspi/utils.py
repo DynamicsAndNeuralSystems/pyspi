@@ -1,4 +1,3 @@
-"""pyspi utility functions."""
 import numpy as np
 from scipy.stats import zscore
 import warnings
@@ -142,19 +141,52 @@ def check_optional_deps():
 
     return isAvailable
 
-def filter_spis(configfile, keywords, name="filtered_config"):
-    """Filter a YAML using a list of keywords, and save the reduced
-    set as a new YAML with a user-specified name in the current
-    directory."""
-    
-    # check that keywords is a list
+def filter_spis(keywords, output_name = None, configfile= None):
+    """
+    Filter a YAML using a list of keywords, and save the reduced set as a new
+    YAML with a user-specified name (or a random one if not provided) in the
+    current directory.
+
+    Args:
+        keywords (list): A list of keywords (as strings) to filter the YAML.
+        output_name (str, optional): The desired name for the output file. Defaults to a random name. 
+        configfile (str, optional): The path to the input YAML file. Defaults to the `config.yaml' in the pyspi dir. 
+
+    Raises:
+        ValueError: If `keywords` is not a list or if no SPIs match the keywords.
+        FileNotFoundError: If the specified `configfile` or the default `config.yaml` is not found.
+        IOError: If there's an error reading the YAML file.
+    """
+    # handle invalid keyword input
+    if not keywords:
+        raise ValueError("At least one keyword must be provided.")
+    if not all(isinstance(keyword, str) for keyword in keywords):
+        raise ValueError("All keywords must be strings.")
     if not isinstance(keywords, list):
-        raise TypeError("Keywords must be passed as a list.")
-    # load in the original YAML
-    with open(configfile) as f:
-        yf = yaml.load(f, Loader=yaml.FullLoader)
-    
-    # new dictonary to be converted to final YAML
+        raise ValueError("Keywords must be provided as a list of strings.")
+
+    # if no configfile and no keywords are provided, use the default 'config.yaml' in pyspi location
+    if configfile is None:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        default_config = os.path.join(script_dir, 'config.yaml')
+        if not os.path.isfile(default_config):
+            raise FileNotFoundError(f"Default 'config.yaml' file not found in {script_dir}.")
+        configfile = default_config
+        source_file_info = f"Default 'config.yaml' file from {script_dir} was used as the source file."
+    else:
+        source_file_info = f"User-specified config file '{configfile}' was used as the source file."
+
+    # load in user-specified yaml
+    try:
+        with open(configfile) as f:
+            yf = yaml.load(f, Loader=yaml.FullLoader)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Config file '{configfile}' not found.")
+    except Exception as e:
+        # handle all other exceptions
+        raise IOError(f"An error occurred while trying to read '{configfile}': {e}")
+
+    # new dictionary to be converted to final YAML
     filtered_subset = {}
     spis_found = 0
     
@@ -164,7 +196,11 @@ def filter_spis(configfile, keywords, name="filtered_config"):
             spi_labels = yf[module][spi].get('labels')
             if all(keyword in spi_labels for keyword in keywords):
                 module_spis[spi] = yf[module][spi]
-                spis_found += len(yf[module][spi].get('configs'))
+                if yf[module][spi].get('configs'):
+                    spis_found += len(yf[module][spi].get('configs'))
+                else:
+                    spis_found += 1
+    
         if module_spis:
             filtered_subset[module] = module_spis
     
@@ -172,16 +208,23 @@ def filter_spis(configfile, keywords, name="filtered_config"):
     if spis_found == 0:
         raise ValueError(f"0 SPIs were found with the specific keywords: {keywords}.")
     
+    # construct output file path
+    if output_name is None:
+        # use a unique name
+        output_name = "config_" + os.urandom(4).hex()
+
+    output_file = os.path.join(os.getcwd(), f"{output_name}.yaml")
+    
     # write to YAML
-    with open(f"pyspi/{name}.yaml", "w") as outfile:
+    with open(output_file, "w") as outfile:
         yaml.dump(filtered_subset, outfile, default_flow_style=False, sort_keys=False)
 
     # output relevant information
-      # output relevant information
     print(f"""\nOperation Summary:
 -----------------
+- {source_file_info}
 - Total SPIs Matched: {spis_found} SPI(s) were found with the specific keywords: {keywords}.
-- New File Created: A YAML file named `{name}.yaml` has been saved in the current directory: `pyspi/{name}.yaml'
+- New File Created: A YAML file named `{output_name}.yaml` has been saved in the current directory: `{output_file}'
 - Next Steps: To utilise the filtered set of SPIs, please initialise a new Calculator instance with the following command:
-`Calculator(configfile='pyspi/{name}.yaml')`
+`Calculator(configfile='{output_file}')`
 """)
