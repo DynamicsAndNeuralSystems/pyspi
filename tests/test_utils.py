@@ -1,17 +1,17 @@
-from pyspi.utils import spi_filter
+from pyspi.utils import filter_spis
 import pytest
 import yaml
 
 def test_filter_spis_invalid_keywords():
     """Pass in a dataype other than a list for the keywords"""
     with pytest.raises(TypeError) as excinfo:
-        spi_filter("pyspi/config.yaml", "linear")
+        filter_spis("pyspi/config.yaml", "linear")
     assert "Keywords must be passed as a list" in str(excinfo.value), "Keywords must be passed as list error not shown."
 
 def test_filter_spis_with_invalid_config():
     """Pass in an invalid/missing config file"""
     with pytest.raises(FileNotFoundError):
-        spi_filter("invalid_config.yaml", ["test"])
+        filter_spis("invalid_config.yaml", ["test"])
 
 def test_filter_spis_no_matches():
     """Pass in keywords that return no spis and check for ValuError"""
@@ -28,7 +28,7 @@ def test_filter_spis_no_matches():
         yaml.dump(mock_yaml_content, f)
     
     with pytest.raises(ValueError) as excinfo:
-        spi_filter("pyspi/mock_config2.yaml", keywords, name="mock_filtered_config")
+        filter_spis("pyspi/mock_config2.yaml", keywords, name="mock_filtered_config")
     assert "0 SPIs were found" in str(excinfo.value), "Incorrect error message returned when no keywords match found."
 
 def test_filter_spis_normal_operation():
@@ -52,7 +52,7 @@ def test_filter_spis_normal_operation():
         yaml.dump(mock_yaml_content, f)
 
     
-    spi_filter("pyspi/mock_config.yaml", keywords, name="mock_filtered_config")
+    filter_spis("pyspi/mock_config.yaml", keywords, name="mock_filtered_config")
 
     # load in the output
     with open("pyspi/mock_filtered_config.yaml", "r") as f:
