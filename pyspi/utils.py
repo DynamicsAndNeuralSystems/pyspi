@@ -185,5 +185,3 @@ def filter_spis(configfile, keywords, name="filtered_config"):
 - Next Steps: To utilise the filtered set of SPIs, please initialise a new Calculator instance with the following command:
 `Calculator(configfile='pyspi/{name}.yaml')`
 """)
-    
-    
