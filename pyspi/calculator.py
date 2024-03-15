@@ -95,7 +95,7 @@ class Calculator:
             for dep in missing_deps:
                 print(f"- {dep}")
 
-            print(f"\nAs a result, a total of {len(self._excluded_spis)} SPI(s) have been excluded:")
+            print(f"\nAs a result, a total of {len(self._excluded_spis)} SPI(s) have been excluded:\n")
 
             dependency_groups = {}
             for spi in self._excluded_spis:
@@ -105,17 +105,17 @@ class Calculator:
                     dependency_groups[dep].append(spi[0])
 
             for dep, spis in dependency_groups.items():
-                print(f"\nDependency: {dep} affects {len(spis)} SPI(s)")
+                print(f"\nDependency - {dep} - affects {len(spis)} SPI(s)")
                 print("Excluded SPIs:")
                 for spi in spis:
                     print(f"  - {spi}")
 
-            print(f"="*100)
-            print("\nOptions to Proceed:")
+            print(f"\n" + "="*100)
+            print("\nOPTIONS TO PROCEED:\n")
             print(f"  1) Install the following dependencies to access all SPIs: [{', '.join(missing_deps)}]")
             callable_name = "{Calculator/CalculatorFrame}"
             print(f"  2) Continue with a reduced set of {self.n_spis} SPIs by calling {callable_name}.compute(). \n")
-            print(f"="*100)
+            print(f"="*100 + "\n")
 
         if dataset is not None:
             self.load_dataset(dataset)
