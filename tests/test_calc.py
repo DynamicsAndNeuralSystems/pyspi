@@ -1,37 +1,51 @@
-from pyspi.calculator import Calculator, Data
+from pyspi.calculator import Calculator, Data, CalculatorFrame
 from pyspi.data import load_dataset
 import numpy as np 
 import os
-import yaml
 import pytest
 
 ############################# Test Calculator Object ########################
-def test_whether_calculator_instatiates():
+def test_whether_calculator_instantiates():
     """Basic test to check whether or not the calculator will instantiate."""
     calc = Calculator()
     assert isinstance(calc, Calculator), "Calculator failed to instantiate."
 
-def test_default_calculator_instantiates_with_correct_num_spis():
-    """Test whether the default calculator instantiates with the full SPI set"""
+def test_whether_calculator_computes():
+    # check whether the calculator runs
+    data = np.random.randn(3, 100)
+    calc = Calculator(dataset=data)
+    calc.compute()
+
+def test_whether_calc_instantiates_without_octave():
+    # set octave to false to emulate a system without octave (i.e., fails the check)
+    Calculator._optional_dependencies['octave'] = False
     calc = Calculator()
-    n_spis_actual = calc.n_spis
-    # get expected number of spis based on yaml
-    with open('pyspi/config.yaml', 'rb') as y:
-        yaml_file = yaml.full_load(y)
-    count = 0
-    for module in yaml_file.keys():
-        for base_spi in yaml_file[module].keys():
-            if yaml_file[module][base_spi] == None:
-                count += 1
-            else:
-                count += len(yaml_file[module][base_spi])
-    assert count == n_spis_actual, f"Number of SPIs loaded from the calculator ({n_spis_actual}) does not matched expected amount {count}"
+    is_initialised = isinstance(calc, Calculator)
+    Calculator._optional_dependencies = {}
+    assert is_initialised, "Calculator failed to instantiate without Octave."
+
+def test_whether_calc_instantiates_without_java():
+    # set java to false and all other deps to true
+    Calculator._optional_dependencies['java'] = False
+    Calculator._optional_dependencies['octave'] = True
+    calc = Calculator()
+    is_initialised = isinstance(calc, Calculator)
+    Calculator._optional_dependencies = {}
+    assert is_initialised, "Calculator failed to instantiate without Java."
+
+def test_whether_calc_instantiates_wo_optional_deps():
+    # set all optional deps to false
+    Calculator._optional_dependencies['java'] = False
+    Calculator._optional_dependencies['octave'] = False
+    calc = Calculator()
+    is_initialised = isinstance(calc, Calculator)
+    Calculator._optional_dependencies = {}
+    assert is_initialised, "Calculator failed to instantiate without optional dependencies."
 
 @pytest.mark.parametrize("subset", [
     'fabfour',
     'fast',
-    'sonnet',
-    'octaveless'
+    'sonnet'
 ])
 def test_whether_calculator_instantiates_with_subsets(subset):
     """Test whether the calculator instantiates with each of the available subsets"""
@@ -112,11 +126,10 @@ def test_data_object_process_and_observations(shape, n_procs_expected, n_obs_exp
 
 @pytest.mark.parametrize("yaml_filename", [
     'fabfour_config', 
-    'fast_config', 
-    'octaveless_config', 
+    'fast_config',
     'sonnet_config'])
 def test_whether_config_files_exist(yaml_filename):
-    """Check whether the config, fabfour, fast, octaveless, sonnet_config files exist"""
+    """Check whether the config, fabfour, fast, sonnet_config files exist"""
     expected_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'pyspi', f'{yaml_filename}.yaml'))
     assert os.path.isfile(expected_file), f"{yaml_filename}.yaml file was not found."
 
@@ -243,3 +256,44 @@ def test_load_invalid_dataset():
     with pytest.raises(NameError) as excinfo:
         dataset = load_dataset(name="test")
     assert "Unknown dataset: test" in str(excinfo.value), "Did not get expected error when loading invalid dataset."
+
+def test_calculator_frame_normal_operation():
+    """Test whether the calculator frame instantiates as expected."""
+    datasets = [np.random.randn(3, 100) for _ in range(3)]
+    dataset_names = ['d1', 'd2', 'd3']
+    dataset_labels = ['label1', 'label2', 'label3']
+
+    # create calculator frame
+    calc_frame = CalculatorFrame(name="MyCalcFrame", datasets=[Data(data=data, dim_order='ps') for data in datasets], 
+                                 names=dataset_names, labels=dataset_labels, subset='fabfour')
+    assert(isinstance(calc_frame, CalculatorFrame)), "CalculatorFrame failed to instantiate."
+
+    # check the properties of the frame
+    # check expected number of calcs in frame - 3 for 3 datasets
+    num_calcs_in_frame = calc_frame.n_calculators
+    assert num_calcs_in_frame == 3, f"Unexpected number ({num_calcs_in_frame}) of calculators in the frame. Expected 3."
+    
+    # get the frame name
+    assert calc_frame.name == "MyCalcFrame", "Calculator frame has unexpected name."
+
+    # ensure dataset names, labels passed along to inidividual calculators
+    for (index, calc) in enumerate(calc_frame.calculators[0]):
+        assert calc.name == dataset_names[index], "Indiviudal calculator has unexpected name."
+        assert calc.labels == dataset_labels[index], "Indiviudal calculator has unexpected label."
+    
+    # check that compute runs
+    calc_frame.compute()
+
+
+def test_correlation_frame_normal_operation():
+    """Test whether the correlation frame instantiates as expected.""" 
+    datasets = [np.random.randn(3, 100) for _ in range(3)]
+    dataset_names = ['d1', 'd2', 'd3']
+    dataset_labels = ['label1', 'label2', 'label3']
+    calc_frame = CalculatorFrame(name="MyCalcFrame", datasets=[Data(data=data, dim_order='ps') for data in datasets], 
+                                 names=dataset_names, labels=dataset_labels, subset='fabfour')
+    
+    calc_frame.compute()
+    cf = calc_frame.get_correlation_df()
+
+    assert not(cf[0].empty), "Correlation frame is empty."

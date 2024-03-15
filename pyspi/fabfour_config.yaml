@@ -2,20 +2,53 @@
 .statistics.basic:
   # Covariance
   Covariance:
-    - estimator: EmpiricalCovariance
+    labels:
+      - undirected
+      - nonlinear
+      - unisgned
+      - bivariate
+      - contemporaneous
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
 
   # Spearman's correlation coefficient
   SpearmanR:
-    - squared: True
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - contemporaneous
+    dependencies:
+    configs:
+      - squared: True
 
 # Directed information with a Gaussian density estimator
 .statistics.infotheory:
   DirectedInfo:
-    - estimator: gaussian
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+    dependencies:
+      - java
+    configs:
+      - estimator: gaussian
 
 # Power envelope correlation
 .statistics.misc:
   PowerEnvelopeCorrelation:
-    - orth: False
-      log: False
-      absolute: False
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - time-dependent
+    dependencies:
+    configs:
+      - orth: False
+        log: False
+        absolute: False

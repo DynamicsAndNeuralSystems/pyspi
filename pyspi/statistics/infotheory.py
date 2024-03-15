@@ -1,7 +1,10 @@
 import jpype as jp
 import numpy as np
 from pyspi import utils
-from oct2py import octave, Struct
+try:
+    from oct2py import octave, Struct
+except Exception:
+    pass
 import copy
 import os
 import logging
@@ -11,13 +14,13 @@ from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_b
 """
 Contains relevant dependence statistics from the information theory community.
 """
-if not jp.isJVMStarted():
-    jarloc = (
-        os.path.dirname(os.path.abspath(__file__)) + "/../lib/jidt/infodynamics.jar"
-    )
-    # Change to debug info
-    logging.debug(f"Starting JVM with java class {jarloc}.")
-    jp.startJVM(jp.getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarloc)
+# if not jp.isJVMStarted():
+#     jarloc = (
+#         os.path.dirname(os.path.abspath(__file__)) + "/../lib/jidt/infodynamics.jar"
+#     )
+#     # Change to debug info
+#     logging.debug(f"Starting JVM with java class {jarloc}.")
+#     jp.startJVM(jp.getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarloc)
 
 
 class JIDTBase(Unsigned):

@@ -2,78 +2,194 @@
 .statistics.basic:
   # Covariance
   Covariance:
-    - estimator: EmpiricalCovariance
+    labels:
+      - undirected
+      - nonlinear
+      - unsigned
+      - bivariate
+      - contemporaneous
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
 
 .statistics.distance:
   DynamicTimeWarping:
-    - global_constraint: itakura
+    labels:
+      - undirected
+      - nonlinear
+      - unsigned
+      - bivariate 
+      - time-dependent
+    dependencies:
+    configs:
+      - global_constraint: itakura
 
   Barycenter:
-  - mode: dtw
-    statistic: mean
+    labels:
+      - undirected
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+    dependencies:
+    configs:
+      - mode: dtw
+        statistic: mean
 
 .statistics.causal:
 
   # Additive noise model
   AdditiveNoiseModel:
+    labels:
+      - directed, 
+      - nonlinear
+      - unsigned
+      - bivariate
+      - contemporaneous
+    dependencies:
+    configs:
 
 
 # Information-theoretic statistics
 .statistics.infotheory:
   DirectedInfo: # No theiler window yet
-    - estimator: gaussian
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+    dependencies:
+      - java
+    configs:
+      - estimator: gaussian
 
   # Transfer entropy
   TransferEntropy:
-    - estimator: kraskov
-      prop_k: 4
-      auto_embed_method: MAX_CORR_AIS
-      k_search_max: 10
-      tau_search_max: 4
-      dyn_corr_excl: AUTO
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+    dependencies:
+      - java
+    configs:
+      - estimator: kraskov
+        prop_k: 4
+        auto_embed_method: MAX_CORR_AIS
+        k_search_max: 10
+        tau_search_max: 4
+        dyn_corr_excl: AUTO
   
   # Integrated information
   IntegratedInformation:
-    - phitype: 'star'
+    labels:
+      - undirected
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+    dependencies: 
+      - octave
+    configs:
+      - phitype: 'star'
 
 # statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
 .statistics.spectral:
 
   CoherenceMagnitude:
-    - fs: 1
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+    dependencies:
+    configs:
+      - fs: 1
 
   PhaseSlopeIndex:
-    - fmin: 0
-      fmax: 0.5
+    labels:
+      - directed
+      - linear/nonlinear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - time-frequency dependent
+    dependencies:
+    configs:
+      - fmin: 0
+        fmax: 0.5
 
   PhaseLagIndex:
-
-    - fs: 1
-      statistic: max
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+    dependencies:
+    configs:
+      - fs: 1
+        statistic: max
 
   SpectralGrangerCausality:
       # Non-parametric Granger causality (no VAR model)
-    - method: nonparametric
-      fmin: 0
-      fmax: 0.5
-      statistic: mean
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+    dependencies:
+    configs:
+      - method: nonparametric
+        fmin: 0
+        fmax: 0.5
+        statistic: mean
 
 # statistics that analyse in the wavlet-domain (only Mortlet wavelet's at the moment)
 .statistics.wavelet:
   PhaseSlopeIndex:
-    - fs: 1
+    labels:
+      - directed
+      - linear/nonlinear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - time-frequency dependent
+    dependencies:
+    configs:
+      - fs: 1
 
 .statistics.misc:
   # Cointegration
   Cointegration:
-    - method: aeg
-      statistic: tstat
-      autolag: aic
-      maxlag: 10
-      trend: ct
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - time-dependent
+    dependencies:
+    configs:
+      - method: aeg
+        statistic: tstat
+        autolag: aic
+        maxlag: 10
+        trend: ct
 
   # Power envelope correlation
   PowerEnvelopeCorrelation:
-    - orth: False
-      log: False
-      absolute: False
+    labels:
+      - undirected, 
+      - linear
+      - unsigned
+      - bivariate
+      - time-dependent
+    dependencies:
+    configs:
+      - orth: False
+        log: False
+        absolute: False

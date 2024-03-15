@@ -3,6 +3,8 @@ import numpy as np
 from scipy.stats import zscore
 import warnings
 import pandas as pd
+import os
+import yaml 
 
 def _contains_nan(a, nan_policy='propagate'):
     policies = ['propagate', 'raise', 'omit']
@@ -94,7 +96,7 @@ def standardise(a, dimension=0, df=1):
         numpy array
             standardised data
     """
-    # Avoid division by standard devitation if the process is constant.
+    # Avoid division by standard deviation if the process is constant.
     a_sd = a.std(axis=dimension, ddof=df)
 
     if np.isclose(a_sd, 0):
@@ -105,3 +107,81 @@ def standardise(a, dimension=0, df=1):
 def convert_mdf_to_ddf(df):
     ddf = pd.pivot_table(data=df.stack(dropna=False).reset_index(),index='Dataset',columns=['SPI-1', 'SPI-2'],dropna=False).T.droplevel(0)
     return ddf
+
+def is_jpype_jvm_available():
+    """Check whether a JVM is accessible via Jpype"""
+    try:
+        import jpype as jp
+        if not jp.isJVMStarted():
+            jarloc = (os.path.dirname(os.path.abspath(__file__)) + "/lib/jidt/infodynamics.jar")
+            # if JVM not started, start a session
+            print(f"Starting JVM with java class {jarloc}.")
+            jp.startJVM(jp.getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarloc)
+        return True
+    except Exception as e:
+        print(f"Jpype JVM not available: {e}")
+        return False
+
+def is_octave_available():
+    """Check whether octave is available"""
+    try:
+        from oct2py import Oct2Py
+        oc = Oct2Py()
+        oc.exit()
+        return True
+    except Exception as e:
+        print(f"Octave not available: {e}")
+        return False
+
+def check_optional_deps():
+    """Bundle all of the optional
+    dependency checks together."""
+    isAvailable = {}
+    isAvailable['octave'] = is_octave_available()
+    isAvailable['java'] = is_jpype_jvm_available()
+
+    return isAvailable
+
+def filter_spis(configfile, keywords, name="filtered_config"):
+    """Filter a YAML using a list of keywords, and save the reduced
+    set as a new YAML with a user-specified name in the current
+    directory."""
+    
+    # check that keywords is a list
+    if not isinstance(keywords, list):
+        raise TypeError("Keywords must be passed as a list.")
+    # load in the original YAML
+    with open(configfile) as f:
+        yf = yaml.load(f, Loader=yaml.FullLoader)
+    
+    # new dictonary to be converted to final YAML
+    filtered_subset = {}
+    spis_found = 0
+    
+    for module in yf:
+        module_spis = {}
+        for spi in yf[module]:
+            spi_labels = yf[module][spi].get('labels')
+            if all(keyword in spi_labels for keyword in keywords):
+                module_spis[spi] = yf[module][spi]
+                spis_found += len(yf[module][spi].get('configs'))
+        if module_spis:
+            filtered_subset[module] = module_spis
+    
+    # check that > 0 SPIs found
+    if spis_found == 0:
+        raise ValueError(f"0 SPIs were found with the specific keywords: {keywords}.")
+    
+    # write to YAML
+    with open(f"pyspi/{name}.yaml", "w") as outfile:
+        yaml.dump(filtered_subset, outfile, default_flow_style=False, sort_keys=False)
+
+    # output relevant information
+      # output relevant information
+    print(f"""\nOperation Summary:
+-----------------
+- Total SPIs Matched: {spis_found} SPI(s) were found with the specific keywords: {keywords}.
+- New File Created: A YAML file named `{name}.yaml` has been saved in the current directory: `pyspi/{name}.yaml'
+- Next Steps: To utilise the filtered set of SPIs, please initialise a new Calculator instance with the following command:
+`Calculator(configfile='pyspi/{name}.yaml')`
+""")
