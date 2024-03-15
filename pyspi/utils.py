@@ -142,7 +142,7 @@ def check_optional_deps():
 
     return isAvailable
 
-def spi_filter(configfile, keywords, name="filtered_config"):
+def filter_spis(configfile, keywords, name="filtered_config"):
     """Filter a YAML using a list of keywords, and save the reduced
     set as a new YAML with a user-specified name in the current
     directory."""

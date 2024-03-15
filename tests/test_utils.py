@@ -59,13 +59,3 @@ def test_filter_spis_normal_operation():
         actual_output = yaml.load(f, Loader=yaml.FullLoader)
     
     assert actual_output == expected_output_yaml, "Expected filtered YAML does not match actual filtered YAML."
-
-
-
-
-
-
-
-
-
-
