@@ -91,9 +91,12 @@ class Calculator:
             print("**** SPI Initialisation Warning ****")
             print("\nSome dependencies were not detected, which has led to the exclusion of certain SPIs:")
             print("\nMissing Dependencies:")
+
             for dep in missing_deps:
                 print(f"- {dep}")
+
             print(f"\nAs a result, {len(self._excluded_spis)} SPI(s) have been excluded:")
+
             dependency_groups = {}
             for spi in self._excluded_spis:
                 for dep in spi[1]: 
@@ -106,9 +109,11 @@ class Calculator:
                 print("Excluded SPIs:")
                 for spi in spis:
                     print(f"  - {spi}")
+
             print("\nOptions to Proceed:")
             print(f"  1) Install the following dependencies to access all SPIs: [{', '.join(missing_deps)}]")
-            print(f"  2) Continue with a reduced set of {self.n_spis} SPIs by running .compute() as usual. \n")
+            callable_name = "{Calculator/CalculatorFrame}"
+            print(f"  2) Continue with a reduced set of {self.n_spis} SPIs by calling {callable_name}.compute(). \n")
 
         if dataset is not None:
             self.load_dataset(dataset)
