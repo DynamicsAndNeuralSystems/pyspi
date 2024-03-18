@@ -33,7 +33,7 @@ jobs:
         run: |
           pytest -v ./tests/test_SPIs.py
   test-macOS:
-    runs-on: macos-latest
+    runs-on: macos-14
     strategy:
       matrix:
         python-version: ["3.8", "3.9"]
