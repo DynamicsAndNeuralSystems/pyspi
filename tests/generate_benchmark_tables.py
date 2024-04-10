@@ -36,5 +36,5 @@ for i in range(3):
 mpi_benchmarks = get_benchmark_tables(store_calcs)
 
 # save data 
-with open("tests/CML7_benchmark_tables2.pkl", "wb") as f:
+with open("tests/CML7_benchmark_tables_new.pkl", "wb") as f:
     dill.dump(mpi_benchmarks, f)
