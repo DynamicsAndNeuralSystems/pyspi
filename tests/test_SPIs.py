@@ -61,11 +61,9 @@ def test_mpi(est, est_ob, mpi_benchmark, mpi_new, spi_warning_logger):
     mean_table = mpi_benchmark['mean']
     std_table = mpi_benchmark['std']
 
-    # check std stable for zeros and impute with smallest non-zero value
-    min_nonzero_std = np.nanmin(std_table[std_table > 0])
-    std_table[std_table == 0] = min_nonzero_std
-     
-
+    # check std table for zeros and impute with smallest non-zero value
+    std_table = np.where(std_table == 0, 1e-10, std_table)
+    
     # check that the shapes are equal
     assert mean_table.shape == mpi_new.shape, f"SPI: {est}| Different table shapes. "
 
@@ -79,24 +77,26 @@ def test_mpi(est, est_ob, mpi_benchmark, mpi_new, spi_warning_logger):
     # get the module name for easy reference
     module_name = est_ob.__module__.split(".")[-1]
 
-    if (mpi_new == mpi_mean).all() == False:
+    if not np.allclose(mpi_new, mpi_mean):
         # tables are not equivalent, quantify the difference by z-scoring.
         diff = abs(mpi_new - mpi_mean)
         zscores = diff/std_table
+
         idxs_greater_than_thresh = np.argwhere(zscores > zscore_threshold)
+
         if len(idxs_greater_than_thresh) > 0:
-            sigs = list()
-            for idx in idxs_greater_than_thresh:
-                sigs.append(zscores[idx[0], idx[1]])
+            sigs = zscores[idxs_greater_than_thresh[:, 0], idxs_greater_than_thresh[:, 1]]
             # get the max
             max_z = max(sigs)
+
             # number of interactions
-            num_iteractions = (mpi_new.shape[0] * mpi_new.shape[1]) - mpi_new.shape[0]
+            num_interactions = mpi_new.size - mpi_new.shape[0]
             # count exceedances
             num_exceed = len(sigs)
+
             if isSymmetric:
                 # number of unique exceedences is half
-                num_exceed /= 2
-                num_iteractions /= 2
+                num_exceed //= 2
+                num_interactions //= 2
 
-            spi_warning_logger(est, module_name, max_z, int(num_exceed), int(num_iteractions))
+            spi_warning_logger(est, module_name, max_z, int(num_exceed), int(num_interactions))
