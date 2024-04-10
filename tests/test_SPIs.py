@@ -8,7 +8,7 @@ import numpy as np
 
 def load_benchmark_tables():
     """Function to load the mean and standard deviation tables for each MPI."""
-    table_fname = 'CML7_benchmark_tables.pkl'
+    table_fname = 'CML7_benchmark_tables_new.pkl'
     with open(f"tests/{table_fname}", "rb") as f:
         loaded_tables = dill.load(f)
     
