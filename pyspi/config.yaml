@@ -309,7 +309,8 @@
       - mode: softdtw
         statistic: max
         squared: True
-  
+
+  # Gromov-Wasserstain Distance
   GromovWasserstainTau:
     labels:
       - unsigned
