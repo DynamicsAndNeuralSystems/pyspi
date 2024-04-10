@@ -28,3 +28,8 @@ jobs:
       - name: Run data generation
         run: |
           python tests/generate_benchmark_tables.py
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-tables
+          path: tests/CML7_benchmark_tables_new.pkl
