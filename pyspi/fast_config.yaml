@@ -169,6 +169,17 @@
       - mode: euclidean
         statistic: max
         squared: True
+        
+  # Gromov-Wasserstain Distance
+  GromovWasserstainTau:
+    labels:
+      - unsigned
+      - distance
+      - unordered
+      - nonlinear
+      - undirected
+    dependencies:
+    configs:
 
 .statistics.causal:
   # Additive noise model

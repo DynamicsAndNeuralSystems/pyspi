@@ -1,14 +1,14 @@
-name: Unit Testing Pipeline
+name: Generate benchmarking dataset tables
 
 on: 
-  push:
+  workflow_dispatch:
 
 jobs:
   test-ubuntu:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9"]
+        python-version: ["3.9"]
     steps:
       - uses: actions/checkout@v4
       - name: Setup python ${{ matrix.python-version }}
@@ -25,10 +25,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install .
-      - name: Run pyspi calculator/utils unit tests
+      - name: Run data generation
         run: |
-          pytest -v ./tests/test_calc.py
-          pytest -v ./tests/test_utils.py
-      - name: Run pyspi SPI unit tests
-        run: |
-          pytest -v ./tests/test_SPIs.py
+          python tests/generate_benchmark_tables.py
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-tables
+          path: tests/CML7_benchmark_tables_new.pkl

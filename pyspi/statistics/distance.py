@@ -259,3 +259,62 @@ class Barycenter(Directed, Signed):
             data.barycenter[self._mode][(j, i)] = data.barycenter[self._mode][(i, j)]
 
         return self._statfn(bc)
+
+
+class GromovWasserstainTau(Undirected, Unsigned):
+    """Gromov-Wasserstain distance (GWTau)"""
+
+    name = "Gromov-Wasserstain Distance"
+    identifier = "gwtau"
+    labels = ["unsigned", "distance", "unordered", "nonlinear", "undirected"]
+
+    @staticmethod
+    def vec_geo_dist(x):
+        diffs = np.diff(x, axis=0)
+        distances = np.linalg.norm(diffs, axis=1)
+        return np.cumsum(distances)
+    
+    @staticmethod
+    def wass_sorted(x1, x2):
+        x1 = np.sort(x1)[::-1] # sort in descending order
+        x2 = np.sort(x2)[::-1] 
+
+        if len(x1) == len(x2):
+            res = np.sqrt(np.mean((x1 - x2) ** 2))
+        else:
+            N, M = len(x1), len(x2)
+            i_ratios = np.arange(1, N + 1) / N
+            j_ratios = np.arange(1, M + 1) / M
+        
+        
+            min_values = np.minimum.outer(i_ratios, j_ratios)
+            max_values = np.maximum.outer(i_ratios - 1/N, j_ratios - 1/M)
+        
+            lam = np.where(min_values > max_values, min_values - max_values, 0)
+        
+            diffs_squared = (x1[:, None] - x2) ** 2
+            my_sum = np.sum(lam * diffs_squared)
+        
+            res = np.sqrt(my_sum)
+
+        return res
+    
+    @staticmethod
+    def gwtau(xi, xj):
+        timei = np.arange(len(xi))
+        timej = np.arange(len(xj))
+        traji = np.column_stack([timei, xi])
+        trajj = np.column_stack([timej, xj])
+
+        vi = GromovWasserstainTau.vec_geo_dist(traji)
+        vj = GromovWasserstainTau.vec_geo_dist(trajj)
+        gw = GromovWasserstainTau.wass_sorted(vi, vj)
+    
+        return gw
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        x, y = data.to_numpy()[[i, j]]
+        # insert compute SPI code here (computes on x and y)
+        stat = self.gwtau(x, y)
+        return stat
