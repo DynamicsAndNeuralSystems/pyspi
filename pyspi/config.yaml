@@ -309,6 +309,16 @@
       - mode: softdtw
         statistic: max
         squared: True
+  
+  GromovWasserstainTau:
+    labels:
+      - unsigned
+      - distance
+      - unordered
+      - nonlinear
+      - undirected
+    dependencies:
+    configs:
 
 .statistics.causal:
   # Additive noise model
