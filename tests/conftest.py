@@ -30,7 +30,7 @@ def pytest_sessionfinish(session, exitstatus):
 
     # print problematic SPIs in table format
     if spi_warnings:
-        print(f"\nDetected {len(spi_warnings)} SPI(s) with outputs exceeding the specified 2 sigma threshold.\n")
+        print(f"\nDetected {len(spi_warnings)} SPI(s) with outputs exceeding the specified 1 sigma threshold.\n")
 
         # table header
         print(f"{'SPI':<25}{'Cat':<10}{'Max ZSc.':>10}{'# Exceed. Pairs':>20}{'Unq. Pairs':>15}")

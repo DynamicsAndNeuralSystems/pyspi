@@ -38,6 +38,7 @@ class JIDTBase(Unsigned):
     _TAU_SEARCH_MAX_PROP_NAME = "AUTO_EMBED_TAU_SEARCH_MAX"
     _BIAS_CORRECTION = "BIAS_CORRECTION"
     _NORMALISE = "NORMALISE"
+    _SEED = "NOISE_SEED"
 
     _base_class = jp.JPackage("infodynamics.measures.continuous")
 
@@ -104,6 +105,7 @@ class JIDTBase(Unsigned):
             calc.setProperty(self._NNK_PROP_NAME, str(self._prop_k))
 
         calc.setProperty(self._BIAS_CORRECTION, "false")
+        calc.setProperty(self._SEED, "42")
 
         return calc
 

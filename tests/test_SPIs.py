@@ -55,7 +55,7 @@ def pytest_generate_tests(metafunc):
 
 def test_mpi(est, est_ob, mpi_benchmark, mpi_new, spi_warning_logger):
     """Run the benchmarking tests."""
-    zscore_threshold = 2 # 2 sigma
+    zscore_threshold = 1 # 2 sigma
     
     # separate the the mean and std. dev tables for the benchmark
     mean_table = mpi_benchmark['mean']
