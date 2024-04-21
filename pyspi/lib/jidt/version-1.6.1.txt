@@ -7,5 +7,5 @@ Copyright (C) 2022-     Joseph T. Lizier, Ipek Özdemir, Pedro Mediano, Emanuele
 
 Version 1.6.1
 
-22/8/2023
+22/08/2023
 

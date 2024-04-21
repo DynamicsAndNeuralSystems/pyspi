@@ -44,7 +44,7 @@ def pytest_sessionfinish(session, exitstatus):
                 error = " **"
             print(f"{est+error:<25}{module_name:<10}{max_z:>10.4g}{num_exceed:>15}{num_iteractions:>20}")
     else:
-        print("\n\nNo SPIs exceeded the sigma threshold.\n")
+        print("\n\nNo SPIs exceeded the 1 sigma threshold.\n")
 
     print(footer_line)
     print(padded_footer)

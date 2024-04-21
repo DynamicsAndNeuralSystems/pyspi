@@ -5,7 +5,7 @@ Copyright (C) 2016-2019 Joseph T. Lizier, Ipek Özdemir and Pedro Mediano
 Copyright (C) 2019-2022 Joseph T. Lizier, Ipek Özdemir, Pedro Mediano, Emanuele Crosato, Sooraj Sekhar and Oscar Huaigu Xu
 Copyright (C) 2022-     Joseph T. Lizier, Ipek Özdemir, Pedro Mediano, Emanuele Crosato, Sooraj Sekhar, Oscar Huaigu Xu and David Shorten
 
-Version @VERSION@ (see release notes below)
+Version 1.6.1 (see release notes below)
 
 JIDT provides a standalone, open source code Java implementation (usable in Matlab, Octave and Python) of information-theoretic measures of distributed computation in complex systems: i.e. information storage, transfer and modification.
 
@@ -282,5 +282,5 @@ First distribution
 
 =============
 
-Joseph T. Lizier, @DATE@
+Joseph T. Lizier, 22/08/2023
 
