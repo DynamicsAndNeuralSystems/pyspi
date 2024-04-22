@@ -125,6 +125,7 @@ class ConvergentCrossMapping(Directed, Signed):
                         target=targname,
                         libSizes=lib_sizes,
                         sample=100,
+                        seed=42,
                     )
                     ccmf[_i, _j] = ccm_df.iloc[:, 1].values[: (nlibs + 1)]
                     ccmf[_j, _i] = ccm_df.iloc[:, 2].values[: (nlibs + 1)]
