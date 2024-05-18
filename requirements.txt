@@ -10,7 +10,7 @@ tqdm
 nitime
 hyppo
 pyEDM==1.15.2.0
-jpype
+jpype1
 sktime
 dill
 spectral-connectivity
