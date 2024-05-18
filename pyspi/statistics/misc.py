@@ -1,5 +1,6 @@
 import warnings
 import numpy as np
+import inspect
 
 from statsmodels.tsa import stattools
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
@@ -114,8 +115,12 @@ class LinearModel(Directed, Unsigned):
     def bivariate(self, data, i=None, j=None):
         z = data.to_numpy()
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            mdl = self._model().fit(z[i], np.ravel(z[j]))
+             warnings.simplefilter("ignore")
+             model_params = inspect.signature(self._model).parameters
+             if "random_state" in model_params:
+                 mdl = self._model(random_state=42).fit(z[i], np.ravel(z[j]))
+             else:
+                 mdl = self._model().fit(z[i], np.ravel(z[j]))
         y_predict = mdl.predict(z[i])
         return mean_squared_error(y_predict, np.ravel(z[j]))
 
