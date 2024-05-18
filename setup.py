@@ -23,7 +23,7 @@ install_requires = [
         'dill',
         'spectral-connectivity',
         'torch',
-        'cdt',
+        'cdt==0.5.23',
         'oct2py',
         'tslearn',
         'mne==0.23.0',
