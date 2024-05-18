@@ -1,6 +1,6 @@
 pytest
 h5py
-scikit-learn==1.3.0
+scikit-learn==1.2.0
 scipy
 numpy
 pandas
