@@ -14,7 +14,6 @@ class AdditiveNoiseModel(Directed, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        # set the global seed so that ANM() uses it for GP
         np.random.seed(42) 
         z = data.to_numpy()
         return ANM().anm_score(z[i], z[j])
