@@ -177,7 +177,7 @@ class Data:
             data = data[:, :n_observations]
 
         if self.normalise:
-            print("Attempting to normalise the dataset...\n")
+            print("Normalising the dataset...\n")
             data = zscore(data, axis=1, nan_policy="omit", ddof=1)
             try:
                 data = detrend(data, axis=1)
