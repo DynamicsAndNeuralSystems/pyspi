@@ -16,7 +16,7 @@ class AdditiveNoiseModel(Directed, Unsigned):
     
     # monkey-patch the anm_score function, see cdt PR #155
     def corrected_anm_score(self, x, y):
-        gp = GaussianProcessRegressor().fit(x, y)
+        gp = GaussianProcessRegressor(random_state=42).fit(x, y)
         y_predict = gp.predict(x).reshape(-1, 1) 
         indepscore = normalized_hsic(y_predict - y, x)
         return indepscore
@@ -25,7 +25,6 @@ class AdditiveNoiseModel(Directed, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        np.random.seed(42)
         z = data.to_numpy()
         return ANM().anm_score(z[i], z[j])
 
