@@ -38,10 +38,12 @@ class Calculator:
     _optional_dependencies = None
 
     def __init__(
-        self, dataset=None, name=None, labels=None, subset="all", configfile=None
+        self, dataset=None, name=None, labels=None, subset="all", configfile=None,
+        normalise=True
     ):
         self._spis = {}
         self._excluded_spis = list()
+        self._normalise = normalise
 
         # Define configfile by subset if it was not specified
         if configfile is None:
@@ -252,7 +254,7 @@ class Calculator:
                 New dataset to attach to calculator.
         """
         if not isinstance(dataset, Data):
-            self._dataset = Data(Data.convert_to_numpy(dataset))
+            self._dataset = Data(Data.convert_to_numpy(dataset), normalise=self._normalise)
         else:
             self._dataset = dataset
 
