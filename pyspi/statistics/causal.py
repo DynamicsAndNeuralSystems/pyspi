@@ -14,6 +14,7 @@ class AdditiveNoiseModel(Directed, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        np.random.seed(42)
         z = data.to_numpy()
         return ANM().anm_score(z[i], z[j])
 
