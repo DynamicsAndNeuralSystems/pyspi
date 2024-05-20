@@ -295,7 +295,7 @@ class Calculator:
                 warnings.warn(f'Caught {type(err)} for SPI "{spi}": {err}')
                 self._table[spi] = np.NaN
         pbar.close()
-
+        
     def _rmmin(self):
         """Iterate through all spis and remove the minimum (fixes absolute value errors when correlating)"""
         for spi in self.spis:
