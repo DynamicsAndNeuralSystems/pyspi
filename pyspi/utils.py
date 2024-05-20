@@ -264,11 +264,11 @@ def inspect_calc_results(calc):
         print(single_line_60)
         for i, spi in enumerate(spi_results['NaNs']):
             print(f"{i+1}. {spi}")
-        print(single_line_60)
+        print(single_line_60 + "\n")
     if spi_results['Partial NaNs']:
         print(f"\n[{len(spi_results['Partial NaNs'])}] SPIs which produced partial NaN outputs:")
         print(single_line_60)
         for i, spi in enumerate(spi_results['Partial NaNs']):
             print(f"{i+1}. {spi}")
-        print(single_line_60)
+        print(single_line_60 + "\n")
     

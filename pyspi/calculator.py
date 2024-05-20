@@ -8,7 +8,7 @@ from scipy import stats
 
 # From this package
 from .data import Data
-from .utils import convert_mdf_to_ddf, check_optional_deps
+from .utils import convert_mdf_to_ddf, check_optional_deps, inspect_calc_results
 
 
 class Calculator:
@@ -295,6 +295,7 @@ class Calculator:
                 warnings.warn(f'Caught {type(err)} for SPI "{spi}": {err}')
                 self._table[spi] = np.NaN
         pbar.close()
+        inspect_calc_results(self)
         
     def _rmmin(self):
         """Iterate through all spis and remove the minimum (fixes absolute value errors when correlating)"""
