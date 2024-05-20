@@ -34,7 +34,7 @@ class Calculator:
             A pre-configured subset of SPIs to use. Options are "all", "fast", "sonnet", or "fabfour", defaults to "all".
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
-        normalise (nool, optional):
+        normalise (bool, optional):
             Normalise the dataset along the time axis before computing SPIs, defaults to True.
     """
     _optional_dependencies = None

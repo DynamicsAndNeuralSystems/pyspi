@@ -183,6 +183,8 @@ class Data:
                 data = detrend(data, axis=1)
             except ValueError as err:
                 print(f"Could not detrend data: {err}")
+        else:
+            print("Skipping normalisation of the dataset...\n")
 
         nans = np.isnan(data)
         if nans.any():
