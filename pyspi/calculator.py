@@ -8,7 +8,7 @@ from scipy import stats
 
 # From this package
 from .data import Data
-from .utils import convert_mdf_to_ddf, check_optional_deps
+from .utils import convert_mdf_to_ddf, check_optional_deps, inspect_calc_results
 
 
 class Calculator:
@@ -34,14 +34,18 @@ class Calculator:
             A pre-configured subset of SPIs to use. Options are "all", "fast", "sonnet", or "fabfour", defaults to "all".
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
+        normalise (bool, optional):
+            Normalise the dataset along the time axis before computing SPIs, defaults to True.
     """
     _optional_dependencies = None
 
     def __init__(
-        self, dataset=None, name=None, labels=None, subset="all", configfile=None
+        self, dataset=None, name=None, labels=None, subset="all", configfile=None,
+        normalise=True
     ):
         self._spis = {}
         self._excluded_spis = list()
+        self._normalise = normalise
 
         # Define configfile by subset if it was not specified
         if configfile is None:
@@ -252,7 +256,7 @@ class Calculator:
                 New dataset to attach to calculator.
         """
         if not isinstance(dataset, Data):
-            self._dataset = Data(Data.convert_to_numpy(dataset))
+            self._dataset = Data(Data.convert_to_numpy(dataset), normalise=self._normalise)
         else:
             self._dataset = dataset
 
@@ -293,7 +297,9 @@ class Calculator:
                 warnings.warn(f'Caught {type(err)} for SPI "{spi}": {err}')
                 self._table[spi] = np.NaN
         pbar.close()
-
+        print(f"\nCalculation complete. Time taken: {pbar.format_dict['elapsed']:.4f}s")
+        inspect_calc_results(self)
+        
     def _rmmin(self):
         """Iterate through all spis and remove the minimum (fixes absolute value errors when correlating)"""
         for spi in self.spis:

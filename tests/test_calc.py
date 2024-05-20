@@ -284,7 +284,6 @@ def test_calculator_frame_normal_operation():
     # check that compute runs
     calc_frame.compute()
 
-
 def test_correlation_frame_normal_operation():
     """Test whether the correlation frame instantiates as expected.""" 
     datasets = [np.random.randn(3, 100) for _ in range(3)]
@@ -297,3 +296,13 @@ def test_correlation_frame_normal_operation():
     cf = calc_frame.get_correlation_df()
 
     assert not(cf[0].empty), "Correlation frame is empty."
+
+def test_normalisation_flag():
+    """Test whether the normalisation flag when instantiating
+    the calculator works as expected."""
+    data = np.random.randn(3, 100)
+    calc = Calculator(dataset=data, normalise=False)
+    calc_loaded_dataset = calc.dataset.to_numpy().squeeze()
+    
+    assert (calc_loaded_dataset == data).all(), f"Calculator normalise=False not producing the correct output." 
+    

@@ -228,3 +228,47 @@ def filter_spis(keywords, output_name = None, configfile= None):
 - Next Steps: To utilise the filtered set of SPIs, please initialise a new Calculator instance with the following command:
 `Calculator(configfile='{output_file}')`
 """)
+
+def inspect_calc_results(calc):
+    total_num_spis = calc.n_spis
+    num_procs = calc.dataset.n_processes
+    spi_results = dict({'Successful': list(), 'NaNs': list(), 'Partial NaNs': list()})
+    for key in calc.spis.keys():
+        if calc.table[key].isna().all().all():
+            spi_results['NaNs'].append(key)
+        elif calc.table[key].isnull().values.sum() > num_procs:
+            # off-diagonal NaNs
+            spi_results['Partial NaNs'].append(key)
+        else:
+            # returned numeric values (i.e., not NaN)
+            spi_results['Successful'].append(key)
+    
+    # print summary
+    double_line_60 = "="*60
+    single_line_60 = "-"*60
+    print("\nSPI Computation Results Summary")
+    print(double_line_60)
+    print(f"\nTotal number of SPIs attempted: {total_num_spis}")
+    print(f"Number of SPIs successfully computed: {len(spi_results['Successful'])} ({len(spi_results['Successful']) / total_num_spis * 100:.2f}%)")
+    print(single_line_60)
+    print("Category       | Count | Percentage")
+    print(single_line_60)
+    for category, spis in spi_results.items():
+        count = len(spis)
+        percentage = (count / total_num_spis) * 100
+        print(f"{category:14} | {count:5} | {percentage:6.2f}%")
+    print(single_line_60)
+
+    if spi_results['NaNs']:
+        print(f"\n[{len(spi_results['NaNs'])}] SPI(s) produced NaN outputs:")
+        print(single_line_60)
+        for i, spi in enumerate(spi_results['NaNs']):
+            print(f"{i+1}. {spi}")
+        print(single_line_60 + "\n")
+    if spi_results['Partial NaNs']:
+        print(f"\n[{len(spi_results['Partial NaNs'])}] SPIs which produced partial NaN outputs:")
+        print(single_line_60)
+        for i, spi in enumerate(spi_results['Partial NaNs']):
+            print(f"{i+1}. {spi}")
+        print(single_line_60 + "\n")
+    

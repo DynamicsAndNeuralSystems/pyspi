@@ -177,11 +177,14 @@ class Data:
             data = data[:, :n_observations]
 
         if self.normalise:
+            print("Normalising the dataset...\n")
             data = zscore(data, axis=1, nan_policy="omit", ddof=1)
             try:
                 data = detrend(data, axis=1)
             except ValueError as err:
                 print(f"Could not detrend data: {err}")
+        else:
+            print("Skipping normalisation of the dataset...\n")
 
         nans = np.isnan(data)
         if nans.any():

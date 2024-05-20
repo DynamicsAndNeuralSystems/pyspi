@@ -13,6 +13,6 @@ currently being supported with security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.4   | :white_check_mark: |
+| 1.1.0   | :white_check_mark: |
 
 

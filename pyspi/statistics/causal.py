@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from cdt.causality.pairwise import ANM, CDS, IGCI, RECI
 import pyEDM
+from sklearn.gaussian_process import GaussianProcessRegressor
+from cdt.causality.pairwise.ANM import normalized_hsic
 
 from pyspi.base import Directed, Unsigned, Signed, parse_bivariate, parse_multivariate
 
@@ -11,6 +13,15 @@ class AdditiveNoiseModel(Directed, Unsigned):
     name = "Additive noise model"
     identifier = "anm"
     labels = ["unsigned", "causal", "unordered", "linear", "directed"]
+    
+    # monkey-patch the anm_score function, see cdt PR #155
+    def corrected_anm_score(self, x, y):
+        gp = GaussianProcessRegressor(random_state=42).fit(x, y)
+        y_predict = gp.predict(x).reshape(-1, 1) 
+        indepscore = normalized_hsic(y_predict - y, x)
+        return indepscore
+    
+    ANM.anm_score = corrected_anm_score
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):

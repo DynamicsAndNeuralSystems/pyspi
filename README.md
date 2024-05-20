@@ -14,7 +14,7 @@
     <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" height="20"/></a>
     <a href="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml"><img src="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml/badge.svg" height="20"/></a>
     <a href="https://twitter.com/compTimeSeries"><img src="https://img.shields.io/twitter/url/https/twitter.com/compTimeSeries.svg?style=social&label=Follow%20%40compTimeSeries" height="20"/></a><br>
-    <a href="https://www.python.org"><img src="https://img.shields.io/badge/Python-3.8%20|%203.9-3776AB.svg?style=flat&logo=python&logoColor=white" alt="Python 3.8 | 3.9"></a>
+    <a href="https://www.python.org"><img src="https://img.shields.io/badge/Python-3.8%20|%203.9%20|%203.10%20|%203.11%20|%203.12-3776AB.svg?style=flat&logo=python&logoColor=white" alt="Python 3.8 | 3.9 | 3.10 | 3.11 | 3.12"></a>
 </p>
 
 _pyspi_ is a comprehensive python library for computing statistics of pairwise interactions (SPIs) from multivariate time-series (MTS) data.
@@ -74,21 +74,6 @@ Once you have installed _pyspi_, you can learn how to apply the package by check
 
 ### Advanced Usage
 For advanced users, we offer several additional guides in the [full documentation](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage) on how you can distribute your _pyspi_ jobs across PBS clusters, as well as how you can construct your own subsets of SPIs. 
-Click one of the following dropdowns for more information:
-
-<details closed>
-<summary>Distributing pyspi calculations</summary>
-<p>If you have access to a PBS cluster and are processing MTS with many processes (or are analyzing many MTS), then you may find the <a href="https://github.com/DynamicsAndNeuralSystems/pyspi-distribute"><em>pyspi distribute</em></a> repository helpful.
-In the full <a href="https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/distributing-calculations-on-a-cluster">documentation </a>, we provide a comprehensive guide on how you can distribute <em>pyspi</em> calculations on a PBS cluster, along with the necessary scripts and commands to get started!</p>
-</details>
-
-<details closed>
-<summary>Reduced subsets</summary>
-<p>If your dataset is large (containing many processes and/or observations), you can use a pre-configured set of reduced statistics or create your own subsets.
-Follow the guide in the <a href="https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/using-a-reduced-spi-set">documentation </a> to learn how you can create your own reduced subsets.</p>
-</details>
-
-
 
 ## SPI Descriptions 📋
 To access a table with a high-level overview of the _pyspi_ library of SPIs, including their associated identifiers, see the [table of SPIs](https://time-series-features.gitbook.io/pyspi/spis/table-of-spis) in the full documentation.
@@ -167,4 +152,3 @@ Below are some of the leading contributors to _pyspi_:
 
 ## License 🧾
 _pyspi_ is released under the [GNU General Public License](https://www.gnu.org/licenses/gpl-3.0).
-
