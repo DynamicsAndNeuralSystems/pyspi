@@ -34,6 +34,8 @@ class Calculator:
             A pre-configured subset of SPIs to use. Options are "all", "fast", "sonnet", or "fabfour", defaults to "all".
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
+        normalise (nool, optional):
+            Normalise the dataset along the time axis before computing SPIs, defaults to True.
     """
     _optional_dependencies = None
 
@@ -295,6 +297,7 @@ class Calculator:
                 warnings.warn(f'Caught {type(err)} for SPI "{spi}": {err}')
                 self._table[spi] = np.NaN
         pbar.close()
+        print(f"\nCalculation complete. Time taken: {pbar.format_dict["elapsed"]:.4f}s")
         inspect_calc_results(self)
         
     def _rmmin(self):
