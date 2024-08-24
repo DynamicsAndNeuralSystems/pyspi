@@ -11,7 +11,7 @@ install_requires = [
         'h5py',
         'scikit-learn',
         'scipy',
-        'numpy',
+        'numpy<2.0.0',
         'pandas',
         'statsmodels',
         'pyyaml',

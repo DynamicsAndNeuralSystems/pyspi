@@ -98,7 +98,7 @@ def test_pass_dataset_with_nan_into_calculator(nan_loc, expected_output):
     """Check whether ValueError is raised when a dataset containing a NaN is passed into the calculator object"""
     base_dataset = np.random.randn(5, 100)
     for loc in nan_loc:
-        base_dataset[loc, 0] = np.NaN
+        base_dataset[loc, 0] = np.nan
     with pytest.raises(ValueError) as excinfo:
         calc = Calculator(dataset=base_dataset)
     assert f"non-numerics (NaNs) in processes: {expected_output}" in str(excinfo), "NaNs not detected in dataset when loading into Calculator!"
