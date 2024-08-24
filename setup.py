@@ -28,7 +28,8 @@ install_requires = [
         'oct2py',
         'tslearn',
         'mne==0.23.0',
-        'seaborn'
+        'seaborn',
+        'future'
 ]
 
 testing_extras = [

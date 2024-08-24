@@ -20,3 +20,4 @@ oct2py
 tslearn
 mne==0.23.0
 seaborn
+future
