@@ -300,10 +300,10 @@ class MutualInfo(JIDTBase, Undirected):
             return np.nan
 
 
-class TimeLaggedMutualInfo(MutualInfo):
+class TimeLaggedMutualInfo(JIDTBase, Directed):
     name = "Time-lagged mutual information"
     identifier = "tlmi"
-    labels = ["unsigned", "infotheory", "temporal", "undirected"]
+    labels = ["unsigned", "infotheory", "temporal", "directed"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
