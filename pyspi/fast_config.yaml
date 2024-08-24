@@ -322,7 +322,7 @@
   # Mutual information
   TimeLaggedMutualInfo:
     labels:
-      - directed
+      - undirected
       - nonlinear
       - unsigned
       - bivariate
