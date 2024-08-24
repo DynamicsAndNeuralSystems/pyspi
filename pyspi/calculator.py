@@ -266,7 +266,7 @@ class Calculator:
         self._table = pd.DataFrame(
             data=np.full(
                 (self.dataset.n_processes, self.n_spis * self.dataset.n_processes),
-                np.NaN,
+                np.nan,
             ),
             columns=columns,
             index=self._dataset.procnames,
@@ -289,13 +289,13 @@ class Calculator:
                 S = self._spis[spi].multivariate(self.dataset)
 
                 # Ensure the diagonal is NaN (sometimes set within the functions)
-                np.fill_diagonal(S, np.NaN)
+                np.fill_diagonal(S, np.nan)
 
                 # Save results
                 self._table[spi] = S
             except Exception as err:
                 warnings.warn(f'Caught {type(err)} for SPI "{spi}": {err}')
-                self._table[spi] = np.NaN
+                self._table[spi] = np.nan
         pbar.close()
         print(f"\nCalculation complete. Time taken: {pbar.format_dict['elapsed']:.4f}s")
         inspect_calc_results(self)

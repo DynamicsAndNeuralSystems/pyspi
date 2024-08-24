@@ -297,7 +297,7 @@ class MutualInfo(JIDTBase, Undirected):
             logging.warning(
                 "MI calcs failed. Maybe check input data for Cholesky factorisation?"
             )
-            return np.NaN
+            return np.nan
 
 
 class TimeLaggedMutualInfo(MutualInfo):
@@ -331,7 +331,7 @@ class TimeLaggedMutualInfo(MutualInfo):
             logging.warning(
                 "Time-lagged MI calcs failed. Maybe check input data for Cholesky factorisation?"
             )
-            return np.NaN
+            return np.nan
 
 
 class TransferEntropy(JIDTBase, Directed):
@@ -405,7 +405,7 @@ class TransferEntropy(JIDTBase, Directed):
             return self._calc.computeAverageLocalOfObservations()
         except Exception as err:
             logging.warning(f"TE calcs failed: {err}.")
-            return np.NaN
+            return np.nan
 
 
 class CrossmapEntropy(JIDTBase, Directed):

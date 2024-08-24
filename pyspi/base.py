@@ -86,7 +86,7 @@ class Directed:
         """ Compute the dependency statistics for the entire multivariate dataset
         """
         A = np.empty((data.n_processes,data.n_processes))
-        A[:] = np.NaN
+        A[:] = np.nan
 
         for j in range(data.n_processes):
             for i in [ii for ii in range(data.n_processes) if ii != j]:
