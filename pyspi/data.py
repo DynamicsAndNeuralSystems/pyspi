@@ -40,6 +40,8 @@ class Data:
             2-dimensional array with raw data, defaults to None.
         dim_order (str, optional):
             Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, defaults to 'ps'.
+        detrend (bool, optional):
+            If True, data is detrended along the time dimension, defaults to True. 
         normalise (bool, optional):
             If True, data is z-scored (normalised) along the time dimension, defaults to True.
         name (str, optional):
@@ -57,6 +59,7 @@ class Data:
         self,
         data=None,
         dim_order="ps",
+        detrend=True,
         normalise=True,
         name=None,
         procnames=None,
@@ -64,6 +67,7 @@ class Data:
         n_observations=None,
     ):
         self.normalise = normalise
+        self.detrend = detrend
         if data is not None:
             dat = self.convert_to_numpy(data)
             self.set_data(
@@ -176,13 +180,16 @@ class Data:
         if n_observations is not None:
             data = data[:, :n_observations]
 
-        if self.normalise:
-            print("Normalising the dataset...\n")
-            data = zscore(data, axis=1, nan_policy="omit", ddof=1)
+        if self.detrend:
+            print("De-trending the dataset...\n")
             try:
                 data = detrend(data, axis=1)
             except ValueError as err:
                 print(f"Could not detrend data: {err}")
+
+        if self.normalise:
+            print("Normalising the dataset...\n")
+            data = zscore(data, axis=1, nan_policy="omit", ddof=1)
         else:
             print("Skipping normalisation of the dataset...\n")
 

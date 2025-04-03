@@ -34,6 +34,8 @@ class Calculator:
             A pre-configured subset of SPIs to use. Options are "all", "fast", "sonnet", or "fabfour", defaults to "all".
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
+        detrend (bool, optional):
+            Detrend the dataset along the time axis before computing SPIs, defaults to True.
         normalise (bool, optional):
             Normalise the dataset along the time axis before computing SPIs, defaults to True.
     """
@@ -41,11 +43,12 @@ class Calculator:
 
     def __init__(
         self, dataset=None, name=None, labels=None, subset="all", configfile=None,
-        normalise=True
+        detrend=True, normalise=True
     ):
         self._spis = {}
         self._excluded_spis = list()
         self._normalise = normalise
+        self._detrend = detrend
 
         # Define configfile by subset if it was not specified
         if configfile is None:
@@ -256,7 +259,7 @@ class Calculator:
                 New dataset to attach to calculator.
         """
         if not isinstance(dataset, Data):
-            self._dataset = Data(Data.convert_to_numpy(dataset), normalise=self._normalise)
+            self._dataset = Data(Data.convert_to_numpy(dataset), normalise=self._normalise, detrend=self._detrend)
         else:
             self._dataset = dataset
 
@@ -505,7 +508,7 @@ class CalculatorFrame:
             self.add_calculator(calc)
 
     def init_from_yaml(
-        self, document, normalise=True, n_processes=None, n_observations=None, **kwargs
+        self, document, detrend=True, normalise=True, n_processes=None, n_observations=None, **kwargs
     ):
         datasets = []
         names = []
@@ -524,6 +527,7 @@ class CalculatorFrame:
                             data=file,
                             dim_order=dim_order,
                             name=names[-1],
+                            detrend=detrend,
                             normalise=normalise,
                             n_processes=n_processes,
                             n_observations=n_observations,
