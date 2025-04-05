@@ -29,12 +29,12 @@ store_calcs = list()
 
 for i in range(75):
     np.random.seed(42)
-    calc = Calculator(dataset=dataset)
+    calc = Calculator(dataset=dataset, normalise=False)
     calc.compute()
     store_calcs.append(calc)
 
 mpi_benchmarks = get_benchmark_tables(store_calcs)
 
 # save data 
-with open("tests/CML7_benchmark_tables_new.pkl", "wb") as f:
+with open("tests/CML7_benchmark_tables_no_norm.pkl", "wb") as f:
     dill.dump(mpi_benchmarks, f)
