@@ -18,7 +18,7 @@ install_requires = [
         'tqdm',
         'nitime',
         'hyppo',
-        'pyEDM==1.15.2.0',
+        'pyEDM',
         'jpype1',
         'sktime',
         'dill',

@@ -186,6 +186,8 @@ class Data:
                 data = detrend(data, axis=1)
             except ValueError as err:
                 print(f"Could not detrend data: {err}")
+        else:
+            print("Skipping detrending of the dataset...\n")
 
         if self.normalise:
             print("Normalising the dataset...\n")
