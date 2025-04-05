@@ -29,7 +29,8 @@ install_requires = [
         'tslearn',
         'mne==0.23.0',
         'seaborn',
-        'future'
+        'future',
+        'colorama'
 ]
 
 testing_extras = [

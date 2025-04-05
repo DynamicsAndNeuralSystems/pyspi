@@ -5,6 +5,8 @@ import copy, yaml, importlib, time, warnings, os
 from tqdm import tqdm
 from collections import Counter
 from scipy import stats
+from colorama import init, Fore
+init(autoreset=True)
 
 # From this package
 from .data import Data
@@ -92,11 +94,11 @@ class Calculator:
         self._labels = labels
 
         print(f"="*100)
-        print(f"Number of SPIs: {len(self.spis)}\n")
+        print(Fore.GREEN + f"{len(self.spis)} SPI(s) were successfully initialised.\n")
         if len(self._excluded_spis) > 0:
             missing_deps = [dep for dep, is_met in self._optional_dependencies.items() if not is_met]
-            print("**** SPI Initialisation Warning ****")
-            print("\nSome dependencies were not detected, which has led to the exclusion of certain SPIs:")
+            print(Fore.YELLOW + "**** SPI Initialisation Warning ****")
+            print(Fore.YELLOW + "\nSome dependencies were not detected, which has led to the exclusion of certain SPIs:")
             print("\nMissing Dependencies:")
 
             for dep in missing_deps:
@@ -118,7 +120,7 @@ class Calculator:
                     print(f"  - {spi}")
 
             print(f"\n" + "="*100)
-            print("\nOPTIONS TO PROCEED:\n")
+            print(Fore.YELLOW + "\nOPTIONS TO PROCEED:\n")
             print(f"  1) Install the following dependencies to access all SPIs: [{', '.join(missing_deps)}]")
             callable_name = "{Calculator/CalculatorFrame}"
             print(f"  2) Continue with a reduced set of {self.n_spis} SPIs by calling {callable_name}.compute(). \n")

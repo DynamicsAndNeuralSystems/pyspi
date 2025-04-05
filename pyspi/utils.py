@@ -4,6 +4,8 @@ import warnings
 import pandas as pd
 import os
 import yaml 
+from colorama import Fore, init
+init(autoreset=True)
 
 def _contains_nan(a, nan_policy='propagate'):
     policies = ['propagate', 'raise', 'omit']

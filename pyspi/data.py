@@ -7,10 +7,11 @@ import pandas as pd
 from pyspi import utils
 from scipy.stats import zscore
 from scipy.signal import detrend
+from colorama import init, Fore
 import os
 
 VERBOSE = False
-
+init(autoreset=True) # automatically reset coloured outputs
 
 class Data:
     """Store data for dependency analysis.
@@ -181,19 +182,19 @@ class Data:
             data = data[:, :n_observations]
 
         if self.detrend:
-            print("De-trending the dataset...\n")
+            print(Fore.GREEN + "[1/2] De-trending the dataset...")
             try:
                 data = detrend(data, axis=1)
             except ValueError as err:
                 print(f"Could not detrend data: {err}")
         else:
-            print("Skipping detrending of the dataset...\n")
+            print(Fore.RED + "[1/2] Skipping detrending of the dataset...")
 
         if self.normalise:
-            print("Normalising the dataset...\n")
+            print(Fore.GREEN + "[2/2] Normalising (z-scoring) the dataset...\n")
             data = zscore(data, axis=1, nan_policy="omit", ddof=1)
         else:
-            print("Skipping normalisation of the dataset...\n")
+            print(Fore.RED + "[2/2] Skipping normalisation of the dataset...\n")
 
         nans = np.isnan(data)
         if nans.any():
