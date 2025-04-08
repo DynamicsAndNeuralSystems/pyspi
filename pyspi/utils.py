@@ -232,6 +232,10 @@ def filter_spis(keywords, output_name = None, configfile= None):
 """)
 
 def inspect_calc_results(calc):
+    """
+    Display a summary of the computed SPI results, including counts of successful computations, 
+    outputs with NaNs, and partially computed results.
+    """
     total_num_spis = calc.n_spis
     num_procs = calc.dataset.n_processes
     spi_results = dict({'Successful': list(), 'NaNs': list(), 'Partial NaNs': list()})

@@ -302,7 +302,7 @@ class Calculator:
                 warnings.warn(f'Caught {type(err)} for SPI "{spi}": {err}')
                 self._table[spi] = np.nan
         pbar.close()
-        print(f"\nCalculation complete. Time taken: {pbar.format_dict['elapsed']:.4f}s")
+        print(Fore.GREEN + f"\nCalculation complete. Time taken: {pbar.format_dict['elapsed']:.4f}s")
         inspect_calc_results(self)
         
     def _rmmin(self):
