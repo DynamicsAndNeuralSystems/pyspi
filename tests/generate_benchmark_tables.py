@@ -27,7 +27,7 @@ dataset = np.load("pyspi/data/cml7.npy").T
 # create list to store the calculator objects
 store_calcs = list()
 
-for i in range(75):
+for i in range(5):
     np.random.seed(42)
     calc = Calculator(dataset=dataset, normalise=False)
     calc.compute()
@@ -36,5 +36,5 @@ for i in range(75):
 mpi_benchmarks = get_benchmark_tables(store_calcs)
 
 # save data 
-with open("tests/CML7_benchmark_tables_no_norm.pkl", "wb") as f:
+with open("tests/CML7_benchmark_tables_new.pkl", "wb") as f:
     dill.dump(mpi_benchmarks, f)
