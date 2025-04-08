@@ -27,9 +27,9 @@ dataset = np.load("pyspi/data/cml7.npy").T
 # create list to store the calculator objects
 store_calcs = list()
 
-for i in range(75):
+for i in range(5):
     np.random.seed(42)
-    calc = Calculator(dataset=dataset)
+    calc = Calculator(dataset=dataset, detrend=False, normalise=False)
     calc.compute()
     store_calcs.append(calc)
 
