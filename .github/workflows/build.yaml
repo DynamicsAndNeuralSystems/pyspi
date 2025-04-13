@@ -2,7 +2,7 @@ name: Build
 
 on: 
   workflow_dispatch
-  pull_request:
+  pull_request
 
 jobs:
   build_wheels:
