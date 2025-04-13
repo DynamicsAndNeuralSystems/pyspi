@@ -7,10 +7,11 @@ import pandas as pd
 from pyspi import utils
 from scipy.stats import zscore
 from scipy.signal import detrend
+from colorama import init, Fore
 import os
 
 VERBOSE = False
-
+init(autoreset=True) # automatically reset coloured outputs
 
 class Data:
     """Store data for dependency analysis.
@@ -40,8 +41,11 @@ class Data:
             2-dimensional array with raw data, defaults to None.
         dim_order (str, optional):
             Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, defaults to 'ps'.
+        detrend (bool, optional):
+            If True, detrend the dataset along the time axis before normalising (if enabled), defaults to True.
         normalise (bool, optional):
-            If True, data is z-scored (normalised) along the time dimension, defaults to True.
+            If True, z-score normalise the dataset along the time axis before computing SPIs, defaults to True.
+            Detrending (if enabled) is always applied before normalisation.
         name (str, optional):
             Name of the dataset
         procnames (list, optional):
@@ -57,6 +61,7 @@ class Data:
         self,
         data=None,
         dim_order="ps",
+        detrend=True,
         normalise=True,
         name=None,
         procnames=None,
@@ -64,6 +69,7 @@ class Data:
         n_observations=None,
     ):
         self.normalise = normalise
+        self.detrend = detrend
         if data is not None:
             dat = self.convert_to_numpy(data)
             self.set_data(
@@ -176,15 +182,20 @@ class Data:
         if n_observations is not None:
             data = data[:, :n_observations]
 
-        if self.normalise:
-            print("Normalising the dataset...\n")
-            data = zscore(data, axis=1, nan_policy="omit", ddof=1)
+        if self.detrend:
+            print(Fore.GREEN + "[1/2] De-trending the dataset...")
             try:
                 data = detrend(data, axis=1)
             except ValueError as err:
                 print(f"Could not detrend data: {err}")
         else:
-            print("Skipping normalisation of the dataset...\n")
+            print(Fore.RED + "[1/2] Skipping detrending of the dataset...")
+
+        if self.normalise:
+            print(Fore.GREEN + "[2/2] Normalising (z-scoring) the dataset...\n")
+            data = zscore(data, axis=1, nan_policy="omit", ddof=1)
+        else:
+            print(Fore.RED + "[2/2] Skipping normalisation of the dataset...\n")
 
         nans = np.isnan(data)
         if nans.any():

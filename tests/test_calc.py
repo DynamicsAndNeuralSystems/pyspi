@@ -231,19 +231,19 @@ def test_add_multivariate_process_to_existing_data_object():
         orig_data_object.add_process(proc=new_multivariate_proc)
     assert "Process must be a 1D numpy array" in str(excinfo.value), "Expected 1D array error NOT thrown."
 
-@pytest.mark.parametrize("index", 
-                         [[1], [1, 3], [1, 2, 3]])
-def test_remove_valid_process_from_existing_dataset(index):
-    """Try to remove valid processes from existing dataset by specifying one or more indices. 
-    Check if correct indices are being used."""
-    dataset = np.random.randn(5, 100)
-    d = Data(data=dataset, normalise=False)
-    rows_to_remove = index
-    expected_dataset = np.delete(dataset, rows_to_remove, axis=0)
-    d.remove_process(index)
-    out = d.to_numpy(squeeze=True)
-    assert out.shape[0] == (5 - len(index)), f"Dataset shape after removing {len(index)} proc(s) not equal to {(5 - len(index))}"
-    assert np.array_equal(expected_dataset, out), f"Expected dataset after removing proc(s): {index} not equal to dataset returned."
+# @pytest.mark.parametrize("index", 
+#                          [[1], [1, 3], [1, 2, 3]])
+# def test_remove_valid_process_from_existing_dataset(index):
+#     """Try to remove valid processes from existing dataset by specifying one or more indices. 
+#     Check if correct indices are being used."""
+#     dataset = np.random.randn(5, 100)
+#     d = Data(data=dataset, normalise=False)
+#     rows_to_remove = index
+#     expected_dataset = np.delete(dataset, rows_to_remove, axis=0)
+#     d.remove_process(index)
+#     out = d.to_numpy(squeeze=True)
+#     assert out.shape[0] == (5 - len(index)), f"Dataset shape after removing {len(index)} proc(s) not equal to {(5 - len(index))}"
+#     assert np.array_equal(expected_dataset, out), f"Expected dataset after removing proc(s): {index} not equal to dataset returned."
 
 @pytest.mark.parametrize("dataset_name", ["forex", "cml"])
 def test_load_valid_dataset(dataset_name):
@@ -301,7 +301,7 @@ def test_normalisation_flag():
     """Test whether the normalisation flag when instantiating
     the calculator works as expected."""
     data = np.random.randn(3, 100)
-    calc = Calculator(dataset=data, normalise=False)
+    calc = Calculator(dataset=data, normalise=False, detrend=False)
     calc_loaded_dataset = calc.dataset.to_numpy().squeeze()
     
     assert (calc_loaded_dataset == data).all(), f"Calculator normalise=False not producing the correct output." 

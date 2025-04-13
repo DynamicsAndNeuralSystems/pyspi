@@ -5,6 +5,8 @@ import copy, yaml, importlib, time, warnings, os
 from tqdm import tqdm
 from collections import Counter
 from scipy import stats
+from colorama import init, Fore
+init(autoreset=True)
 
 # From this package
 from .data import Data
@@ -34,18 +36,22 @@ class Calculator:
             A pre-configured subset of SPIs to use. Options are "all", "fast", "sonnet", or "fabfour", defaults to "all".
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
+        detrend (bool, optional):
+            If True, detrend the dataset along the time axis before normalising (if enabled), defaults to True.
         normalise (bool, optional):
-            Normalise the dataset along the time axis before computing SPIs, defaults to True.
+            If True, z-score normalise the dataset along the time axis before computing SPIs, defaults to True.
+            Detrending (if enabled) is always applied before normalisation.
     """
     _optional_dependencies = None
 
     def __init__(
         self, dataset=None, name=None, labels=None, subset="all", configfile=None,
-        normalise=True
+        detrend=True, normalise=True
     ):
         self._spis = {}
         self._excluded_spis = list()
         self._normalise = normalise
+        self._detrend = detrend
 
         # Define configfile by subset if it was not specified
         if configfile is None:
@@ -89,11 +95,11 @@ class Calculator:
         self._labels = labels
 
         print(f"="*100)
-        print(f"Number of SPIs: {len(self.spis)}\n")
+        print(Fore.GREEN + f"{len(self.spis)} SPI(s) were successfully initialised.\n")
         if len(self._excluded_spis) > 0:
             missing_deps = [dep for dep, is_met in self._optional_dependencies.items() if not is_met]
-            print("**** SPI Initialisation Warning ****")
-            print("\nSome dependencies were not detected, which has led to the exclusion of certain SPIs:")
+            print(Fore.YELLOW + "**** SPI Initialisation Warning ****")
+            print(Fore.YELLOW + "\nSome dependencies were not detected, which has led to the exclusion of certain SPIs:")
             print("\nMissing Dependencies:")
 
             for dep in missing_deps:
@@ -115,7 +121,7 @@ class Calculator:
                     print(f"  - {spi}")
 
             print(f"\n" + "="*100)
-            print("\nOPTIONS TO PROCEED:\n")
+            print(Fore.YELLOW + "\nOPTIONS TO PROCEED:\n")
             print(f"  1) Install the following dependencies to access all SPIs: [{', '.join(missing_deps)}]")
             callable_name = "{Calculator/CalculatorFrame}"
             print(f"  2) Continue with a reduced set of {self.n_spis} SPIs by calling {callable_name}.compute(). \n")
@@ -256,7 +262,7 @@ class Calculator:
                 New dataset to attach to calculator.
         """
         if not isinstance(dataset, Data):
-            self._dataset = Data(Data.convert_to_numpy(dataset), normalise=self._normalise)
+            self._dataset = Data(Data.convert_to_numpy(dataset), normalise=self._normalise, detrend=self._detrend)
         else:
             self._dataset = dataset
 
@@ -297,7 +303,7 @@ class Calculator:
                 warnings.warn(f'Caught {type(err)} for SPI "{spi}": {err}')
                 self._table[spi] = np.nan
         pbar.close()
-        print(f"\nCalculation complete. Time taken: {pbar.format_dict['elapsed']:.4f}s")
+        print(Fore.GREEN + f"\nCalculation complete. Time taken: {pbar.format_dict['elapsed']:.4f}s")
         inspect_calc_results(self)
         
     def _rmmin(self):
@@ -505,7 +511,7 @@ class CalculatorFrame:
             self.add_calculator(calc)
 
     def init_from_yaml(
-        self, document, normalise=True, n_processes=None, n_observations=None, **kwargs
+        self, document, detrend=True, normalise=True, n_processes=None, n_observations=None, **kwargs
     ):
         datasets = []
         names = []
@@ -524,6 +530,7 @@ class CalculatorFrame:
                             data=file,
                             dim_order=dim_order,
                             name=names[-1],
+                            detrend=detrend,
                             normalise=normalise,
                             n_processes=n_processes,
                             n_observations=n_observations,

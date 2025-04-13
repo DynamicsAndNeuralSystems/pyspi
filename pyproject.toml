@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyspi"
-version = "1.1.1"
+version = "2.0.0"
 authors = [
     { name ="Oliver M. Cliff", email="oliver.m.cliff@gmail.com"},
 ]

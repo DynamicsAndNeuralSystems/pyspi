@@ -24,7 +24,7 @@ def compute_new_tables():
     benchmark_dataset = load_benchmark_dataset()
     # Compute new tables on the benchmark dataset
     np.random.seed(42)
-    calc = Calculator(dataset=benchmark_dataset)
+    calc = Calculator(dataset=benchmark_dataset, normalise=True, detrend=True)
     calc.compute()
     table_dict = dict()
     for spi in calc.spis:
