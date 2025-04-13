@@ -42,9 +42,10 @@ class Data:
         dim_order (str, optional):
             Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, defaults to 'ps'.
         detrend (bool, optional):
-            If True, data is detrended along the time dimension, defaults to True. 
+            If True, detrend the dataset along the time axis before normalising (if enabled), defaults to True.
         normalise (bool, optional):
-            If True, data is z-scored (normalised) along the time dimension, defaults to True.
+            If True, z-score normalise the dataset along the time axis before computing SPIs, defaults to True.
+            Detrending (if enabled) is always applied before normalisation.
         name (str, optional):
             Name of the dataset
         procnames (list, optional):

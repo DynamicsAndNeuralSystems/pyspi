@@ -37,9 +37,10 @@ class Calculator:
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
         detrend (bool, optional):
-            Detrend the dataset along the time axis before computing SPIs, defaults to True.
+            If True, detrend the dataset along the time axis before normalising (if enabled), defaults to True.
         normalise (bool, optional):
-            Normalise the dataset along the time axis before computing SPIs, defaults to True.
+            If True, z-score normalise the dataset along the time axis before computing SPIs, defaults to True.
+            Detrending (if enabled) is always applied before normalisation.
     """
     _optional_dependencies = None
 
