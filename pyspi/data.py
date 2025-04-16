@@ -182,19 +182,19 @@ class Data:
             data = data[:, :n_observations]
 
         if self.detrend:
-            print(Fore.GREEN + "[1/2] De-trending the dataset...")
+            print(Fore.GREEN + "[1/2] Detrending time series in the dataset...")
             try:
                 data = detrend(data, axis=1)
             except ValueError as err:
                 print(f"Could not detrend data: {err}")
         else:
-            print(Fore.RED + "[1/2] Skipping detrending of the dataset...")
+            print(Fore.RED + "[1/2] Skipping detrending of time series in the dataset...")
 
         if self.normalise:
-            print(Fore.GREEN + "[2/2] Normalising (z-scoring) the dataset...\n")
+            print(Fore.GREEN + "[2/2] Normalising (z-scoring) each time series in the dataset...\n")
             data = zscore(data, axis=1, nan_policy="omit", ddof=1)
         else:
-            print(Fore.RED + "[2/2] Skipping normalisation of the dataset...\n")
+            print(Fore.RED + "[2/2] Skipping normalisation of time series in the dataset...\n")
 
         nans = np.isnan(data)
         if nans.any():
