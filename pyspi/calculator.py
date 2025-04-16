@@ -37,16 +37,15 @@ class Calculator:
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
         detrend (bool, optional):
-            If True, detrend the dataset along the time axis before normalising (if enabled), defaults to True.
+            If True, detrend each time series individually along the time axis before normalising (if enabled), defaults to False.
         normalise (bool, optional):
-            If True, z-score normalise the dataset along the time axis before computing SPIs, defaults to True.
-            Detrending (if enabled) is always applied before normalisation.
+            If True, z-score normalise each time series in the MTS dataset individually along the time axis before computing SPIs, defaults to True.
     """
     _optional_dependencies = None
 
     def __init__(
         self, dataset=None, name=None, labels=None, subset="all", configfile=None,
-        detrend=True, normalise=True
+        detrend=False, normalise=True
     ):
         self._spis = {}
         self._excluded_spis = list()
@@ -511,7 +510,7 @@ class CalculatorFrame:
             self.add_calculator(calc)
 
     def init_from_yaml(
-        self, document, detrend=True, normalise=True, n_processes=None, n_observations=None, **kwargs
+        self, document, detrend=False, normalise=True, n_processes=None, n_observations=None, **kwargs
     ):
         datasets = []
         names = []

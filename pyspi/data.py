@@ -42,10 +42,9 @@ class Data:
         dim_order (str, optional):
             Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, defaults to 'ps'.
         detrend (bool, optional):
-            If True, detrend the dataset along the time axis before normalising (if enabled), defaults to True.
+            If True, detrend each time series individually along the time axis before normalising (if enabled), defaults to False.
         normalise (bool, optional):
-            If True, z-score normalise the dataset along the time axis before computing SPIs, defaults to True.
-            Detrending (if enabled) is always applied before normalisation.
+            If True, z-score normalise each time series in the MTS dataset individually along the time axis before computing SPIs, defaults to True.
         name (str, optional):
             Name of the dataset
         procnames (list, optional):
@@ -61,7 +60,7 @@ class Data:
         self,
         data=None,
         dim_order="ps",
-        detrend=True,
+        detrend=False,
         normalise=True,
         name=None,
         procnames=None,
