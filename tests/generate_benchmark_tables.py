@@ -29,7 +29,7 @@ store_calcs = list()
 
 for i in range(10):
     np.random.seed(42)
-    calc = Calculator(dataset=dataset, detrend=True, normalise=True)
+    calc = Calculator(dataset=dataset)
     calc.compute()
     store_calcs.append(calc)
 
