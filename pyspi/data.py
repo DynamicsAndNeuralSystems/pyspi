@@ -42,17 +42,17 @@ class Data:
         dim_order (str, optional):
             Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, defaults to 'ps'.
         detrend (bool, optional):
-            If True, detrend each time series individually along the time axis before normalising (if enabled), defaults to False.
+            If True, detrend each time series individually along the time axis before normalising (if enabled), default=False.
         normalise (bool, optional):
-            If True, z-score normalise each time series in the MTS dataset individually along the time axis before computing SPIs, defaults to True.
+            If True, z-score normalise each time series in the MTS dataset individually along the time axis before computing SPIs, default=True.
         name (str, optional):
             Name of the dataset
         procnames (list, optional):
-            List of process names with length the number of processes, defaults to None.
+            List of process names with length the number of processes, default=None.
         n_processes (int, optional):
-            Truncates data to this many processes, defaults to None.
+            Truncates data to this many processes, default=None.
         n_observations (int, optional):
-            Truncates data to this many observations, defaults to None.
+            Truncates data to this many observations, default=None.
 
     """
 
