@@ -38,22 +38,21 @@ class Data:
 
     Args:
         data (array_like, optional):
-            2-dimensional array with raw data, defaults to None.
+            2-dimensional array with raw data, default=None.
         dim_order (str, optional):
-            Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, defaults to 'ps'.
+            Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, default='ps'.
         detrend (bool, optional):
-            If True, detrend the dataset along the time axis before normalising (if enabled), defaults to True.
+            If True, detrend each time series in the MTS dataset individually along the time axis, default=False.
         normalise (bool, optional):
-            If True, z-score normalise the dataset along the time axis before computing SPIs, defaults to True.
-            Detrending (if enabled) is always applied before normalisation.
+            If True, z-score normalise each time series in the MTS dataset individually along the time axis, default=True.
         name (str, optional):
             Name of the dataset
         procnames (list, optional):
-            List of process names with length the number of processes, defaults to None.
+            List of process names with length the number of processes, default=None.
         n_processes (int, optional):
-            Truncates data to this many processes, defaults to None.
+            Truncates data to this many processes, default=None.
         n_observations (int, optional):
-            Truncates data to this many observations, defaults to None.
+            Truncates data to this many observations, default=None.
 
     """
 
@@ -61,7 +60,7 @@ class Data:
         self,
         data=None,
         dim_order="ps",
-        detrend=True,
+        detrend=False,
         normalise=True,
         name=None,
         procnames=None,
@@ -183,19 +182,19 @@ class Data:
             data = data[:, :n_observations]
 
         if self.detrend:
-            print(Fore.GREEN + "[1/2] De-trending the dataset...")
+            print(Fore.GREEN + "[1/2] Detrending time series in the dataset...")
             try:
                 data = detrend(data, axis=1)
             except ValueError as err:
                 print(f"Could not detrend data: {err}")
         else:
-            print(Fore.RED + "[1/2] Skipping detrending of the dataset...")
+            print(Fore.RED + "[1/2] Skipping detrending of time series in the dataset...")
 
         if self.normalise:
-            print(Fore.GREEN + "[2/2] Normalising (z-scoring) the dataset...\n")
+            print(Fore.GREEN + "[2/2] Normalising (z-scoring) each time series in the dataset...\n")
             data = zscore(data, axis=1, nan_policy="omit", ddof=1)
         else:
-            print(Fore.RED + "[2/2] Skipping normalisation of the dataset...\n")
+            print(Fore.RED + "[2/2] Skipping normalisation of time series in the dataset...\n")
 
         nans = np.isnan(data)
         if nans.any():

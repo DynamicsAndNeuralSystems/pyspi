@@ -16,7 +16,7 @@ from .utils import convert_mdf_to_ddf, check_optional_deps, inspect_calc_results
 class Calculator:
     """Compute all pairwise interactions.
 
-    The calculator takes in a multivariate time-series dataset, computes and stores all pairwise interactions for the dataset.
+    The calculator takes in a multivariate time-series dataset (MTS), computes and stores all pairwise interactions for the dataset.
     It uses a YAML configuration file that can be modified in order to compute a reduced set of pairwise methods.
 
     Example:
@@ -27,26 +27,25 @@ class Calculator:
 
     Args:
         dataset (:class:`~pyspi.data.Data`, array_like, optional):
-            The multivariate time series of M processes and T observations, defaults to None.
+            The multivariate time series of M processes and T observations, default=None.
         name (str, optional):
-            The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances, defaults to None.
+            The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances, default=None.
         labels (array_like, optional):
-            Any set of strings by which you want to label the calculator. This can be useful later for classification purposes, defaults to None.
+            Any set of strings by which you want to label the calculator. This can be useful later for classification purposes, default=None.
         subset (str, optional):
-            A pre-configured subset of SPIs to use. Options are "all", "fast", "sonnet", or "fabfour", defaults to "all".
+            A pre-configured subset of SPIs to use. Options are "all", "fast", "sonnet", or "fabfour", default="all".
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
         detrend (bool, optional):
-            If True, detrend the dataset along the time axis before normalising (if enabled), defaults to True.
+            If True, detrend each time series in the MTS dataset individually along the time axis, default=False.
         normalise (bool, optional):
-            If True, z-score normalise the dataset along the time axis before computing SPIs, defaults to True.
-            Detrending (if enabled) is always applied before normalisation.
+            If True, z-score normalise each time series in the MTS dataset individually along the time axis, default=True.
     """
     _optional_dependencies = None
 
     def __init__(
         self, dataset=None, name=None, labels=None, subset="all", configfile=None,
-        detrend=True, normalise=True
+        detrend=False, normalise=True
     ):
         self._spis = {}
         self._excluded_spis = list()
@@ -511,7 +510,7 @@ class CalculatorFrame:
             self.add_calculator(calc)
 
     def init_from_yaml(
-        self, document, detrend=True, normalise=True, n_processes=None, n_observations=None, **kwargs
+        self, document, detrend=False, normalise=True, n_processes=None, n_observations=None, **kwargs
     ):
         datasets = []
         names = []
