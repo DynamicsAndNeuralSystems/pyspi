@@ -38,13 +38,13 @@ class Data:
 
     Args:
         data (array_like, optional):
-            2-dimensional array with raw data, defaults to None.
+            2-dimensional array with raw data, default=None.
         dim_order (str, optional):
-            Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, defaults to 'ps'.
+            Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, default='ps'.
         detrend (bool, optional):
-            If True, detrend each time series individually along the time axis before normalising (if enabled), default=False.
+            If True, detrend each time series in the MTS dataset individually along the time axis, default=False.
         normalise (bool, optional):
-            If True, z-score normalise each time series in the MTS dataset individually along the time axis before computing SPIs, default=True.
+            If True, z-score normalise each time series in the MTS dataset individually along the time axis, default=True.
         name (str, optional):
             Name of the dataset
         procnames (list, optional):

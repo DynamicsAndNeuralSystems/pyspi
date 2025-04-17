@@ -16,7 +16,7 @@ from .utils import convert_mdf_to_ddf, check_optional_deps, inspect_calc_results
 class Calculator:
     """Compute all pairwise interactions.
 
-    The calculator takes in a multivariate time-series dataset, computes and stores all pairwise interactions for the dataset.
+    The calculator takes in a multivariate time-series dataset (MTS), computes and stores all pairwise interactions for the dataset.
     It uses a YAML configuration file that can be modified in order to compute a reduced set of pairwise methods.
 
     Example:
@@ -37,9 +37,9 @@ class Calculator:
         configfile (str, optional):
             The location of the YAML configuration file for a user-defined subset. See :ref:`Using a reduced SPI set`, defaults to :code:`'</path/to/pyspi>/pyspi/config.yaml'`
         detrend (bool, optional):
-            If True, detrend each time series in the MTS dataset individually along the time axis before normalising (if enabled), default=False.
+            If True, detrend each time series in the MTS dataset individually along the time axis, default=False.
         normalise (bool, optional):
-            If True, z-score normalise each time series in the MTS dataset individually along the time axis before computing SPIs, default=True.
+            If True, z-score normalise each time series in the MTS dataset individually along the time axis, default=True.
     """
     _optional_dependencies = None
 
