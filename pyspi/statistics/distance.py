@@ -237,6 +237,8 @@ class Barycenter(Directed, Signed):
             self._statfn = lambda x: np.nanmean(self._preproc(x))
         elif statistic == "max":
             self._statfn = lambda x: np.nanmax(self._preproc(x))
+        elif statistic == "max_time":
+            self._statfn = lambda x: np.argmax(self._preproc(x))
         else:
             raise NameError(f"Unknown statistic: {statistic}")
 

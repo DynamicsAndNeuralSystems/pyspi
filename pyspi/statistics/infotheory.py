@@ -180,7 +180,7 @@ class JIDTBase(Unsigned):
 
         key = self._getkey()
         if key not in data.joint_entropy:
-            data.joint_entropy[key] = np.full((data.n_processes, data.n_processes), -np.infty)
+            data.joint_entropy[key] = np.full((data.n_processes, data.n_processes), -np.inf)
 
         if data.joint_entropy[key][i, j] == -np.inf:
             x, y = data.to_numpy()[[i, j]]
