@@ -1,122 +1,132 @@
+# Refactored code for base.py for creating a unified public API for the PySPI library.
+
+# Importing the libraries
+import os
+import pandas as pd
 import numpy as np
-import copy
-import warnings
+
 from skbase import BaseObject
 from pyspi.data import Data
+import warnings, copy
 
-# ------------------------------
-# Decorators for input parsing
-# ------------------------------
-def parse_univariate(func):
-    def wrapper(self, data, i=None, inplace=True):
-        if not isinstance(data, Data):
-            data = Data(data=data)
-        elif not inplace:
-            data = copy.deepcopy(data)
-        if i is None:
-            i = 0 if data.n_processes == 1 else ValueError("Please specify `i`.")
-        return func(self, data, i=i)
-    return wrapper
-
-def parse_bivariate(func):
-    def wrapper(self, data, data2=None, i=None, j=None, inplace=True):
-        if not isinstance(data, Data):
-            if data2 is None:
-                raise TypeError("Provide either a Data object or two 1D arrays.")
-            data = Data()
-            data.add_process(data)
-            data.add_process(data2)
-        elif not inplace:
-            data = copy.deepcopy(data)
-        if i is None or j is None:
-            if data.n_processes == 2:
-                i, j = 0, 1
-            else:
-                raise ValueError("Indices i and j must be provided.")
-        return func(self, data, i=i, j=j)
-    return wrapper
-
-def parse_multivariate(func):
-    def wrapper(self, data, inplace=True):
-        if not isinstance(data, Data):
-            data = Data()
-            for p in data:
-                data.add_process(p)
-        elif not inplace:
-            data = copy.deepcopy(data)
-        return func(self, data)
-    return wrapper
-
-# ------------------------------
-# Base SPI class
-# ------------------------------
+# Base Class
 class BaseSPI(BaseObject):
+    """
+    Base class for PySPI. This class provides a unified public API for the PySPI library.
+    """
     _tags = {
         "capability-multivariate": True,
+        "capability-univariate": True,
         "capability-bivariate": True,
-        "capability-unequal_length": False,
-        "python_dependencies": "sktime"
+        "python_dependencies": "sktime",
+        "issigned": True,
+        "identifier": "base",
+        "name": "BasePySPI",
     }
 
-    def _spi(self, data: Data, i: int = 0) -> float:
-        raise NotImplementedError("Subclass must implement _spi.")
+    # so now using these tags, we dont need to separately handle the parsing of
+    # univariate, bivariate and multivariate data
+    # better add a deprecation warning here
 
-    @parse_univariate
+    # defining the methods
+    
+    def _spi(self, data: Data, i: int = 0) -> float:
+        raise NotImplementedError("Subclass must implement this methos")
+    
     def spi(self, data, i=None):
+        if not isinstance(data, Data):
+            data = Data(data)
+        if i is None:
+            i = 0
         return self._spi(data, i)
 
     def _spi_mat(self, data: Data, data2: Data = None, i: int = None, j: int = None) -> np.ndarray:
-        raise NotImplementedError("Subclass must implement _spi_mat.")
-
-    def spi_mat(self, data, data2=None, i=None, j=None):
+        raise NotImplementedError("Subclass must implement this method")
+    
+    def spi_mat(self, data: Data, data2: Data = None, i=None, j=None):
+        # logic yet to be implemented
         if not isinstance(data, Data):
             data = Data(data)
         if data2 is not None and not isinstance(data2, Data):
             data2 = Data(data2)
         return self._spi_mat(data, data2, i, j)
 
-# ------------------------------
-# Directed / Undirected Interfaces
-# ------------------------------
-class Directed:
-    name = "Bivariate Base"
-    identifier = "bivariate_base"
-    labels = ['signed']
+    def get_group(self, classes):
+        warnings.warn(
+            "The 'get_group' method is deprecated. Use skbase's tagging system instead.",
+            DeprecationWarning,
+        )
+        labset = set(self.get_tags()["labels"])
+        matches = [set(cls).issubset(labset) for cls in classes]
 
-    @parse_bivariate
-    def bivariate(self, data, i=None, j=None):
-        raise NotImplementedError("bivariate method must be implemented.")
+        if np.count_nonzero(matches) > 1:
+            warnings.warn(f"More than one match for classes {classes}")
+        elif np.count_nonzero(matches) == 1:
+            try:
+                idx = np.where(matches)[0][0]
+                return idx, ", ".join(classes[idx])
+            except (TypeError, IndexError):
+                pass
+        return None
 
-    @parse_multivariate
-    def multivariate(self, data):
-        n = data.n_processes
-        A = np.full((n, n), np.nan)
-        for j in range(n):
-            for i in range(n):
-                if i != j:
-                    A[i, j] = self.bivariate(data, i=i, j=j)
+class SignedSPI(BaseSPI):
+    _tags = {
+        "capability-signed": True
+    }
+
+class DirectedSPI(BaseSPI):
+    _tags = {
+        "capability-directed": True
+    }
+
+    def _spi_mat(self, data, data2 = None, i = None, j = None) -> np.ndarray:
+        n_processes1 = data.n_processes
+        n_processes2 = data2.n_processes if data2 is not None else n_processes1
+        A = np.empty((n_processes1, n_processes2))
+        A[:] = np.nan
+
+        for col in range(n_processes2):
+            for row in range(n_processes1):
+                if row != col:  # Typically directed measures are off-diagonal
+                    A[row, col] = self._compute_directed_pair(data, data2, row, col) # Placeholder
+        if i is not None:
+            A = A[i, :]
+        if j is not None:
+            A = A[:, j]
         return A
+    
+    def compute_directed_pair(self, data, data2, i, j):
+        # Placeholder for the actual computation
+        raise NotImplementedError("_compute_directed_pair must be implemented.")
+    
+class UndirectedSPI(BaseSPI):
+    _tags = {
+        "capability:multivariate": True,
+    }
 
-class Undirected(Directed):
-    name = "Undirected Base"
-    identifier = "undirected_base"
-    labels = ['unsigned']
+    def _spi_mat(self, data, data2 = None, i = None, j = None) -> np.ndarray:
+        n_processes1 = data.n_processes
+        n_processes2 = data2.n_processes if data2 is not None else n_processes1
+        A = np.empty((n_processes1, n_processes2))
+        A[:] = np.nan
 
-    def ispositive(self):
-        return False
+        for col in range(n_processes2):
+            for row in range(n_processes1):
+                A[row, col] = self._compute_undirected_pair(data, data2, row, col) # Placeholder
 
-    @parse_multivariate
-    def multivariate(self, data):
-        A = super().multivariate(data)
-        li = np.tril_indices(data.n_processes, -1)
+        # Ensure symmetry for undirected measures
+        li = np.tril_indices(n_processes1, -1)
         A[li] = A.T[li]
+        if i is not None:
+            A = A[i, :]
+        if j is not None:
+            A = A[:, j]
         return A
+    
+    def compute_undirected_pair(self, data, data2, i, j):
+        # Placeholder for the actual computation
+        raise NotImplementedError("_compute_undirected_pair must be implemented.")
 
-# ------------------------------
-# Signed / Unsigned Mixins
-# ------------------------------
-class Signed:
-    def issigned(self): return True
+    
 
-class Unsigned:
-    def issigned(self): return False
+
