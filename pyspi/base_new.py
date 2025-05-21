@@ -32,7 +32,7 @@ class BaseNewSPI(BaseObject):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def ensure_data_format(self, data: Data, data2: Data  = None) -> tuple:
+    def _ensure_data_format(self, data: Data, data2: Data  = None) -> tuple:
         """
         Ensure the data is in the correct format.
         
@@ -330,7 +330,7 @@ class SignedNewSPI(BaseNewSPI):
 
     _tags = {
         "capability-signed": True,
-        "identifier": "signed",
+        "identifier": "signed   ",
         "name": "SignedPySPI",
     }
 
