@@ -1,6 +1,7 @@
 import numpy as np
 import warnings, copy
 
+
 from skbase import BaseObject
 from pyspi.data import Data
 
@@ -338,5 +339,3 @@ class SignedNewSPI(BaseNewSPI):
         super().__init__(**kwargs)
                 
 ### Example Usage to be added later after finalizing the API design ###
-
-        
