@@ -1,5 +1,5 @@
 # Debian linux distribution with python 3.9
-FROM --platform=linux/amd64 python:3.9-slim-buster
+FROM --platform=linux/amd64 python:3.9-slim-bookworm
 
 # Set the working directory
 WORKDIR /pyspi_project
