@@ -8,6 +8,7 @@ from sklearn.gaussian_process import kernels, GaussianProcessRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn import linear_model
 import mne.connectivity as mnec
+from pyspi.lib.ids.dependence import compute_IDS
 
 from pyspi.base import (
     Directed,
@@ -147,7 +148,7 @@ class GPModel(Directed, Unsigned):
 
 
 class PowerEnvelopeCorrelation(Undirected, Unsigned):
-    humanname = "Power envelope correlation"
+    name = "Power envelope correlation"
     identifier = "pec"
     labels = ["unsigned", "misc", "undirected"]
 
@@ -173,3 +174,28 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
         )
         np.fill_diagonal(adj, np.nan)
         return adj
+
+class InterDependenceScore(Undirected, Unsigned):
+    name = "Interdependence score"
+    identifier = "ids"
+    labels = ["unsigned", "misc", "undirected", "nonlinear"]
+
+    def __init__(
+            self,
+            terms=6,
+            pnorm='max',
+            bandwidth=0.5
+    ):
+        self._num_terms = terms
+        self._p_norm = pnorm
+        self._bandwidth_term = bandwidth
+
+
+    @parse_multivariate
+    def multivariate(self, data):
+        # reshape for the compute_IDS function which expects shape (obs, proc)
+        z = np.squeeze(data.to_numpy(), axis=2).T
+        ids = compute_IDS(z, num_terms=self._num_terms, p_norm=self._p_norm, 
+                           bandwidth_term=self._bandwidth_term)
+        return ids
+    
