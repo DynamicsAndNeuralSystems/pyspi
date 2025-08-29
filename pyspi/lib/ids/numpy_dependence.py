@@ -1,3 +1,8 @@
+"""
+Interdependence Score (IDS) computation.
+Based on the work by Adityanarayanan Radhakrishnan (MIT License)
+Original: https://github.com/aradha/interdependence_scores
+"""
 import numpy as np 
 import math
 import sys

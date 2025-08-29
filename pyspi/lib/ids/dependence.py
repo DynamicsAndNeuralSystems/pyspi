@@ -1,11 +1,20 @@
+"""
+Interdependence Score (IDS) computation.
+Based on the work by Adityanarayanan Radhakrishnan (MIT License)
+Original: https://github.com/aradha/interdependence_scores
+Modified for use in pyspi package.
+"""
 from .numpy_dependence import compute_IDS_numpy
 
 def compute_IDS(X, Y=None, num_terms=6, p_norm='max', 
                 p_val=False, num_tests=100, bandwidth_term=1/2):
     """Compute IDS between all pairs of variables in X (or between X and Y).
     
-    Taken from the implementation in: https://github.com/aradha/interdependence_scores
+    This is a modified version of the implementation from:
+    https://github.com/aradha/interdependence_scores
     
+    Original author: Adityanarayanan Radhakrishnan
+    License: MIT (see LICENSE.txt)
 
     Parameters:
         X: np.ndarray or torch.Tensor
