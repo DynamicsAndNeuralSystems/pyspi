@@ -1391,3 +1391,15 @@
       - orth: True
         log: True
         absolute: True
+
+  # Interdependence score
+  InterDependenceScore:
+    labels:
+      - unsigned
+      - undirected
+      - nonlinear
+    dependencies:
+    configs: # default params
+      - terms: 6
+        pnorm: 'max'
+        bandwidth: 0.5
