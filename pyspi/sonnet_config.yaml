@@ -91,7 +91,6 @@
       - bivariate
       - time-dependent
     dependencies: 
-      - octave
     configs:
       - phitype: 'star'
 

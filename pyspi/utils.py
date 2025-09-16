@@ -123,22 +123,10 @@ def is_jpype_jvm_available():
         print(f"Jpype JVM not available: {e}")
         return False
 
-def is_octave_available():
-    """Check whether octave is available"""
-    try:
-        from oct2py import Oct2Py
-        oc = Oct2Py()
-        oc.exit()
-        return True
-    except Exception as e:
-        print(f"Octave not available: {e}")
-        return False
-
 def check_optional_deps():
     """Bundle all of the optional
     dependency checks together."""
     isAvailable = {}
-    isAvailable['octave'] = is_octave_available()
     isAvailable['java'] = is_jpype_jvm_available()
 
     return isAvailable
