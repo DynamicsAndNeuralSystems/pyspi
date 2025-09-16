@@ -558,22 +558,34 @@ class IntegratedInformation(Undirected, Unsigned):
     labels = ["linear", "unsigned", "infotheory", "temporal", "undirected"]
 
     def __init__(self, phitype="star", delay=1, normalization=0):
-        self._params = Struct()
-        self._params["tau"] = 1
-        self._options = Struct()
-        self._options["type_of_phi"] = phitype
-        self._options["type_of_dist"] = "Gauss"
-        self._options["normalization"] = normalization
+        self._phitype = phitype
+        self._delay = delay
+        self._normalization = normalization
         self.identifier += f"_{phitype}_t-{delay}_norm-{normalization}"
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        """
+        Compute integrated information using native Python implementation.
+        This completely replaces the MATLAB/Octave dependency.
+        """
+        try:
+            from pyspi.lib.phi_native import phi_comp
 
-        if not octave.exist("phi_comp"):
-            path = os.path.dirname(os.path.abspath(__file__)) + "/../lib/PhiToolbox/"
-            octave.addpath(octave.genpath(path))
+            # Prepare partition for bivariate analysis
+            P = np.array([1, 2])
+            X = data.to_numpy(squeeze=True)[[i, j]]
 
-        P = [1, 2]
-        Z = data.to_numpy(squeeze=True)[[i, j]]
+            # Set up parameters for native implementation
+            params = {"tau": self._delay}
+            options = {
+                "type_of_phi": self._phitype,
+                "type_of_dist": "Gauss",
+                "normalization": self._normalization
+            }
 
-        return octave.phi_comp(Z, P, self._params, self._options)
+            return phi_comp(X, P, params, options)
+
+        except Exception as e:
+            logging.error(f"Integrated information computation failed: {e}")
+            return np.nan
