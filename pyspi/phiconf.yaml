@@ -1,0 +1,19 @@
+.statistics.infotheory:
+  IntegratedInformation:
+      labels:
+        - undirected
+        - nonlinear
+        - unsigned
+        - bivariate
+        - time-dependent
+      dependencies: 
+      configs:
+        - phitype: "star"
+
+        - phitype: "star"
+          normalization: 1
+
+        - phitype: "Geo"
+
+        - phitype: "Geo"
+          normalization: 1

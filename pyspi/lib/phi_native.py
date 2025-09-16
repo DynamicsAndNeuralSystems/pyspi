@@ -4,6 +4,9 @@ Native Python implementation of integrated information (phi) calculation.
 This module provides a pure Python implementation of the phi computation
 algorithms from the PhiToolbox, eliminating the need for MATLAB/Octave emulation.
 
+Author:
+Lipeng Lin (https://github.com/ErronLLP)
+
 Based on:
 - Oizumi et al., 2016, PLoS Comp Biol
 - Original PhiToolbox MATLAB implementation
