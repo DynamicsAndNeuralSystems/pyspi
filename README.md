@@ -36,13 +36,9 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 <hr style="border-top: 3px solid #bbb;">
 
 ## Installation 📥
-The simplest way to get the _pyspi_ package up and running is to install the package using `pip install`. 
-For access to the full library of SPIs, the code requires GNU's [Octave](https://octave.org/download) to be installed on your system.
+The simplest way to get the _pyspi_ package up and running is to install the package using `pip install`.
 
-#### 1. Pre-Install Octave (Optional)
-While you can safely install _pyspi_ without first installing `Octave`, you will not have access to the full library of SPIs
-
-#### 2. Create a conda environment (Optional, Recommended)
+#### 1. Create a conda environment (Optional, Recommended)
 While you can also install _pyspi_ outside of a conda environment, it depends on a lot of user packages that may make managing dependencies quite difficult. 
 So, we would also recommend installing pyspi in a conda environment. Firstly, create a fresh conda environment:
 ```
@@ -50,14 +46,13 @@ conda create -n pyspi python=3.9.0
 ```
 Once you have created the environment, activate it using `conda activate pyspi`.
 
-#### 3. Install with _pip_
+#### 2. Install with _pip_
 Using `pip` for [`pyspi`](https://pypi.org/project/pyspi/):
 ```
 pip install pyspi
 ```
 
-For a more detailed guide on how to install _pyspi_, as well as how you can use _pyspi_ without first installing Octave, 
-please see the [full documentation](https://time-series-features.gitbook.io/pyspi/installation/installing-pyspi).
+For a more detailed guide on how to install _pyspi_, please see the [full documentation](https://time-series-features.gitbook.io/pyspi/installation/installing-pyspi).
 Additionally, we provide a comprehensive [troubleshooting guide](https://time-series-features.gitbook.io/pyspi/installation/troubleshooting) for users who encounter issues installing _pyspi_ on their system,
 as well as [alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options). 
 
