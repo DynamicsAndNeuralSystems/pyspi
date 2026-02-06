@@ -134,6 +134,7 @@ If you are interested in trying other highly comparative toolboxes like _pyspi_,
 
 - [_hctsa_](https://github.com/benfulcher/hctsa), the _highly comparative time-series analysis_ toolkit, computes over 7000 time-series features from univariate time series.
 - [_hcga_](https://github.com/barahona-research-group/hcga), a _highly comparative graph analysis_ toolkit, computes several thousands of graph features directly from any given network.
+- [_pyhctsa_](https://github.com/DynamicsAndNeuralSystems/pyhctsa), a python implementation of the _highly comparative time-series analysis_ toolkit.
 
 
 ## Our Contributors 🌟
