@@ -8,6 +8,7 @@ with open('README.md', 'r', encoding='utf-8') as file:
 
 
 install_requires = [
+        'setuptools',
         'h5py',
         'scikit-learn',
         'scipy',
