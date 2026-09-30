@@ -81,6 +81,29 @@ class ConvergentCrossMapping(Directed, Signed):
     def key(self):
         return self._E
 
+    @staticmethod
+    def _embed_dimension(df, column, lib_pred, maxE=10):
+        """Simplex-projection skill (rho) versus embedding dimension E = 1..maxE.
+
+        Equivalent to pyEDM.EmbedDimension, which in pyEDM 2.x always starts a
+        multiprocessing Pool (needs an `if __name__ == "__main__"` guard under
+        the spawn start method, i.e. macOS/Windows) and requires `target`.
+        Returns a DataFrame with columns ["E", "rho"].
+        """
+        rho = []
+        for E in range(1, maxE + 1):
+            sim = pyEDM.Simplex(
+                dataFrame=df,
+                columns=column,
+                target=column,
+                lib=lib_pred,
+                pred=lib_pred,
+                E=E,
+                Tp=1,
+            )
+            rho.append(pyEDM.ComputeError(sim["Observations"], sim["Predictions"])["rho"])
+        return pd.DataFrame({"E": np.arange(1, maxE + 1, dtype=float), "rho": rho})
+
     def _from_cache(self, data):
         try:
             ccmf = data.ccm[self.key]
@@ -101,13 +124,7 @@ class ConvergentCrossMapping(Directed, Signed):
                 # Infer optimal embedding from simplex projection
                 for _i in range(M):
                     pred = str(10) + " " + str(N - 10)
-                    embed_df = pyEDM.EmbedDimension(
-                        dataFrame=df,
-                        lib=pred,
-                        pred=pred,
-                        columns=df.columns.values[_i + 1],
-                        showPlot=False,
-                    )
+                    embed_df = self._embed_dimension(df, df.columns.values[_i + 1], pred)
                     embedding[_i] = embed_df.max()["E"]
             else:
                 embedding = np.array([self._E] * M)
@@ -126,7 +143,9 @@ class ConvergentCrossMapping(Directed, Signed):
                     upperE = int(np.floor((N - E - 1) / 10) * 10)
                     lowerE = int(np.ceil(2 * E / 10) * 10)
                     inc = int((upperE - lowerE) / nlibs)
-                    lib_sizes = str(lowerE) + " " + str(upperE) + " " + str(inc)
+                    # pyEDM 2.x: pass explicit sizes (a 3-element list is otherwise
+                    # ambiguous between start/stop/increment and three sizes)
+                    lib_sizes = list(range(lowerE, upperE + 1, inc))[: nlibs + 1]
                     srcname = df.columns.values[_i + 1]
                     targname = df.columns.values[_j + 1]
                     ccm_df = pyEDM.CCM(
@@ -137,9 +156,10 @@ class ConvergentCrossMapping(Directed, Signed):
                         libSizes=lib_sizes,
                         sample=100,
                         seed=42,
+                        parallel=False,  # avoid spawning a process pool per pair
                     )
-                    ccmf[_i, _j] = ccm_df.iloc[:, 1].values[: (nlibs + 1)]
-                    ccmf[_j, _i] = ccm_df.iloc[:, 2].values[: (nlibs + 1)]
+                    ccmf[_i, _j] = ccm_df[f"{srcname}:{targname}"].values[: (nlibs + 1)]
+                    ccmf[_j, _i] = ccm_df[f"{targname}:{srcname}"].values[: (nlibs + 1)]
 
             try:
                 data.ccm[self.key] = ccmf
