@@ -136,7 +136,7 @@ name or a path to your own YAML:
 | `"fast"` | 213 | General use; drops the slowest SPIs. |
 | `"benchmarked_p99"` | 318 | Near-complete, with only the worst cost outliers removed. |
 | `"benchmarked_p95"` | 305 | Good coverage/cost trade-off. |
-| `"benchmarked_p90"` | 290 | Recommended default for large batches. |
+| `"benchmarked_p90"` | 289 | Recommended default for large batches. |
 | `"benchmarked_p80"` | 261 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14). |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |
