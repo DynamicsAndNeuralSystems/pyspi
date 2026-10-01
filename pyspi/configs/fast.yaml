@@ -1,0 +1,1401 @@
+# Basic statistics
+.statistics.basic:
+  # Covariance
+  Covariance:
+    labels:
+      - undirected
+      - linear
+      - signed
+      - multivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
+      - estimator: GraphicalLasso
+      - estimator: GraphicalLassoCV
+      - estimator: LedoitWolf
+      - estimator: OAS
+      - estimator: ShrunkCovariance
+      - estimator: EmpiricalCovariance
+        squared: True
+      - estimator: GraphicalLasso
+        squared: True
+      - estimator: LedoitWolf
+        squared: True
+      - estimator: OAS
+        squared: True
+      - estimator: ShrunkCovariance
+        squared: True
+
+  # Precision
+  Precision:
+    labels:
+      - undirected
+      - linear
+      - signed
+      - multivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
+      - estimator: GraphicalLasso
+      - estimator: LedoitWolf
+      - estimator: OAS
+      - estimator: ShrunkCovariance
+      - estimator: EmpiricalCovariance
+        squared: True
+      - estimator: GraphicalLasso
+        squared: True
+      - estimator: LedoitWolf
+        squared: True
+      - estimator: OAS
+        squared: True
+      - estimator: ShrunkCovariance
+        squared: True
+
+  # Spearman's correlation coefficient
+  SpearmanR:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - squared: True
+      - squared: False
+
+  # Kendall's rank correlation coefficient
+  KendallTau:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - squared: True
+      - squared: False
+
+  # statistics based on cross-correlation (squared means we square the xcorr, not the output)
+  CrossCorrelation:
+    labels:
+      - undirected
+      - linear
+      - signed/unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: "max"
+        labels:
+          - M10
+
+      - statistic: "max"
+        squared: True
+
+      - statistic: "mean"
+
+      - statistic: "mean"
+        squared: True
+
+      - statistic: "mean"
+        sigonly: False
+
+      - statistic: "mean"
+        squared: True
+        sigonly: False
+
+.statistics.distance:
+  PairwiseDistance:
+    labels:
+      - unsigned
+      - unordered
+      - nonlinear
+      - undirected
+      - MXX
+    dependencies:
+    configs:
+      - metric: "euclidean"
+      - metric: "cityblock"
+      - metric: "cosine"
+      - metric: "chebyshev"
+      - metric: "canberra"
+      - metric: "braycurtis"
+
+  # Distance correlation
+  DistanceCorrelation:
+    labels:
+      - undirected
+      - nonlinear
+      - unsigned
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - biased: False
+      - biased: True
+
+  # Hilbert-Schmidt independence criterion
+  HilbertSchmidtIndependenceCriterion:
+    labels:
+      - undirected
+      - nonlinear
+      - unsigned
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - biased: False
+      - biased: True
+
+  Barycenter:
+    labels:
+      - undirected
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - mode: euclidean
+        statistic: mean
+      - mode: euclidean
+        statistic: max
+
+      - mode: euclidean
+        statistic: mean
+        squared: True
+
+      - mode: euclidean
+        statistic: max
+        squared: True
+        
+  # Gromov-Wasserstain Distance
+  GromovWasserstainTau:
+    labels:
+      - unsigned
+      - distance
+      - unordered
+      - nonlinear
+      - undirected
+      - MXX
+    dependencies:
+    configs:
+
+.statistics.causal:
+  # Additive noise model
+  AdditiveNoiseModel:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - contemporaneous
+      - M02
+    dependencies:
+    configs:
+
+  # Conditional distribution similarity statistic
+  ConditionalDistributionSimilarity:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - contemporaneous
+      - M02
+    dependencies:
+    configs:
+
+  # Regression error-based causal inference
+  RegressionErrorCausalInference:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+
+  # Information-geometric causal inference (disabled heuristic)
+  # InformationGeometricCausalInference:
+  #   labels:
+  #     - directed
+  #     - nonlinear
+  #     - unsigned
+  #     - bivariate
+  #     - contemporaneous
+  #   dependencies:
+  #   configs:
+
+# Information-theoretic statistics
+.statistics.infotheory:
+  JointEntropy: # No theiler window yet
+    labels:
+      - undirected
+      - nonlinear
+      - unsigned
+      - bivariate
+      - contemporaneous
+      - M14
+    configs:
+      - estimator: gaussian
+      - estimator: kozachenko
+      - estimator: kernel
+
+  ConditionalEntropy: # No theiler window yet
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - contemporaneous
+      - M14
+    configs:
+    - estimator: gaussian
+    - estimator: kernel
+
+  CrossmapEntropy: # No theiler window yet
+    labels:
+      - unsigned
+      - directed
+      - time-dependent
+      - bivariate
+      - MXX
+    configs:
+      - estimator: gaussian
+        history_length: 1
+
+      - estimator: kozachenko
+        history_length: 1
+
+      - estimator: kernel
+        history_length: 1
+
+      - estimator: gaussian
+        history_length: 10
+
+      - estimator: kozachenko
+        history_length: 10
+
+      - estimator: kernel
+        history_length: 10
+
+  StochasticInteraction: # No theiler window
+    labels:
+      - undirected
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    configs:
+      - estimator: gaussian
+        labels:
+          - M05
+      - estimator: kozachenko
+      - estimator: kernel
+
+  # Mutual information
+  MutualInfo:
+    labels:
+      - undirected
+      - nonlinear
+      - unsigned
+      - bivariate
+      - contemporaneous
+      - M14
+    configs:
+      - estimator: gaussian
+
+      - estimator: kraskov
+        prop_k: 4
+
+      - estimator: kraskov
+        prop_k: 4
+        dyn_corr_excl: AUTO
+
+      - estimator: kernel
+        kernel_width: 0.25
+
+  # Mutual information
+  TimeLaggedMutualInfo:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    configs:
+      - estimator: gaussian
+
+      - estimator: kraskov
+        prop_k: 4
+
+      - estimator: kraskov
+        prop_k: 4
+        dyn_corr_excl: AUTO
+
+      - estimator: kernel
+        kernel_width: 0.25
+
+  # Transfer entropy
+  TransferEntropy:
+    # Kraskov estimator with fixed embedding of 1 for source/target and DCE
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M04
+    configs:
+      - estimator: kraskov
+        prop_k: 4
+        k_history: 1
+        l_history: 1
+        dyn_corr_excl: AUTO
+
+      - estimator: gaussian
+        k_history: 1
+        l_history: 1
+      # Disabled: k_history=1 gives a single ordinal symbol, so the transfer
+      # entropy is identically zero. Rejected at construction; kept here as a
+      # record of what was dropped.
+      # - estimator: symbolic
+      #   k_history: 1
+      #   l_history: 1
+      #   labels:
+      #     - M05
+      #
+      # Disabled: severely undersampled and unvalidated at T=100. 10! symbols
+      # against ~91 usable samples: on var1 and cml every joint count is 1, so
+      # the value tracks sample size rather than dependence, but that does not
+      # hold universally (kuramoto: 3 of 42 pairs). Still constructible, and
+      # defensible for long series where the symbol space is populated.
+      # - estimator: symbolic
+      #   k_history: 10
+      #   l_history: 1
+      #   labels:
+      #     - M05
+
+# statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
+        labels:
+          - M05
+.statistics.spectral:
+  CoherencePhase:
+    labels:
+      - linear
+      - signed
+      - antisymmetric
+      - bivariate
+      - frequency-dependent
+      - M01
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+  CoherenceMagnitude:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M12
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  # Coherence (ordinal or squared? imaginary components of the coherence)
+  ImaginaryCoherence:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M12
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  PhaseSlopeIndex:
+    labels:
+      - linear/nonlinear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M01
+    dependencies:
+    configs:
+      - fmin: 0
+        fmax: 0.5
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+  PhaseLockingValue:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M10
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+      - fs: 1
+        statistic: max
+        labels:
+          - M12
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+        labels:
+          - M12
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  PhaseLagIndex:
+    labels:
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M07
+    dependencies:
+    configs:
+      - fs: 1
+        labels:
+          - M14
+
+      - fmin: 0
+        fmax: 0.25
+        labels:
+          - M01
+
+      - fmin: 0.25
+        fmax: 0.5
+        labels:
+          - M01
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  WeightedPhaseLagIndex:
+    labels:
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M07
+    dependencies:
+    configs:
+      - fs: 1
+        labels:
+          - M14
+
+      - fmin: 0
+        fmax: 0.25
+        labels:
+          - M01
+
+      - fmin: 0.25
+        fmax: 0.5
+        labels:
+          - M01
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  DebiasedSquaredPhaseLagIndex:
+    # NOTE: the `max` band statistic saturates on the data tested. The band
+    # maximum reaches exactly 1 as soon as the sign of the imaginary coherency
+    # is consistent across tapers at any ONE frequency. On the frozen fixtures
+    # the share of pairs sitting at exactly 1 runs from 29% to 100% depending on
+    # the data, with 1 to 16 distinct values; the `mean` variants are graded
+    # normally. This is an empirical observation, not a law: saturation is NOT
+    # monotone in T -- changing T recomputes the tapers and Fourier
+    # coefficients, so the values at a longer series are not a superset of the
+    # shorter one (measured non-monotone in 7 of 36 seed/band combinations).
+    # Kept enabled: the statistic is behaving as defined. Read `max` values
+    # near 1 with that in mind.
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M07
+    dependencies:
+    configs:
+      - fs: 1
+        labels:
+          - M12
+
+      - fmin: 0
+        fmax: 0.25
+        labels:
+          - M12
+
+      - fmin: 0.25
+        fmax: 0.5
+        labels:
+          - M12
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  DebiasedSquaredWeightedPhaseLagIndex:
+    # NOTE: same saturation behaviour as DebiasedSquaredPhaseLagIndex above.
+    # See that note.
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M07
+    dependencies:
+    configs:
+      - fs: 1
+        labels:
+          - M12
+
+      - fmin: 0
+        fmax: 0.25
+        labels:
+          - M12
+
+      - fmin: 0.25
+        fmax: 0.5
+        labels:
+          - M12
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  PairwisePhaseConsistency:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M12
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  DirectedTransferFunction:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  # partial_coherence:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  #   - fs: 1
+  #     statistic: max
+
+  #   - fmin: 0
+  #     fmax: 0.25
+  #     statistic: max
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+  #     statistic: max
+
+  DirectedCoherence:
+    # Directed coherence is recomputed in pyspi (see DirectedCoherence in
+    # statistics/spectral.py): the backend puts |H|^2 in the numerator while
+    # the denominator is on the magnitude scale, which made it unbounded
+    # (baselines reached 3.27 / 1.84 / 1139.47). The corrected form is bounded
+    # in [0,1] and reproduces sqrt(directed_transfer_function()) to 4e-16 under
+    # an identity noise covariance, which is the identity DC must satisfy.
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  PartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  GeneralizedPartialDirectedCoherence:
+    labels:
+      - unsigned
+      - directed
+      - linear
+      - bivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  DirectDirectedTransferFunction:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+      - fs: 1
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+  GroupDelay:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M01
+    dependencies:
+    configs:
+      - fmin: 0
+        fmax: 0.5
+        statistic: delay
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: delay
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: delay
+
+  SpectralGrangerCausality:
+    # Non-parametric Granger causality (no VAR model)
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - method: nonparametric
+        fmin: 0
+        fmax: 0.5
+        statistic: mean
+
+      - method: nonparametric
+        fmin: 0
+        fmax: 0.25
+        statistic: mean
+
+      - method: nonparametric
+        fmin: 0.25
+        fmax: 0.5
+        statistic: mean
+
+      - method: nonparametric
+        fmin: 0
+        fmax: 0.5
+        statistic: max
+
+      - method: nonparametric
+        fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - method: nonparametric
+        fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+        # Parametric Granger causality (VAR model with inferred or predefined order)
+
+        # AR order optimised by BIC
+      - method: parametric
+        fmin: 0
+        fmax: 0.5
+        statistic: mean
+        labels:
+          - M05
+
+      - method: parametric
+        fmin: 0
+        fmax: 0.25
+        statistic: mean
+        labels:
+          - M05
+
+      - fmin: 0.25
+        fmax: 0.5
+        method: parametric
+        statistic: mean
+
+        # AR order 1
+        labels:
+          - M05
+      - fs: 1
+        order: 1
+        method: parametric
+        statistic: mean
+        labels:
+          - M05
+
+      - fmin: 0
+        fmax: 0.25
+        order: 1
+        method: parametric
+        statistic: mean
+        labels:
+          - M05
+
+      - fmin: 0.25
+        fmax: 0.5
+        order: 1
+        method: parametric
+        statistic: mean
+
+        # AR order 20
+        labels:
+          - M05
+      - fs: 1
+        order: 20
+        method: parametric
+        statistic: mean
+
+      - fmin: 0
+        fmax: 0.25
+        order: 20
+        method: parametric
+        statistic: mean
+
+      - fmin: 0.25
+        fmax: 0.5
+        order: 20
+        method: parametric
+        statistic: mean
+
+        # AR order optimised by BIC
+      - fs: 1
+        method: parametric
+        statistic: max
+        labels:
+          - M05
+
+      - fmin: 0
+        fmax: 0.25
+        method: parametric
+        statistic: max
+        labels:
+          - M05
+
+      - fmin: 0.25
+        fmax: 0.5
+        method: parametric
+        statistic: max
+
+        # AR order 1
+        labels:
+          - M05
+      - fs: 1
+        order: 1
+        method: parametric
+        statistic: max
+        labels:
+          - M05
+
+      - fmin: 0
+        fmax: 0.25
+        order: 1
+        method: parametric
+        statistic: max
+        labels:
+          - M05
+
+      - fmin: 0.25
+        fmax: 0.5
+        order: 1
+        method: parametric
+        statistic: max
+
+        # AR order 20
+        labels:
+          - M05
+      - fs: 1
+        order: 20
+        method: parametric
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        order: 20
+        method: parametric
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        order: 20
+        method: parametric
+        statistic: max
+
+# statistics that analyse in the wavlet-domain (only Mortlet wavelet's at the moment)
+.statistics.wavelet:
+  # CoherenceMagnitude:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  #   - fs: 1
+  #     statistic: max
+
+  #   - fmin: 0
+  #     fmax: 0.25
+  #     statistic: max
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+  #     statistic: max
+
+  # CoherencePhase:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  # # Coherence (ordinal or squared? imaginary components of the coherence)
+  # ImaginaryCoherence:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  #   - fs: 1
+  #     statistic: max
+
+  #   - fmin: 0
+  #     fmax: 0.25
+  #     statistic: max
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+  #     statistic: max
+
+  # PhaseLockingValue:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  #   - fs: 1
+  #     statistic: max
+
+  #   - fmin: 0
+  #     fmax: 0.25
+  #     statistic: max
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+  #     statistic: max
+
+  # PairwisePhaseConsistency:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  #   - fs: 1
+  #     statistic: max
+
+  #   - fmin: 0
+  #     fmax: 0.25
+  #     statistic: max
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+  #     statistic: max
+
+  # PhaseLagIndex:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  #   - fs: 1
+  #     statistic: max
+
+  #   - fmin: 0
+  #     fmax: 0.25
+  #     statistic: max
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+  #     statistic: max
+
+  # DebiasedSquaredWeightedPhaseLagIndex:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  #   - fs: 1
+  #     statistic: max
+
+  #   - fmin: 0
+  #     fmax: 0.25
+  #     statistic: max
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+  #     statistic: max
+
+  # WeightedPhaseLagIndex:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  #   - fs: 1
+  #     statistic: max
+
+  #   - fmin: 0
+  #     fmax: 0.25
+  #     statistic: max
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+  #     statistic: max
+
+  # debiased_weighted_squared_PhaseLagIndex:
+  #   - fs: 1
+
+  #   - fmin: 0
+  #     fmax: 0.25
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+
+  #   - fs: 1
+  #     statistic: max
+
+  #   - fmin: 0
+  #     fmax: 0.25
+  #     statistic: max
+
+  #   - fmin: 0.25
+  #     fmax: 0.5
+  #     statistic: max
+
+  PhaseSlopeIndex:
+    labels:
+      - unsigned
+      - time/frequency dependent
+      - bivariate
+      - M08
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+      - fmin: 0
+        fmax: 0.5
+        statistic: max
+
+      - fmin: 0
+        fmax: 0.25
+        statistic: max
+
+      - fmin: 0.25
+        fmax: 0.5
+        statistic: max
+
+.statistics.misc:
+  LinearModel:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - model: Ridge
+      - model: Lasso
+      - model: SGDRegressor
+      - model: ElasticNet
+      - model: BayesianRidge
+
+  # Cointegration
+  Cointegration:
+    labels:
+      - linear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M13
+    dependencies:
+    configs:
+      - method: johansen
+        statistic: max_eig_stat
+        det_order: 0 # Constant trend
+        k_ar_diff: 10
+
+      - method: johansen
+        statistic: trace_stat
+        det_order: 0
+        k_ar_diff: 10
+
+      - method: johansen
+        statistic: max_eig_stat
+        det_order: 0 # Constant trend
+        k_ar_diff: 1
+
+      - method: johansen
+        statistic: trace_stat
+        det_order: 0
+        k_ar_diff: 1
+
+      - method: johansen
+        statistic: max_eig_stat
+        det_order: 1 # Linear trend
+        k_ar_diff: 10
+
+      - method: johansen
+        statistic: trace_stat
+        det_order: 1
+        k_ar_diff: 10
+
+      - method: johansen
+        statistic: max_eig_stat
+        det_order: 1
+        k_ar_diff: 1
+
+      - method: johansen
+        statistic: trace_stat
+        det_order: 1
+        k_ar_diff: 1
+
+      - method: aeg
+        statistic: tstat
+        autolag: aic
+        maxlag: 10
+        trend: c
+
+      - method: aeg
+        statistic: tstat
+        autolag: aic
+        maxlag: 10
+        trend: ct
+
+      - method: aeg
+        statistic: tstat
+        autolag: bic
+        maxlag: 10
+        trend: ct
+
+  # Power envelope correlation
+  PowerEnvelopeCorrelation:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M11
+    dependencies:
+    configs:
+      - orth: False
+        log: False
+        absolute: False
+
+      - orth: True
+        log: False
+        absolute: False
+
+      - orth: False
+        log: True
+        absolute: False
+
+      - orth: True
+        log: True
+        absolute: False
+
+      - orth: True
+        log: False
+        absolute: True
+
+      - orth: True
+        log: True
+        absolute: True
+
+  # Interdependence score
+  InterDependenceScore:
+    labels:
+      - unsigned
+      - undirected
+      - nonlinear
+    dependencies:
+    configs: # default params
+      - terms: 6
+        pnorm: 'max'
+        bandwidth: 0.5

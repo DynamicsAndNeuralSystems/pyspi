@@ -1,0 +1,67 @@
+# Small config for tests/test_parallel.py
+# Covers:
+#  - covariance cache namespace (Covariance + Precision, multiple estimators)
+#  - spectral_mv cache namespace (CoherenceMagnitude, multiple freq bands)
+#  - ccm cache namespace (ConvergentCrossMapping) — also exercises the pyEDM
+#    call site, whose nested pools are off unconditionally
+#  - cacheless basic SPIs (SpearmanR, KendallTau)
+#  - cacheless misc SPI (PowerEnvelopeCorrelation)
+# All SPIs here are deterministic (CCM is seeded) so serial == parallel exactly.
+.statistics.basic:
+  Covariance:
+    labels: [undirected, linear, signed, multivariate, contemporaneous, M14]
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
+      - estimator: LedoitWolf
+      - estimator: OAS
+
+  Precision:
+    labels: [undirected, linear, signed, multivariate, contemporaneous, M14]
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
+      - estimator: LedoitWolf
+
+  SpearmanR:
+    labels: [undirected, nonlinear, signed, bivariate, contemporaneous, M14]
+    dependencies:
+    configs:
+      - squared: True
+      - squared: False
+
+  KendallTau:
+    labels: [undirected, nonlinear, signed, bivariate, contemporaneous, M14]
+    dependencies:
+    configs:
+      - squared: False
+
+.statistics.spectral:
+  CoherenceMagnitude:
+    labels: [undirected, linear, unsigned, bivariate, frequency-dependent, M12]
+    dependencies:
+    configs:
+      - fs: 1
+      - fmin: 0
+        fmax: 0.25
+      - fmin: 0.25
+        fmax: 0.5
+
+.statistics.causal:
+  ConvergentCrossMapping:
+    labels: [causal, directed, nonlinear, temporal, signed, M14]
+    dependencies:
+    configs:
+      - statistic: mean
+        embedding_dimension: 1
+      - statistic: max
+        embedding_dimension: 1
+
+.statistics.misc:
+  PowerEnvelopeCorrelation:
+    labels: [undirected, linear, unsigned, bivariate, time-dependent, M11]
+    dependencies:
+    configs:
+      - orth: False
+        log: False
+        absolute: False

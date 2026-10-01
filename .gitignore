@@ -1,13 +1,35 @@
-pyspi.egg-info
-pyspi/__pycache__
+# Build artefacts
+build/
+dist/
+*.egg-info/
 **/__pycache__/**
-dist
+
+# Environments and tool caches
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Data / logs. Regression baselines under tests/ are tracked deliberately.
 *.pkl
 !tests/*.pkl
 *.log
 *.bkp
+
+# Editor / OS
 .DS_Store
-.vscode
-build
-octave-workspace
-readme.html
+.vscode/
+
+# Exploratory notebooks: regenerable from bench/results/cells + analyse_cells,
+# and they carry large non-rendering outputs. report.md is the tracked summary.
+bench/results/analysis/*.ipynb
+
+# Raw benchmark cells are large, machine-specific inputs to the tracked summaries.
+bench/results/cells/physics_config*.json
+
+# Local assistant instructions
+CLAUDE.md
+AGENTS.md
+.claude/
+
+# Review/critique artifacts (not part of the package)
+critiques.md

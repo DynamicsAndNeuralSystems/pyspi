@@ -1,35 +1,35 @@
 name: Generate benchmarking dataset tables
 
-on: 
+on:
   workflow_dispatch:
 
 jobs:
-  test-ubuntu:
+  generate:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9"]
+    # Regenerating the baselines runs the full calculator many times over.
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
-      - name: Setup python ${{ matrix.python-version }}
+
+      - name: Setup python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
           cache: 'pip'
-      - name: Install octave
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential octave
-      - name: Install pyspi dependencies
+
+      - name: Install pyspi
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
           pip install .
+
       - name: Run data generation
-        run: |
-          python tests/generate_benchmark_tables.py
+        run: python tests/tools/generate_benchmark_tables.py --dataset all
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-tables
-          path: tests/CML7_benchmark_tables_new.pkl
+          # Glob rather than a fixed filename so this keeps working regardless of
+          # which baselines the script writes and what it names them.
+          path: tests/data/baselines/*.npz
+          if-no-files-found: error

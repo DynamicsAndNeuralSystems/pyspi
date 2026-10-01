@@ -4,28 +4,53 @@ import yaml
 from unittest.mock import mock_open, patch
 
 @pytest.fixture
+def config_file(tmp_path, mock_yaml_content):
+    """A real config yaml on disk, so filter_spis exercises real path resolution."""
+    path = tmp_path / "mock_config.yaml"
+    path.write_text(yaml.dump(mock_yaml_content))
+    return path
+
+
+@pytest.fixture
 def mock_yaml_content():
+    """Real modules, classes and config params.
+
+    filter_spis now instantiates each config and matches on the labels the SPI
+    actually carries, because several traits are only set in __init__ and are
+    invisible in the raw YAML. That means the fixture has to be loadable: fake
+    module names and integer configs cannot be instantiated.
+    """
     return {
-        "module1": {
-            "spi1": {"labels": ["keyword1", "keyword2"], "configs": [1, 2]},
-            "spi2": {"labels": ["keyword1"], "configs": [3]},
+        ".statistics.basic": {
+            "Covariance": {
+                "labels": ["keyword1", "keyword2"],
+                "configs": [{"estimator": "EmpiricalCovariance"},
+                            {"estimator": "LedoitWolf"}],
+            },
+            "SpearmanR": {
+                "labels": ["keyword1"],
+                "configs": [{"squared": True}],
+            },
         },
-        "module2": {
-            "spi3": {"labels": ["keyword3"], "configs": [1, 2, 3]},
+        ".statistics.misc": {
+            "PowerEnvelopeCorrelation": {
+                "labels": ["keyword3"],
+                "configs": [{"orth": False, "log": False, "absolute": False}],
+            },
         },
     }
 
 def test_filter_spis_invalid_keywords():
     """Pass in a dataype other than a list for the keywords"""
     with pytest.raises(ValueError) as excinfo:
-        filter_spis(keywords="linear", configfile="pyspi/config.yaml")
+        filter_spis(keywords="linear", configfile="full")
     assert "Keywords must be provided as a list of strings" in str(excinfo.value)
     # check for passing in an empty list
     with pytest.raises(ValueError) as excinfo:
-        filter_spis(keywords=[], configfile="pyspi/config.yaml")
+        filter_spis(keywords=[], configfile="full")
     assert "At least one keyword must be provided" in str(excinfo.value)
     with pytest.raises(ValueError) as excinfo:
-        filter_spis(keywords=[4], configfile="pyspi/config.yaml")
+        filter_spis(keywords=[4], configfile="full")
     assert "All keywords must be strings" in str(excinfo.value)  
 
 def test_filter_spis_with_invalid_config():
@@ -33,42 +58,31 @@ def test_filter_spis_with_invalid_config():
     with pytest.raises(FileNotFoundError):
         filter_spis(keywords=["test"], configfile="invalid_config.yaml")
 
-def test_filter_spis_no_matches(mock_yaml_content):
-    """Pass in keywords that return no spis and check for ValuError"""
-    m = mock_open()
-    m().read.return_value = yaml.dump(mock_yaml_content)
-    keywords = ["random_keyword"]
-
-    with patch("builtins.open", m), \
-        patch("os.path.isfile", return_value=True), \
-        patch("yaml.load", return_value=mock_yaml_content):
-        with pytest.raises(ValueError) as excinfo:
-            filter_spis(keywords=keywords, output_name="mock_filtered_config", configfile="./mock_config.yaml")
-
+def test_filter_spis_no_matches(config_file, tmp_path, monkeypatch):
+    """Pass in keywords that return no spis and check for ValueError"""
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError) as excinfo:
+        filter_spis(keywords=["random_keyword"], output_name="mock_filtered_config",
+                    configfile=str(config_file))
     assert "0 SPIs were found" in str(excinfo.value), "Incorrect error message returned when no keywords match found."
 
-def test_filter_spis_normal_operation(mock_yaml_content):
-    """Test whether the filter spis function works as expected"""
-    m = mock_open()
-    m().read_return_value = yaml.dump(mock_yaml_content)
-    keywords = ["keyword1", "keyword2"] # filter keys
-    expected_output_yaml = {
-        "module1": {
-            "spi1": {"labels": ["keyword1", "keyword2"], "configs": [1,2]}
+def test_filter_spis_normal_operation(config_file, tmp_path, monkeypatch):
+    """Filter a config down to the SPIs carrying every keyword."""
+    monkeypatch.chdir(tmp_path)
+    filter_spis(keywords=["keyword1", "keyword2"], output_name="mock_filtered_config",
+                configfile=str(config_file))
+
+    written = yaml.safe_load((tmp_path / "mock_filtered_config.yaml").read_text())
+    assert written == {
+        ".statistics.basic": {
+            "Covariance": {
+                "labels": ["keyword1", "keyword2"],
+                "configs": [{"estimator": "EmpiricalCovariance"},
+                            {"estimator": "LedoitWolf"}],
+            }
         }
-    }
+    }, "Expected filtered YAML does not match actual filtered YAML."
 
-    with patch("builtins.open", m), patch("os.path.isfile", return_value=True), \
-         patch("yaml.load", return_value=mock_yaml_content), \
-         patch("yaml.dump") as mock_dump:
-        
-        filter_spis(keywords=keywords, output_name="mock_filtered_config", configfile="./mock_config.yaml")
-
-        mock_dump.assert_called_once()
-        args, _ = mock_dump.call_args # get call args for dump and intercept
-        actual_output = args[0]  # the first argument to yaml.dump should be the yaml
-
-        assert actual_output == expected_output_yaml, "Expected filtered YAML does not match actual filtered YAML."
 
 def test_filter_spis_io_error_on_read():
     # check to see whether io error is raised when trying to access the configfile
@@ -101,19 +115,21 @@ def test_filter_spis_saves_with_random_name_if_no_name_provided(mock_yaml_conten
 
         assert found_expected_call, f"no file with the expected name {expected_file_name_pattern} was saved."
 
-def test_loads_default_config_if_no_config_specified(mock_yaml_content):
-    script_dir = "/fake/script/directory"
-    default_config_path = f"{script_dir}/config.yaml"
+def test_loads_default_config_if_no_config_specified(tmp_path, monkeypatch):
+    """With no configfile, filter_spis falls back to the bundled 'full' config."""
+    monkeypatch.chdir(tmp_path)
+    filter_spis(["nonlinear"], output_name="from_default")
 
-    with patch("builtins.open", mock_open()) as mocked_open, \
-         patch("os.path.isfile", return_value=True), \
-         patch("yaml.load", return_value=mock_yaml_content), \
-         patch("os.path.dirname", return_value=script_dir), \
-         patch("os.path.abspath", return_value=script_dir):
-        
-        # run filter func without specifying a config file 
-        filter_spis(["keyword1"])
+    written = yaml.safe_load((tmp_path / "from_default.yaml").read_text())
+    assert written, "Filtering the default config produced an empty result."
 
-        # ensure the mock_open was called with the expected path
-        assert any(call.args[0] == default_config_path for call in mocked_open.mock_calls), \
-        "Expected default config file to be opened."
+    # Assert on the labels the SPIs actually carry, not on the family block in
+    # the YAML: filtering resolves each config, and several labels are only
+    # added in __init__ (estimator-dependent 'nonlinear', 'antisymmetric' for
+    # mean-reduced phase measures), so a matching SPI's family labels need not
+    # list the keyword.
+    from pyspi.calculator import load_spis_from_yaml
+    spis = load_spis_from_yaml(str(tmp_path / "from_default.yaml"), quiet=True)
+    assert spis, "Filtered config instantiated no SPIs."
+    missing = [k for k, v in spis.items() if "nonlinear" not in (v.labels or [])]
+    assert not missing, f"Filtered config contains SPIs without the label: {missing}"

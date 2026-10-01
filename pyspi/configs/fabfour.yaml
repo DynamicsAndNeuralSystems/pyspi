@@ -1,0 +1,65 @@
+# Pearson and Spearman correlation statistics
+.statistics.basic:
+  # Covariance
+  Covariance:
+    labels:
+      - undirected
+      - nonlinear
+      - unisgned
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
+
+  # Spearman's correlation coefficient
+  SpearmanR:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - squared: True
+
+# Directed information with a Gaussian density estimator
+.statistics.infotheory:
+  DirectedInfo:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M03
+    configs:
+      - estimator: gaussian
+      # Disabled: composing directed information from four separately-estimated
+      # entropies leaves each with its own dimension-dependent bias, and they do
+      # not cancel. On independent data the kernel variant sat at 3.8-4.4 for
+      # every T from 100 to 8000 (a fixed bandwidth in ~11 dimensions does not
+      # improve with sample size) and kozachenko returned negatives, for a
+      # quantity bounded below by zero. Use estimator: kraskov, which estimates
+      # each conditional-MI term directly.
+      # - estimator: kernel
+      # - estimator: kozachenko
+
+# Power envelope correlation
+.statistics.misc:
+  PowerEnvelopeCorrelation:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M11
+    dependencies:
+    configs:
+      - orth: False
+        log: False
+        absolute: False

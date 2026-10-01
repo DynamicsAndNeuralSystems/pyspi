@@ -1,0 +1,117 @@
+#!/bin/bash
+#PBS -N pyspi_bench
+#PBS -j oe
+# ---- EDIT FOR YOUR SITE: sizing defaults (largest (M,T) cell you will run) ----
+#PBS -l select=1:ncpus=16:mem=64gb
+#PBS -l walltime=24:00:00
+# ------------------------------------------------------------------------------
+
+# Benchmark pyspi Calculator.compute() over an (M,T,n_jobs) grid on PBS Pro.
+# Writes one JSON per cell to bench/results/cells/<label>_M<M>_T<T>_n<n>.json
+# and one log per job/array task to bench/logs/.
+#
+# SITE SETUP (qsub does NOT expand shell variables inside #PBS directives):
+#   * Resources: edit the two `#PBS -l` lines above. A command-line `-l` of the
+#     SAME resource name overrides them (`qsub -l walltime=72:00:00 ...`); a
+#     different form does not (e.g. Gadi wants `-l ncpus=16 -l mem=64GB`
+#     instead of `-l select=...` — edit the line rather than adding a flag).
+#   * Account / queue / storage / mail live only on the qsub command line:
+#       qsub -P <project> -q <queue> -l storage=<...> -m bea -M you@example.org
+#   * Software: MODULES + VENV below (env vars, so -v works for them).
+#
+# Submit from the repo root. `qsub -v` splits on commas, so pass comma-valued
+# vars by NAME after exporting them in the shell (as in the examples).
+#
+#   # one (M,T) cell per array task (5 tasks, in parallel):
+#   M=32 T=200,400,800,1600,3200 CONFIG=full REPEATS=1 \
+#     qsub -J 1-5 -v M,T,CONFIG,REPEATS bench/run_benchmark.pbs
+#
+#   # a single cell, bigger walltime, on a named project/queue:
+#   M=64 T=3200 CONFIG=full \
+#     qsub -P myproj -q normal -l walltime=168:00:00 -v M,T,CONFIG bench/run_benchmark.pbs
+#
+#   # a bundled preset, sequentially, in one job:
+#   qsub -v PRESET=parallel,CONFIG=benchmarked_p90 bench/run_benchmark.pbs
+#
+# Env vars (-v), with defaults:
+#   M, T      comma-separated grid axes; if BOTH set they override PRESET
+#   NJOBS     Calculator.compute(n_jobs=) — keep 1 for config-cutting      [1]
+#   PRESET    bundled grid: headline | scaling | parallel | amortized [amortized]
+#   CONFIG    bundled config name (full/fast/benchmarked_p90/...) or YAML path [full]
+#   REPEATS   repeats per cell                                             [2]
+#   LABEL     output filename prefix                       [bench_<config-stem>]
+#   PYSPI_DIR repo checkout                                     [$PBS_O_WORKDIR]
+#   VENV      venv with pyspi installed editable            [$PYSPI_DIR/.venv];
+#             set VENV= (empty) if python is already on PATH via MODULES/conda
+#   MODULES   space-separated modules to load, e.g. "python3/3.12.1"      [none]
+#
+# Array jobs: `-J 1-N` runs the Nth cell of the resolved grid per task
+# (--array-index). Without -J the job walks every cell sequentially. Both are
+# --resume, so a resubmit skips cells whose JSON already exists.
+
+set -euo pipefail
+
+PYSPI_DIR="${PYSPI_DIR:-${PBS_O_WORKDIR:-}}"
+if [[ -z "$PYSPI_DIR" ]]; then
+    echo "[ERROR] set PYSPI_DIR, or submit with qsub from the repo root." >&2
+    exit 1
+fi
+cd "$PYSPI_DIR"
+
+PRESET="${PRESET:-amortized}"
+CONFIG="${CONFIG:-full}"
+REPEATS="${REPEATS:-2}"
+M="${M:-}"
+T="${T:-}"
+NJOBS="${NJOBS:-1}"
+VENV="${VENV-${PYSPI_DIR}/.venv}"
+LABEL="${LABEL:-bench_$(basename "${CONFIG}" .yaml)}"
+
+# One log per job, or per array task.
+LOG_DIR="${PYSPI_DIR}/bench/logs"
+mkdir -p "$LOG_DIR"
+JOBID="${PBS_JOBID:-local}"
+ARRAY_ID="${PBS_ARRAY_INDEX:-}"
+exec >"$LOG_DIR/bench_${JOBID%%.*}${ARRAY_ID:+_${ARRAY_ID}}.log" 2>&1
+
+if command -v module >/dev/null 2>&1; then
+    module purge
+    for _mod in ${MODULES:-}; do module load "$_mod"; done
+fi
+[[ -n "$VENV" ]] && source "${VENV}/bin/activate"
+
+# BLAS single-threaded — matches the production regime (1 dataset / core).
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export KMP_DUPLICATE_LIB_OK=TRUE
+
+# Some GPU-aware transitive imports do ast.literal_eval() on this if it is set,
+# and the physics queue sets it empty. Kept because the failure it prevents is
+# an import-time crash, not a pyspi one.
+unset CUDA_VISIBLE_DEVICES
+
+# Explicit M and T override the preset. One array, never empty, so `set -u`
+# stays happy on older bash.
+if [[ -n "$M" && -n "$T" ]]; then
+    ARGS=(--m "$M" --t "$T" --n-jobs "$NJOBS")
+else
+    ARGS=(--preset "$PRESET")
+fi
+[[ -n "$ARRAY_ID" ]] && ARGS+=(--array-index "$ARRAY_ID")
+
+echo "[bench] host=$(hostname) start=$(date)"
+echo "[bench] config=${CONFIG}  grid=${ARGS[*]}  repeats=${REPEATS}"
+echo "[bench] label=${LABEL}  output_dir=bench/results/cells/"
+
+python -m bench.bench_compute \
+    "${ARGS[@]}" \
+    --config "${CONFIG}" \
+    --repeats "${REPEATS}" \
+    --output-dir bench/results/cells \
+    --label "${LABEL}" \
+    --resume
+
+echo "[bench] finished at $(date)"

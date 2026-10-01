@@ -1,36 +1,137 @@
 [build-system]
-requires      = ["setuptools>=61.0.0", "wheel"]
+# >=77 for PEP 639: the `license = "GPL-3.0-or-later"` SPDX expression and
+# `license-files` below are only understood from that release, and older
+# setuptools would build a wheel with no licence metadata at all.
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyspi"
-version = "2.0.1"
-authors = [
-    { name ="Oliver M. Cliff", email="oliver.m.cliff@gmail.com"},
-]
-maintainers = [
-    {name = "Joshua B. Moore"},
-    {email = "joshua.moore@sydney.edu.au"},
-]
+version = "3.0.0"
 description = "Library for pairwise analysis of time series data."
 readme = "README.md"
-license = {text = "GNU General Public License v3 (GPLv3)"}
-requires-python = ">=3.8"
+# PEP 639 SPDX expression. The `{ text = ... }` table is deprecated by
+# setuptools >= 77 and emits a build warning that will become an error.
+license = "GPL-3.0-or-later"
+# The two vendored MIT notices go in the wheel's licence metadata as well as
+# in package data: `pyspi/lib/ids/` and the four pairwise causal scores in
+# `pyspi/lib/pairwise_causal.py` carry their own terms, and a redistributor
+# reading only the dist-info should see them.
+license-files = ["LICENSE.txt", "pyspi/lib/LICENSE-cdt.txt",
+                 "pyspi/lib/ids/LICENSE.txt"]
+requires-python = ">=3.10"
+authors = [
+    { name = "Oliver M. Cliff", email = "oliver.m.cliff@gmail.com" },
+]
+maintainers = [
+    { name = "Joshua B. Moore", email = "joshua.moore@sydney.edu.au" },
+]
 classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Development Status :: 1 - Planning",
+    "Development Status :: 4 - Beta",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
     "Intended Audience :: Science/Research",
     "Environment :: Console",
-    "Environment :: Other Environment",
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Information Analysis",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
-dynamic = ["dependencies", "optional-dependencies"]
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.11",
+    # >=2.1 for DataFrame.stack(future_stack=True), the pandas 3 stack semantics.
+    "pandas>=2.1",
+    "scikit-learn>=1.3",
+    "statsmodels>=0.14",
+    "mne>=1.6",
+    "mne-connectivity>=0.5",
+    # Upper-bounded on purpose. DirectedCoherence reads two *private*
+    # Connectivity properties (_transfer_function, _noise_covariance) because
+    # the public directed_coherence() is wrong twice over (see
+    # statistics/spectral.py). Supported range is verified end to end against
+    # the oldest published 1.1 (1.1.0) and the locked current release; both
+    # expose the whole surface pyspi uses. 1.1.x lacks transforms.
+    # prepare_time_series (there is a fallback) and returns a 400-point rather
+    # than 401-point frequency grid, so band statistics differ marginally
+    # across the range. A major bump is where a private property may vanish;
+    # tests/test_directionality.py fails loudly if one does.
+    "spectral-connectivity>=1.1,<3",
+    "nitime>=0.10",
+    "hyppo>=0.4",
+    # cdt and torch are gone. pyspi used four functions from
+    # cdt.causality.pairwise (the ANM independence score, CDS, RECI, IGCI);
+    # they are transcribed in pyspi/lib/pairwise_causal.py and produce
+    # bit-identical values (verified against cdt 0.6 before removal, and frozen
+    # in tests/data/fixtures/cdt_pairwise_reference.npz). torch was never used
+    # for any pyspi computation -- it entered only because cdt eagerly imports
+    # its Torch-backed models at package load.
+    "tslearn>=0.6",
+    "dtaidistance>=2.3",
+    # >=2.5 dropped the `import pkg_resources` that previously forced a
+    # setuptools<80 pin on every install (pkg_resources was removed in
+    # setuptools 80). Verified: nothing in the dependency tree imports it.
+    "pyEDM>=2.5",
+    "pyyaml>=6.0",
+    "tqdm>=4.65",
+    "colorama>=0.4",
+]
+
+[project.optional-dependencies]
+testing = [
+    "pytest>=7",
+]
+# Optional: only required for loading the sktime/aeon .ts dataset format.
+tsfile = [
+    "aeon>=1.0",
+]
+# Optional: the compute-cost benchmark suite and its analysis notebook (bench/).
+# Not needed to use pyspi.
+bench = [
+    "psutil>=5.9",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "plotly>=5.20",
+    "nbformat>=5.10",
+    "ipykernel>=6.29",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7",
+    "psutil>=5.9",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "plotly>=5.20",
+    "nbformat>=5.10",
+    "ipykernel>=6.29",
+]
 
 [project.urls]
 Homepage = "https://github.com/DynamicsAndNeuralSystems/pyspi"
 Documentation = "https://time-series-features.gitbook.io/pyspi/"
+
+[tool.pytest.ini_options]
+# Default: skip the slow suite (test_baseline_drift.py plus the cache-sharing
+# sweep in test_cache_keys.py; ~2 min on a 2024 laptop).
+# Run everything with: pytest -m ''
+# Run only regression: pytest -m slow
+addopts = "-m 'not slow'"
+markers = [
+    "slow: regression suite against frozen baseline SPI tables (run with -m slow)",
+]
+
+[tool.setuptools.packages.find]
+include = ["pyspi*"]
+
+[tool.setuptools.package-data]
+# Globs, not an enumeration: hand-listing these is what previously let four
+# shipped configs and two datasets go missing from the wheel unnoticed.
+pyspi = [
+    "configs/*.yaml",
+    "data/*.npy",
+]
+"pyspi.lib" = ["LICENSE-cdt.txt"]
+"pyspi.lib.ids" = ["LICENSE.txt"]

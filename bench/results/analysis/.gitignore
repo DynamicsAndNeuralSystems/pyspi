@@ -1,0 +1,6 @@
+# Derived artefacts of `python -m bench.analyse_cells` — regenerate in seconds
+# from the committed per-cell JSONs, so they are not tracked. The small,
+# human-readable summaries (report.md, scaling.csv, cell_summary.csv) are.
+long_costs.csv
+jaccard_p*.csv
+plot_*.png

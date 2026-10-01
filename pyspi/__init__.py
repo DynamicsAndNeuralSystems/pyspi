@@ -1,17 +1,23 @@
-# For some reason the JVM causes a segfault with OpenBLAS (numpy's linalg sovler). Need to halt multithreading before starting JVM:
-import os, logging, sys
+# BLAS threading: default to single-threaded BLAS so that parallel workers
+# (see Calculator.compute) don't oversubscribe (n_jobs workers x full BLAS).
+# Workers pin BLAS to 1 thread in _parallel._worker_init; this line ensures
+# the main process (and any serial run) does the same by default.
+import os
+import logging
+import numpy as np
 
-os.environ['OMP_NUM_THREADS'] = '1'
+os.environ.setdefault('OMP_NUM_THREADS', '1')
 
-# formatter = logging.Formatter('[%(levelname)s: %(asctime)s]: %(message)s')
+# Standard library practice: a library should not emit log output unless the
+# application configures a handler. Calculator(verbose=...) attaches a real
+# handler on demand via pyspi._logging.configure().
+logging.getLogger("pyspi").addHandler(logging.NullHandler())
 
-# ch = logging.StreamHandler()
-# ch.setFormatter(formatter)
-# ch.setLevel(logging.DEBUG)
+# NumPy 2 removed np.NaN; some legacy code paths still reference it.
+if not hasattr(np, "NaN"):
+    np.NaN = np.nan
 
-# logger = logging.getLogger()
-# logger.addHandler(ch)
-# logger.setLevel(logging.INFO)
 
-# logging.captureWarnings(True)
-# logging.basicConfig(stream=, level=logging.INFO)
+from .calculator import Calculator, load_table  # noqa: E402
+
+__all__ = ["Calculator", "load_table"]

@@ -1,3 +1,0 @@
-[submodule "pyspi/lib/tigramite"]
-	path = pyspi/lib/tigramite
-	url = https://github.com/jakobrunge/tigramite.git

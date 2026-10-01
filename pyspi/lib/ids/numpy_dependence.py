@@ -8,8 +8,11 @@ import math
 import sys
 from tqdm import tqdm
 
+# NOTE: the upstream module called np.random.seed(1717) here, at import time.
+# Importing pyspi therefore reseeded the caller's global NumPy RNG, silently
+# changing the results of any surrounding analysis. Seeding is the caller's
+# decision, so it is not done here.
 SEED = 1717
-np.random.seed(SEED)
 
 EPSILON = sys.float_info.epsilon
 

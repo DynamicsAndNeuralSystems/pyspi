@@ -1,0 +1,42 @@
+#!/bin/bash
+#PBS -N bench_physics
+#PBS -j oe
+#PBS -l select=1:ncpus=16:mem=64gb
+#PBS -l walltime=168:00:00
+#PBS -J 1-5
+
+# WORKED EXAMPLE — copy this file, rename it, and adapt the #PBS lines to your
+# own cluster. It is the concrete configuration used on the USYD Physics PBS
+# Pro queue to produce the committed `physics_config_M*_T*_n1.json` cells:
+# the full config, repeats=1, n_jobs=1, one (M,T) cell per array task.
+#
+# Everything below just pins env vars and hands off to ../run_benchmark.pbs,
+# which holds the actual logic (see its header for the full option list).
+#
+# Submit from the repo root. Defaults here reproduce the M=64 row; the two
+# other committed rows are one override away:
+#
+#   qsub bench/physics/run_bench.pbs                        # M=64  x 5 T, 168 h
+#   M=32 qsub -l walltime=72:00:00 -v M bench/physics/run_bench.pbs
+#   M=4,8,16 qsub -J 1-15 -l select=1:ncpus=12:mem=48gb -l walltime=24:00:00 \
+#       -v M bench/physics/run_bench.pbs
+#
+# Mail is a qsub-line option, since #PBS directives are not shell-expanded:
+#   qsub -m bea -M you@example.org bench/physics/run_bench.pbs
+
+set -euo pipefail
+
+export M="${M:-64}"
+export T="${T:-200,400,800,1600,3200}"
+export NJOBS="${NJOBS:-1}"
+export CONFIG="${CONFIG:-full}"
+export REPEATS="${REPEATS:-1}"
+export LABEL="${LABEL:-physics_config}"   # prefix of the committed cell JSONs
+export PYSPI_DIR="${PYSPI_DIR:-${PBS_O_WORKDIR:-}}"
+if [[ -z "$PYSPI_DIR" ]]; then
+    echo "[ERROR] set PYSPI_DIR, or submit with qsub from the repo root." >&2
+    exit 1
+fi
+export VENV="${VENV-${PYSPI_DIR}/.venv}"  # python comes from the venv, no modules
+
+exec bash "${PYSPI_DIR}/bench/run_benchmark.pbs"

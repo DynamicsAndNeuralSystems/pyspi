@@ -1,0 +1,26 @@
+# Config of deliberately misbehaving SPIs, plus one healthy SPI so the run
+# still produces a valid column. Used by tests/test_execution_parity.py to pin
+# that serial and parallel report failure identically.
+failing_spis:
+  AlwaysRaises:
+    labels: [test]
+    configs:
+      - message: deliberate test failure
+
+  AlwaysWarns:
+    labels: [test]
+    configs:
+
+  WrongShape:
+    labels: [test]
+    configs:
+
+  NonFinite:
+    labels: [test]
+    configs:
+
+.statistics.basic:
+  Covariance:
+    labels: [undirected, linear, signed]
+    configs:
+      - estimator: EmpiricalCovariance

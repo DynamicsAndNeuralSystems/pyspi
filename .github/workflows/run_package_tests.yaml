@@ -1,0 +1,108 @@
+name: Packaging Pipeline
+
+# The unit-test job installs pyspi as an editable checkout, so it exercises the
+# repository, not the artefact users receive. Everything that can only break in
+# a built wheel -- a data file left out of package-data, a config or dataset
+# resolved relative to the source tree, a console entry point that is not
+# wired up -- is invisible to it. This job builds the wheel, installs it into a
+# clean environment, and runs from a directory that contains no pyspi source.
+
+on: [push, pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wheel:
+    name: wheel / python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build the wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir dist/
+
+      - name: Install it into a clean environment
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install --upgrade pip
+          /tmp/clean/bin/pip install dist/*.whl
+
+      # Run from an empty directory: from the repository root, `import pyspi`
+      # finds the source tree and the installed package is never touched.
+      - name: Import, resolve every bundled config and dataset, run fabfour
+        run: |
+          mkdir -p /tmp/run && cd /tmp/run
+          /tmp/clean/bin/python - <<'PY'
+          import os, tempfile
+          import numpy as np
+          import pyspi
+          from pyspi.calculator import (Calculator, bundled_configs, load_table,
+                                        load_spis_from_yaml, resolve_config)
+          from pyspi.data import available_datasets, load_dataset
+
+          for name in bundled_configs():
+              path = resolve_config(name)
+              assert os.path.exists(path), f"{name} -> {path}"
+              assert load_spis_from_yaml(path, quiet=True), name
+          for name in available_datasets():
+              load_dataset(name)
+
+          rng = np.random.default_rng(0)
+          calc = Calculator(dataset=rng.standard_normal((3, 100)), config="fabfour")
+          calc.compute()
+          assert not calc.errors, calc.errors
+
+          out = os.path.join(tempfile.mkdtemp(), "results.npz")
+          calc.save(out)
+          table = load_table(out)
+          assert np.allclose(table.to_numpy(), calc.table.to_numpy(), equal_nan=True)
+          assert table.attrs["run_digest"] == calc.run_digest
+          print("package smoke test OK")
+          PY
+
+      - name: Exercise the CLI
+        run: |
+          mkdir -p /tmp/cli && cd /tmp/cli
+          /tmp/clean/bin/python -c "import numpy as np; np.save('d.npy', np.random.default_rng(0).standard_normal((3, 100)))"
+          /tmp/clean/bin/python -m pyspi compute --data d.npy --config fabfour --output r.npz --quiet
+          /tmp/clean/bin/python -m pyspi --help
+          /tmp/clean/bin/python -c "
+          from pyspi.calculator import load_table
+          t = load_table('r.npz')
+          assert t.shape[0] == 3, t.shape
+          print('CLI round-trip OK')
+          "
+
+  lock:
+    name: locked resolution (uv.lock)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      # The matrix above floats to the latest compatible dependencies, which is
+      # what catches upstream breakage. This pins to the committed lock, which
+      # is what makes a failure there attributable: if both jobs fail the change
+      # is ours, if only the floating one does it is a dependency's.
+      - name: Check the lock is current
+        run: uv lock --check
+
+      - name: Run the fast suite against the locked resolution
+        run: |
+          uv sync --locked --extra testing
+          uv run pytest -q

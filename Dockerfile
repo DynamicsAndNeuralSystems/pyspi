@@ -1,24 +1,28 @@
-# Debian linux distribution with python 3.9
-FROM --platform=linux/amd64 python:3.9-slim-bookworm
+# Reproducible pyspi environment built from the committed uv.lock.
+#
+# linux/amd64 is pinned deliberately: dtaidistance publishes no linux-aarch64
+# wheel, so an arm64 build would fall back to its sdist and require a C
+# toolchain. Every dependency in uv.lock has a manylinux x86_64 wheel for
+# CPython 3.12, so no compiler is installed here.
+FROM --platform=linux/amd64 python:3.12-slim-bookworm
 
-# Set the working directory
-WORKDIR /pyspi_project
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-# Copy the current directory contents into the container
-COPY . .
+# Keep the environment outside the workdir so it can never be shadowed by a
+# host .venv, and so the image works with `python` straight off PATH.
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_COMPILE_BYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH"
 
-# Update the package index and install essential packages
-RUN apt-get update && apt-get install -y build-essential octave
+WORKDIR /pyspi
 
-# Upgrade pip and setuptools
-RUN pip install --upgrade pip setuptools
+# Dependencies first: this layer is only invalidated when the lock or the
+# project metadata changes, not when library source changes.
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --frozen --no-install-project
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt && \
-    python setup.py install
+# Then the package itself.
+COPY pyspi ./pyspi
+RUN uv sync --frozen
 
-# Make port 80 available to communicate with other containters if needed
-# EXPOSE 80
-
-# Run app.py when the container launches
 CMD ["python"]
