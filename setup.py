@@ -19,6 +19,7 @@ install_requires = [
         'nitime',
         'hyppo',
         'pyEDM==1.15.2.0',
+        'setuptools<81',  # pyEDM 1.x imports pkg_resources, removed in setuptools>=81
         'jpype1',
         'sktime',
         'dill',
