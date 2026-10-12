@@ -724,6 +724,163 @@ def test_ksg_cmi_matches_exact_pairwise_strict_counts(w, near_deterministic):
     assert _ksg_cmi(A, B, C, 1, w) == pytest.approx(expected, abs=1e-12)
 
 
+def _brute_force_radius_and_counts(joint, marginal, k, w):
+    """kth allowed joint distance and the allowed marginal points strictly inside it."""
+    n = joint.shape[0]
+
+    def chebyshev(M):
+        return np.abs(M[:, None, :] - M[None, :, :]).max(axis=-1)
+
+    allowed = np.abs(np.arange(n)[:, None] - np.arange(n)) > w
+    d_joint = np.where(allowed, chebyshev(joint), np.inf)
+    eps = np.sort(d_joint, axis=1)[:, k - 1]
+    return eps, ((chebyshev(marginal) < eps[:, None]) & allowed).sum(axis=1)
+
+
+@pytest.mark.parametrize("chunk", [1 << 21, 7])
+@pytest.mark.parametrize("k", [1, 4])
+@pytest.mark.parametrize("w", [0, 1, 2, 9, "largest"])
+def test_ksg_radius_and_counts_match_brute_force(w, k, chunk, monkeypatch):
+    """Integer neighbour counts, against all N^2 distances.
+
+    ``w="largest"`` is the widest window the estimator accepts: exactly ``k``
+    usable neighbours remain for an interior point. Autocorrelated series put
+    genuine neighbours inside the window, so the exclusion is exercised; a
+    seven-element block forces the radius search through many chunks.
+    """
+    from scipy.spatial import cKDTree
+
+    from pyspi.statistics import infotheory as it
+
+    monkeypatch.setattr(it, "_KSG_CHUNK", chunk)
+    rng = np.random.default_rng(4)
+    n = 41
+    series = rng.standard_normal((n, 3))
+    for t in range(1, n):
+        series[t] += 0.9 * series[t - 1]
+    if w == "largest":
+        w = (n - k - 1) // 2
+        it._validate_ksg_sample(n, k, w)
+        with pytest.raises(ValueError, match="usable neighbour"):
+            it._validate_ksg_sample(n, k, w + 1)
+
+    radius = it._ksg_radius(cKDTree(series), series, k, w)
+    for cols in ([0], [1, 2], [0, 1, 2]):
+        marginal = series[:, cols]
+        eps, expected = _brute_force_radius_and_counts(series, marginal, k, w)
+        assert np.array_equal(radius, np.nextafter(eps, -np.inf))
+        got = it._ksg_counts(cKDTree(marginal), marginal, radius, w)
+        assert np.array_equal(got, expected)
+
+
+@pytest.mark.parametrize("w", [0, 1, 3, 40])
+def test_ksg_counts_include_the_boundary_and_exclude_the_window(w):
+    """Points on a lattice with integer radii: most distances sit on a boundary.
+
+    The estimators never pass such data (ties are refused), but the helper's
+    contract -- distance <= radius, window and self removed -- is only tested
+    where neighbours lie exactly on the radius, inside and outside the window.
+    """
+    from scipy.spatial import cKDTree
+
+    from pyspi.statistics.infotheory import _ksg_counts
+
+    rng = np.random.default_rng(6)
+    n = 30
+    pts = rng.integers(0, 6, size=(n, 2)).astype(float)
+    radius = rng.integers(0, 4, size=n).astype(float)
+    dist = np.abs(pts[:, None, :] - pts[None, :, :]).max(axis=-1)
+    apart = np.abs(np.arange(n)[:, None] - np.arange(n))
+    expected = ((dist <= radius[:, None]) & (apart > w)).sum(axis=1)
+    assert ((dist == radius[:, None]) & (apart > 0) & (apart <= w)).any() or w == 0
+
+    assert np.array_equal(_ksg_counts(cKDTree(pts), pts, radius, w), expected)
+
+
+def test_ksg_radius_is_infinite_when_too_few_neighbours_survive_the_window():
+    """Unreachable through the validated entry points; every point then counts."""
+    from scipy.spatial import cKDTree
+
+    from pyspi.statistics.infotheory import _ksg_counts, _ksg_radius
+
+    rng = np.random.default_rng(0)
+    pts = rng.standard_normal((9, 2))
+    radius = _ksg_radius(cKDTree(pts), pts, 4, 3)
+    usable = (np.abs(np.arange(9)[:, None] - np.arange(9)) > 3).sum(axis=1)
+    assert np.array_equal(radius < np.finfo(float).max, usable >= 4)
+    counts = _ksg_counts(cKDTree(pts), pts, radius, 3)
+    assert np.array_equal(counts[usable < 4], usable[usable < 4])
+
+
+@pytest.mark.parametrize("w", [0, 3, "largest"])
+def test_ksg_pair_mi_matches_exact_pairwise_strict_counts(w):
+    from pyspi.statistics.infotheory import _knn_condition, _ksg_mi_pair
+
+    rng = np.random.default_rng(8)
+    n, k = 60, 4
+    x = rng.standard_normal(n)
+    for t in range(1, n):
+        x[t] += 0.8 * x[t - 1]
+    y = 0.7 * x + rng.standard_normal(n)
+    if w == "largest":
+        w = (n - k - 1) // 2
+    xc, yc = _knn_condition(np.column_stack([x, y])).T
+    expected = _brute_force_ksg_mi_general(xc[:, None], yc[:, None], k, w)
+    assert _ksg_mi_pair(x, y, k, w) == pytest.approx(expected, abs=1e-12)
+    assert _ksg_mi_pair(y, x, k, w) == pytest.approx(expected, abs=1e-12)
+
+
+@pytest.mark.parametrize("w", [0, 3, "largest"])
+@pytest.mark.parametrize("k_history,l_history", [(1, 1), (2, 1), (2, 2)])
+def test_kraskov_te_matches_brute_force_in_both_directions(k_history, l_history, w):
+    """I(target future; source past | target past), and it is not symmetric."""
+    from pyspi.statistics.infotheory import (_knn_condition,
+                                             _kraskov_te_bivariate,
+                                             _te_build_embeddings)
+
+    rng = np.random.default_rng(21)
+    n, k = 90, 4
+    src = rng.standard_normal(n)
+    targ = rng.standard_normal(n)
+    for t in range(1, n):
+        src[t] += 0.5 * src[t - 1]
+        targ[t] += 0.4 * targ[t - 1] + 0.8 * src[t - 1]
+
+    values = []
+    for s, t_ in ((src, targ), (targ, src)):
+        Y_f, Y_p, X_p = _te_build_embeddings(s, t_, k_history, 1, l_history, 1)
+        w_ = (Y_f.shape[0] - k - 1) // 2 if w == "largest" else w
+        parts = np.split(_knn_condition(np.column_stack([Y_f, X_p, Y_p])),
+                         [Y_f.shape[1], Y_f.shape[1] + X_p.shape[1]], axis=1)
+        expected = _brute_force_ksg_cmi(*parts, k, w_)
+        got = _kraskov_te_bivariate(s, t_, k_history, 1, l_history, 1, k, w_)
+        assert got == pytest.approx(expected, abs=1e-12)
+        values.append(got)
+    if w != "largest":       # almost every sample is excluded at the widest window
+        assert values[0] > values[1] + 0.05
+
+
+@pytest.mark.parametrize("w", [0, 2])
+def test_ksg_refuses_constant_tied_and_short_inputs(w):
+    from pyspi.statistics.infotheory import _ksg_cmi, _ksg_mi_general, _ksg_mi_pair
+
+    rng = np.random.default_rng(2)
+    x = rng.standard_normal(30)
+    constant = np.full(30, 1.5)
+    tied = np.round(x)
+    with pytest.raises(ValueError, match="marginal y is constant"):
+        _ksg_mi_pair(x, constant, 4, w)
+    with pytest.raises(ValueError, match="constant column"):
+        _ksg_cmi(constant[:, None], x[:, None], x[::-1, None].copy(), 4, w)
+    for fn in (_ksg_mi_pair, _ksg_mi_general):
+        with pytest.raises(ValueError, match="tie-free"):
+            fn(x, tied, 4, w)
+        short = 4 + 2 * w          # one observation too few for k=4
+        with pytest.raises(ValueError, match="usable neighbour"):
+            fn(x[:short], x[::-1][:short], 4, w)
+        assert np.isfinite(fn(x[:short + 1], x[::-1][:short + 1], 4, w))
+
+
 @pytest.mark.parametrize("dim,delay", [(1, 1), (2, 1), (3, 2), (4, 1)])
 def test_ksg_ais_matches_an_independent_multivariate_reference(dim, delay):
     """The AIS candidate score, against a brute-force multivariate KSG.

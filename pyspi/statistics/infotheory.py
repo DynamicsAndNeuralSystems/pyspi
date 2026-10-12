@@ -688,6 +688,61 @@ def _strict_radius(epsilon):
     return np.nextafter(epsilon, -np.inf)
 
 
+# Elements per temporary in the Theiler-window neighbour search below.
+_KSG_CHUNK = 1 << 21
+
+
+def _ksg_radius(tree, points, k, w):
+    """Strict radius of each point's kth nearest neighbour in the joint space.
+
+    With a Theiler window ``w`` the neighbours ``|j - i| <= w`` do not count.
+    The nearest ``k + 2w + 2`` points always hold ``k`` that do (the point
+    itself and at most ``2w`` window members are skipped), and when that many
+    do not exist the query returns every point, so nothing further could be
+    found: a row with fewer than ``k`` valid neighbours has radius ``inf``.
+    Rows are searched in blocks so the ``N x (k + 2w + 2)`` neighbour table is
+    never held at once.
+    """
+    N = points.shape[0]
+    if w == 0:
+        dists, _ = tree.query(points, k=k + 1, p=np.inf)
+        return _strict_radius(dists[:, k])
+    n_query = min(k + 2 * w + 2, N)
+    eps = np.full(N, np.inf)
+    step = max(1, _KSG_CHUNK // n_query)
+    for start in range(0, N, step):
+        rows = np.arange(start, min(start + step, N))
+        dists, idx = tree.query(points[rows], k=n_query, p=np.inf)
+        valid = np.abs(idx - rows[:, None]) > w
+        valid[:, 0] = False
+        rank = np.cumsum(valid, axis=1)
+        found = rank[:, -1] >= k
+        kth = np.argmax(rank[found] >= k, axis=1)
+        eps[rows[found]] = dists[found, kth]
+    return _strict_radius(eps)
+
+
+def _ksg_counts(tree, points, radius, w):
+    """Neighbours of each point within its ``radius``, boundary included.
+
+    The point itself is not a neighbour, nor is any ``|j - i| <= w``. The tree
+    counts every point in the ball; the excluded ones that fell inside it are
+    then subtracted one time offset at a time, by the comparison the tree
+    itself makes (largest coordinate difference ``<= radius``), which needs
+    O(N) memory whatever the window.
+    """
+    n = tree.query_ball_point(points, radius, p=np.inf,
+                              return_length=True).astype(np.float64)
+    if w == 0:
+        return n - 1
+    n -= radius >= 0
+    for d in range(1, min(w, points.shape[0] - 1) + 1):
+        apart = np.abs(points[d:] - points[:-d]).max(axis=1)
+        n[:-d] -= apart <= radius[:-d]
+        n[d:] -= apart <= radius[d:]
+    return n
+
+
 def _ksg_mi_pair(x, y, k, w):
     """KSG Estimator 1 MI for a single pair of scalar series."""
     N = len(x)
@@ -702,51 +757,18 @@ def _ksg_mi_pair(x, y, k, w):
                 f"constant, so all neighbour distances are zero."
             )
     x, y = _knn_condition(np.column_stack([x, y])).T
-    tree_x = cKDTree(x.reshape(-1, 1))
-    tree_y = cKDTree(y.reshape(-1, 1))
+    x = x.reshape(-1, 1)
+    y = y.reshape(-1, 1)
+    tree_x = cKDTree(x)
+    tree_y = cKDTree(y)
     xy = np.column_stack([x, y])
-    tree_xy = cKDTree(xy)
-
-    if w == 0:
-        dists, _ = tree_xy.query(xy, k=k + 1, p=np.inf)
-        eps = dists[:, k]
-        eps_strict = _strict_radius(eps)
-        nx_lists = tree_x.query_ball_point(x.reshape(-1, 1), eps_strict, p=np.inf)
-        ny_lists = tree_y.query_ball_point(y.reshape(-1, 1), eps_strict, p=np.inf)
-        n_x = np.array([len(lst) - 1 for lst in nx_lists], dtype=np.float64)
-        n_y = np.array([len(lst) - 1 for lst in ny_lists], dtype=np.float64)
-    else:
-        n_query = min(k + 2 * w + 2, N)
-        dists_all, idx_all = tree_xy.query(xy, k=n_query, p=np.inf)
-
-        eps = np.empty(N)
-        n_x = np.empty(N)
-        n_y = np.empty(N)
-
-        for i in range(N):
-            valid = np.abs(idx_all[i] - i) > w
-            valid[0] = False
-            d_valid = dists_all[i][valid]
-
-            if len(d_valid) < k:
-                all_dists = np.max(np.abs(xy - xy[i]), axis=1)
-                all_dists[max(0, i - w): i + w + 1] = np.inf
-                all_dists[i] = np.inf
-                d_valid = np.sort(all_dists)
-                d_valid = d_valid[np.isfinite(d_valid)]
-
-            e = d_valid[k - 1] if len(d_valid) >= k else np.inf
-            eps[i] = e
-
-            # Count marginal neighbours STRICTLY within eps (< eps), matching
-            # KSG1 and the w==0 branch above. Inclusive (<= eps) counting wrongly
-            # admits the k-th neighbour at the boundary, inflating n_x/n_y and
-            # flipping the sign of the Theiler-window effect on MI.
-            e_strict = _strict_radius(e)
-            ix = tree_x.query_ball_point([[x[i]]], e_strict, p=np.inf)[0]
-            iy = tree_y.query_ball_point([[y[i]]], e_strict, p=np.inf)[0]
-            n_x[i] = sum(1 for j in ix if abs(j - i) > w and j != i)
-            n_y[i] = sum(1 for j in iy if abs(j - i) > w and j != i)
+    # Marginal neighbours are counted STRICTLY within eps (< eps), as KSG1
+    # requires. Inclusive (<= eps) counting wrongly admits the k-th neighbour
+    # at the boundary, inflating n_x/n_y and flipping the sign of the
+    # Theiler-window effect on MI.
+    eps = _ksg_radius(cKDTree(xy), xy, k, w)
+    n_x = _ksg_counts(tree_x, x, eps, w)
+    n_y = _ksg_counts(tree_y, y, eps, w)
 
     # psi(N) uses the full, unreduced N (KSG1 convention; only the neighbour
     # set is window-restricted, not the normalisation). See JIDT
@@ -780,35 +802,9 @@ def _ksg_mi_general(A, B, k_nn, w=0, condition=True):
     tree_ab = cKDTree(AB)
     tree_a = cKDTree(A)
     tree_b = cKDTree(B)
-
-    if w == 0:
-        dists, _ = tree_ab.query(AB, k=k_nn + 1, p=np.inf)
-        eps = _strict_radius(dists[:, k_nn])
-        n_a = np.array([len(lst) - 1 for lst in
-                        tree_a.query_ball_point(A, eps, p=np.inf)], dtype=np.float64)
-        n_b = np.array([len(lst) - 1 for lst in
-                        tree_b.query_ball_point(B, eps, p=np.inf)], dtype=np.float64)
-    else:
-        n_query = min(k_nn + 2 * w + 2, N)
-        dists_all, idx_all = tree_ab.query(AB, k=n_query, p=np.inf)
-        n_a = np.empty(N)
-        n_b = np.empty(N)
-        for i in range(N):
-            valid = np.abs(idx_all[i] - i) > w
-            valid[0] = False
-            d_valid = dists_all[i][valid]
-            if len(d_valid) < k_nn:
-                all_d = np.max(np.abs(AB - AB[i]), axis=1)
-                all_d[max(0, i - w): i + w + 1] = np.inf
-                all_d[i] = np.inf
-                d_valid = np.sort(all_d)
-                d_valid = d_valid[np.isfinite(d_valid)]
-            e = d_valid[k_nn - 1] if len(d_valid) >= k_nn else np.inf
-            e_strict = _strict_radius(e)
-            ia = tree_a.query_ball_point(A[i], e_strict, p=np.inf)
-            ib = tree_b.query_ball_point(B[i], e_strict, p=np.inf)
-            n_a[i] = sum(1 for j in ia if abs(j - i) > w and j != i)
-            n_b[i] = sum(1 for j in ib if abs(j - i) > w and j != i)
+    eps = _ksg_radius(tree_ab, AB, k_nn, w)
+    n_a = _ksg_counts(tree_a, A, eps, w)
+    n_b = _ksg_counts(tree_b, B, eps, w)
 
     return float(digamma(k_nn) + digamma(N)
                  - np.mean(digamma(n_a + 1) + digamma(n_b + 1)))
@@ -1052,33 +1048,10 @@ def _ksg_cmi(A, B, C, k_nn, w=0, condition=True):
     tree_BC = cKDTree(BC)
     tree_C = cKDTree(C)
 
-    if w == 0:
-        dists, _ = tree_joint.query(joint, k=k_nn + 1, p=np.inf)
-        eps = dists[:, k_nn]
-        eps_strict = _strict_radius(eps)
-
-        n_AC = np.array([len(l) - 1 for l in
-                         tree_AC.query_ball_point(AC, eps_strict, p=np.inf)], dtype=np.float64)
-        n_BC = np.array([len(l) - 1 for l in
-                         tree_BC.query_ball_point(BC, eps_strict, p=np.inf)], dtype=np.float64)
-        n_C = np.array([len(l) - 1 for l in
-                        tree_C.query_ball_point(C, eps_strict, p=np.inf)], dtype=np.float64)
-    else:
-        n_query = min(k_nn + 2 * w + 2, N)
-        dists_all, idx_all = tree_joint.query(joint, k=n_query, p=np.inf)
-        n_AC = np.empty(N); n_BC = np.empty(N); n_C = np.empty(N)
-        for i in range(N):
-            valid = np.abs(idx_all[i] - i) > w
-            valid[0] = False
-            d_valid = dists_all[i][valid]
-            e = d_valid[k_nn - 1] if len(d_valid) >= k_nn else np.inf
-            e_strict = _strict_radius(e)
-            n_AC[i] = sum(1 for j in tree_AC.query_ball_point(AC[i], e_strict, p=np.inf)
-                          if abs(j - i) > w and j != i)
-            n_BC[i] = sum(1 for j in tree_BC.query_ball_point(BC[i], e_strict, p=np.inf)
-                          if abs(j - i) > w and j != i)
-            n_C[i] = sum(1 for j in tree_C.query_ball_point(C[i], e_strict, p=np.inf)
-                         if abs(j - i) > w and j != i)
+    eps_strict = _ksg_radius(tree_joint, joint, k_nn, w)
+    n_AC = _ksg_counts(tree_AC, AC, eps_strict, w)
+    n_BC = _ksg_counts(tree_BC, BC, eps_strict, w)
+    n_C = _ksg_counts(tree_C, C, eps_strict, w)
 
     return float(digamma(k_nn) + np.mean(
         digamma(n_C + 1) - digamma(n_AC + 1) - digamma(n_BC + 1)
