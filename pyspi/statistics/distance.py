@@ -140,6 +140,19 @@ class DistanceCorrelation(Undirected, Unsigned):
         stat = Dcorr(bias=self._biased).statistic(x, y)
         return stat
 
+    @parse_multivariate
+    def multivariate(self, data):
+        # The inherited loop evaluates both orders of every pair and keeps
+        # bivariate(i, j) with i < j for both entries. This statistic holds no
+        # state between calls, so only the kept half is evaluated, in the order
+        # the inherited loop reaches it.
+        M = data.n_processes
+        A = np.full((M, M), np.nan)
+        for j in range(M):
+            for i in range(j):
+                A[i, j] = A[j, i] = self.bivariate(data, i=i, j=j)
+        return A
+
 
 class MultiscaleGraphCorrelation(Undirected, Unsigned):
     """Multiscale graph correlation"""

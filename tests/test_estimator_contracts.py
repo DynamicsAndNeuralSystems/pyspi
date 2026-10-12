@@ -1636,3 +1636,128 @@ def test_no_p90_spi_depends_on_the_global_rng():
                if not np.array_equal(first[key].to_numpy(float),
                                      second[key].to_numpy(float), equal_nan=True)]
     assert not changed
+
+
+# --------------------------------------------------------------------------
+# Distance correlation evaluates the retained half only
+# --------------------------------------------------------------------------
+
+def _dcorr_inputs():
+    rng = np.random.default_rng(733)
+    t = 64
+    ar = rng.standard_normal((4, t))
+    for k in range(1, t):
+        ar[:, k] += 0.8 * ar[:, k - 1]
+    tied = np.round(rng.standard_normal((4, t)))
+    constant = rng.standard_normal((4, t))
+    constant[1] = 2.5
+    return {
+        "iid": rng.standard_normal((5, t)),
+        "autocorrelated": ar,
+        "tied": tied,
+        "constant process": constant,
+        "large offset": 1e8 + rng.standard_normal((3, t)),
+        "T=4": rng.standard_normal((3, 4)),
+        "T=3": rng.standard_normal((3, 3)),
+        "two processes": rng.standard_normal((2, t)),
+    }
+
+
+@pytest.mark.parametrize("biased", [False, True])
+@pytest.mark.parametrize("case", list(_dcorr_inputs()))
+def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
+    """Same matrix, bit for bit, as evaluating both orders and keeping one.
+
+    Constant and three-sample inputs are included for what they return
+    (NaN, or a raised error), which must not change either.
+    """
+    import warnings
+
+    from pyspi.base import Undirected
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    series = _dcorr_inputs()[case]
+    spi = DistanceCorrelation(biased=biased)
+
+    def run(method):
+        data = Data(data=series.copy(), dim_order="ps", zscore=False)
+        before = data.to_numpy().copy()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            try:
+                out = ("ok", np.asarray(method(spi, data), float))
+            except Exception as e:
+                out = ("raised", type(e).__name__, str(e))
+        assert np.array_equal(data.to_numpy(), before, equal_nan=True)
+        return out
+
+    new, old = run(DistanceCorrelation.multivariate), run(Undirected.multivariate)
+    assert new[0] == old[0]
+    if new[0] == "raised":
+        assert new == old
+    else:
+        assert np.array_equal(new[1], old[1], equal_nan=True)
+        assert np.array_equal(new[1], new[1].T, equal_nan=True)
+        assert np.isnan(np.diag(new[1])).all()
+
+
+def test_distance_correlation_calls_each_pair_once_in_the_retained_order(monkeypatch):
+    """Half the calls, each as (i, j) with i < j, in the inherited order."""
+    from pyspi.base import Undirected
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    data = _data(m=5, t=40)
+    calls = []
+    inner = DistanceCorrelation.bivariate
+    monkeypatch.setattr(
+        DistanceCorrelation, "bivariate",
+        lambda self, data, i=None, j=None: calls.append((i, j)) or inner(self, data, i=i, j=j))
+
+    spi = DistanceCorrelation()
+    spi.multivariate(data)
+    retained, calls[:] = list(calls), []
+    Undirected.multivariate(spi, data)
+
+    assert len(retained) == 10 and len(calls) == 20
+    assert retained == [(i, j) for i, j in calls if i < j]
+
+
+@pytest.mark.parametrize("biased", [False, True])
+def test_distance_correlation_matches_the_double_centring_definition(biased):
+    """Szekely's sample statistic written out from distance matrices.
+
+    Biased: dCor, the square root of the ratio of double-centred sums.
+    Unbiased: the U-centred estimate of dCor^2 (Szekely & Rizzo 2014), which
+    can be negative and is not square-rooted.
+    """
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    rng = np.random.default_rng(5)
+    n = 50
+    x = rng.standard_normal(n)
+    series = np.stack([x, x ** 2 + 0.3 * rng.standard_normal(n),
+                       rng.standard_normal(n)])
+
+    def centred(v):
+        d = np.abs(v[:, None] - v[None, :])
+        if biased:
+            return d - d.mean(0) - d.mean(1)[:, None] + d.mean()
+        u = (d - d.sum(0) / (n - 2) - d.sum(1)[:, None] / (n - 2)
+             + d.sum() / ((n - 1) * (n - 2)))
+        np.fill_diagonal(u, 0)
+        return u
+
+    def dcorr(a, b):
+        A, B = centred(a), centred(b)
+        ratio = (A * B).sum() / np.sqrt((A * A).sum() * (B * B).sum())
+        return np.sqrt(ratio) if biased else ratio
+
+    S = DistanceCorrelation(biased=biased).multivariate(
+        Data(data=series, dim_order="ps", zscore=False))
+    for i in range(3):
+        for j in range(3):
+            if i != j:
+                assert S[i, j] == pytest.approx(dcorr(series[i], series[j]), abs=1e-12)
+    # Nonlinear dependence with zero correlation. The biased statistic sits
+    # near 0.2 for independent series of this length, so the margin is modest.
+    assert S[0, 1] > 2 * abs(S[0, 2])
