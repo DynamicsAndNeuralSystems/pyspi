@@ -606,6 +606,12 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
         self.identifier = "psi"
         super().__init__(**kwargs)
         self._measure = "phase_slope_index"
+        # Always use `_get_statistic`, as GroupDelay does. The dispatcher only
+        # falls back to it on `TypeError`, and since spectral-connectivity 2.0
+        # `Connectivity.phase_slope_index()` accepts a no-argument call: it
+        # returned the full-band, unthinned index, so every band variant of
+        # this SPI was the same matrix.
+        self._recompute = True
 
     @property
     def _cache_subkey(self):

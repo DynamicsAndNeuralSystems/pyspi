@@ -420,7 +420,12 @@ SCHEMA_VERSION = 1
 #         representable radius instead of shrinking epsilon by 1e-10.
 #   r7 -- coherence phase uses a circular mean and refuses zero-resultant and
 #         antipodal locations that have no unique signed float orientation.
-COMPUTATION_VERSION = "3.0.0.r7"
+#   r8 -- no SPI reads the global NumPy stream: the sgddtw barycenter and the
+#         MinCovDet / EllipticEnvelope fits each use a fixed-seed generator, so
+#         their SPIs change value and no longer depend on evaluation order or
+#         the caller's seed. Multitaper phase slope index applies its band;
+#         its variants were one identical full-band matrix.
+COMPUTATION_VERSION = "3.0.0.r8"
 
 
 def read_manifest(checkpoint_dir: Path):
@@ -528,6 +533,7 @@ def run_parallel(
 
     # Pin BLAS env before any worker spawns — workers inherit single-threaded
     # BLAS from process start (the only lever for macOS Accelerate).
+    parent_env = {var: os.environ.get(var) for var in _BLAS_ENV_VARS}
     _pin_blas_env()
 
     arr = np.ascontiguousarray(dataset._data)
@@ -599,6 +605,15 @@ def run_parallel(
         pbar.close()
         return results
     finally:
+        # The pins are for the workers. Left behind, NUMBA_NUM_THREADS=1 would
+        # contradict a numba runtime that has already launched its threads in
+        # this process, and numba refuses to compile anything further once it
+        # sees that -- so the next SPI needing a fresh compilation here failed.
+        for var, value in parent_env.items():
+            if value is None:
+                os.environ.pop(var, None)
+            else:
+                os.environ[var] = value
         if manager is not None:
             manager.shutdown()
         if shared is not None:

@@ -1,3 +1,4 @@
+import functools
 import os
 import warnings
 import numpy as np
@@ -436,7 +437,13 @@ class Barycenter(Directed, Signed):
         elif mode == "dtw":
             self._fn = dtw_barycenter_averaging
         elif mode == "sgddtw":
-            self._fn = dtw_barycenter_averaging_subgradient
+            # A generator of its own for every fit. Left to its default,
+            # tslearn draws the update order from the global NumPy stream, so
+            # a pair's barycenter depended on how many had been fitted before
+            # it: on process order, on which SPIs ran earlier, on serial
+            # versus parallel, and on which other pairs were computed at all.
+            self._fn = functools.partial(
+                dtw_barycenter_averaging_subgradient, random_state=42)
         elif mode == "softdtw":
             self._fn = softdtw_barycenter
         else:

@@ -1525,3 +1525,114 @@ def test_ksg_paths_are_affine_and_process_permutation_covariant(seed):
 
     assert _ksg_ais(y, 2, 1, 4) == pytest.approx(
         _ksg_ais(-3.0 * y + 2.0, 2, 1, 4), abs=1e-12)
+
+
+# --------------------------------------------------------------------------
+# A band-limited SPI must use its band; no SPI may read the global RNG
+# --------------------------------------------------------------------------
+
+def _psi_bands(series):
+    from pyspi.statistics.spectral import PhaseSlopeIndex
+
+    data = Data(data=series, dim_order="ps", zscore=True)
+    return [np.asarray(PhaseSlopeIndex(fs=1, fmin=lo, fmax=hi).multivariate(data), float)
+            for lo, hi in ((0, 0.5), (0, 0.25), (0.25, 0.5))]
+
+
+def test_multitaper_phase_slope_index_uses_its_frequency_band():
+    """Coupling confined below 0.1 cycles/sample must not show up above 0.25.
+
+    The three band variants were one identical full-band matrix: the band
+    arguments are only passed by ``_get_statistic``, which the dispatcher
+    reached on ``TypeError`` alone, and the backend stopped raising one.
+
+    Process 0 drives process 1 at a lag of two samples through a low-pass
+    filter, so their coherence -- and with it any phase slope -- lives in the
+    low band. Process 2 is independent and sets the noise level.
+    """
+    from scipy import signal
+
+    rng = np.random.default_rng(7)
+    T = 2000
+    x, e = rng.standard_normal((2, T + 2))
+    low = signal.filtfilt(*signal.butter(4, 0.2), x)
+    series = np.stack([x[2:], low[:-2] / low.std() + 0.5 * e[2:],
+                       rng.standard_normal(T)])
+    full, low_band, high_band = _psi_bands(series)
+
+    assert not np.allclose(low_band, high_band, equal_nan=True)
+    assert not np.allclose(full, low_band, equal_nan=True)
+    noise = max(abs(low_band[0, 2]), abs(high_band[0, 2]), abs(high_band[1, 2]))
+    assert low_band[0, 1] > 10 * noise            # the driver leads, in its band
+    assert abs(high_band[0, 1]) < 3 * noise       # and is absent outside it
+    for S in (full, low_band, high_band):         # antisymmetric throughout
+        off = ~np.eye(3, dtype=bool)
+        assert np.allclose(S[off], -S.T[off], atol=1e-9)
+
+
+def test_multitaper_phase_slope_index_sign_follows_the_lag():
+    """Positive from leader to follower in every band; reversing the roles flips it."""
+    rng = np.random.default_rng(3)
+    T = 2000
+    x, e = rng.standard_normal((2, T + 1))
+    follower = 0.9 * x[:-1] + 0.3 * e[1:]
+    for S in _psi_bands(np.stack([x[1:], follower])):
+        assert S[0, 1] > 0 > S[1, 0]
+    for S in _psi_bands(np.stack([follower, x[1:]])):
+        assert S[1, 0] > 0 > S[0, 1]
+
+
+def test_multitaper_phase_slope_index_memory_does_not_grow_with_length(monkeypatch):
+    """The backend sums over all pairs of the frequencies it is handed.
+
+    Unthinned that is O(F^2 M^2) temporaries -- tens of GB at T=5000, M=28.
+    With the band applied the spectrum is thinned to about fifty independent
+    frequencies first, whatever the series length.
+    """
+    import spectral_connectivity.connectivity as backend
+
+    handed = []
+    inner = backend._inner_combination
+    monkeypatch.setattr(
+        backend, "_inner_combination",
+        lambda data, axis=-3: handed.append(data.shape[axis]) or inner(data, axis))
+    rng = np.random.default_rng(0)
+    for T in (500, 4000):
+        _psi_bands(rng.standard_normal((2, T)))
+    assert len(handed) == 6 and max(handed) <= 51
+
+
+def test_no_p90_spi_depends_on_the_global_rng():
+    """A statistic is a function of the data, not of what ran before it.
+
+    The sgddtw barycenters and the MinCovDet / EllipticEnvelope fits drew from
+    the global NumPy stream, so their values changed with the caller's seed,
+    with SPI order, and between serial and parallel runs. Each now owns a
+    fixed-seed generator. (The graphical-lasso solver still *advances* the
+    global stream -- scikit-learn draws a seed it never uses under cyclic
+    coordinate descent -- which is harmless only while nothing reads it.)
+    """
+    import os
+    import random
+    import warnings
+
+    from pyspi.calculator import Calculator
+
+    fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "data", "fixtures", "cml_M5_T100.npy")
+
+    def table(seed):
+        calc = Calculator(dataset=Data(data=fixture, dim_order="sp"),
+                          config="benchmarked_p90", verbose=False)
+        np.random.seed(seed)
+        random.seed(seed)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            calc.compute(progress=False)
+        return calc.table
+
+    first, second = table(1), table(2)
+    changed = [key for key in first.columns.get_level_values(0).unique()
+               if not np.array_equal(first[key].to_numpy(float),
+                                     second[key].to_numpy(float), equal_nan=True)]
+    assert not changed

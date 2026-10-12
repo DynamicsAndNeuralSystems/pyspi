@@ -1,3 +1,4 @@
+import inspect
 import warnings
 import sklearn.covariance as cov
 from scipy import stats, signal
@@ -42,9 +43,17 @@ class Estimators(Undirected, Signed):
         except (AttributeError, KeyError):
             z = data.to_numpy(squeeze=True).T
 
+            estimator = getattr(cov, self._estimator)
+            # MinCovDet and EllipticEnvelope search from random subsets of the
+            # observations. Unpinned they drew those from the global NumPy
+            # stream, so the fit -- and all four SPIs read from it -- changed
+            # from run to run and with whatever had consumed the stream first.
+            kwargs = ({"random_state": 42}
+                      if "random_state" in inspect.signature(estimator).parameters
+                      else {})
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                mycov = getattr(cov, self._estimator)().fit(z)
+                mycov = estimator(**kwargs).fit(z)
             try:
                 data.covariance[self._estimator] = mycov
             except AttributeError:

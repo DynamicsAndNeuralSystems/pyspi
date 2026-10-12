@@ -123,19 +123,10 @@ def test_cache_sharing_never_changes_a_value():
     shared = Calculator(dataset=Data(data=fixture, dim_order="sp"))
     shared.compute()
 
-    # Soft-DTW barycentres are fitted by gradient descent seeded from the
-    # global RNG, so isolating one moves the RNG position rather than the
-    # cache; `tests/tools/measure_reproducibility.py` shows they reproduce
-    # exactly when the config is computed twice in the same order.
-    RNG_DEPENDENT = {"bary_sgddtw_mean", "bary_sgddtw_max",
-                     "bary-sq_sgddtw_mean", "bary-sq_sgddtw_max"}
-
     spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
     mismatched = []
     for identifier, spi in spis.items():
         if getattr(type(spi), "_cache_namespace", None) is None:
-            continue
-        if identifier in RNG_DEPENDENT:
             continue
         np.random.seed(42)
         isolated = np.asarray(spi.multivariate(Data(data=fixture, dim_order="sp")),
