@@ -309,3 +309,52 @@ def test_parallel_run_leaves_the_parent_environment_alone(monkeypatch):
     assert os.environ["NUMEXPR_NUM_THREADS"] == "1"
     assert not calc.errors
 
+
+
+@pytest.mark.slow
+def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):
+    """One table, bit for bit, however the work is divided.
+
+    ``benchmarked_p90`` on a fixture where six SPIs fail, so values, missing
+    entries, recorded errors and their order are all compared. The serial runs
+    differ in the global NumPy seed; the parallel ones in worker count. The
+    last run resumes from every other checkpoint with a different worker
+    count, so cache groups are entered part-way through.
+    """
+    import warnings
+
+    from pyspi.data import Data
+
+    fixture = Path(__file__).parent / "data" / "fixtures" / "kuramoto_M7_T100.npy"
+
+    def run(n_jobs, seed, **kwargs):
+        np.random.seed(seed)
+        calc = Calculator(dataset=Data(data=str(fixture), dim_order="sp"),
+                          config="benchmarked_p90", verbose=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            calc.compute(n_jobs=n_jobs, progress=False,
+                         mp_context="spawn" if n_jobs > 1 else None, **kwargs)
+        return calc
+
+    def assert_same(calc, label):
+        assert list(calc.table.columns) == list(ref.table.columns), label
+        assert np.array_equal(calc.table.to_numpy(float), ref.table.to_numpy(float),
+                              equal_nan=True), label
+        assert list(calc.errors.items()) == list(ref.errors.items()), label
+
+    ref = run(1, seed=0)
+    assert len(ref.errors) == 6
+
+    assert_same(run(1, seed=1), "serial, another global seed")
+    assert_same(run(2, seed=2), "two workers")
+    cp_dir = tmp_path / "ckpt"
+    assert_same(run(4, seed=3, checkpoint_dir=cp_dir), "four workers")
+
+    for key in list(ref.spis)[::2]:
+        (cp_dir / f"{key}.npy").unlink()
+    resumed = run(2, seed=4, checkpoint_dir=cp_dir)
+    assert list(resumed.table.columns) == list(ref.table.columns)
+    assert np.array_equal(resumed.table.to_numpy(float), ref.table.to_numpy(float),
+                          equal_nan=True)
+    assert resumed.errors == ref.errors
