@@ -108,6 +108,20 @@ LOOSE_SPIS = {
     "anm": (1e-6, 1e-3),
 }
 
+# Families solved through dense linear algebra (Gaussian/VAR regressions,
+# spectral factorisation of a fitted VAR, Phi-star's covariance inversions)
+# differ at the rounding level across BLAS/LAPACK builds even with identical
+# package versions. Measured on CI (Linux OpenBLAS) against the frozen
+# baselines, with numpy/scipy locked: max relative 2.4e-7 (gc_gaussian), the
+# rest 3e-9 to 2e-8; with the latest dependencies, at most 7e-7. Keyed by
+# identifier prefix, as the sensitivity belongs to the estimator family rather
+# than to one parameterisation. rtol 1e-6 still catches any real change.
+LOOSE_PREFIXES = {
+    prefix: (1e-12, 1e-6)
+    for prefix in ("gc_gaussian", "di_gaussian", "xme_gaussian",
+                   "phi_star", "sgc_parametric")
+}
+
 # Optional looser per-family tolerances for the advisory "latest dependencies"
 # job (PYSPI_DRIFT_TIER=latest). Upstream releases legitimately move numerical
 # results, and the point of that job is to *see* the movement, not to be strict
@@ -124,7 +138,12 @@ def _tolerance(spi_key):
     """(atol, rtol) for ``spi_key`` under the selected tier."""
     if _TIER == "latest" and spi_key in LATEST_TIER_SPIS:
         return LATEST_TIER_SPIS[spi_key]
-    return LOOSE_SPIS.get(spi_key, TIGHT)
+    if spi_key in LOOSE_SPIS:
+        return LOOSE_SPIS[spi_key]
+    for prefix, tol in LOOSE_PREFIXES.items():
+        if spi_key.startswith(prefix):
+            return tol
+    return TIGHT
 
 
 def _baseline_path(dataset_name):
