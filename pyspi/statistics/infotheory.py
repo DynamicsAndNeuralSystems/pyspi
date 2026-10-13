@@ -591,60 +591,69 @@ def _numpy_delay_embedding(x, dim):
 # k-NN input conditioning
 # ---------------------------------------------------------------------------
 
-# JIDT switches both of these on by default for every KSG-family calculator:
-# MutualInfoCalculatorMultiVariateKraskov, ConditionalMutualInfoCalculator-
-# MultiVariateKraskov and EntropyCalculatorMultiVariateKozachenko all set
-# `addNoise = true; noiseLevel = 1e-8` in their constructors ("to match the
-# noise order in MILCA toolkit"); `normalise = true` is inherited from their
-# common base. pyspi retains normalisation but intentionally does not copy the
-# random-noise policy.
-# KSG estimator 1 is a continuous-density estimator. Exact coordinate ties
-# make the kth-neighbour radius/counting convention ambiguous; deterministic
-# jitter merely replaces that ambiguity with dependence on an arbitrary noise
-# realisation, and content-derived jitter additionally depends on sample order.
-# pyspi therefore refuses tied coordinates instead of pretending to recover a
-# discrete information measure. Per-coordinate standardisation remains: the
-# joint L-infinity geometry is then covariant under nonzero affine marginal
-# changes, including reflections, without rounding or random state.
+# JIDT adds random noise (1e-8) to every KSG input and normalises it. pyspi
+# standardises each coordinate (below) but replaces JIDT's noise with the
+# tie-break policy of hctsa's BF_TieBreakNoise (and pyhctsa's
+# bf_tie_break_noise): KSG assumes no ties, so a variable with many repeated
+# values is first given tiny, *deterministic* Gaussian jitter. Tie-free data
+# are returned bit-identically.
+
+# Seeds of the per-variable jitter streams. Variables that are compared with one
+# another must not share a stream (identical noise would manufacture
+# dependence), so source, target and the embedding-selection pass differ.
+_TIE_SEED_SOURCE = 0
+_TIE_SEED_TARGET = 1
+_TIE_SEED_SELECTION = 2
+
+
+def _tie_break(y, seed=0):
+    """Break exact ties in a raw series, as hctsa's ``BF_TieBreakNoise``.
+
+    If fewer than 90% of the values are unique and the std is positive, add
+    Gaussian noise with standard deviation ``1e-10 * std(y, ddof=1)`` drawn from
+    a local generator seeded with ``seed`` (never the global NumPy RNG), so the
+    same input always gives the same output. Otherwise ``y`` is returned
+    untouched. Apply to the raw series *before* delay embedding so that every
+    embedded lag of a sample carries the same perturbation.
+    """
+    y = np.asarray(y, dtype=np.float64)
+    if y.size < 2 or not np.all(np.isfinite(y)):
+        return y        # non-finite input is rejected by _knn_condition
+    sigma = y.std(ddof=1)
+    if np.unique(y).size < 0.9 * y.size and sigma > 0:
+        y = y + 1e-10 * sigma * np.random.default_rng(seed).standard_normal(y.shape)
+    return y
 
 
 def _knn_condition(X):
-    """Validate continuous KSG input and standardise each coordinate.
+    """Validate KSG input and standardise each coordinate.
 
-    Every coordinate must be tie-free. Quantised/discrete data requires an
-    external discrete plug-in information estimator; pyspi has no general
-    discrete MI/TLMI/DI estimator. Adding deterministic jitter does not turn
-    KSG into one and can make the result depend on sample order.
+    Non-finite values and constant coordinates raise. Ties do not: callers
+    apply ``_tie_break`` to raw series first (KSG itself assumes no ties).
 
     Standardisation uses an observed origin before mean/std calculation to
     reduce cancellation under affine offsets. No rounding, dither, seed, or
-    global RNG state participates in the estimator.
+    global RNG state participates here.
     """
     X = np.asarray(X, dtype=np.float64)
     reshaped = X.ndim == 1
     if reshaped:
         X = X.reshape(-1, 1)
+    if not np.all(np.isfinite(X)):
+        raise ValueError("KSG requires finite input: found NaN or infinite values.")
 
     out = np.empty_like(X)
     for c in range(X.shape[1]):
         col = X[:, c]
-        n_unique = np.unique(col).size
-        if n_unique != col.size:
-            raise ValueError(
-                f"KSG requires continuous, tie-free coordinates: coordinate "
-                f"{c} has {n_unique} unique value(s) among {col.size} "
-                f"observations. Deterministic jitter would make the estimate "
-                f"depend on arbitrary noise. Use a discrete plug-in "
-                f"information estimator outside pyspi for quantised/discrete "
-                f"data, or "
-                f"remove measurement rounding only when scientifically "
-                f"justified."
-            )
         # Subtract an observed origin before taking the mean/std. This is
         # algebraically identical, but avoids needless cancellation when an
         # affine transform adds an offset large relative to the variation.
         shifted = col - col[0]
         sd = shifted.std(ddof=1)      # JIDT MatrixUtils.stdDevs: sample std
+        if not sd > 0:
+            raise ValueError(
+                f"KSG cannot estimate: coordinate {c} is constant, so all "
+                f"neighbour distances are zero.")
         out[:, c] = (shifted - shifted.mean()) / sd
     return out.reshape(-1) if reshaped else out
 
@@ -756,6 +765,8 @@ def _ksg_mi_pair(x, y, k, w):
                 f"KSG cannot estimate mutual information: marginal {name} is "
                 f"constant, so all neighbour distances are zero."
             )
+    x = _tie_break(x, _TIE_SEED_SOURCE)
+    y = _tie_break(y, _TIE_SEED_TARGET)
     x, y = _knn_condition(np.column_stack([x, y])).T
     x = x.reshape(-1, 1)
     y = y.reshape(-1, 1)
@@ -1060,6 +1071,9 @@ def _ksg_cmi(A, B, C, k_nn, w=0, condition=True):
 
 def _kraskov_te_bivariate(src, targ, k_history, k_tau, l_history, l_tau, k_nn, w):
     """Kraskov TE via the Frenzel-Pompe CMI estimator: I(Y_f; X_p | Y_p)."""
+    # Jitter the raw series (idempotent if already done), then embed.
+    src = _tie_break(src, _TIE_SEED_SOURCE)
+    targ = _tie_break(targ, _TIE_SEED_TARGET)
     Y_f, Y_p, X_p = _te_build_embeddings(src, targ, k_history, k_tau, l_history, l_tau)
     if Y_f is None:
         return np.nan
@@ -1758,6 +1772,10 @@ class TransferEntropy(InfoTheoryBase, Directed):
         if cache is None:
             cache = data.ais_embedding = {}
         if key not in cache:
+            if self._estimator == "kraskov":
+                # Role-independent seed: the cached choice must not depend on
+                # whether the series was first seen as source or target.
+                series = _tie_break(series, _TIE_SEED_SELECTION)
             dim, delay, _ = _select_embedding(
                 series, scorer, self._k_search_max, self._tau_search_max)
             cache[key] = (dim, delay)
@@ -1957,6 +1975,9 @@ class DirectedInfo(CausalEntropy, Directed):
         """
         z = data.to_numpy(squeeze=True)
         src, targ = np.asarray(z[i], float), np.asarray(z[j], float)
+        if self._estimator == "kraskov":
+            src = _tie_break(src, _TIE_SEED_SOURCE)
+            targ = _tie_break(targ, _TIE_SEED_TARGET)
         n = self._n
         T = targ.size
         if T <= n + 1:

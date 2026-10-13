@@ -861,7 +861,7 @@ def test_kraskov_te_matches_brute_force_in_both_directions(k_history, l_history,
 
 
 @pytest.mark.parametrize("w", [0, 2])
-def test_ksg_refuses_constant_tied_and_short_inputs(w):
+def test_ksg_refuses_constant_and_short_inputs(w):
     from pyspi.statistics.infotheory import _ksg_cmi, _ksg_mi_general, _ksg_mi_pair
 
     rng = np.random.default_rng(2)
@@ -872,9 +872,8 @@ def test_ksg_refuses_constant_tied_and_short_inputs(w):
         _ksg_mi_pair(x, constant, 4, w)
     with pytest.raises(ValueError, match="constant column"):
         _ksg_cmi(constant[:, None], x[:, None], x[::-1, None].copy(), 4, w)
+    assert np.isfinite(_ksg_mi_pair(x, tied, 4, w))   # ties are jittered, not refused
     for fn in (_ksg_mi_pair, _ksg_mi_general):
-        with pytest.raises(ValueError, match="tie-free"):
-            fn(x, tied, 4, w)
         short = 4 + 2 * w          # one observation too few for k=4
         with pytest.raises(ValueError, match="usable neighbour"):
             fn(x[:short], x[::-1][:short], 4, w)
