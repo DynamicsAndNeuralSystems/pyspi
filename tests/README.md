@@ -33,23 +33,15 @@ corrupt baseline can never break collection of unrelated tests.
 ### Contract tests (originally red)
 
 These files began as *red* tests: assertions for behaviour the package did not
-yet have. All but one are now green. The single remaining marker is
+yet have. All are now green; no `xfail` markers remain. The last one,
 `test_structural_traits.py::test_no_bundled_spi_returns_a_constant_matrix`,
-`@pytest.mark.xfail(strict=True)`, and it records a **fixture/low-data finding,
-not a proven universal defect**: the six `dspli_*_max` and `dswpli_*_max`
-variants return a constant matrix on `var1_M3_T100` (M=3, T=100),
-which carries no pairwise information *on that fixture*. Whether it holds at
-larger M or T has not been established, and no SPI should be removed on this
-evidence alone.
-
-`strict=True` turns an *unexpected pass* into a failure, so when the question is
-settled the test fails until the marker is deleted -- a marker cannot silently
-outlive the finding it describes.
+was resolved by dropping the six constant `dspli_*_max` and `dswpli_*_max`
+SPIs from the bundled configs.
 
 Two rules when working on these:
 
-1. **Do not relax an assertion to make one pass.** Fix the code, or leave the
-   marker.
+1. **Do not relax an assertion to make one pass.** Fix the code, or mark the
+   test `xfail(strict=True)` with the reason.
 2. **Check the failure reason, not just the xfail count.** Several of these
    initially "failed" for reasons unrelated to the bug under test -- a vacuous
    comparison, a wrong keyword, a config name passed where a path was wanted. An
@@ -126,9 +118,7 @@ split — `1e-2` for `causal` and `misc`, on the assumption that their optimiser
 and permutation tests were not bit-reproducible — was measured and found false;
 see `LOOSE_SPIS` in the module and `tools/measure_reproducibility.py`.
 
-## Open finding
+## Open findings
 
-One `xfail(strict=True)` marker remains. Six `max`-statistic SPIs return a
-constant matrix on `var1_M3_T100`; the marker records that fixture observation
-without claiming a universal defect. Positional `bivariate(data, 0, 1)` is no
-longer xfailed: it is rejected with a message explaining the signature.
+None. Positional `bivariate(data, 0, 1)` is no longer xfailed: it is rejected
+with a message explaining the signature.

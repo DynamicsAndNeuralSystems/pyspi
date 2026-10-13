@@ -120,7 +120,7 @@ def _off(matrix):
 # ---------------------------------------------------------------------------
 
 def _representative_spis():
-    """(label, factory) -- one per family the audit touched, not 322 SPIs."""
+    """(label, factory) -- one per family the audit touched, not 316 SPIs."""
     import pyspi.statistics.basic as basic
     import pyspi.statistics.causal as causal
     import pyspi.statistics.distance as distance

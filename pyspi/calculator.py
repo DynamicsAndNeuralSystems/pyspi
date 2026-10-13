@@ -37,6 +37,13 @@ def _is_module_label(label):
     )
 
 
+_CONTRADICTORY_LABELS = (
+    ("linear", "nonlinear"),
+    ("directed", "undirected"),
+    ("signed", "unsigned"),
+)
+
+
 def _merge_spi_labels(spi, family_labels=None, config_labels=None):
     labels = list(getattr(spi, "labels", []))
     family_labels = _as_label_list(family_labels)
@@ -80,11 +87,28 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
             if label not in _DIRECTEDNESS or label == trait
         ]
 
+    # Likewise for linear/nonlinear: if the class commits to one, the other
+    # is dropped, so a config cannot add `linear` next to a class's `nonlinear`.
+    own_lin = [label for label in ("linear", "nonlinear") if label in labels]
+    if len(own_lin) == 1:
+        merged = [
+            label for label in merged
+            if label not in ("linear", "nonlinear") or label == own_lin[0]
+        ]
+
     issigned = getattr(spi, "issigned", None)
     if issigned is not None:
         actual = "signed" if issigned() else "unsigned"
         merged = [label for label in merged
                   if label not in ("signed", "unsigned")] + [actual]
+
+    # Whatever the class did not settle must not be left contradictory.
+    for pair in _CONTRADICTORY_LABELS:
+        if all(label in merged for label in pair):
+            raise ValueError(
+                f"{type(spi).__name__} ends up with contradictory labels "
+                f"{pair[0]!r} and {pair[1]!r}: {merged}"
+            )
     spi.labels = merged
 
 
@@ -182,7 +206,7 @@ def warn_partial_cache_buckets(spis):
             kept[b].add(key)
     if not any(bkey[0] in EXPENSIVE for bkey in kept):
         # Nothing this advisory could say anything about. Checked before the
-        # `full` config is touched: building it instantiates 322 SPIs and pulls
+        # `full` config is touched: building it instantiates 316 SPIs and pulls
         # a heavy dependency tree, which is real import time for a check that
         # only ever comments on `ccm` and `barycenter`.
         return
@@ -382,7 +406,7 @@ class Calculator:
             Which SPIs to compute. Either the name of a bundled config or a path
             to your own YAML file, default="full". Bundled configs are:
 
-            - ``"full"`` -- every SPI (322).
+            - ``"full"`` -- every SPI (316).
             - ``"fast"`` -- drops the slowest SPIs.
             - ``"sonnet"`` -- 14 representative SPIs, one per module (M01-M14).
             - ``"fabfour"`` -- 4 SPIs: covariance, Spearman, directed information,

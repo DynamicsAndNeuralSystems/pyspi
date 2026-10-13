@@ -14,7 +14,7 @@ Arrays are saved as ``(observations, processes)`` â€” i.e. ``dim_order='sp'`` â€
 matching the ``.npy`` files bundled in ``pyspi/data/``. The generators build
 ``(processes, observations)`` internally and transpose on write.
 
-``T = 100`` throughout. That is short enough to keep the 322-SPI drift suite
+``T = 100`` throughout. That is short enough to keep the 316-SPI drift suite
 fast (SPI cost is at worst quadratic in ``M`` and roughly linear-to-quadratic in
 ``T``) while still leaving enough samples for the embedding- and
 spectrum-based estimators, which need a few dozen effective observations after
