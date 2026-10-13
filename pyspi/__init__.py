@@ -1,12 +1,12 @@
-# BLAS threading: default to single-threaded BLAS so that parallel workers
-# (see Calculator.compute) don't oversubscribe (n_jobs workers x full BLAS).
-# Workers pin BLAS to 1 thread in _parallel._worker_init; this line ensures
-# the main process (and any serial run) does the same by default.
-import os
 import logging
 import numpy as np
 
-os.environ.setdefault('OMP_NUM_THREADS', '1')
+# No OMP_NUM_THREADS default here. A setdefault at this point runs after numpy
+# (imported above, and by the caller) has already initialised its BLAS, so it
+# never pinned anything in-process; it only mutated the environment of every
+# program that imports pyspi. Thread pinning lives in pyspi._parallel: workers
+# pin BLAS in _worker_init, and Calculator.compute warns about (or, on a
+# single-core allocation, pins) an oversubscribed setup.
 
 # Standard library practice: a library should not emit log output unless the
 # application configures a handler. Calculator(verbose=...) attaches a real
