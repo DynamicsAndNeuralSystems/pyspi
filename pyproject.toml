@@ -19,7 +19,7 @@ license = "GPL-3.0-or-later"
 # reading only the dist-info should see them.
 license-files = ["LICENSE.txt", "pyspi/lib/LICENSE-cdt.txt",
                  "pyspi/lib/ids/LICENSE.txt"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Oliver M. Cliff", email = "oliver.m.cliff@gmail.com" },
 ]
@@ -44,7 +44,7 @@ dependencies = [
     "scipy>=1.11",
     # >=2.1 for DataFrame.stack(future_stack=True), the pandas 3 stack semantics.
     "pandas>=2.1",
-    "scikit-learn>=1.3",
+    "scikit-learn>=1.8",
     "statsmodels>=0.14",
     "mne>=1.6",
     "mne-connectivity>=0.5",

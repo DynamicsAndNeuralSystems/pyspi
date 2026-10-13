@@ -14,7 +14,7 @@
     <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" height="20"/></a>
     <a href="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml"><img src="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml/badge.svg" height="20"/></a>
     <a href="https://twitter.com/compTimeSeries"><img src="https://img.shields.io/twitter/url/https/twitter.com/compTimeSeries.svg?style=social&label=Follow%20%40compTimeSeries" height="20"/></a><br>
-    <a href="https://www.python.org"><img src="https://img.shields.io/badge/Python-3.10%20|%203.11%20|%203.12-3776AB.svg?style=flat&logo=python&logoColor=white" alt="Python 3.10 | 3.11 | 3.12"></a><br>
+    <a href="https://www.python.org"><img src="https://img.shields.io/badge/Python-3.11%20|%203.12%20|%203.13-3776AB.svg?style=flat&logo=python&logoColor=white" alt="Python 3.11 | 3.12 | 3.13"></a><br>
     <a href="https://pepy.tech/projects/pyspi"><img src="https://static.pepy.tech/personalized-badge/pyspi?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=BLUE&left_text=downloads" alt="pyspi downloads" height="20"/></a>
 </p>
 
@@ -40,7 +40,7 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 
 ## Installation 📥
 
-_pyspi_ requires **Python 3.10 or newer**.
+_pyspi_ requires **Python 3.11 or newer**.
 
 > **Upgrading from 2.x?** Version 3.0 removes the Java/JIDT dependency and
 > changes the `Calculator` API. See [CHANGELOG.md](CHANGELOG.md) for the

@@ -48,9 +48,14 @@ class Estimators(Undirected, Signed):
             # observations. Unpinned they drew those from the global NumPy
             # stream, so the fit -- and all four SPIs read from it -- changed
             # from run to run and with whatever had consumed the stream first.
-            kwargs = ({"random_state": 42}
-                      if "random_state" in inspect.signature(estimator).parameters
-                      else {})
+            params = inspect.signature(estimator).parameters
+            kwargs = {"random_state": 42} if "random_state" in params else {}
+            # GraphicalLasso(CV) stop at the default tol=1e-4, so their values
+            # depended on the solver path, which scikit-learn 1.8 changed (gap-
+            # safe screening, new stopping rule): up to 1.5e-4 apart. Converging
+            # tightly makes the result the solution, not the path (~1e-9 apart).
+            if "enet_tol" in params:
+                kwargs.update(tol=1e-8, enet_tol=1e-8)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 mycov = estimator(**kwargs).fit(z)
