@@ -10,6 +10,7 @@ from scipy.signal import detrend
 import os
 
 from ._logging import get_logger
+from ._compat import resolve_zscore
 
 logger = get_logger("pyspi.data")
 
@@ -79,6 +80,8 @@ class Data:
             not whole-dataset: it removes each process's arbitrary gain/units
             without letting the choice of the other processes in the dataset
             influence any pairwise statistic.
+        normalise (bool, optional):
+            Deprecated 2.x spelling of ``zscore``; removed in 4.0.
         name (str, optional):
             Name of the dataset
         procnames (list, optional):
@@ -121,13 +124,15 @@ class Data:
         data=None,
         dim_order="ps",
         detrend=False,
-        zscore=True,
+        zscore=None,
         name=None,
         procnames=None,
         n_processes=None,
         n_observations=None,
+        normalise=None,
     ):
-        self.zscore = zscore
+        # `normalise` is the deprecated 2.x spelling of `zscore` (removed in 4.0).
+        self.zscore = resolve_zscore(zscore, normalise)
         self.detrend = detrend
         # Explicit empty state so attribute access is consistent before set_data
         # has run (Data() with no args is a legitimate builder-pattern entry point

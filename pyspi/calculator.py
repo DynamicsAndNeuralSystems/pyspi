@@ -12,6 +12,7 @@ from .data import Data
 from .utils import convert_mdf_to_ddf, inspect_calc_results, require_int
 from . import _parallel
 from ._logging import get_logger, configure as _configure_logging
+from ._compat import resolve_zscore, resolve_config_arg, translate_calculator_kwargs
 
 logger = get_logger("pyspi.calculator")
 
@@ -399,11 +400,20 @@ class Calculator:
             standardisation is deliberate: it removes each process's arbitrary
             gain/units without letting the choice of the other processes in the
             dataset influence any pairwise statistic.
+        subset, configfile, normalise:
+            Deprecated 2.x spellings of ``config`` (``subset="all"`` is
+            ``config="full"``), ``config`` (a path) and ``zscore``. They emit a
+            ``DeprecationWarning``, are removed in 4.0, and cannot be combined
+            with the new argument they replace.
     """
     def __init__(
-        self, dataset=None, name=None, labels=None, config="full",
-        detrend=False, zscore=True, verbose=True,
+        self, dataset=None, name=None, labels=None, config=None,
+        detrend=False, zscore=None, verbose=True,
+        subset=None, configfile=None, normalise=None,
     ):
+        # 2.x spellings (subset/configfile/normalise): deprecated, removed in 4.0.
+        config = resolve_config_arg(config, subset, configfile)
+        zscore = resolve_zscore(zscore, normalise)
         self._spis = {}
         self._zscore = zscore
         self._detrend = detrend
@@ -1045,6 +1055,7 @@ class CalculatorFrame:
         labels=None,
         **kwargs,
     ):
+        kwargs = translate_calculator_kwargs(kwargs)
         if calculators is not None:
             self.set_calculator(calculators)
 
@@ -1117,6 +1128,7 @@ class CalculatorFrame:
         self.n_calculators = len(self.calculators.index)
 
     def init_from_list(self, datasets, names, labels, **kwargs):
+        kwargs = translate_calculator_kwargs(kwargs)
         base_calc = Calculator(**kwargs)
         for i, dataset in enumerate(datasets):
             calc = copy.deepcopy(base_calc)
@@ -1126,8 +1138,11 @@ class CalculatorFrame:
             self.add_calculator(calc)
 
     def init_from_yaml(
-        self, document, detrend=False, zscore=True, n_processes=None, n_observations=None, **kwargs
+        self, document, detrend=False, zscore=None, n_processes=None, n_observations=None,
+        normalise=None, **kwargs
     ):
+        zscore = resolve_zscore(zscore, normalise)
+        kwargs = translate_calculator_kwargs(kwargs)
         datasets = []
         names = []
         labels = []
