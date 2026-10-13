@@ -641,6 +641,25 @@ class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
 
 
 class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
+    """Phase slope index, in the backend's all-frequency-pairs form.
+
+    The band is thinned to about fifty frequencies and
+    ``Im sum_{a<b} conj(C(f_a)) C(f_b)`` is taken over *every* pair of them,
+    ``C`` being the complex coherency. Nolte et al. (2008, Phys. Rev. Lett.
+    100, 234101) sum over adjacent frequencies only. The difference matters:
+
+    - Distant pairs give short lags a long lever arm. In one recording of 1000
+      samples a one-sample lead is detected with d' near 90 here and below 1
+      with the adjacent-frequency sum.
+    - Their phase differences wrap. The value *falls* as the lag grows and its
+      sign is unreliable beyond roughly ``25 / (fmax - fmin)`` samples (50 for
+      the full band), where the adjacent-frequency sum is still correct.
+
+    So this is a sensitive short-lag direction statistic, not a measure of the
+    size of the lag. It is unnormalised: the published index is divided by a
+    jackknife standard deviation over epochs, which one recording lacks.
+    """
+
     # Antisymmetric in (i, j): slope of the phase spectrum.
     _antisymmetric_spectrum = True
     name = "Phase slope index"
