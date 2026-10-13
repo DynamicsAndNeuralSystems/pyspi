@@ -182,15 +182,6 @@ EXPECTED_REFUSALS = {
     for seed in SEEDS
     for T in (T_SHORT, T_LONG)
 }
-EXPECTED_REFUSALS.update({
-    (label, fixture, seed, T):
-        (ValueError, r"^KSG requires continuous, tie-free coordinates:")
-    for label in ("mi_kraskov", "tlmi_kraskov", "te_kraskov_fixed",
-                  "te_kraskov_auto", "di_kraskov")
-    for fixture in ("binary", "four_level")
-    for seed in SEEDS
-    for T in (T_SHORT, T_LONG)
-})
 
 
 @pytest.mark.parametrize("name,seed,T", ALL_CASES)
@@ -257,16 +248,18 @@ def test_gaussian_mi_tracks_the_sample_correlation_on_short_records(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("levels", [2, 4])
-def test_ksg_mi_explicitly_refuses_a_duplicated_quantised_process(seed, levels):
-    """Tied coordinates require an external discrete estimator, not jitter."""
+def test_ksg_mi_of_a_duplicated_quantised_process_approaches_its_entropy(seed, levels):
+    """Identical discrete series get independent tie-break jitter (seeds 0, 1),
+    so their MI is finite and close to H = ln(levels); tolerance 0.4 nats at
+    T=256 covers the estimator's finite-sample error."""
     import pyspi.statistics.infotheory as it
 
     rng = np.random.default_rng(seed)
     x = rng.integers(0, levels, T_LONG).astype(float)
     data = Data(data=np.vstack([x, x.copy(), rng.standard_normal(T_LONG)]),
                 dim_order="ps", zscore=False)
-    with pytest.raises(ValueError, match="continuous, tie-free coordinates"):
-        it.MutualInfo(estimator="kraskov").bivariate(data, i=0, j=1)
+    mi = it.MutualInfo(estimator="kraskov").bivariate(data, i=0, j=1)
+    assert abs(mi - np.log(levels)) < 0.4, mi
 
 
 @pytest.mark.parametrize("seed", SEEDS)

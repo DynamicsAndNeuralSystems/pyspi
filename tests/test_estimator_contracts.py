@@ -444,8 +444,15 @@ def test_ksg_mi_is_invariant_to_per_coordinate_rescaling(scale):
 
 @pytest.mark.parametrize("w", [0, 5])
 @pytest.mark.parametrize("levels", [2, 4, None])
-def test_ksg_mi_refuses_quantised_marginals(levels, w):
-    """Continuous KSG must not turn arbitrary tie-breaking into a result."""
+def test_ksg_mi_of_independent_quantised_marginals_is_near_zero(levels, w):
+    """Ties are broken by hctsa-style jitter, so independent data give MI ~ 0.
+
+    Before the tie-break these returned -3.35 (binary), -1.96 (four-level) and
+    +0.90 (rounded Gaussians) at N=400, k=4. Sampling SD of the estimator at
+    N=400, k=4 is ~0.02-0.035 (measured over 20 seeds); the tolerance of 0.15
+    is more than four SD, i.e. loose enough not to flake, tight enough to be
+    ~20x below the old failures.
+    """
     from pyspi.statistics.infotheory import _ksg_mi_pair
 
     rng = np.random.default_rng(0)
@@ -454,19 +461,44 @@ def test_ksg_mi_refuses_quantised_marginals(levels, w):
             return np.round(rng.standard_normal(400), 1)
         return rng.integers(0, levels, 400).astype(float)
 
-    with pytest.raises(ValueError, match="continuous, tie-free coordinates"):
-        _ksg_mi_pair(draw(), draw(), 4, w)
+    mi = _ksg_mi_pair(draw(), draw(), 4, w)
+    assert abs(mi) < 0.15, f"MI = {mi:.4f} on independent data (levels={levels}, w={w})"
 
 
-def test_ksg_refusal_directs_discrete_data_to_an_external_estimator():
+def test_ksg_mi_on_dependent_binary_data_is_positive():
+    """The jitter must not erase real dependence between quantised variables."""
     from pyspi.statistics.infotheory import _ksg_mi_pair
 
     rng = np.random.default_rng(1)
-    x = (rng.random(4000) < 0.5)
-    y = np.where(rng.random(4000) < 0.8, x, ~x)
+    x = (rng.random(2000) < 0.5)
+    y = np.where(rng.random(2000) < 0.9, x, ~x)
+    assert _ksg_mi_pair(x.astype(float), y.astype(float), 4, 0) > 0.2
 
-    with pytest.raises(ValueError, match="estimator outside pyspi"):
-        _ksg_mi_pair(x.astype(float), y.astype(float), 4, 0)
+
+def test_tie_break_is_untouched_when_mostly_unique_and_deterministic_otherwise():
+    from pyspi.statistics.infotheory import _tie_break
+
+    rng = np.random.default_rng(3)
+    x = rng.standard_normal(200)
+    x[10] = x[9]                       # one duplicate: 99.5% unique
+    assert np.array_equal(_tie_break(x, 0), x)
+
+    q = rng.integers(0, 4, 200).astype(float)
+    a, b = _tie_break(q, 0), _tie_break(q, 0)
+    assert np.array_equal(a, b)
+    assert not np.array_equal(a, _tie_break(q, 1))
+    assert np.unique(a).size == q.size
+    assert np.max(np.abs(a - q)) < 1e-8 * q.std(ddof=1)
+    assert np.array_equal(_tie_break(np.ones(50), 0), np.ones(50))  # constant: untouched
+
+
+def test_tie_break_does_not_touch_the_global_rng():
+    from pyspi.statistics.infotheory import _tie_break
+
+    np.random.seed(123)
+    before = np.random.get_state()[1].copy()
+    _tie_break(np.zeros(10) + np.arange(10) % 2, 0)
+    assert np.array_equal(np.random.get_state()[1], before)
 
 
 def test_ksg_is_deterministic_and_independent_of_call_context():
@@ -485,12 +517,8 @@ def test_ksg_is_deterministic_and_independent_of_call_context():
         assert np.array_equal(spi.multivariate(data), table, equal_nan=True)
 
 
-def test_kraskov_spis_refuse_the_quantised_bundled_dataset():
-    """Every `forex` process is tied: 24--212 values in 250 samples.
-
-    It ships with the package, so the no-ties contract must be explicit rather
-    than an accidental low-level neighbour-count failure.
-    """
+def test_kraskov_spis_compute_finite_values_on_the_quantised_bundled_dataset():
+    """Every `forex` process is tied (24--212 distinct values in 250 samples)."""
     import pyspi.statistics.infotheory as it
     from pyspi.data import load_dataset
 
@@ -500,9 +528,17 @@ def test_kraskov_spis_refuse_the_quantised_bundled_dataset():
     for spi in (it.MutualInfo(estimator="kraskov"),
                 it.TimeLaggedMutualInfo(estimator="kraskov"),
                 it.TransferEntropy(estimator="kraskov"),
+                it.TransferEntropy(estimator="kraskov",
+                                   auto_embed_method="MAX_CORR_AIS"),
                 it.DirectedInfo(estimator="kraskov")):
-        with pytest.raises(ValueError, match="estimator outside pyspi"):
-            spi.bivariate(data, i=0, j=1)
+        for i, j in ((0, 1), (1, 2), (2, 0)):
+            first = spi.bivariate(data, i=i, j=j)
+            assert np.isfinite(first), (spi.identifier, i, j)
+            assert spi.bivariate(data, i=i, j=j) == first   # deterministic
+    for cls in (it.MutualInfo, it.TimeLaggedMutualInfo):
+        table = cls(estimator="kraskov").multivariate(data)
+        off = ~np.eye(len(Z), dtype=bool)
+        assert np.all(np.isfinite(table[off]))
 
 
 def test_kozachenko_entropy_still_refuses_tied_data_rather_than_dithering():
@@ -883,20 +919,32 @@ def test_knn_condition_is_affine_and_process_permutation_covariant(seed):
     assert np.allclose(moved, base * np.sign(scales), atol=5e-15, rtol=0)
 
 
-def test_knn_condition_refuses_duplicates_and_affine_rounding_boundary():
-    """There is no numerical key/tolerance boundary because no key is used."""
+def test_knn_condition_accepts_duplicates_but_rejects_constant_and_nonfinite():
     from pyspi.statistics.infotheory import _knn_condition
 
     x = np.r_[np.zeros(4), np.ones(22)]
-    for moved in (x, 0.1 * x + 0.3, -7.0 * x + 2.0):
-        with pytest.raises(ValueError, match="continuous, tie-free coordinates"):
-            _knn_condition(moved)
+    assert np.all(np.isfinite(_knn_condition(x)))
+    for bad in (np.ones(10), np.r_[np.arange(9.0), np.nan], np.r_[np.arange(9.0), np.inf]):
+        with pytest.raises(ValueError):
+            _knn_condition(bad)
+
+
+def test_tie_free_input_is_bit_identical_with_and_without_tie_break():
+    """Fully-unique data must not be touched at all by the jitter step."""
+    from pyspi.statistics.infotheory import _ksg_mi_pair, _tie_break
+
+    rng = np.random.default_rng(4)
+    x, y = rng.standard_normal(300), rng.standard_normal(300)
+    assert _tie_break(x, 0) is not None and np.array_equal(_tie_break(x, 0), x)
+    assert np.array_equal(_tie_break(y, 1), y)
+    # Repeat calls are identical (no hidden state).
+    assert _ksg_mi_pair(x, y, 4, 0) == _ksg_mi_pair(x.copy(), y.copy(), 4, 0)
 
 
 @pytest.mark.parametrize("seed", [0, 53])
 @pytest.mark.parametrize("kind", ["one_duplicate", "binary", "four_level"])
-def test_all_ksg_paths_consistently_refuse_tied_data(seed, kind):
-    """MI, TLMI, AIS, TE and DI share the explicit no-ties contract."""
+def test_all_ksg_paths_handle_tied_data_deterministically(seed, kind):
+    """MI, TLMI, AIS, TE and DI jitter ties the same way and stay finite."""
     import pyspi.statistics.infotheory as it
     from pyspi.data import Data
 
@@ -919,10 +967,12 @@ def test_all_ksg_paths_consistently_refuse_tied_data(seed, kind):
         it.TransferEntropy(estimator="kraskov"),
         it.DirectedInfo(estimator="kraskov", n=2),
     ):
-        with pytest.raises(ValueError, match="continuous, tie-free coordinates"):
-            spi.bivariate(data, i=0, j=1)
-    with pytest.raises(ValueError, match="continuous, tie-free coordinates"):
-        it._ksg_ais(x, 2, 1, 4)
+        v = spi.bivariate(data, i=0, j=1)
+        assert np.isfinite(v)
+        assert spi.bivariate(data, i=0, j=1) == v
+        # Independent data: nothing should look like a large dependence.
+        assert abs(v) < 0.5, (spi.identifier, v)
+    assert np.isfinite(it._ksg_ais(it._tie_break(x, 2), 2, 1, 4))
 
 
 @pytest.mark.parametrize("scale", [1e-3, 1.0, 1e3])
