@@ -13,12 +13,13 @@ readme = "README.md"
 # PEP 639 SPDX expression. The `{ text = ... }` table is deprecated by
 # setuptools >= 77 and emits a build warning that will become an error.
 license = "GPL-3.0-or-later"
-# The two vendored MIT notices go in the wheel's licence metadata as well as
-# in package data: `pyspi/lib/ids/` and the four pairwise causal scores in
-# `pyspi/lib/pairwise_causal.py` carry their own terms, and a redistributor
-# reading only the dist-info should see them.
+# The vendored notices go in the wheel's licence metadata as well as in
+# package data: `pyspi/lib/ids/` and the four pairwise causal scores in
+# `pyspi/lib/pairwise_causal.py` carry their own (MIT) terms, and
+# `pyspi/statistics/infotheory.py` follows JIDT (GPL-3.0-or-later; the jar is
+# no longer shipped). A redistributor reading only the dist-info should see them.
 license-files = ["LICENSE.txt", "pyspi/lib/LICENSE-cdt.txt",
-                 "pyspi/lib/ids/LICENSE.txt"]
+                 "pyspi/lib/LICENSE-jidt.txt", "pyspi/lib/ids/LICENSE.txt"]
 requires-python = ">=3.11"
 authors = [
     { name = "Oliver M. Cliff", email = "oliver.m.cliff@gmail.com" },
@@ -136,5 +137,5 @@ pyspi = [
     "configs/*.yaml",
     "data/*.npy",
 ]
-"pyspi.lib" = ["LICENSE-cdt.txt"]
+"pyspi.lib" = ["LICENSE-cdt.txt", "LICENSE-jidt.txt"]
 "pyspi.lib.ids" = ["LICENSE.txt"]

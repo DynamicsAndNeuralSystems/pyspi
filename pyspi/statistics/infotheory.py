@@ -1,9 +1,27 @@
 """Information-theoretic statistics, implemented in pure NumPy.
 
-The estimators here were ported from JIDT (Lizier, 2014, "JIDT: An
-information-theoretic toolkit for studying the dynamics of complex systems",
-Frontiers in Robotics and AI), which served as the reference implementation the
-port was validated against; the version used for validation was JIDT 1.6.1.
+Attribution. The Kraskov-Stoegbauer-Grassberger (KSG), box-kernel, Gaussian
+and symbolic estimators of mutual information and transfer entropy in this
+module, and the Kozachenko-Leonenko entropy estimator, follow -- and were
+validated against -- the Java Information Dynamics Toolkit (JIDT):
+
+    Lizier, J. T. (2014). JIDT: An information-theoretic toolkit for studying
+    the dynamics of complex systems. Frontiers in Robotics and AI 1:11.
+    https://github.com/jlizier/jidt  (GPL-3.0-or-later; (C) 2012- J. T. Lizier
+    and contributors)
+
+pyspi 2.x called JIDT through JPype; pyspi 3 reimplements the algorithms in
+NumPy and no longer ships the jar. The code here is an independent NumPy
+implementation, but the estimator definitions, parameter names and default
+behaviours (k_HISTORY, DYN_CORR_EXCL, KERNEL_WIDTH, AUTO_EMBED_METHOD, ...)
+derive from JIDT. JIDT's copyright notice is retained in
+``pyspi/lib/LICENSE-jidt.txt``. The version used for validation was JIDT 1.6.1;
+``tests/test_jidt_reference.py`` pins JIDT's outputs on a fixed dataset (no Java
+required), and ``tests/tools/jidt_reference/`` regenerates them. Known
+deviations: kernel TE differs from JIDT by up to 1.9e-4 bits (per-column rather
+than whole-series normalisation); Gaussian estimators carry a deterministic
+1e-8 relative ridge; KSG breaks ties with a small seeded jitter (hctsa-style)
+where JIDT adds random noise by default.
 """
 
 import math
