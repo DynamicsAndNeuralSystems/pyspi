@@ -97,6 +97,7 @@ A second pass, driven by a suite of red tests, closed a set of defects that prod
 - **`load_table()` dropped everything `save()` wrote except the numbers.** The run spec, digest and error map were written and never read, so a loaded table could not be asked which SPIs failed — and a NaN column is otherwise indistinguishable from a legitimately undefined statistic. They now arrive in `DataFrame.attrs` (`schema`, `run_spec`, `run_digest`, `errors`). Validation also covered only `ndim` and the SPI axis; a file whose matrices were the wrong width reached `MultiIndex.from_product` and failed there with a reshape error rather than a statement about the file. The full `(n_spis, M, M)` shape is now checked.
 
 - **`run_digest` did not bind to the algorithm.** It hashed the run spec, the config contents and the dataset bytes, so identical inputs computed by two different estimator implementations produced the same digest and a checkpoint written by one could be resumed by the other. It now covers the computation version too.
+- **`pyspi.COMPUTATION_VERSION` is public.** It is the value checkpoints and `run_digest` are keyed on, bumped whenever a change can alter a valid SPI output. Record it with saved results and do not pool results computed under different values.
 
 - **A successful recomputation left a stale error behind.** `compute(retry_failed=True)` on a resumed run kept the old `calc.errors` entry next to the good column it had just written, and `save()` froze that contradiction into the file.
 

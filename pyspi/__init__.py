@@ -19,5 +19,8 @@ if not hasattr(np, "NaN"):
 
 
 from .calculator import Calculator, load_table  # noqa: E402
+# Bumped whenever a change can alter a valid SPI output. Record it with saved
+# results, and do not pool results computed under different values.
+from ._parallel import COMPUTATION_VERSION  # noqa: E402
 
-__all__ = ["Calculator", "load_table"]
+__all__ = ["Calculator", "load_table", "COMPUTATION_VERSION"]

@@ -358,3 +358,12 @@ def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):
     assert np.array_equal(resumed.table.to_numpy(float), ref.table.to_numpy(float),
                           equal_nan=True)
     assert resumed.errors == ref.errors
+
+
+def test_computation_version_is_public():
+    """Callers record it with their results; it is what checkpoints are keyed on."""
+    import pyspi
+    from pyspi import _parallel
+
+    assert pyspi.COMPUTATION_VERSION == _parallel.COMPUTATION_VERSION
+    assert "COMPUTATION_VERSION" in pyspi.__all__
