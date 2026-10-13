@@ -11,19 +11,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: 'pip'
+      - uses: astral-sh/setup-uv@v5
 
-      - name: Install pyspi
-        run: |
-          python -m pip install --upgrade pip
-          pip install .
+      # Baselines are frozen against uv.lock; regenerate from the same
+      # resolution so they stay comparable with the blocking regression job.
+      - name: Install pyspi from the lock
+        run: uv sync --locked
 
       - name: Run data generation
-        run: python tests/tools/generate_benchmark_tables.py --dataset all
+        run: uv run python tests/tools/generate_benchmark_tables.py --dataset all
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

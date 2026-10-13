@@ -7,7 +7,10 @@ name: Packaging Pipeline
 # wired up -- is invisible to it. This job builds the wheel, installs it into a
 # clean environment, and runs from a directory that contains no pyspi source.
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

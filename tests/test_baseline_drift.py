@@ -89,7 +89,7 @@ LOOSE = (1e-6, 1e-2)
 # deterministic, is slack that hides deterministic regressions -- exactly the
 # failure mode this suite exists to catch.
 #
-# So the map is empty, and that is a measurement, not an assumption. Re-measure
+# So the map was empty, and that was a measurement, not an assumption. Re-measure
 # with:
 #     python tests/tools/measure_reproducibility.py
 # and add an entry here -- keyed by SPI identifier, valued (atol, rtol) -- for
@@ -97,7 +97,34 @@ LOOSE = (1e-6, 1e-2)
 # defined because a genuinely stochastic SPI (an unpinned permutation test, a
 # GPU-backed estimator) is a plausible future addition, and it needs a home
 # that is not "the whole module it happens to live in".
-LOOSE_SPIS = {}          # e.g. {"some_stochastic_spi": LOOSE}
+LOOSE_SPIS = {
+    # ANM fits Gaussian processes whose kernel matrix is ill-conditioned on
+    # these short, smooth fixtures (cond ~ 6e11). A condition number that large
+    # amplifies last-bit differences in BLAS/LAPACK (macOS Accelerate vs Linux
+    # OpenBLAS, different CPU kernels) by up to ~cond * eps ~ 1e-4 relative in
+    # the solved coefficients, even with every dependency locked. Measured:
+    # ~1e-4 relative, macOS vs the Linux-frozen baselines. 1e-3 leaves a 10x
+    # margin and is still tight enough to catch a real change to the estimator.
+    "anm": (1e-6, 1e-3),
+}
+
+# Optional looser per-family tolerances for the advisory "latest dependencies"
+# job (PYSPI_DRIFT_TIER=latest). Upstream releases legitimately move numerical
+# results, and the point of that job is to *see* the movement, not to be strict
+# about it. The default tier ("locked") is what blocks merges. Empty until a
+# family is measured to need it; add entries keyed by SPI identifier.
+LATEST_TIER_SPIS = {}
+
+_TIER = os.environ.get("PYSPI_DRIFT_TIER", "locked")
+if _TIER not in ("locked", "latest"):
+    raise ValueError(f"PYSPI_DRIFT_TIER must be 'locked' or 'latest', got {_TIER!r}")
+
+
+def _tolerance(spi_key):
+    """(atol, rtol) for ``spi_key`` under the selected tier."""
+    if _TIER == "latest" and spi_key in LATEST_TIER_SPIS:
+        return LATEST_TIER_SPIS[spi_key]
+    return LOOSE_SPIS.get(spi_key, TIGHT)
 
 
 def _baseline_path(dataset_name):
@@ -257,7 +284,7 @@ def test_baseline_drift(dataset_name, spi_key, baseline_tables, current_tables,
     finite = ~ref_nan
 
     module_name = spis[spi_key].__module__.split(".")[-1]
-    atol, rtol = LOOSE_SPIS.get(spi_key, TIGHT)
+    atol, rtol = _tolerance(spi_key)
 
     abs_diff = np.zeros_like(ref, dtype=np.float64)
     abs_diff[finite] = np.abs(new[finite] - ref[finite])
