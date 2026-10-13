@@ -4,7 +4,7 @@
   Covariance:
     labels:
       - undirected
-      - nonlinear
+      - linear
       - unisgned
       - bivariate
       - contemporaneous

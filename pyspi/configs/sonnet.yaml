@@ -4,7 +4,7 @@
   Covariance:
     labels:
       - undirected
-      - nonlinear
+      - linear
       - unsigned
       - bivariate
       - contemporaneous
@@ -17,7 +17,7 @@
   DynamicTimeWarping:
     labels:
       - undirected
-      - nonlinear
+      - linear
       - unsigned
       - bivariate 
       - time-dependent
@@ -29,7 +29,7 @@
   Barycenter:
     labels:
       - undirected
-      - nonlinear
+      - linear
       - unsigned
       - bivariate
       - time-dependent
@@ -46,7 +46,7 @@
   # Additive noise model
   AdditiveNoiseModel:
     labels:
-      - directed, 
+      - directed 
       - nonlinear
       - unsigned
       - bivariate
