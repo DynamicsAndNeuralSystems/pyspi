@@ -487,7 +487,7 @@ class CalculatorFrame:
             self._calculators = pd.concat([self._calculators.values, calc])
         elif isinstance(calc, Calculator):
             self._calculators = pd.concat(
-                [self._calculators, pd.Series(data=calc, name=calc.name)],
+                [self._calculators, pd.Series(data=calc)],
                 ignore_index=True,
             )
         elif isinstance(calc, pd.DataFrame):
