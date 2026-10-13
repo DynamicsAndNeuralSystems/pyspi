@@ -51,7 +51,7 @@ setup(
                         'data/standard_normal.npy',
                         'data/cml7.npy']},
     include_package_data=True,
-    version='2.0.1',
+    version='2.0.2',
     description='Library for pairwise analysis of time series data.',
     author='Oliver M. Cliff',
     author_email='oliver.m.cliff@gmail.com',
