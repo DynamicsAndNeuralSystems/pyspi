@@ -572,3 +572,77 @@ def test_group_delay_structural_labels_match_the_matrices():
         labels = set(spi.labels)
         if {"antisymmetric", "asymmetric"} & labels:
             assert not {"directed", "undirected"} & labels, identifier
+
+
+# --------------------------------------------------------------------------
+# One spectral factorisation per pair, shared by the directed measures
+# --------------------------------------------------------------------------
+
+DIRECTED_MEASURES = ("directed_transfer_function", "directed_coherence",
+                     "partial_directed_coherence",
+                     "generalized_partial_directed_coherence",
+                     "direct_directed_transfer_function")
+
+
+def _pair_multitaper(seed=0, T=400):
+    import spectral_connectivity as sc
+
+    rng = np.random.default_rng(seed)
+    x = rng.standard_normal((T, 2))
+    x[1:, 1] += 0.6 * x[:-1, 0]
+    return sc.Multitaper(x[:, None, :], sampling_frequency=1)
+
+
+@pytest.mark.parametrize("order", [DIRECTED_MEASURES, DIRECTED_MEASURES[::-1]])
+def test_factored_connectivity_gives_the_backend_values_from_one_factorisation(
+        order, monkeypatch):
+    """Bit-identical to a plain ``Connectivity``, whatever is asked for first."""
+    import spectral_connectivity as sc
+    import spectral_connectivity.connectivity as backend
+
+    from pyspi.statistics.spectral import _FactoredConnectivity
+
+    for private in ("_minimum_phase_factor", "_transfer_function",
+                    "_noise_covariance", "_MVAR_Fourier_coefficients"):
+        assert isinstance(getattr(sc.Connectivity, private, None), property), private
+
+    plain = sc.Connectivity.from_multitaper(_pair_multitaper())
+    expected = {name: getattr(plain, name)() for name in DIRECTED_MEASURES}
+    noise, transfer = plain._noise_covariance, plain._transfer_function
+
+    calls = []
+    inner = backend.minimum_phase_decomposition
+    monkeypatch.setattr(backend, "minimum_phase_decomposition",
+                        lambda *a, **k: calls.append(1) or inner(*a, **k))
+    factored = _FactoredConnectivity.from_multitaper(_pair_multitaper())
+    for name in order + order:
+        assert np.array_equal(getattr(factored, name)(), expected[name]), name
+    assert np.array_equal(factored._noise_covariance, noise)
+    assert np.array_equal(factored._transfer_function, transfer)
+    assert len(calls) == 1
+    assert factored.fourier_coefficients is None      # released once factorised
+    assert np.array_equal(factored.frequencies, plain.frequencies)
+
+
+def test_directed_spectral_spis_share_one_task_and_one_factorisation_per_pair(monkeypatch):
+    import spectral_connectivity.connectivity as backend
+
+    from pyspi import _parallel
+    from pyspi.calculator import Calculator
+    from pyspi.statistics import spectral
+
+    rng = np.random.default_rng(1)
+    calc = Calculator(dataset=rng.standard_normal((3, 300)),
+                      config="benchmarked_p90", verbose=False)
+    keys = [k for k, s in calc.spis.items()
+            if isinstance(s, spectral.NonparametricSpectralBivariate)]
+    assert len(keys) == 30 and _parallel.build_tasks(keys, calc.spis) == [keys]
+
+    calls = []
+    inner = backend.minimum_phase_decomposition
+    monkeypatch.setattr(backend, "minimum_phase_decomposition",
+                        lambda *a, **k: calls.append(1) or inner(*a, **k))
+    for key in keys:
+        S, err, _, _ = _parallel.run_spi(calc.spis[key], calc.dataset, key, 3)
+        assert err is None and np.isfinite(S[~np.eye(3, dtype=bool)]).all(), key
+    assert len(calls) == 6                              # one per ordered pair

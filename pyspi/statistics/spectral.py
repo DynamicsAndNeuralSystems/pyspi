@@ -1,3 +1,4 @@
+import functools
 import logging
 import numpy as np
 from contextlib import contextmanager
@@ -287,24 +288,67 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
         return adj
 
 
+class _FactoredConnectivity(sc.Connectivity):
+    """A pair's ``Connectivity``, reduced to its spectral factorisation.
+
+    The directed measures are all read off the Wilson minimum-phase factor,
+    through the transfer function, the innovation covariance and the MVAR
+    coefficients. The backend derives each of those afresh on every access --
+    two to four factorisations for a single measure, fourteen for the five
+    directed measures of one pair -- and the factorisation is the expensive
+    step. Here it is done once. Each quantity is a deterministic function of
+    the same spectrum, so keeping the first result changes no value.
+
+    Once factorised, the Fourier coefficients and the factor itself are let go:
+    one of these objects is held per ordered pair, and they were most of it.
+    """
+
+    @functools.cached_property
+    def _minimum_phase_factor(self):
+        return super()._minimum_phase_factor
+
+    def _factorise(self):
+        held = vars(self)
+        if "_noise_covariance" not in held:
+            # The parent's properties read the factor through `self`, so it is
+            # computed by the cached property above exactly once for the two.
+            transfer = np.array(super()._transfer_function)
+            held["_noise_covariance"] = np.array(super()._noise_covariance)
+            held["_transfer_function"] = transfer
+            del held["_minimum_phase_factor"]
+            self.fourier_coefficients = None
+        return held
+
+    @functools.cached_property
+    def _transfer_function(self):
+        return self._factorise()["_transfer_function"]
+
+    @functools.cached_property
+    def _noise_covariance(self):
+        return self._factorise()["_noise_covariance"]
+
+    @functools.cached_property
+    def _MVAR_Fourier_coefficients(self):
+        return super()._MVAR_Fourier_coefficients
+
+
 class NonparametricSpectralBivariate(NonparametricSpectral):
     _cache_namespace = "spectral_bv"
 
     @property
     def _cache_subkey(self):
-        # Per-pair Connectivity is shared across classes, but the per-class
-        # measure extraction (DTF, dDTF, dCoh, etc.) dominates in practice
-        # (~10s per class at M=16,T=800 vs <1s for the shared Multitaper).
-        # Bucket amortization by class so variants of one measure share, but
-        # different measures don't get cross-amortized. fs mirrors `key`.
-        return (type(self).__name__, self._fs)
+        # One bucket for every directed measure at a sampling frequency: they
+        # share the pair's Connectivity and, through _FactoredConnectivity, its
+        # factorisation, which is nearly all of the cost. Split by class, each
+        # worker repeated that factorisation for every pair. fs mirrors `key`.
+        return (self._fs,)
 
     def _get_cache(self, data, i, j):
         """Cache Connectivity object per (i,j) pair, not per (measure,i,j).
 
         Multiple directed spectral SPIs (DirectedCoherence, PartialDirectedCoherence,
-        etc.) share the same Multitaper+Connectivity for a given (i,j). The expensive
-        part is building the Multitaper — each measure extraction is cheap.
+        etc.) share the same Multitaper+Connectivity for a given (i,j), and with
+        it the spectral factorisation every one of them is derived from.
         """
         # fs belongs in both keys: it is passed to Multitaper, so it changes the
         # Connectivity object and the frequency grid as well as the measure.
@@ -325,7 +369,7 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
             z = np.transpose(data.to_numpy(squeeze=True)[[i, j]])
             z = _ensure_time_series_3d(z)
             m = sc.Multitaper(z, sampling_frequency=self._fs)
-            conn = sc.Connectivity.from_multitaper(m)
+            conn = _FactoredConnectivity.from_multitaper(m)
             conns[conn_key] = conn
 
         # `_recompute` lets a subclass override a backend measure outright, not
@@ -340,6 +384,10 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
                 except TypeError:
                     res = self._get_statistic(conn)
 
+        # Only the i->j spectrum is kept. [1, 0] not [0, 1]: the sub-system is
+        # built as [i, j] (local 0 = i, local 1 = j) and the backend indexes
+        # [target, source], so the i->j flow is at [1, 0]. See _to_source_target.
+        res = np.array(res[0, :, 1, 0])
         freq = conn.frequencies
         cache[measure_key] = res
         cache[self._freq_key] = freq
@@ -349,11 +397,7 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
     def bivariate(self, data, i=None, j=None):
         bv_freq, freq = self._get_cache(data, i, j)
         freq_id = np.where((freq > self._fmin) * (freq < self._fmax))[0]
-
-        # [1, 0] not [0, 1]: the sub-system is built as [i, j] (local 0 = i,
-        # local 1 = j) and the backend indexes [target, source], so the i->j
-        # flow is at [1, 0]. See _to_source_target.
-        return self._statfn(bv_freq[0, freq_id, 1, 0])
+        return self._statfn(bv_freq[freq_id])
 
 
 class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):

@@ -339,7 +339,7 @@ def cache_bucket(spi):
     ``bary_softdtw`` share nothing, and the multitaper spectral SPIs cache per
     class and sampling frequency. On the ``full`` config the namespaces divide
     as: spectral_mv 84 SPIs across 16 independent caches, covariance 32 across
-    8, spectral_bv 30 across 5, barycenter 16 across 4, coint 11 across 7,
+    8, spectral_bv 30 in one, barycenter 16 across 4, coint 11 across 7,
     ccm 9 across 3.
     """
     ns = getattr(type(spi), "_cache_namespace", None)
@@ -353,7 +353,9 @@ def cache_bucket(spi):
 # picks up first, so a stale or missing entry costs some makespan and nothing
 # else -- it cannot change a computed value. Anything unlisted is treated as
 # cheap.
-_NAMESPACE_COST = {"ccm": 292.7, "barycenter": 11.1, "spectral_bv": 1.6,
+# spectral_bv was 1.6 there; it is rescaled by the 7.6x measured when its
+# SPIs began sharing one factorisation per pair.
+_NAMESPACE_COST = {"ccm": 292.7, "barycenter": 11.1, "spectral_bv": 0.2,
                    "spectral_mv": 0.3, "coint": 0.3, "covariance": 0.3}
 
 
