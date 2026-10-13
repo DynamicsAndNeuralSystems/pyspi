@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pyEDM
 from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import ConstantKernel, RBF
 
 from pyspi.lib.pairwise_causal import (
     cds_score, igci_score, normalized_hsic, reci_score,
@@ -31,7 +32,14 @@ class AdditiveNoiseModel(Directed, Unsigned):
         """
         z = data.to_numpy()
         x, y = z[i], z[j]
-        gp = GaussianProcessRegressor(random_state=42).fit(x, y)
+        # Explicit kernel: sklearn <=1.8's default (kernel=None) is this fixed
+        # ConstantKernel * RBF, but 1.9 changed the default to an *optimised*
+        # kernel, whose length scale collapses to its lower bound and changes
+        # every value. No hyperparameters are tuned, so there is no optimiser
+        # (and no randomness) in the fit.
+        kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(
+            1.0, length_scale_bounds="fixed")
+        gp = GaussianProcessRegressor(kernel=kernel, optimizer=None).fit(x, y)
         y_predict = gp.predict(x).reshape(-1, 1)
         return normalized_hsic(y_predict - y, x)
 
