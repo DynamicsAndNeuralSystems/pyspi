@@ -641,23 +641,27 @@ class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
 
 
 class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
-    """Phase slope index, in the backend's all-frequency-pairs form.
+    """Phase slope index (Nolte et al. 2008, Phys. Rev. Lett. 100, 234101).
 
-    The band is thinned to about fifty frequencies and
-    ``Im sum_{a<b} conj(C(f_a)) C(f_b)`` is taken over *every* pair of them,
-    ``C`` being the complex coherency. Nolte et al. (2008, Phys. Rev. Lett.
-    100, 234101) sum over adjacent frequencies only. The difference matters:
+    ``Psi_ij = Im sum_f conj(C_ij(f)) C_ij(f + df)`` over the band, with ``C``
+    the complex coherency and ``df`` the frequency resolution of its estimate:
+    a coherence-weighted phase difference between neighbouring frequencies. It
+    grows with the lag between two processes and its sign says which leads.
 
-    - Distant pairs give short lags a long lever arm. In one recording of 1000
-      samples a one-sample lead is detected with d' near 90 here and below 1
-      with the adjacent-frequency sum.
-    - Their phase differences wrap. The value *falls* as the lag grows and its
-      sign is unreliable beyond roughly ``25 / (fmax - fmin)`` samples (50 for
-      the full band), where the adjacent-frequency sum is still correct.
+    ``df`` is the multitaper bandwidth, ``_FREQUENCY_STEP`` FFT bins: closer
+    frequencies share tapers and carry no independent phase. The sign is then
+    reliable for lags up to ``T / (2 * _FREQUENCY_STEP)`` samples, beyond which
+    the phase difference wraps.
 
-    So this is a sensitive short-lag direction statistic, not a measure of the
-    size of the lag. It is unnormalised: the published index is divided by a
-    jackknife standard deviation over epochs, which one recording lacks.
+    This is the unnormalised index. Nolte et al. divide it by a jackknife
+    standard deviation over epochs, which a single recording does not provide,
+    so the value scales with the number of frequencies in the band.
+
+    Computed here rather than by ``Connectivity.phase_slope_index``. In
+    spectral-connectivity 2.0 that method sums over *all* pairs of frequencies,
+    which is not this index -- it fell as the lag grew and changed sign near 50
+    samples -- and later releases change it; doing the sum here keeps the value
+    independent of the backend version.
     """
 
     # Antisymmetric in (i, j): slope of the phase spectrum.
@@ -665,15 +669,16 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     name = "Phase slope index"
     labels = ["unsigned", "spectral", "undirected"]
 
+    # Frequency resolution of the multitaper estimate in FFT bins: twice the
+    # backend's default time-halfbandwidth product of 3.
+    _FREQUENCY_STEP = 6
+
     def __init__(self, **kwargs):
         self.identifier = "psi"
         super().__init__(**kwargs)
         self._measure = "phase_slope_index"
-        # Always use `_get_statistic`, as GroupDelay does. The dispatcher only
-        # falls back to it on `TypeError`, and since spectral-connectivity 2.0
-        # `Connectivity.phase_slope_index()` accepts a no-argument call: it
-        # returned the full-band, unthinned index, so every band variant of
-        # this SPI was the same matrix.
+        # Always use `_get_statistic`, as GroupDelay does: the backend method
+        # of this name is not the published index (see the class docstring).
         self._recompute = True
 
     @property
@@ -682,10 +687,17 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
         return (type(self).__name__, self._fs, self._fmin, self._fmax)
 
     def _get_statistic(self, C):
-        return C.phase_slope_index(
-            frequencies_of_interest=[self._fmin, self._fmax],
-            frequency_resolution=(self._fmax - self._fmin) / 50,
-        )
+        freq = C.frequencies
+        # Strictly inside the band, as the backend's own band selection is.
+        inside = np.flatnonzero((self._fmin < freq) & (freq < self._fmax))
+        coherency = C.coherency()[..., inside[::self._FREQUENCY_STEP], :, :]
+        if coherency.shape[-3] < 2:
+            raise ValueError(
+                f"Phase slope index needs at least two independent frequencies "
+                f"inside ({self._fmin}, {self._fmax}); the series is too short "
+                f"for this band.")
+        return np.imag(np.sum(
+            np.conj(coherency[..., :-1, :, :]) * coherency[..., 1:, :, :], axis=-3))
 
 
 def _independent_significant_frequencies(p_values, step, alpha=0.05,

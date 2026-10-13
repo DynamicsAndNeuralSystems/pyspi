@@ -1596,7 +1596,7 @@ def test_multitaper_phase_slope_index_uses_its_frequency_band():
     arguments are only passed by ``_get_statistic``, which the dispatcher
     reached on ``TypeError`` alone, and the backend stopped raising one.
 
-    Process 0 drives process 1 at a lag of two samples through a low-pass
+    Process 0 drives process 1 at a lag of thirty samples through a low-pass
     filter, so their coherence -- and with it any phase slope -- lives in the
     low band. Process 2 is independent and sets the noise level.
     """
@@ -1604,52 +1604,114 @@ def test_multitaper_phase_slope_index_uses_its_frequency_band():
 
     rng = np.random.default_rng(7)
     T = 2000
-    x, e = rng.standard_normal((2, T + 2))
+    x, e = rng.standard_normal((2, T + 30))
     low = signal.filtfilt(*signal.butter(4, 0.2), x)
-    series = np.stack([x[2:], low[:-2] / low.std() + 0.5 * e[2:],
+    series = np.stack([x[30:], low[:-30] / low.std() + 0.5 * e[30:],
                        rng.standard_normal(T)])
     full, low_band, high_band = _psi_bands(series)
 
     assert not np.allclose(low_band, high_band, equal_nan=True)
     assert not np.allclose(full, low_band, equal_nan=True)
     noise = max(abs(low_band[0, 2]), abs(high_band[0, 2]), abs(high_band[1, 2]))
-    assert low_band[0, 1] > 10 * noise            # the driver leads, in its band
+    assert low_band[0, 1] > 5 * noise             # the driver leads, in its band
     assert abs(high_band[0, 1]) < 3 * noise       # and is absent outside it
     for S in (full, low_band, high_band):         # antisymmetric throughout
         off = ~np.eye(3, dtype=bool)
         assert np.allclose(S[off], -S.T[off], atol=1e-9)
 
 
-def test_multitaper_phase_slope_index_sign_follows_the_lag():
-    """Positive from leader to follower in every band; reversing the roles flips it."""
-    rng = np.random.default_rng(3)
-    T = 2000
-    x, e = rng.standard_normal((2, T + 1))
-    follower = 0.9 * x[:-1] + 0.3 * e[1:]
-    for S in _psi_bands(np.stack([x[1:], follower])):
-        assert S[0, 1] > 0 > S[1, 0]
-    for S in _psi_bands(np.stack([follower, x[1:]])):
-        assert S[1, 0] > 0 > S[0, 1]
+def _lagged_pair(lag, seed, T=2000):
+    """Process 0 leads process 1 by ``lag`` samples, with independent noise."""
+    rng = np.random.default_rng(seed)
+    x, e = rng.standard_normal(T + lag), rng.standard_normal(T)
+    return np.stack([x[lag:], 0.9 * x[:T] + 0.4 * e])
 
 
-def test_multitaper_phase_slope_index_memory_does_not_grow_with_length(monkeypatch):
-    """The backend sums over all pairs of the frequencies it is handed.
+@pytest.mark.parametrize("lag", [5, 20, 60, 100, 150])
+def test_multitaper_phase_slope_index_sign_follows_the_lag(lag):
+    """Positive from leader to follower in every band, up to T/12 = 167 samples.
 
-    Unthinned that is O(F^2 M^2) temporaries -- tens of GB at T=5000, M=28.
-    With the band applied the spectrum is thinned to about fifty independent
-    frequencies first, whatever the series length.
+    Not asserted below five samples: the index of a one-sample lag is about
+    the size of its noise in a single recording.
+
+    Summed over all frequency pairs, as the backend does it, the index changed
+    sign for lags beyond about 50 samples; reversing the roles flips it.
     """
+    for seed in range(3):
+        series = _lagged_pair(lag, seed)
+        for S in _psi_bands(series):
+            assert S[0, 1] > 0 > S[1, 0]
+            assert S[0, 1] == pytest.approx(-S[1, 0], rel=1e-12)
+        for S in _psi_bands(series[::-1]):
+            assert S[1, 0] > 0 > S[0, 1]
+
+
+def test_multitaper_phase_slope_index_grows_in_proportion_to_the_lag():
+    """A pure delay tilts the phase spectrum by 2 pi lag per unit frequency.
+
+    Neighbouring frequencies then differ in phase by ``2 pi lag df``, and for
+    small lags the index is proportional to it: doubling the lag doubles the
+    index. (The all-pairs sum *fell* with lag: 659, 332, 130 at lags 1, 2, 5
+    here.)
+    """
+    def full_band(lag):
+        return np.mean([_psi_bands(_lagged_pair(lag, seed))[0][0, 1] for seed in range(6)])
+
+    one, two, four, eight = (full_band(lag) for lag in (1, 2, 4, 8))
+    for ratio in (two / one, four / two, eight / four):
+        assert ratio == pytest.approx(2.0, rel=0.12)
+
+
+def test_multitaper_phase_slope_index_is_the_adjacent_frequency_sum(monkeypatch):
+    """Nolte's definition, written out pair by pair from the coherency.
+
+    Neighbours are one multitaper bandwidth apart, six FFT bins at the
+    backend's defaults.
+
+    Also: the backend's all-pairs sum, whose temporaries grow with the square
+    of the number of frequencies, is never called.
+    """
+    import spectral_connectivity as sc
     import spectral_connectivity.connectivity as backend
 
-    handed = []
-    inner = backend._inner_combination
-    monkeypatch.setattr(
-        backend, "_inner_combination",
-        lambda data, axis=-3: handed.append(data.shape[axis]) or inner(data, axis))
-    rng = np.random.default_rng(0)
-    for T in (500, 4000):
-        _psi_bands(rng.standard_normal((2, T)))
-    assert len(handed) == 6 and max(handed) <= 51
+    from pyspi.statistics.spectral import PhaseSlopeIndex
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("the all-frequency-pairs sum was called")
+
+    monkeypatch.setattr(backend, "_inner_combination", refuse)
+    rng = np.random.default_rng(4)
+    series = rng.standard_normal((3, 600))
+    series[1, 3:] += 0.8 * series[0, :-3]
+    multitaper = sc.Multitaper(series.T[:, None, :], sampling_frequency=1)
+    conn = sc.Connectivity.from_multitaper(multitaper)
+    coherency, freq = conn.coherency()[0], conn.frequencies
+    assert multitaper.frequency_resolution / (freq[1] - freq[0]) == pytest.approx(
+        PhaseSlopeIndex._FREQUENCY_STEP)
+
+    for fmin, fmax in ((0, 0.5), (0, 0.25), (0.25, 0.5)):
+        inside = [k for k, f in enumerate(freq) if fmin < f < fmax][::6]
+        expected = np.zeros((3, 3))
+        for i in range(3):
+            for j in range(3):
+                if i != j:
+                    expected[i, j] = sum(
+                        (coherency[a, i, j].conjugate() * coherency[b, i, j]).imag
+                        for a, b in zip(inside, inside[1:]))
+        got = np.asarray(PhaseSlopeIndex(fs=1, fmin=fmin, fmax=fmax).multivariate(
+            Data(data=series, dim_order="ps", zscore=False)), float)
+        off = ~np.eye(3, dtype=bool)
+        assert np.allclose(got[off], expected[off], rtol=1e-10, atol=1e-12)
+        assert got[0, 1] > 0
+
+
+def test_multitaper_phase_slope_index_refuses_a_band_with_one_frequency():
+    from pyspi.statistics.spectral import PhaseSlopeIndex
+
+    data = Data(data=np.random.default_rng(0).standard_normal((2, 6)),
+                dim_order="ps", zscore=False)
+    with pytest.raises(ValueError, match="at least two independent frequencies"):
+        PhaseSlopeIndex(fs=1, fmin=0.25, fmax=0.5).multivariate(data)
 
 
 def test_no_p90_spi_depends_on_the_global_rng():

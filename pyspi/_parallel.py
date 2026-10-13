@@ -456,7 +456,14 @@ SCHEMA_VERSION = 1
 #         their SPIs change value and no longer depend on evaluation order or
 #         the caller's seed. Multitaper phase slope index applies its band;
 #         its variants were one identical full-band matrix.
-COMPUTATION_VERSION = "3.0.0.r8"
+#   r9 -- multitaper phase slope index is Nolte's sum over neighbouring
+#         frequencies one multitaper bandwidth apart, computed in pyspi; it
+#         was the backend's sum over all pairs of thinned frequencies. Also
+#         covers GraphicalLasso(CV) converging at tol=1e-8 (values moved by
+#         up to 1.5e-4) and the scikit-learn >= 1.8 floor, under which the
+#         MinCovDet / EllipticEnvelope estimates carry its consistency
+#         correction; both landed without a revision of their own.
+COMPUTATION_VERSION = "3.0.0.r9"
 
 
 def read_manifest(checkpoint_dir: Path):
