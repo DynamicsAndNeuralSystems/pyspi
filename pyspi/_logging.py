@@ -5,18 +5,21 @@ progress) through the standard ``logging`` module under the ``pyspi`` logger.
 
 Behaviour:
 - ``pyspi/__init__.py`` attaches a ``NullHandler`` so importing pyspi never
-  prints anything on its own (standard library practice).
-- ``Calculator(verbose=...)`` calls :func:`configure` as a convenience for
-  interactive/script users: ``verbose=True`` (default) attaches a colored
-  ``StreamHandler`` at INFO; ``verbose=False`` raises the level to WARNING so
-  only problems surface.
-- Power users who attach their own handler before constructing a Calculator
-  are respected — :func:`configure` will not add a second StreamHandler, and
-  ``verbose`` then only adjusts the level.
+  prints anything on its own (standard library practice). Import also leaves
+  ``sys.stdout``/``sys.stderr`` and the root logger untouched.
+- ``Calculator(verbose=True)`` (the default) calls :func:`configure`, which
+  attaches one colored ``StreamHandler`` to the ``pyspi`` logger and sets it to
+  INFO -- once, however many Calculators are built. ``propagate`` is not
+  touched, so a host application's root handlers still receive the records.
+- ``Calculator(verbose=False)`` does nothing to logging at all: no handler, no
+  level. Records then follow the application's own configuration (or Python's
+  last-resort handler, which shows WARNING and above).
+- Power users who attach their own handler to the ``pyspi`` logger are
+  respected: :func:`configure` will not add a second one.
 
-Note: ``verbose`` maps to a *process-global* logger level. Two Calculators
-with different ``verbose`` in the same process share one level (last wins).
-For per-call control of the parallel progress bar use ``compute(progress=...)``.
+Note: ``verbose=True`` sets a *process-global* logger level, and it is never
+lowered again by a later ``verbose=False``. For per-call control of the
+parallel progress bar use ``compute(progress=...)``.
 """
 
 from __future__ import annotations
@@ -24,9 +27,6 @@ from __future__ import annotations
 import logging
 
 from colorama import Fore, Style
-from colorama import init as _colorama_init
-
-_colorama_init(autoreset=True)
 
 _LEVEL_COLORS = {
     logging.DEBUG: Fore.CYAN,
@@ -54,19 +54,30 @@ def get_logger(name: str = _LOGGER_NAME) -> logging.Logger:
 
 
 def configure(verbose: bool = True) -> None:
-    """Idempotently attach a colored StreamHandler to the ``pyspi`` logger.
+    """Opt in to pyspi's console logging; idempotent.
 
     Args:
-        verbose: True -> level INFO (chatty); False -> level WARNING (problems only).
+        verbose: True -> attach a colored StreamHandler (once) and log at INFO.
+            False -> leave logging entirely to the application.
     """
+    if not verbose:
+        return
     logger = logging.getLogger(_LOGGER_NAME)
     has_stream = any(
         isinstance(h, logging.StreamHandler) and not isinstance(h, logging.NullHandler)
         for h in logger.handlers
     )
     if not has_stream:
+        # Translate ANSI colors on legacy Windows consoles; a no-op elsewhere.
+        # Called here, on opt-in, rather than at import: colorama.init() swaps
+        # out sys.stdout/sys.stderr, which a library must never do.
+        try:
+            from colorama import just_fix_windows_console
+            just_fix_windows_console()
+        except ImportError:  # colorama < 0.4.6
+            pass
         handler = logging.StreamHandler()
         handler.setFormatter(ColorFormatter("%(message)s"))
         logger.addHandler(handler)
-        logger.propagate = False
-    logger.setLevel(logging.INFO if verbose else logging.WARNING)
+    if logger.level == logging.NOTSET or logger.level > logging.INFO:
+        logger.setLevel(logging.INFO)

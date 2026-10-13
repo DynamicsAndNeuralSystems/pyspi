@@ -21,7 +21,10 @@ from pathlib import Path
 
 import numpy as np
 
+from . import _parallel
 from .calculator import Calculator, bundled_configs
+
+_OUTPUT_SUFFIXES = (".npz", ".csv")
 
 
 def _load_array(path: Path) -> np.ndarray:
@@ -47,8 +50,9 @@ def main(argv=None) -> int:
     cp.add_argument("--output", type=Path, default=None,
                     help="Where to write results; format follows the extension "
                          "(.npz, .csv). Default: <data>.spi.npz.")
-    cp.add_argument("--n-jobs", type=int, default=1,
-                    help="Worker process count. 1 = serial (default).")
+    cp.add_argument("--n-jobs", type=int, default=None,
+                    help="Worker process count. 1 = serial, -1 = all available cores. "
+                         "Default: the PYSPI_N_JOBS environment variable, else 1.")
     cp.add_argument("--checkpoint-dir", type=Path, default=None,
                     help="Directory for per-SPI .npy checkpoints. Enables resume.")
     cp.add_argument("--no-resume", action="store_true",
@@ -74,6 +78,15 @@ def main(argv=None) -> int:
 
     args = parser.parse_args(argv)
 
+    # Fail on bad arguments before any computation, not after it.
+    out = args.output or args.data.with_suffix(".spi.npz")
+    if out.suffix not in _OUTPUT_SUFFIXES:
+        parser.error(f"unsupported output suffix {out.suffix!r}; use .npz or .csv.")
+    try:
+        _parallel.resolve_n_jobs(args.n_jobs)
+    except (TypeError, ValueError) as err:
+        parser.error(str(err))
+
     arr = _load_array(args.data)
     if arr.ndim != 2:
         raise SystemExit(f"Data must be 2D (processes x observations); got shape {arr.shape}")
@@ -91,7 +104,6 @@ def main(argv=None) -> int:
         mp_context=args.mp_context,
     )
 
-    out = args.output or args.data.with_suffix(".spi.npz")
     calc.save(out)
     print(f"Wrote results table -> {out}")
 
