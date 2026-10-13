@@ -40,9 +40,33 @@ def parse_bivariate(function):
 
         if i is None and j is None:
             if data.n_processes == 2:
-                i,j = 0,1
+                i, j = 0, 1
             else:
-                Warning('i and j not set.')
+                raise ValueError(
+                    f'Require arguments i and j to be set: the dataset has '
+                    f'{data.n_processes} processes, so there is no default '
+                    f'pair. (Use multivariate() for the whole matrix.)'
+                )
+        elif i is None or j is None:
+            # One index alone was a warning-free path straight into
+            # `z[None]`, which numpy reads as `np.newaxis`: the "pair" became
+            # the whole (1, M, T) block and the SPI computed something with no
+            # relation to what was asked for. The signature is
+            # `(data, data2, i, j)`, so `bivariate(data, 0, 3)` -- the obvious
+            # way to write it -- lands here with i=3 and j unset.
+            raise ValueError(
+                f'Both i and j must be given (got i={i!r}, j={j!r}). Note the '
+                f'signature is bivariate(data, data2=None, i=None, j=None), so '
+                f'positional indices must be passed as keywords.'
+            )
+        for name, idx in (("i", i), ("j", j)):
+            if not (isinstance(idx, (int, np.integer)) and not isinstance(idx, bool)):
+                raise TypeError(f'{name} must be an integer process index, '
+                                f'got {idx!r}.')
+            if not 0 <= idx < data.n_processes:
+                raise IndexError(
+                    f'{name}={idx} is out of range for {data.n_processes} '
+                    f'process(es).')
 
         return function(self,data,i=i,j=j)
 
