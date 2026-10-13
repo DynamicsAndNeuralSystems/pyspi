@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: pyspi: Python Toolkit of Statistics for Pairwise Interactions
+title: 'pyspi: Python Toolkit of Statistics for Pairwise Interactions'
 message: If you use this software, please cite both the article from preferred-citation and the software itself.
 type: software
 authors:
@@ -22,3 +22,25 @@ keywords:
   - pairwise-interactions
   - time-series analysis
 license: GPL-3.0
+preferred-citation:
+  type: article
+  title: Unifying pairwise interactions in complex dynamics
+  authors:
+    - given-names: Oliver M.
+      family-names: Cliff
+    - given-names: Annie G.
+      family-names: Bryant
+    - given-names: Joseph T.
+      family-names: Lizier
+    - given-names: Naotsugu
+      family-names: Tsuchiya
+    - given-names: Ben D.
+      family-names: Fulcher
+  journal: Nature Computational Science
+  volume: 3
+  issue: 10
+  start: 883
+  end: 893
+  year: 2023
+  month: 9
+  doi: 10.1038/s43588-023-00519-x
