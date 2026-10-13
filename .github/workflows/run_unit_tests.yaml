@@ -1,6 +1,9 @@
 name: Unit Testing Pipeline
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 
 # Supersede in-flight runs for the same ref; keep runs on different refs independent.
 concurrency:

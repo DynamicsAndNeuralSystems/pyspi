@@ -25,8 +25,11 @@ Usage
     python tests/tools/generate_benchmark_tables.py --out /tmp/baselines
 """
 import argparse
+import json
 import os
+import platform
 import time
+from importlib import metadata
 
 import numpy as np
 
@@ -110,12 +113,41 @@ def build_tables(dataset_name, config="full", seed=42):
     return tables
 
 
+PROVENANCE_PACKAGES = ("numpy", "scipy", "scikit-learn", "statsmodels", "pyEDM",
+                       "spectral-connectivity")
+
+
+def provenance():
+    """Environment the baselines were frozen in, as a JSON-serialisable dict.
+
+    Stored in each archive so a drift failure can be attributed to a dependency
+    or platform change rather than to the code.
+    """
+    from pyspi import _parallel
+
+    versions = {}
+    for pkg in PROVENANCE_PACKAGES:
+        try:
+            versions[pkg] = metadata.version(pkg)
+        except metadata.PackageNotFoundError:
+            versions[pkg] = None
+    return {
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "packages": versions,
+        "computation_version": _parallel.COMPUTATION_VERSION,
+    }
+
+
 def write_npz(tables, path, dataset_name, config, seed):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     payload = dict(tables)
     payload[META_PREFIX + "dataset" + META_PREFIX] = np.array(dataset_name)
     payload[META_PREFIX + "config" + META_PREFIX] = np.array(config)
     payload[META_PREFIX + "seed" + META_PREFIX] = np.array(seed)
+    payload[META_PREFIX + "provenance" + META_PREFIX] = np.array(
+        json.dumps(provenance(), sort_keys=True))
     np.savez_compressed(path, **payload)
 
 
