@@ -976,17 +976,10 @@
         statistic: max
 
   DebiasedSquaredPhaseLagIndex:
-    # NOTE: the `max` band statistic saturates on the data tested. The band
-    # maximum reaches exactly 1 as soon as the sign of the imaginary coherency
-    # is consistent across tapers at any ONE frequency. On the frozen fixtures
-    # the share of pairs sitting at exactly 1 runs from 29% to 100% depending on
-    # the data, with 1 to 16 distinct values; the `mean` variants are graded
-    # normally. This is an empirical observation, not a law: saturation is NOT
-    # monotone in T -- changing T recomputes the tapers and Fourier
-    # coefficients, so the values at a longer series are not a superset of the
-    # shorter one (measured non-monotone in 7 of 36 seed/band combinations).
-    # Kept enabled: the statistic is behaving as defined. Read `max` values
-    # near 1 with that in mind.
+    # NOTE: only the `mean` band statistic is bundled. The `max` variants were
+    # removed: the debiased estimates rest on a few tapers of one recording,
+    # and the maximum over frequencies returned exactly 1 for essentially any
+    # input (white noise included), so carried no information.
     labels:
       - undirected
       - linear
@@ -1009,21 +1002,9 @@
         fmax: 0.5
         labels:
           - M12
-
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
 
   DebiasedSquaredWeightedPhaseLagIndex:
-    # NOTE: same saturation behaviour as DebiasedSquaredPhaseLagIndex above.
-    # See that note.
+    # NOTE: only the `mean` band statistic is bundled; see DebiasedSquaredPhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -1046,17 +1027,6 @@
         fmax: 0.5
         labels:
           - M12
-
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
 
   PairwisePhaseConsistency:
     labels:

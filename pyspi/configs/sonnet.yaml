@@ -5,8 +5,8 @@
     labels:
       - undirected
       - linear
-      - unsigned
-      - bivariate
+      - signed
+      - multivariate
       - contemporaneous
       - M14
     dependencies:
@@ -17,9 +17,9 @@
   DynamicTimeWarping:
     labels:
       - undirected
-      - linear
+      - nonlinear
       - unsigned
-      - bivariate 
+      - bivariate
       - time-dependent
       - M10
     dependencies:
@@ -29,7 +29,7 @@
   Barycenter:
     labels:
       - undirected
-      - linear
+      - nonlinear
       - unsigned
       - bivariate
       - time-dependent
@@ -46,7 +46,7 @@
   # Additive noise model
   AdditiveNoiseModel:
     labels:
-      - directed 
+      - directed
       - nonlinear
       - unsigned
       - bivariate
@@ -149,7 +149,6 @@
       - unsigned
       - bivariate
       - frequency-dependent
-      - time-frequency dependent
       - M01
     dependencies:
     configs:
@@ -188,11 +187,9 @@
 .statistics.wavelet:
   PhaseSlopeIndex:
     labels:
-      - linear/nonlinear
       - unsigned
+      - time/frequency dependent
       - bivariate
-      - frequency-dependent
-      - time-frequency dependent
       - M08
     dependencies:
     configs:
@@ -218,7 +215,7 @@
   # Power envelope correlation
   PowerEnvelopeCorrelation:
     labels:
-      - undirected, 
+      - undirected
       - linear
       - unsigned
       - bivariate

@@ -80,7 +80,7 @@ LOOSE = (1e-6, 1e-2)
 # optimisers, GP
 # restarts and randomised independence tests made them irreproducible. Measured,
 # that is false: `tests/tools/measure_reproducibility.py` computes the full
-# config twice per fixture and, on all three fixtures, **322 of 322 SPIs
+# config twice per fixture and, on all three fixtures, **316 of 316 SPIs
 # reproduce bit-exactly** -- max |difference| identically 0, including every
 # `anm`/`cds`/`reci`/`ccm`, every `coint_*`, `gpfit_*` (GaussianProcessRegressor
 # defaults to n_restarts_optimizer=0, so there are no random restarts),

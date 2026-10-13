@@ -19,10 +19,6 @@ Resolved here:
 * ``hhg`` was declared directed but is exactly symmetric; ``ce``, ``dcorrx``
   and ``mgcx`` were labelled undirected in configs but are directed.
 
-One open finding remains, marked ``xfail(strict=True)`` with its reasoning in
-the marker. It is recorded rather than silently patched because it needs a
-scientific decision, not a code change.
-
 The audit reads the committed baseline matrices, so it costs no computation.
 """
 import os
@@ -174,17 +170,6 @@ def test_antisymmetric_measures_are_labelled_as_such():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Fixture/low-data finding, not a proven universal defect. "
-        "dspli_*_max and dswpli_*_max variants return a "
-        "constant matrix on var1_M3_T100 (M=3, T=100), so on that fixture "
-        "they carry no pairwise information. Whether it holds at larger M or "
-        "T has not been established, and none should be removed from "
-        "the shipped set on this evidence alone."
-    ),
-)
 def test_no_bundled_spi_returns_a_constant_matrix():
     """A constant matrix carries no pairwise information."""
     z = np.load(BASELINE, allow_pickle=False)

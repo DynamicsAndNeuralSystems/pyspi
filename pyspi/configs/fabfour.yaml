@@ -5,8 +5,8 @@
     labels:
       - undirected
       - linear
-      - unisgned
-      - bivariate
+      - signed
+      - multivariate
       - contemporaneous
       - M14
     dependencies:
