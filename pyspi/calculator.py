@@ -797,7 +797,9 @@ class Calculator:
         """Compute every SPI on the loaded dataset.
 
         Args:
-            n_jobs (int, optional): Number of worker processes. ``None`` (default)
+            n_jobs (int, optional): Number of worker processes. ``-1`` uses every
+                core available to this process, ``-2`` all but one (joblib
+                convention); ``0`` raises ``ValueError``. ``None`` (default)
                 falls back to the ``PYSPI_N_JOBS`` environment variable, or 1 if
                 unset. ``1`` runs serially in this process.
             checkpoint_dir (str | Path, optional): If set, each finished SPI is
@@ -826,8 +828,7 @@ class Calculator:
                 "Dataset not loaded yet. Please initialise with load_dataset."
             )
 
-        if n_jobs is None:
-            n_jobs = int(os.getenv("PYSPI_N_JOBS", "1"))
+        n_jobs = _parallel.resolve_n_jobs(n_jobs)
         _parallel.guard_oversubscription(n_jobs)
 
         spi_keys = list(self.spis.keys())

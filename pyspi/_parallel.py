@@ -99,10 +99,39 @@ def available_cores() -> int:
     physical core count. That distinction is the whole point of the check in
     :func:`guard_oversubscription`.
     """
+    process_cpu_count = getattr(os, "process_cpu_count", None)  # Python 3.13+
+    if process_cpu_count is not None:
+        return process_cpu_count() or 1
     try:
         return len(os.sched_getaffinity(0))  # Linux
     except AttributeError:
         return os.cpu_count() or 1
+
+
+def resolve_n_jobs(n_jobs) -> int:
+    """Turn a user ``n_jobs`` into a worker count >= 1, joblib-style.
+
+    Positive values pass through; ``-1`` means every core this process may use
+    (see :func:`available_cores`), ``-2`` all but one, and so on, floored at 1.
+    ``0`` and non-integers raise: a silent serial fallback hid typos.
+    ``None`` reads ``PYSPI_N_JOBS`` (default 1).
+    """
+    if n_jobs is None:
+        raw = os.environ.get("PYSPI_N_JOBS", "1")
+        try:
+            n_jobs = int(raw)
+        except ValueError:
+            raise ValueError(
+                f"PYSPI_N_JOBS must be an integer, got {raw!r}."
+            ) from None
+    if isinstance(n_jobs, bool) or not isinstance(n_jobs, (int, np.integer)):
+        raise TypeError(f"n_jobs must be an integer, got {n_jobs!r} "
+                        f"({type(n_jobs).__name__}).")
+    if n_jobs == 0:
+        raise ValueError("n_jobs must not be 0 (use 1 for serial, -1 for all cores).")
+    if n_jobs < 0:
+        return max(1, available_cores() + 1 + int(n_jobs))
+    return int(n_jobs)
 
 
 def _requested_threads() -> int:
@@ -122,8 +151,8 @@ def guard_oversubscription(n_jobs: int) -> None:
     The dangerous case is dataset-level parallelism on a cluster: many
     single-core pyspi processes, each inheriting a site-wide
     ``OMP_NUM_THREADS=8``, so a 48-core node runs 384 threads and thrashes.
-    ``pyspi/__init__`` only *defaults* the variable to 1, so an inherited value
-    survives by design -- a user who sets it deliberately should keep it.
+    pyspi never sets the variable itself, so an inherited value survives by
+    design -- a user who sets it deliberately should keep it.
 
     When the scheduler granted exactly one core, more than one thread is never
     right, so that case is pinned outright. Anything else only warns, since
