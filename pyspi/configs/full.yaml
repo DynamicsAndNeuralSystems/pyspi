@@ -826,6 +826,20 @@
         fmax: 0.5
         statistic: max
 
+  # Phase-aligned correlation (fork-added): zero-lag correlation maximised over
+  # all-pass filters, from Welch cross-spectra. nperseg null = automatic length.
+  PhaseAlignedCorrelation:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - MXX
+    dependencies:
+    configs:
+      - nperseg: null
+
   # Coherence (ordinal or squared? imaginary components of the coherence)
   ImaginaryCoherence:
     labels:

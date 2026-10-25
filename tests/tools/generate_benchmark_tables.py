@@ -1,7 +1,7 @@
 """Regenerate the baseline SPI tables used by ``tests/test_baseline_drift.py``.
 
 For each frozen test fixture in ``tests/data/fixtures/`` this runs the full
-Calculator (all 316 SPIs)
+Calculator (all 317 SPIs)
 once and stores the resulting MxM matrix per SPI in a single compressed
 ``.npz`` file under ``tests/data/baselines/``.
 

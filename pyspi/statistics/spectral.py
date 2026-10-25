@@ -15,7 +15,8 @@ from pyspi.base import (
 import nitime.analysis as nta
 import nitime.timeseries as ts
 import warnings
-from pyspi.utils import fmt_param
+from scipy import signal
+from pyspi.utils import fmt_param, require_int
 
 try:
     from spectral_connectivity.transforms import prepare_time_series
@@ -1031,3 +1032,119 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             # `Calculator.errors` with its cause attached, not as a silent
             # empty column plus a warning.
             raise
+
+
+def _welch_cross_spectra(z, nperseg):
+    """Hann-window Welch spectral matrices ``S[f, j, k]`` of ``z`` (processes x time).
+
+    One-sided rfft bins; segments of ``nperseg`` samples start every
+    ``nperseg // 2`` (a remainder shorter than a segment is dropped), and each
+    segment is demeaned before windowing. Unscaled: the window and sampling
+    normalisations cancel in any coherence-type ratio.
+    """
+    starts = np.arange(0, z.shape[1] - nperseg + 1, nperseg // 2)
+    segments = z[:, starts[:, None] + np.arange(nperseg)]          # (M, K, n)
+    segments = segments - segments.mean(axis=-1, keepdims=True)
+    X = np.fft.rfft(segments * signal.get_window("hann", nperseg), axis=-1)
+    X = np.transpose(X, (2, 0, 1))                                  # (F, M, K)
+    return X @ np.conj(np.swapaxes(X, 1, 2)) / len(starts)
+
+
+class PhaseAlignedCorrelation(Undirected, Unsigned):
+    """Phase-aligned correlation: zero-lag correlation maximised over all-pass filters.
+
+    ``P_jk = sum_f w_f |S_jk(f)| / sqrt(sum_f w_f S_jj(f) * sum_f w_f S_kk(f))``
+
+    from Welch cross-spectra (``_welch_cross_spectra``), where ``w_f`` counts
+    each one-sided bin's multiplicity on the two-sided grid: 1 at DC and, for
+    even ``nperseg``, at Nyquist; 2 elsewhere. The denominator is then the
+    product of the two signals' total powers.
+
+    In the population, ``S_jk = |S_jk| exp(i phi_jk)`` gives the zero-lag
+    correlation ``r = int |S_jk| cos(phi_jk) / N`` and the lag-``h``
+    cross-correlation ``int |S_jk| cos(phi_jk + 2 pi f h) / N``. Filtering one
+    process by an all-pass filter shifts ``phi_jk`` by any phase per frequency,
+    and the best choice cancels it, so ``P`` is the supremum over such filters
+    and ``r <= max_h xcorr(h) <= P``: no realignment, one global delay, any phase
+    per frequency. A pure delay with positive gain has linear phase, so there
+    ``max xcorr == P``; ``max xcorr < P`` flags dispersion (frequency-dependent
+    delay). Undirected, unsigned (invariant to the sign of either process) and in
+    [0, 1] by Cauchy-Schwarz.
+
+    Equivalently ``P`` is the power-weighted mean coherence magnitude,
+    ``sum_f w_f sqrt(S_jj S_kk) |C_jk| / N``. ``cohmag`` is instead the
+    unweighted mean *squared* coherence magnitude, so it scores a pair coupled
+    only in a narrow high-power band as weakly as one coupled in a narrow
+    low-power band, which ``P`` does not.
+
+    Estimation. On a raw periodogram every bin is perfectly coherent and ``P`` is
+    about ``pi / 4`` for independent noise. Averaging ``K`` segments restricts
+    the realignment to phases smooth on the scale ``1 / nperseg`` and leaves a
+    null floor of about ``sqrt(pi / (4 K))`` (measured 0.074 against 0.071 at
+    ``T = 20000``, ``nperseg = 256``, ``K = 155``). The cost of a short segment
+    is resolution: a delay of ``d`` samples is only partly inside one segment,
+    and ``P`` of a pure delay is the Hann window's normalised autocorrelation at
+    ``d`` -- 0.98 at ``d = nperseg / 20``, 0.94 at ``nperseg / 10`` and 0.47 at
+    ``nperseg / 3``.
+
+    ``nperseg=None`` picks the largest power of two not above ``T / 8``, capped
+    at 256. Below the cap that keeps ``K`` between 15 and 31 (floor 0.16-0.23);
+    at ``T >= 2048`` the segment is 256 samples and ``K`` grows with ``T``
+    (``T = 1000``: 64 samples, ``K = 30``, floor 0.16). The automatic choice
+    refuses ``T < 64``. Pass an integer to fix the resolution across lengths;
+    the identifier records ``auto`` or the integer.
+    """
+
+    name = "Phase-aligned correlation"
+    identifier = "phasealigned"
+    labels = ["unsigned", "spectral", "undirected"]
+
+    _MAX_AUTO_NPERSEG = 256
+    _MIN_AUTO_NPERSEG = 8
+    _SEGMENTS_PER_RECORD = 8
+
+    def __init__(self, nperseg=None):
+        if nperseg is not None:
+            nperseg = require_int("nperseg", nperseg, minimum=2)
+        self._nperseg = nperseg
+        self.identifier = (f"{self.identifier}_welch_nperseg-"
+                           f"{'auto' if nperseg is None else nperseg}")
+
+    def _segment_length(self, T):
+        if self._nperseg is not None:
+            if self._nperseg > T:
+                raise ValueError(f"nperseg={self._nperseg} exceeds the series "
+                                 f"length T={T}.")
+            return self._nperseg
+        quota = T // self._SEGMENTS_PER_RECORD
+        if quota < self._MIN_AUTO_NPERSEG:
+            raise ValueError(
+                f"Phase-aligned correlation needs T >= "
+                f"{self._SEGMENTS_PER_RECORD * self._MIN_AUTO_NPERSEG} for the "
+                f"automatic segment length (got T={T}); pass nperseg to "
+                f"override.")
+        return min(self._MAX_AUTO_NPERSEG, 1 << (quota.bit_length() - 1))
+
+    def _matrix(self, z):
+        nperseg = self._segment_length(z.shape[1])
+        S = _welch_cross_spectra(z, nperseg)
+        w = np.full(S.shape[0], 2.0)
+        w[0] = 1.0
+        if nperseg % 2 == 0:
+            w[-1] = 1.0
+        power = np.einsum("f,fjj->j", w, S).real
+        return np.einsum("f,fjk->jk", w, np.abs(S)) / np.sqrt(np.outer(power, power))
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        return float(self._matrix(data.to_numpy(squeeze=True)[[i, j]])[0, 1])
+
+    @parse_multivariate
+    def multivariate(self, data):
+        P = self._matrix(data.to_numpy(squeeze=True))
+        # |S_jk| and |S_kj| are summed in different orders by the matmul, so
+        # mirror one triangle, as Undirected.multivariate does.
+        lower = np.tril_indices(P.shape[0], -1)
+        P[lower] = P.T[lower]
+        np.fill_diagonal(P, np.nan)
+        return P

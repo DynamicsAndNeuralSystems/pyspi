@@ -152,6 +152,7 @@ def _representative_spis():
                                                  fmax=0.5)),
         ("dcoh_mean", lambda: spectral.DirectedCoherence(statistic="mean",
                                                          fmin=0, fmax=0.5)),
+        ("phasealigned", spectral.PhaseAlignedCorrelation),
         ("anm", causal.AdditiveNoiseModel),
         ("cds", causal.ConditionalDistributionSimilarity),
         ("reci", causal.RegressionErrorCausalInference),
@@ -291,8 +292,10 @@ def test_declared_structure_holds_on_every_fixture(name, seed, T):
     import pyspi.statistics.distance as distance
     import pyspi.statistics.infotheory as it
     from pyspi.statistics.causal import InformationGeometricCausalInference
+    from pyspi.statistics.spectral import PhaseAlignedCorrelation
 
     symmetric = [("mi_gaussian", it.MutualInfo(estimator="gaussian")),
+                 ("phasealigned", PhaseAlignedCorrelation()),
                  ("xcorr_mean", basic.CrossCorrelation(statistic="mean",
                                                        sigonly=False)),
                  ("pdist", distance.PairwiseDistance(metric="euclidean")),

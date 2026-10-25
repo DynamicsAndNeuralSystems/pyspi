@@ -7,7 +7,7 @@ A major overhaul. The Java/JIDT dependency is gone, the `Calculator` API is simp
 **Upgrading from 2.0.2 (the current PyPI release), at a glance:**
 
 - Python **>= 3.11** (2.0.2: >= 3.8), numpy **>= 2** (2.0.2: `<2`), scikit-learn **>= 1.8**, pyEDM **>= 2.5** (2.0.2: `==1.15.2.0`), mne **>= 1.6** (2.0.2: `==0.23.0`). No Java, `jpype`, `cdt` or `torch`. See [Dependencies](#dependencies).
-- The default `full` set goes from **285 SPIs (2.0.2) to 316**: 45 added, 14 removed, 23 renamed (identifier only), 248 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
+- The default `full` set goes from **285 SPIs (2.0.2) to 317**: 46 added, 14 removed, 23 renamed (identifier only), 248 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
 - The old `Calculator(subset=, configfile=, normalise=)` spellings still work, with a `DeprecationWarning`, until 4.0. See [Breaking changes and deprecations](#breaking-changes-and-deprecations).
 - Results tables written by 2.x (pickle) do not load; six directed spectral SPIs are transposed; many estimator values change (see [Changed](#changed) and the "Values changed" table).
 - The license is **GPL-3.0-or-later** (2.0.2: GPL-3.0), agreed by the maintainer, Ben Fulcher.
@@ -63,7 +63,7 @@ Tie-free series are not changed by pyspi's tie handling (see below), and for tho
 
 - **Java and JIDT** (above): `infodynamics.jar`, `jpype1` and the JVM start-up path.
 - **`cdt` and `torch`** (see Dependencies); `setup.py` and `requirements.txt` (packaging is `pyproject.toml` only); `pyspi/phiconf.yaml`; the 2.x config filenames (see the migration table); pickle and parquet output.
-- **Fourteen SPIs** (`full`: 285 to 316 net of 45 additions). See [SPI set changes](#spi-set-changes): six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`.
+- **Fourteen SPIs** (`full`: 285 to 317 net of 46 additions). See [SPI set changes](#spi-set-changes): six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`.
 
 ### Fixed: state, identity, and estimator contracts
 
@@ -300,13 +300,13 @@ Definitions the corrected measures are checked against:
 | `parse_bivariate` with ambiguous `i`/`j` (built a `Warning` and carried on) | raises `ValueError` |
 | pickled results tables | cannot be loaded; re-save with `Calculator.save()` (`.npz`) and read with `pyspi.load_table()` |
 | `A[i, j]` of `sgc`, `dcoh`, `pdcoh`, `gpdcoh`, `dtf`, `ddtf` (influence of j on i) | transposed: row = source, column = target; transpose saved 2.x results |
-| SPI identifiers in saved 2.x results | 23 renamed, 14 removed, 45 added; see [SPI set changes](#spi-set-changes) |
+| SPI identifiers in saved 2.x results | 23 renamed, 14 removed, 46 added; see [SPI set changes](#spi-set-changes) |
 | `import pyspi` replacing `sys.stdout`/`sys.stderr`, seeding NumPy's global RNG, setting `OMP_NUM_THREADS` | no longer |
 | `phase_multitaper_max_*` | removed; `CoherencePhase(statistic="max")` raises because ordinary maxima of wrapped angles are branch-cut dependent |
 
 ### SPI set changes
 
-**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 316.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
+**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 317.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
 
 | Change | SPIs | Families |
 |:-------|-----:|:---------|
@@ -314,8 +314,8 @@ Definitions the corrected measures are checked against:
 | Unchanged identifier | 248 | (values may still change; see "Values changed") |
 | **Renamed** (identifier only, except DTW) | 23 | `sgc` (11), Kraskov DCE (4), `cce`/`di_gaussian` `n` (4), auto-embedding method (3), DTW Sakoe-Chiba (1) |
 | **Removed** | 14 | multitaper `dspli`/`dswpli` maxima (6), `phase_multitaper_max` (3), symbolic TE (2), `di_kernel`, `di_kozachenko`, `igci` |
-| **Added** | 45 | `LaggedCorrelation` (42), `CrossPairwiseDistance` (2), `di_kraskov_NN-4_n-5` (1) |
-| 3.0.0 `full.yaml` | 316 | 285 − 14 + 45 |
+| **Added** | 46 | `LaggedCorrelation` (42), `CrossPairwiseDistance` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1) |
+| 3.0.0 `full.yaml` | 317 | 285 − 14 + 46 |
 
 Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 207, and `fabfour` (4) and `sonnet` (14) keep their size. The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (312, 299, 283 and 255 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
@@ -337,13 +337,14 @@ The unsupported coherence-phase maxima are removed from shipped configs. Other d
 | `dspli_multitaper_max_*`, `dswpli_multitaper_max_*` (6) | Constant 1.0 on essentially any input (above). |
 | `igci` | Active in 2.0.2's `config.yaml`; commented out of `full.yaml` as a disabled heuristic. The class remains as `InformationGeometricCausalInference`. |
 
-**Added (45)**
+**Added (46)**
 
 | SPI | Why |
 |:----|:----|
 | `corr_{pearson,spearman,kendall}_tau-{1,2,3,4,5,10,20}` and `..._tau-N-sq` (42) | `LaggedCorrelation`: correlation between `x[t]` and `y[t+τ]`, plain and squared, for three correlation types at seven lags. |
 | `xpdist_euclidean_tau-1_{mean,min}_rmse` (2) | `CrossPairwiseDistance`: shifted-path Euclidean upper bound on DTW. |
 | `di_kraskov_NN-4_n-5` (1) | Direct KSG/Frenzel-Pompe conditional-MI estimate of directed information; the validated nonlinear replacement for the two dropped variants. Not in the `benchmarked_p*` sets until it has been timed. |
+| `phasealigned_welch_nperseg-auto` (1) | `PhaseAlignedCorrelation`: zero-lag correlation maximised over all-pass (phase-only) filtering of one process, `sum_f w_f |S_jk(f)| / sqrt(sum_f w_f S_jj(f) sum_f w_f S_kk(f))` from Hann-window Welch cross-spectra. Completes the ladder `r <= max xcorr <= P`; a pure delay gives `max xcorr == P`. Undirected, unsigned, in [0, 1], with a null floor of about `sqrt(pi / (4K))` for `K` segments; `nperseg` defaults to the largest power of two not above `T / 8`, capped at 256. Not in the `benchmarked_p*` sets until it has been timed. |
 
 **Renamed (23)** — no value change, except the DTW row. In every case a parameter that changes the measure was absent from, or misreported by, the identifier.
 
