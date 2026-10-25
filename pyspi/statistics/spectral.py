@@ -1087,12 +1087,14 @@ class PhaseAlignedCorrelation(Undirected, Unsigned):
     ``d`` -- 0.98 at ``d = nperseg / 20``, 0.94 at ``nperseg / 10`` and 0.47 at
     ``nperseg / 3``.
 
-    ``nperseg=None`` picks the largest power of two not above ``T / 8``, capped
-    at 256. Below the cap that keeps ``K`` between 15 and 31 (floor 0.16-0.23);
-    at ``T >= 2048`` the segment is 256 samples and ``K`` grows with ``T``
-    (``T = 1000``: 64 samples, ``K = 30``, floor 0.16). The automatic choice
-    refuses ``T < 64``. Pass an integer to fix the resolution across lengths;
-    the identifier records ``auto`` or the integer.
+    ``nperseg=None`` picks the largest power of two not above ``T / 8``, within
+    [8, 256]. From ``T = 64`` to 2047 that keeps ``K`` between 15 and 31 (floor
+    0.16-0.23; ``T = 1000``: 64 samples, ``K = 30``); from ``T = 2048`` the
+    segment is 256 samples and ``K`` grows with ``T``. Below ``T = 64`` the
+    segment stays at 8 samples and the floor rises (``T = 30``: ``K = 6``,
+    measured 0.37), and the automatic choice refuses a record with fewer than
+    four segments (``T < 20``). Pass an integer to fix the resolution across
+    lengths; the identifier records ``auto`` or the integer.
     """
 
     name = "Phase-aligned correlation"
@@ -1101,7 +1103,7 @@ class PhaseAlignedCorrelation(Undirected, Unsigned):
 
     _MAX_AUTO_NPERSEG = 256
     _MIN_AUTO_NPERSEG = 8
-    _SEGMENTS_PER_RECORD = 8
+    _MIN_AUTO_SEGMENTS = 4
 
     def __init__(self, nperseg=None):
         if nperseg is not None:
@@ -1116,14 +1118,15 @@ class PhaseAlignedCorrelation(Undirected, Unsigned):
                 raise ValueError(f"nperseg={self._nperseg} exceeds the series "
                                  f"length T={T}.")
             return self._nperseg
-        quota = T // self._SEGMENTS_PER_RECORD
-        if quota < self._MIN_AUTO_NPERSEG:
+        n = max(self._MIN_AUTO_NPERSEG, 1 << max((T // 8).bit_length() - 1, 0))
+        n = min(self._MAX_AUTO_NPERSEG, n)
+        shortest = n + (self._MIN_AUTO_SEGMENTS - 1) * (n // 2)
+        if T < shortest:
             raise ValueError(
-                f"Phase-aligned correlation needs T >= "
-                f"{self._SEGMENTS_PER_RECORD * self._MIN_AUTO_NPERSEG} for the "
-                f"automatic segment length (got T={T}); pass nperseg to "
-                f"override.")
-        return min(self._MAX_AUTO_NPERSEG, 1 << (quota.bit_length() - 1))
+                f"Phase-aligned correlation needs T >= {shortest} for "
+                f"{self._MIN_AUTO_SEGMENTS} segments of the automatic length "
+                f"{n} (got T={T}); pass nperseg to override.")
+        return n
 
     def _matrix(self, z):
         nperseg = self._segment_length(z.shape[1])

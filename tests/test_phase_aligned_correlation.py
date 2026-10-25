@@ -59,7 +59,8 @@ def _segments(T, nperseg):
 
 
 @pytest.mark.parametrize("T,nperseg", [(20000, 256), (20000, None), (1000, None),
-                                       (1000, 64), (3001, 101), (100, None)])
+                                       (1000, 64), (3001, 101), (100, None),
+                                       (30, None)])
 def test_matches_reference_implementation(T, nperseg):
     z = _coupled(5, T, seed=T)
     spi = PhaseAlignedCorrelation(nperseg=nperseg)
@@ -71,10 +72,11 @@ def test_matches_reference_implementation(T, nperseg):
 
 def test_automatic_segment_length():
     spi = PhaseAlignedCorrelation()
-    assert [spi._segment_length(T) for T in (64, 100, 1000, 2047, 2048, 20000)] == \
-        [8, 8, 64, 128, 256, 256]
-    with pytest.raises(ValueError, match="T >= 64"):
-        spi._segment_length(63)
+    assert [spi._segment_length(T) for T in (20, 30, 64, 100, 1000, 2047, 2048,
+                                             20000)] == \
+        [8, 8, 8, 8, 64, 128, 256, 256]
+    with pytest.raises(ValueError, match="T >= 20"):
+        spi._segment_length(19)
 
 
 def test_reference_settings_are_the_default_at_long_records():
