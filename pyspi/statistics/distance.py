@@ -409,6 +409,42 @@ class DynamicTimeWarping(TimeWarping):
             return A
 
 
+def _banded_lcss(x, y, global_constraint=None, eps=1.0):
+    """LCSS similarity in which only pairs inside the global band may match.
+
+    The band (tslearn's own Sakoe-Chiba radius-1 or Itakura slope-2 mask)
+    restricts which pairs count as matches, not where the recursion may pass
+    (Vlachos et al. 2002). tslearn < 0.10 ignored the band altogether, so both
+    constrained SPIs equalled `lcss`. tslearn 0.10 applies it by holding every
+    masked cell at zero, which is the same thing for the Sakoe-Chiba band but
+    not for the Itakura parallelogram: that pinches to a single cell at each
+    end, so any pair whose last samples differ by more than `eps` scores
+    exactly 0 (43% of random pairs at T=100), and the rest can read low.
+
+    A row of the LCSS table is non-decreasing, and a match cell's
+    `A[i-1, j-1] + 1` is never below its left or upper neighbour, so each row
+    is the running maximum of its candidates; that is one vectorised pass per
+    row instead of a Python loop per cell.
+    """
+    if global_constraint is None:
+        return tslearn.metrics.lcss(x, y, eps=eps)
+    x = np.asarray(x, dtype=float).ravel()
+    y = np.asarray(y, dtype=float).ravel()
+    n, m = len(x), len(y)
+    if global_constraint == "sakoe_chiba":
+        band = tslearn.metrics.sakoe_chiba_mask(n, m)
+    elif global_constraint == "itakura":
+        band = tslearn.metrics.itakura_mask(n, m)
+    else:
+        raise ValueError(f"Unknown LCSS global constraint: {global_constraint}")
+    match = np.asarray(band, dtype=bool) & (np.abs(x[:, None] - y[None, :]) <= eps)
+    prev = np.zeros(m + 1)
+    for i in range(n):
+        cand = np.where(match[i], prev[:-1] + 1, prev[1:])
+        prev = np.concatenate(([0.0], np.maximum.accumulate(cand)))
+    return prev[-1] / min(n, m)
+
+
 class LongestCommonSubsequence(TimeWarping):
 
     name = "Longest common subsequence"
@@ -416,7 +452,7 @@ class LongestCommonSubsequence(TimeWarping):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._simfn = tslearn.metrics.lcss
+        self._simfn = _banded_lcss
 
 
 class SoftDynamicTimeWarping(TimeWarping):

@@ -790,6 +790,47 @@ def test_itakura_dtw_normalisation_agrees_between_bivariate_and_multivariate():
         spi.multivariate(data)[0, 1], rel=1e-12)
 
 
+def _lcss_cell_by_cell(x, y, band, eps=1.0):
+    """Textbook constrained LCSS: the band limits matches, not the recursion."""
+    A = np.zeros((len(x) + 1, len(y) + 1))
+    for i in range(1, len(x) + 1):
+        for j in range(1, len(y) + 1):
+            if band[i - 1, j - 1] and abs(x[i - 1] - y[j - 1]) <= eps:
+                A[i, j] = A[i - 1, j - 1] + 1
+            else:
+                A[i, j] = max(A[i - 1, j], A[i, j - 1])
+    return A[-1, -1] / min(len(x), len(y))
+
+
+@pytest.mark.parametrize("constraint", ["sakoe_chiba", "itakura"])
+def test_constrained_lcss_applies_its_band_and_only_its_band(constraint):
+    """tslearn < 0.10 ignored the band, so both constrained SPIs equalled
+    `lcss`; tslearn 0.10 holds masked cells at zero, so Itakura LCSS is 0
+    whenever the last samples differ by more than eps."""
+    import tslearn.metrics
+    from pyspi.statistics.distance import LongestCommonSubsequence
+
+    rng = np.random.default_rng(0)
+    T = 100
+    mask_fn = {"sakoe_chiba": tslearn.metrics.sakoe_chiba_mask,
+               "itakura": tslearn.metrics.itakura_mask}[constraint]
+    band = np.asarray(mask_fn(T, T), dtype=bool)
+    plain = LongestCommonSubsequence()
+    banded = LongestCommonSubsequence(global_constraint=constraint)
+    n_below = 0
+    for _ in range(10):
+        z = rng.standard_normal((2, T))
+        z[1, -1] = z[0, -1] + 3.0  # last samples never match
+        data = Data(data=z, dim_order="ps")
+        value = banded.bivariate(data, i=0, j=1)
+        x, y = data.to_numpy(squeeze=True)
+        assert abs(x[-1] - y[-1]) > 1.0
+        assert value == _lcss_cell_by_cell(x, y, band)
+        assert 0 < value <= plain.bivariate(data, i=0, j=1)
+        n_below += value < plain.bivariate(data, i=0, j=1)
+    assert n_below > 0
+
+
 
 @pytest.mark.parametrize("kwargs,exc", [
     ({"i": 0}, ValueError),          # j omitted

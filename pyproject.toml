@@ -69,7 +69,7 @@ dependencies = [
     # in tests/data/fixtures/cdt_pairwise_reference.npz). torch was never used
     # for any pyspi computation -- it entered only because cdt eagerly imports
     # its Torch-backed models at package load.
-    "tslearn>=0.6",
+    "tslearn>=0.10",
     "dtaidistance>=2.3",
     # >=2.5 dropped the `import pkg_resources` that previously forced a
     # setuptools<80 pin on every install (pkg_resources was removed in

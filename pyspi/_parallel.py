@@ -463,7 +463,11 @@ SCHEMA_VERSION = 1
 #         up to 1.5e-4) and the scikit-learn >= 1.8 floor, under which the
 #         MinCovDet / EllipticEnvelope estimates carry its consistency
 #         correction; both landed without a revision of their own.
-COMPUTATION_VERSION = "3.0.0.r9"
+#   r10 -- constrained LCSS applies its Sakoe-Chiba / Itakura band, computed
+#         in pyspi (both variants had equalled plain `lcss`). tslearn >= 0.10,
+#         whose subgradient DBA behind the four `bary*_sgddtw_*` SPIs changed
+#         its update and stopping rule.
+COMPUTATION_VERSION = "3.0.0.r10"
 
 
 def read_manifest(checkpoint_dir: Path):

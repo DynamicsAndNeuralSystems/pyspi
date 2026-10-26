@@ -1679,7 +1679,7 @@ requires-dist = [
     { name = "spectral-connectivity", specifier = ">=1.1,<3" },
     { name = "statsmodels", specifier = ">=0.14" },
     { name = "tqdm", specifier = ">=4.65" },
-    { name = "tslearn", specifier = ">=0.6" },
+    { name = "tslearn", specifier = ">=0.10" },
 ]
 provides-extras = ["testing", "tsfile", "bench"]
 
@@ -2278,7 +2278,7 @@ wheels = [
 
 [[package]]
 name = "tslearn"
-version = "0.8.1"
+version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "joblib" },
@@ -2286,10 +2286,11 @@ dependencies = [
     { name = "numpy" },
     { name = "scikit-learn" },
     { name = "scipy" },
+    { name = "statsmodels" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cd/08/8447f48fe3547ca92abae6875c63a7374b14b78f3b46518e16de45be640d/tslearn-0.8.1.tar.gz", hash = "sha256:68107857404e9a3869ed452fc3b8f1f0b5fdee61a04438c7ee957ec7e928e594", size = 9602140, upload-time = "2026-03-13T13:38:30.425Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/45/73/2ef636bd9e152d32c9955857c5ea4e589fdfb6f671c7d5af75e4d265d2c2/tslearn-0.10.0.tar.gz", hash = "sha256:d37147e49499f3c2b9b4f7f740c0f3ef67a3b69bf352ca6eadea532a0ab43d61", size = 19398980, upload-time = "2026-10-22T09:11:44.831Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5c/da/969c0efec60dcf52fb7b9ed9244a4913b2a7f0a266a0be4700cc1141471e/tslearn-0.8.1-py3-none-any.whl", hash = "sha256:2a79e1447df8c0708cfb8b06a65826ecb9b3d62e1b5b98fa26abbc77766f782d", size = 387871, upload-time = "2026-03-13T13:38:28.525Z" },
+    { url = "https://files.pythonhosted.org/packages/35/6c/9c54d1da774b050d893b2c84bf3de02f4617b0fd4a6a914eb5f341481278/tslearn-0.10.0-py3-none-any.whl", hash = "sha256:793ebbb13ba68cb3fb67b8f6c9a3d7eb2a0ff21a8879f22f47f32b359d6abbbc", size = 423849, upload-time = "2026-10-22T09:11:24.668Z" },
 ]
 
 [[package]]
