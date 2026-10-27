@@ -239,6 +239,22 @@
   #   dependencies:
   #   configs:
 
+  # Normalised Liang-Kleeman information flow, pairwise (Liang 2014, 2015)
+  LiangInformationFlow:
+    labels:
+      - directed
+      - linear
+      - signed
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - k: 1
+        conditional: False
+        statistic: normalised
+        labels:
+          - bivariate
+
 # Information-theoretic statistics
 .statistics.infotheory:
   JointEntropy: # No theiler window yet
