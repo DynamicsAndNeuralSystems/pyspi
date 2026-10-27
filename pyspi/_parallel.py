@@ -467,7 +467,16 @@ SCHEMA_VERSION = 1
 #         in pyspi (both variants had equalled plain `lcss`). tslearn >= 0.10,
 #         whose subgradient DBA behind the four `bary*_sgddtw_*` SPIs changed
 #         its update and stopping rule.
-COMPUTATION_VERSION = "3.0.0.r10"
+#   r11 -- the per-SPI audit: CCM puts the cause on the row and reaches its
+#         largest library; soft-DTW applies its band; dcorrx/mgcx are
+#         source-by-target with the published lagged sum; HSIC uses each
+#         variable's own kernel width; KSG MI under a Theiler window drops
+#         psi(N) for the reduced-pool term; phi_G runs to a disconnected
+#         model; debiased squared PLI is the taper-pair sign product; the
+#         bivariate directed spectral band is closed, dDTF uses the partial
+#         coherence, and parametric spectral GC is fitted on the Yule-Walker
+#         autocovariance at the frequencies it is evaluated at.
+COMPUTATION_VERSION = "3.0.0.r11"
 
 
 def read_manifest(checkpoint_dir: Path):
