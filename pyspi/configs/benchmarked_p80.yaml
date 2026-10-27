@@ -1279,6 +1279,11 @@
 
 .statistics.wavelet:
   PhaseSlopeIndex:
+    # The `max` variants are not bundled: they take the maximum over time of the
+    # instantaneous phase slope, which tends to its bound of 7 whatever the data.
+    # On independent white noise it exceeded the value for a pair at lag 2 in
+    # 85-100% of 200 runs at T=500 and 2000, in every band, and it is positive
+    # both ways round (test_wavelet_audit.py). Three SPIs removed in 3.0.0.
     labels:
       - unsigned
       - time/frequency dependent
@@ -1288,15 +1293,6 @@
     configs:
     - fmin: 0.25
       fmax: 0.5
-    - fmin: 0
-      fmax: 0.5
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
     # - fs: 1
     # - fmin: 0
     #   fmax: 0.25
