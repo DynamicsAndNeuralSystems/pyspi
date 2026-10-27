@@ -60,7 +60,7 @@ class mne(Unsigned):
                 mode="cwt_morlet",
                 sfreq=self._fs,
                 mt_adaptive=True,
-                fmin=5 / data.n_observations,
+                fmin=5 * self._fs / data.n_observations,
                 fmax=self._fs / 2,
                 cwt_freqs=cwt_freqs,
                 cwt_n_cycles=cwt_n_cycles,
@@ -244,22 +244,23 @@ class PhaseSlopeIndex(mne, Undirected):
         inside [fmin, fmax], so each band needs its own call. Cached per band
         on the dataset to share across PSI variants with the same band.
         """
-        # Key on the resolved fmin (below), not the requested one, so two
-        # bands that collapse onto the same floor share correctly.
-        key = (self._fs, max(self._fmin, 5.0 / data.n_observations), self._fmax)
+        # Resolve fmin against the frequency the data can actually support.
+        # fmin=0 asks for an unbounded period: MNE reports an unreliable
+        # spectrum and builds an ~11.1-million-sample Morlet wavelet for T=100.
+        # The floor is five cycles over the record, the same criterion the
+        # sibling wavelet path applies (see mne._get_cache). It is a frequency
+        # in the units of fs: 5 * fs / T Hz, not 5 / T, which is in cycles per
+        # sample and is only the right number at fs=1.
+        fmin = max(self._fmin, 5.0 * self._fs / data.n_observations)
+        # Key on the resolved fmin, not the requested one, so two bands that
+        # collapse onto the same floor share correctly.
+        key = (self._fs, fmin, self._fmax)
         try:
             return data.mne_psi[key]
         except (AttributeError, KeyError):
             pass
 
         z = np.moveaxis(data.to_numpy(), 2, 0)
-        # Resolve fmin against the frequency the data can actually support.
-        # fmin=0 asks for an unbounded period: MNE reports an unreliable
-        # spectrum and builds an ~11.1-million-sample Morlet wavelet for T=100.
-        # The five-cycle floor is the same criterion the sibling wavelet path
-        # already applies (see mne._get_cache), so this makes the two
-        # consistent rather than inventing a new policy.
-        fmin = max(self._fmin, 5.0 / data.n_observations)
         cwt_freqs = np.linspace(max(fmin, 1e-6), self._fmax, 10)
         # A Morlet wavelet spans n_cycles/f seconds. At MNE's default of 7
         # cycles the low-frequency wavelets are longer than the data (223
