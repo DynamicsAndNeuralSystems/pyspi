@@ -68,7 +68,10 @@ class Estimators(Undirected, Signed):
     @parse_multivariate
     def multivariate(self, data):
         mycov = self._from_cache(data)
-        matrix = getattr(mycov, self._kind + "_")
+        # Copied: the fitted estimator's array *is* the cache. Filling its
+        # diagonal in place and returning it handed the caller the cache, so
+        # any edit to the result reached every later SPI read from this Data.
+        matrix = getattr(mycov, self._kind + "_").copy()
         np.fill_diagonal(matrix, np.nan)
         if self._squared:
             return np.square(matrix)

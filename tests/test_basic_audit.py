@@ -225,6 +225,29 @@ def test_covariance_estimator_is_the_named_one_and_is_deterministic(estimator):
     assert np.array_equal(p1[off], ref.precision_[off])
 
 
+@pytest.mark.parametrize("cls", [basic.Covariance, basic.Precision])
+@pytest.mark.parametrize("squared", [False, True])
+def test_covariance_output_does_not_alias_the_cached_fit(cls, squared):
+    """The matrix handed back must be the caller's, not the cache's.
+
+    ``multivariate`` returned ``fit.covariance_`` (or ``precision_``) itself,
+    after writing NaN into the fitted estimator's diagonal. Anything the caller
+    then did to the result -- thresholding, taking absolute values -- was
+    written into the cache, and every later SPI read from the same Data
+    (including the squared variant) silently returned the edited numbers.
+    """
+    X = _series()
+    d = _data(X)
+    plain = cls(squared=squared)
+    first = plain.multivariate(d)
+    expected = first.copy()
+    first[0, 1] = 999.0
+    assert plain.multivariate(d)[0, 1] == expected[0, 1]
+    assert cls(squared=not squared).multivariate(d)[0, 1] != 999.0 ** 2
+    fit = d.covariance["EmpiricalCovariance"]
+    assert np.isfinite(np.diag(getattr(fit, cls(squared=squared)._kind + "_"))).all()
+
+
 @pytest.mark.xfail(strict=True, reason=(
     "sklearn's EllipticEnvelope.fit is MinCovDet.fit plus a decision "
     "threshold (offset_), so with the shared fixed seed its covariance_ and "
