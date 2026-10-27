@@ -130,3 +130,18 @@ def test_aeg_is_the_engle_granger_tstat_of_the_row_on_the_column():
         A = spi.multivariate(data)
         assert A[0, 1] == coint(z[0], z[1], trend=trend, autolag=autolag, maxlag=10)[0]
         assert A[1, 0] == coint(z[1], z[0], trend=trend, autolag=autolag, maxlag=10)[0]
+
+
+def test_cointegration_is_labelled_linear():
+    """Johansen's VECM and Engle-Granger's OLS are linear models.
+
+    Every bundled config declares `linear`, but the class carried `nonlinear`,
+    and label merging lets the class's linearity win, so all eleven `coint_*`
+    SPIs came out `nonlinear` and `filter_spis` sorted them with the
+    nonlinear measures.
+    """
+    coint = _full_spis("coint_")
+    assert len(coint) == 11
+    wrong = sorted(k for k, v in coint.items()
+                   if "linear" not in v.labels or "nonlinear" in v.labels)
+    assert not wrong, f"cointegration SPIs not labelled linear: {wrong}"

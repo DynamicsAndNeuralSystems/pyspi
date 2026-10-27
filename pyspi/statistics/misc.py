@@ -49,7 +49,9 @@ class Cointegration(Directed, Unsigned):
 
     name = "Cointegration"
     identifier = "coint"
-    labels = ["misc", "unsigned", "temporal", "undirected", "nonlinear"]
+    # Linear: Johansen fits a VECM and Engle-Granger an OLS regression. The
+    # class's linearity overrides the config's when labels merge.
+    labels = ["misc", "unsigned", "temporal", "undirected", "linear"]
     _cache_namespace = "coint"
 
     @property
