@@ -675,6 +675,11 @@ def _brute_force_ksg_mi_general(A, B, k, w=0):
     Marginals may have any number of columns, so this can score an AIS
     candidate `MI(Y_future; Y_past_embedding)` directly. Shares no code with
     the cKDTree implementation it checks.
+
+    The N term is psi(m_i + 1) for the m_i points point i may take as a
+    neighbour, averaged over i: KSG's psi(N) is psi of (pool size + 1), and
+    a Theiler window shrinks the pool to the points with |i - j| > w. At w=0
+    every m_i is N - 1 and this is psi(N).
     """
     from scipy.special import digamma
 
@@ -694,7 +699,8 @@ def _brute_force_ksg_mi_general(A, B, k, w=0):
     eps = np.sort(dJ, axis=1)[:, k - 1]
     n_a = ((dA < eps[:, None]) & allowed).sum(axis=1)
     n_b = ((dB < eps[:, None]) & allowed).sum(axis=1)
-    return float(digamma(k) + digamma(n)
+    pool = allowed.sum(axis=1)
+    return float(digamma(k) + np.mean(digamma(pool + 1))
                  - np.mean(digamma(n_a + 1) + digamma(n_b + 1)))
 
 
@@ -865,6 +871,34 @@ def test_ksg_pair_mi_matches_exact_pairwise_strict_counts(w):
     expected = _brute_force_ksg_mi_general(xc[:, None], yc[:, None], k, w)
     assert _ksg_mi_pair(x, y, k, w) == pytest.approx(expected, abs=1e-12)
     assert _ksg_mi_pair(y, x, k, w) == pytest.approx(expected, abs=1e-12)
+
+
+@pytest.mark.parametrize("cls", [MutualInfo, TimeLaggedMutualInfo])
+@pytest.mark.parametrize("w", [20, 60])
+def test_ksg_theiler_window_does_not_manufacture_information(cls, w):
+    """On i.i.d. independent series the MI is 0 whatever the Theiler window.
+
+    The window removes ``|i - j| <= w`` from point i's neighbour pool, leaving
+    ``N - 1 - 2w`` candidates in the interior. KSG's ``psi(N)`` is the
+    expected-log-mass term for a pool of ``N - 1``; keeping it with the reduced
+    pool added ``psi(N) - psi(N - 2w) ~ ln(N / (N - 2w))`` to every estimate
+    (JIDT 1.6.1 does the same and marks it as an open TODO). Before the fix,
+    at N=500, k=4, mean of these 8 seeds: MI +0.102 at w=20 and +0.274 at w=60
+    (TLMI +0.087 and +0.263), against a truth of 0. On the shipped ``DCE-AUTO`` SPIs at T=100 the windows reach w=33 and the
+    offset 0.83 nats, varying from pair to pair with the autocorrelation time.
+
+    i.i.d. data, so the window has no autocorrelation to remove and the right
+    answer does not depend on it. The sampling SD of the 8-seed mean is ~0.009.
+    """
+    vals = []
+    for seed in range(8):
+        rng = np.random.default_rng(seed)
+        data = Data(rng.standard_normal((2, 500)), dim_order="ps", zscore=False)
+        spi = cls(estimator="kraskov", prop_k=4, dyn_corr_excl=w)
+        vals.append(spi.bivariate(data, i=0, j=1))
+    assert abs(np.mean(vals)) < 0.035, (
+        f"{cls.__name__} with Theiler window {w} on independent i.i.d. data: "
+        f"mean {np.mean(vals):+.4f} over 8 seeds (per seed {np.round(vals, 3)})")
 
 
 @pytest.mark.parametrize("w", [0, 3, "largest"])

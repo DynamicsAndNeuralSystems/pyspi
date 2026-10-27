@@ -885,7 +885,9 @@ def _brute_force_ksg_mi(x, y, k, w=0):
 
     Independent of pyspi's cKDTree machinery: full pairwise L-infinity
     distances, the k-th smallest excluding self, strict marginal counts, and
-    psi(k) - <psi(n_x+1) + psi(n_y+1)> + psi(N). Slow, so it is only used on
+    psi(k) - <psi(n_x+1) + psi(n_y+1)> + <psi(m_i+1)>, where m_i is the number
+    of points i may take as a neighbour (N - 1 at w=0, so the last term is
+    psi(N); a Theiler window shrinks the pool). Slow, so it is only used on
     small continuous fixtures -- but it shares no code with the implementation
     it checks.
     """
@@ -903,7 +905,7 @@ def _brute_force_ksg_mi(x, y, k, w=0):
     n_x = ((dx < eps[:, None]) & allowed).sum(axis=1)
     n_y = ((dy < eps[:, None]) & allowed).sum(axis=1)
     return float(digamma(k) - np.mean(digamma(n_x + 1) + digamma(n_y + 1))
-                 + digamma(n))
+                 + np.mean(digamma(allowed.sum(axis=1) + 1)))
 
 
 def test_ksg_matches_an_independent_brute_force_reference():

@@ -21,7 +21,9 @@ required), and ``tests/tools/jidt_reference/`` regenerates them. Known
 deviations: kernel TE differs from JIDT by up to 1.9e-4 bits (per-column rather
 than whole-series normalisation); Gaussian estimators carry a deterministic
 1e-8 relative ridge; KSG breaks ties with a small seeded jitter (hctsa-style)
-where JIDT adds random noise by default.
+where JIDT adds random noise by default; with a Theiler window, KSG MI takes
+its psi(N) term over the window-reduced neighbour pool where JIDT keeps N
+(see _ksg_pool_digamma).
 """
 
 import math
@@ -770,6 +772,28 @@ def _ksg_counts(tree, points, radius, w):
     return n
 
 
+def _ksg_pool_digamma(N, w):
+    """KSG's ``psi(N)`` term for a neighbour pool reduced by a Theiler window.
+
+    ``psi(N)`` is ``psi(m + 1)`` for a pool of ``m = N - 1`` candidate
+    neighbours: it is the expected log probability mass of the ball holding k
+    of them. The window removes ``|j - i| <= w`` from point i's pool, leaving
+    ``m_i = N - 1 - min(i, w) - min(N - 1 - i, w)``, so the term is the mean
+    of ``psi(m_i + 1)``. Keeping ``psi(N)`` with the reduced pool, as JIDT 1.6.1
+    does (its source flags this as an open TODO), adds about
+    ``ln(N / (N - 2w))`` to every MI: 0.27 nats at N=500, w=60 on independent
+    i.i.d. data. At ``w == 0`` this is exactly ``digamma(N)``.
+
+    Only MI needs it. In the Frenzel-Pompe CMI the pool term enters each of
+    the four entropies once and cancels.
+    """
+    if w == 0:
+        return digamma(N)
+    i = np.arange(N)
+    pool = N - 1 - np.minimum(i, w) - np.minimum(N - 1 - i, w)
+    return float(np.mean(digamma(pool + 1)))
+
+
 def _ksg_mi_pair(x, y, k, w):
     """KSG Estimator 1 MI for a single pair of scalar series."""
     N = len(x)
@@ -799,10 +823,11 @@ def _ksg_mi_pair(x, y, k, w):
     n_x = _ksg_counts(tree_x, x, eps, w)
     n_y = _ksg_counts(tree_y, y, eps, w)
 
-    # psi(N) uses the full, unreduced N (KSG1 convention; only the neighbour
-    # set is window-restricted, not the normalisation). See JIDT
-    # MutualInfoCalculatorMultiVariateKraskov.
-    mi = digamma(k) - np.mean(digamma(n_x + 1) + digamma(n_y + 1)) + digamma(N)
+    # psi(N) is psi(pool size + 1); a Theiler window shrinks the pool. JIDT
+    # keeps the unreduced N here, which biases MI upward with w; see
+    # _ksg_pool_digamma.
+    mi = (digamma(k) - np.mean(digamma(n_x + 1) + digamma(n_y + 1))
+          + _ksg_pool_digamma(N, w))
     return float(mi)
 
 
@@ -810,8 +835,9 @@ def _ksg_mi_general(A, B, k_nn, w=0, condition=True):
     """KSG Estimator 1 MI(A; B) for multivariate A (N,dA), B (N,dB), L-inf norm.
 
     Generalisation of _ksg_mi_pair to arbitrary marginal dimensions.
-    Marginal neighbours are counted strictly (< eps); psi(N) uses full N. An
-    optional Theiler window w excludes |j-i| <= w from the neighbour set.
+    Marginal neighbours are counted strictly (< eps). An optional Theiler
+    window w excludes |j-i| <= w from the neighbour set, and psi(N) becomes
+    the mean psi of the reduced pool (_ksg_pool_digamma).
     """
     A = np.asarray(A, dtype=np.float64)
     B = np.asarray(B, dtype=np.float64)
@@ -835,7 +861,7 @@ def _ksg_mi_general(A, B, k_nn, w=0, condition=True):
     n_a = _ksg_counts(tree_a, A, eps, w)
     n_b = _ksg_counts(tree_b, B, eps, w)
 
-    return float(digamma(k_nn) + digamma(N)
+    return float(digamma(k_nn) + _ksg_pool_digamma(N, w)
                  - np.mean(digamma(n_a + 1) + digamma(n_b + 1)))
 
 
