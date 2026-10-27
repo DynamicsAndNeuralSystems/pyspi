@@ -112,11 +112,14 @@ class Precision(Estimators):
 
 
 class CrossCorrelation(Undirected, Signed):
-
-    name = "Cross correlation"
-    labels = ["basic", "linear", "undirected", "temporal"]
-
     """Sample cross-correlation over lags in [-T//4, +T//4].
+
+    ``r(l) = sum_t x[t+l] y[t] / (T sd_x sd_y)`` on the demeaned series: the
+    biased (divide-by-T) estimator, so ``r(0)`` is Pearson's r and
+    ``|r(l)| <= 1``; a pure delay of L samples peaks near ``1 - L/T``.
+    ``statistic`` reduces the retained lags: ``max`` is the largest *signed*
+    value (not the largest ``|r|``; ``squared=True`` gives strength without
+    sign), ``mean`` is their mean.
 
     ``sigonly`` is a historical misnomer kept for compatibility. It is a
     pointwise amplitude threshold -- keep the lags with
@@ -125,6 +128,9 @@ class CrossCorrelation(Undirected, Signed):
     being applied at every lag in the window. When no lag clears it the
     statistic is 0.
     """
+
+    name = "Cross correlation"
+    labels = ["basic", "linear", "undirected", "temporal"]
 
     def __init__(self, squared=False, statistic="max", sigonly=True):
         self.identifier = "xcorr"

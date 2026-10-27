@@ -222,6 +222,13 @@ def test_cross_correlation_matches_direct_lag_sums(params, zscore):
         assert got[i, j] == pytest.approx(ref, abs=1e-12), (i, j)
 
 
+def test_cross_correlation_class_has_its_docstring():
+    """The description sat after `name`/`labels`, so it was a bare string
+    expression and ``CrossCorrelation.__doc__`` was None."""
+    assert basic.CrossCorrelation.__doc__ is not None
+    assert "sigonly" in basic.CrossCorrelation.__doc__
+
+
 # ---------------------------------------------------------------------------
 # Covariance / Precision
 # ---------------------------------------------------------------------------
