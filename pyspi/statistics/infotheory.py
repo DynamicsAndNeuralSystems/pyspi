@@ -1937,6 +1937,9 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
 
     def __init__(self, history_length=10, **kwargs):
         super().__init__(**kwargs)
+        # A negative length wrapped the slices and returned a finite number.
+        history_length = utils.require_int("history_length", history_length,
+                                           minimum=1)
         self.identifier += f"_k{history_length}"
         self._history_length = history_length
 
@@ -2115,6 +2118,8 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
 
     def __init__(self, delay=1, **kwargs):
         super().__init__(**kwargs)
+        # A negative delay wrapped the slices and returned NaN.
+        delay = utils.require_int("delay", delay, minimum=1)
         self._delay = delay
         self.identifier += f"_k-{delay}"
 

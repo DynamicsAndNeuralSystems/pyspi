@@ -731,6 +731,30 @@ def test_dyn_corr_excl_value_reaches_the_identifier_and_the_cache_key():
     assert len({s._getkey() for s in spis}) == 3
 
 
+@pytest.mark.parametrize("cls_name, param", [
+    ("CrossmapEntropy", "history_length"),
+    ("StochasticInteraction", "delay"),
+])
+@pytest.mark.parametrize("bad", [-2, 0])
+def test_history_and_delay_must_be_positive_integers(cls_name, param, bad):
+    """Refused at construction, as CausalEntropy's ``n`` already is.
+
+    Unvalidated, ``CrossmapEntropy(history_length=-2)`` became
+    ``xme_gaussian_k-2`` and returned a finite -10.33 from wrapped negative
+    slices, and ``StochasticInteraction(delay=-1)`` returned NaN under
+    ``si_gaussian_k--1``; zero failed later with an unrelated shape error.
+    """
+    import pyspi.statistics.infotheory as it
+
+    def make(value):
+        return getattr(it, cls_name)(**{param: value})
+
+    with pytest.raises((ValueError, TypeError)):
+        make(bad)
+    with pytest.raises(TypeError):
+        make(2.5)
+
+
 @pytest.mark.parametrize("k, dims", [(6, [6, 5]), (2, [2, 1]), (1, [2, 1])])
 def test_crossmap_entropy_embedding_dimension(k, dims):
     """`history_length=k` gives k-1 source lags and a k-column joint space.
