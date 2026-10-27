@@ -232,6 +232,10 @@ class GPModel(Directed, Unsigned):
 
     def __init__(self, kernel="RBF"):
         self.identifier += f"_{kernel}"
+        if kernel == "DotProduct":
+            # A GP with a dot-product kernel is Bayesian linear regression; the
+            # class-level `nonlinear` describes the RBF variant only.
+            self.labels = [l for l in self.labels if l != "nonlinear"] + ["linear"]
         self._kernel = kernels.ConstantKernel() + kernels.WhiteKernel()
         self._kernel += getattr(kernels, kernel)()
 

@@ -325,6 +325,16 @@ Each fix was first pinned by an independent reference test that the previous cod
   The three `psi_wavelet_max_*` identifiers are removed from every bundled config; the class still accepts `statistic="max"`.
   The three `mean` identifiers are unchanged, and their docstring now gives the lag range their sign holds over: right in every run for lags up to 5 samples, wrong in every run at lag 12 on the full band, where the fixed 10-point grid's phase step wraps (`1 / (2 df)`).
   A time-averaged Nolte wavelet PSI on a bandwidth-spaced grid was prototyped and rejected: its null sd at T=2000 was 0.29 against the current 0.11 and it reversed at the same lag on `[0.25, 0.5]`.
+- **`gpfit_*` returned an in-sample error that the GP can drive to zero.**
+  `GPModel` scored a Gaussian process's prediction of the column from the row by its in-sample mean squared error.
+  The kernel's RBF term has unit amplitude, so at a vanishing length scale it is white noise of variance 1 that the marginal likelihood cannot tell from the `WhiteKernel`, and that solution interpolates y.
+  On an unrelated pair it is usually the global optimum: with ten optimizer restarts, the in-sample MSE fell below 0.05 on 41 of the 68 RBF fixture pairs, and on independent iid pairs from 0.98 to 0.045 (T=100).
+  The default start avoided it on z-scored data, but with `zscore=False` and x in large units it started inside it: independent pairs with sd(x)=100 scored 0.05 of var(y) instead of 1.
+  A noise-level floor and `normalize_y` fail the same way, because the RBF term is what turns into noise.
+  Both identifiers now return the leave-one-out MSE of the same fit (Rasmussen & Williams 2006, eq. 5.12, from the Cholesky factor the fit already holds), which stays near var(y) at either optimum, at the same cost (about 165 s for the pair of SPIs at M=10, T=1000, unchanged).
+  On z-scored independent pairs it is 0.999 rather than 0.958 at T=100 (RBF); on related pairs it is an honest out-of-sample error, 0.01-0.06 above the noise variance at T=100 and shrinking with T; the ranking of related kuramoto pairs against 5-fold CV is 0.96.
+  **`gpfit_DotProduct` and `gpfit_RBF` change** (by up to 0.11 on the fixtures); identifiers are unchanged.
+  `gpfit_DotProduct` is now labelled `linear`: a dot-product kernel is Bayesian linear regression.
 - **`si_kernel_W-0.5_k-1` checked and kept.**
   It was a candidate for removal alongside the fixed-width `di`/`cce`/`xme` kernel estimators.
   Against the closed-form stochastic interaction of a Gaussian VAR(1) it converges: its bias on independent data falls from +1.0 nats at T=100 to +0.05 at T=10000 (about `T**-0.65`, a factor of 20 to 30), its bias on a coupled pair from 6 times the true value at T=100 to 0.18 times at T=10000, and it rises monotonically with coupling strength (Spearman 0.92 at T=1000).
@@ -570,5 +580,6 @@ r12 (relative to r11; same fixtures, same columns):
 | `psi_multitaper_mean_fs-1_fmin-0_fmax-0-25`, `..._fmin-0-25_fmax-0-5` | 2 | 0.57 / 0.72 / 0.48 | Closed band less the real-valued bins in place of the backend's open band; the full-band PSI is unchanged. |
 | `gd_multitaper_delay_*` (again) | 2 | NaN / NaN / 0.13 | Real-valued bins left out of the fit; `[0.25, 0.5]` unchanged. |
 | `gwtau` | 1 | 0.041 / 0.053 / 0.017 | Constant factor `sqrt((T - 1) / T)`: the start of the trajectory is in the distance vector. |
+| `gpfit_DotProduct`, `gpfit_RBF` | 2 | 0.030 / 0.11 / 0.098 | Leave-one-out MSE of the fitted GP in place of the in-sample MSE. |
 
 Everything else in `full` is unchanged to the bit between r11 and r12 on all three fixtures (`dswpli_*`, `icoh_*_max`, `cohmag_*`, the full-band `psi` and the wavelet `psi` included).

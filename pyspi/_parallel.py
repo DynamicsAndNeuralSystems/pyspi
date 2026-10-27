@@ -480,7 +480,8 @@ SCHEMA_VERSION = 1
 #         the row (regressor on the row, as lmfit); GroupDelay thins its
 #         significant coherence run to one multitaper bandwidth; phase
 #         measures, PSI and GroupDelay's fit exclude the real-valued 0 Hz
-#         and Nyquist bins; gwtau's distance vector includes the start.
+#         and Nyquist bins; gwtau's distance vector includes the start;
+#         gpfit scores the leave-one-out error of the fitted GP.
 #         Fifteen duplicate/constant/degenerate SPIs leave the bundled
 #         configs.
 COMPUTATION_VERSION = "3.0.0.r12"
