@@ -5,8 +5,9 @@ from scipy import stats, signal
 import numpy as np
 import pandas as pd
 
-from pyspi.base import Undirected, Signed, parse_bivariate, parse_multivariate
-from pyspi.utils import require_int
+from pyspi.base import (Directed, Undirected, Signed, fill_pairwise,
+                        parse_bivariate, parse_multivariate)
+from pyspi.utils import acf, require_int
 
 
 def _spearman_matrix(Z):
@@ -108,6 +109,57 @@ class Precision(Estimators):
         super().__init__(kind="precision", squared=squared, estimator=estimator)
 
 
+# Lags are examined out to +/- T // 4: further out the sample
+# cross-correlation rests on few overlapping samples.
+_XCORR_MAX_LAG_FRACTION = 4
+
+
+def _xcorr_profile(data, i, j):
+    """The cached cross-correlation profile of the pair ``(i, j)``.
+
+    ``P[T//4 + l] = sum_t x_i[t + l] x_j[t] / (T sd_i sd_j)`` on the demeaned
+    series, for lags ``l = -T//4 .. +T//4`` (odd length ``2 (T//4) + 1``, the
+    zero lag at the centre). A positive ``l`` pairs ``x_i`` with an *earlier*
+    sample of ``x_j`` (``j`` leading), so the lead of ``i`` over ``j`` by
+    ``tau`` sits on the negative side: ``P[T//4 - tau] = sum_t x_i[t]
+    x_j[t + tau] / (T sd_i sd_j)``.
+
+    Stored in ``data.xcorr`` under both orientations (``(j, i)`` is the reversed
+    sequence) and shared by :class:`CrossCorrelation` and
+    :class:`LagResolvedCorrelation`. The returned array *is* the cache entry:
+    read it, do not modify it in place.
+    """
+    try:
+        return data.xcorr[(i, j)]
+    except (KeyError, AttributeError):
+        pass
+
+    T = data.n_observations
+    x, y = data.to_numpy(squeeze=True)[[i, j]]
+
+    # Biased estimator (demeaned, divided by T, as statsmodels'
+    # `ccf(adjusted=False)`): |r| <= 1 and the zero lag is Pearson's r.
+    x = x - x.mean()
+    y = y - y.mean()
+    scale = T * np.sqrt(np.mean(x ** 2) * np.mean(y ** 2))
+
+    # Force FFT method: O(N log N) vs O(N^2) direct for short signals.
+    r_full = signal.correlate(x, y, "full", method="fft") / scale
+
+    # correlate(x, y, "full")[T - 1 + l] == sum_t x[t + l] * y[t], so the
+    # zero lag sits at T - 1.
+    lag_max = T // _XCORR_MAX_LAG_FRACTION
+    r_ij = r_full[T - 1 - lag_max: T + lag_max]
+
+    try:
+        data.xcorr[(i, j)] = r_ij
+    except AttributeError:
+        data.xcorr = {(i, j): r_ij}
+    # r_yx(l) == r_xy(-l): the opposite orientation is the reversed sequence.
+    data.xcorr[(j, i)] = r_ij[::-1]
+    return r_ij
+
+
 class CrossCorrelation(Undirected, Signed):
     """Sample cross-correlation over lags in [-T//4, +T//4].
 
@@ -125,6 +177,8 @@ class CrossCorrelation(Undirected, Signed):
 
     name = "Cross correlation"
     labels = ["basic", "linear", "undirected", "temporal"]
+    # data.xcorr has no parameters; shared with LagResolvedCorrelation.
+    _cache_namespace = "xcorr"
 
     def __init__(self, squared=False, statistic="max", sigonly=True):
         self.identifier = "xcorr"
@@ -140,67 +194,10 @@ class CrossCorrelation(Undirected, Signed):
             self.labels = CrossCorrelation.labels + ["signed"]
         self.identifier += f"_{statistic}_sig-{sigonly}"
 
-    # Lags are examined out to +/- T // 4. Beyond a quarter of the record the
-    # sample cross-correlation is estimated from fewer than 3T/4 overlapping
-    # points and its variance grows without bound under the biased
-    # normalisation used here; the quarter cut is the convention pyspi shipped
-    # and is kept.
-    _MAX_LAG_FRACTION = 4
-
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         T = data.n_observations
-        try:
-            r_ij = data.xcorr[(i, j)]
-        except (KeyError, AttributeError):
-            x, y = data.to_numpy(squeeze=True)[[i, j]]
-
-            # Demeaned, and normalised by T rather than T-1. Three separate
-            # problems with the previous line
-            # `correlate(x, y) / x.std() / y.std() / (T - 1)`:
-            #
-            #   * `signal.correlate` was given the *raw* series while the
-            #     divisor used `std()`, which demeans. The two halves of the
-            #     ratio therefore described different quantities: on
-            #     `arange(10)` against itself with zscore=False it returned
-            #     3.8384 for a correlation.
-            #   * The lag-l sum has T - |l| terms, not T - 1. Dividing by T - 1
-            #     is neither the biased (T) nor the unbiased (T - |l|)
-            #     normalisation, and it put the zero lag of a series with
-            #     itself at T/(T-1): exactly 1.1111 for T = 10.
-            #   * `std()` is the sample standard deviation (ddof=0 in numpy,
-            #     so 1/T) while the divisor was T-1 -- mismatched conventions
-            #     in the same expression.
-            #
-            # Biased (divide by T) rather than unbiased (divide by T - |l|):
-            # the result is a *correlation*, so it must stay in [-1, 1], the
-            # zero lag must equal Pearson's r, and the `max` statistic must not
-            # be dominated by the high-variance tail that the unbiased
-            # normalisation produces at large lags. This is the same choice
-            # statsmodels' `ccf(adjusted=False)` and matplotlib's `xcorr` make.
-            x = x - x.mean()
-            y = y - y.mean()
-            scale = T * np.sqrt(np.mean(x ** 2) * np.mean(y ** 2))
-
-            # Force FFT method: O(N log N) vs O(N^2) direct for short signals.
-            r_full = signal.correlate(x, y, "full", method="fft") / scale
-
-            # correlate(x, y, "full")[T - 1 + l] == sum_t x[t + l] * y[t], so
-            # the zero lag sits at T - 1 and the window must be centred there.
-            # `r_full[T - T//4 : T + T//4]` was centred on T, i.e. on lag +1:
-            # the lag window was asymmetric, which makes `max` over it depend
-            # on the order of the pair for a measure declared undirected.
-            lag_max = T // self._MAX_LAG_FRACTION
-            r_ij = r_full[T - 1 - lag_max: T + lag_max]
-
-            try:
-                data.xcorr[(i, j)] = r_ij
-            except AttributeError:
-                data.xcorr = {(i, j): r_ij}
-            # r_yx(l) == r_xy(-l), so the opposite orientation is the reversed
-            # sequence, not the same one. Aliasing the two made `bivariate(j,i)`
-            # return the lag profile of (i,j).
-            data.xcorr[(j, i)] = r_ij[::-1]
+        r_ij = _xcorr_profile(data, i, j)
 
         # `sigonly` is a pointwise amplitude threshold, not an inferential
         # test. The name is historical and kept for compatibility: it keeps
@@ -247,6 +244,228 @@ class CrossCorrelation(Undirected, Signed):
             return float(np.mean(r_ij))
         else:
             raise TypeError(f"Unknown statistic: {self._statistic}")
+
+
+def _first_nonpositive_acf_lag(x, L):
+    """First lag ``k`` in ``1 .. L`` at which the sample ACF of ``x`` is <= 0.
+
+    ``pyspi.utils.acf`` is the biased (divide-by-T) sample autocorrelation of
+    the demeaned series, ``acf[0] = 1``. If it stays positive out to ``L`` the
+    result is ``L``: the lag is capped at the window and is at least 1.
+    """
+    rho = acf(np.asarray(x, dtype=float))[1:L + 1]
+    hits = np.flatnonzero(rho <= 0)
+    return int(hits[0]) + 1 if hits.size else int(L)
+
+
+class LagResolvedCorrelation(Directed, Signed):
+    """Directed, lag-resolved Pearson cross-correlation.
+
+    Reads the lag profile that :class:`CrossCorrelation` caches in
+    ``data.xcorr`` -- the biased (divide-by-T) sample cross-correlation of the
+    demeaned series over lags ``-T//4 .. +T//4`` -- and reports where on the
+    lag axis a pair's linear coupling sits and which way it runs.
+
+    **Lead correlation.** For a lag ``tau`` (in samples)::
+
+        r_{i->j}(tau) = sum_t (x_i[t] - m_i)(x_j[t + tau] - m_j) / (T s_i s_j)
+
+    summed over the ``T - |tau|`` overlapping samples, with ``m`` the mean and
+    ``s`` the divide-by-T standard deviation. ``tau > 0`` is ``i`` leading ``j``
+    by ``tau``, ``r_{i->j}(-tau) = r_{j->i}(tau)``, and ``r_{i->j}(0)`` is
+    Pearson's r. The denominator is ``T``, not ``T - |tau|`` (Box & Jenkins'
+    estimator, as in ``CrossCorrelation``), so ``|r| <= 1`` and a pure delay of
+    ``d`` samples gives ``1 - d/T`` at its lag.
+
+    All statistics use the window ``L = min(max_lag, T // 4)`` (``max_lag=None``
+    is the full cached window ``T // 4``). ``A[i, j]`` is row ``i`` (source) to
+    column ``j`` (target):
+
+    ``lag``
+        ``l* = argmax_{l in -L..L} |r_{i->j}(l)|``, the signed lag of the
+        strongest linear coupling, an integer number of samples, positive when
+        the row leads the column. Antisymmetric, ``A[i, j] = -A[j, i]``. Exact
+        ties go to the smallest ``|l|``. The lag is on the sample grid (Mitra et
+        al. 2014 interpolate between samples). Under independence ``l*`` is
+        spread over the whole window, so on weakly coupled pairs prefer a short
+        ``max_lag``.
+    ``peak``
+        ``r_{i->j}(l*)``: the signed correlation at that lag. Undirected (the
+        same extremum is found from either orientation), signed.
+    ``onesided``
+        ``r_{i->j}(tau)`` at one lag: directed and signed. ``tau`` is an integer
+        in ``1 .. L`` (default 1), or ``"acf"`` for a per-source lag, the first
+        lag at which the row's sample autocorrelation (``pyspi.utils.acf``,
+        biased) falls to or below zero, capped at ``L`` and at least 1.
+    ``asym``
+        ``(S_{i->j} - S_{j->i}) / (S_{i->j} + S_{j->i})`` with
+        ``S_{i->j} = sum_{l=1..L} r_{i->j}(l)^2``: a lead/lag asymmetry index in
+        ``[-1, 1]``, antisymmetric, positive when the lagged coupling runs
+        mostly from row to column (0 when both sums are 0). Lag 0 enters
+        neither sum. It does not condition on the target's own past, so it is
+        a lead/lag index, not a Granger-causality test: a common driver
+        reaching ``i`` before ``j`` also makes it positive.
+
+    Parameters
+    ----------
+    statistic : {"lag", "peak", "onesided", "asym"}
+    max_lag : int >= 1 or None
+        Upper limit on the window; ``None`` uses ``T // 4``.
+    tau : int >= 1 or "acf", only for ``statistic="onesided"`` (default 1).
+
+    The identifier is ``lagcorr_<statistic>[_tau-<tau>]_L-<max_lag>``, e.g.
+    ``lagcorr_lag_L-None``, ``lagcorr_onesided_tau-acf_L-None``.
+
+    References
+    ----------
+    Box, G. E. P., Jenkins, G. M., Reinsel, G. C. & Ljung, G. M. (2015). *Time
+    Series Analysis: Forecasting and Control*, 5th ed. Wiley. -- the sample
+    cross-correlation function.
+    Mitra, A., Snyder, A. Z., Hacker, C. D. & Raichle, M. E. (2014). Lag
+    structure in resting-state fMRI. *J. Neurophysiol.* 111, 2374-2391. -- the
+    lag of the cross-covariance extremum, interpolated between samples.
+    """
+
+    name = "Lag-resolved cross-correlation"
+    identifier = "lagcorr"
+    labels = ["basic", "linear", "temporal"]
+    # Shares CrossCorrelation's parameter-free cache, data.xcorr, so every
+    # variant of both classes is one parallel task.
+    _cache_namespace = "xcorr"
+
+    # Structural trait of each statistic's matrix.
+    _TRAITS = {
+        "lag": "antisymmetric",
+        "peak": "undirected",
+        "onesided": "directed",
+        "asym": "antisymmetric",
+    }
+
+    def __init__(self, statistic="lag", max_lag=None, tau=None):
+        if statistic not in self._TRAITS:
+            raise ValueError(
+                f"Unknown statistic {statistic!r}; expected one of "
+                f"{sorted(self._TRAITS)}.")
+        if statistic == "onesided":
+            if tau is None:
+                tau = 1
+            if not (isinstance(tau, str) and tau == "acf"):
+                tau = require_int("tau", tau, minimum=1)
+        elif tau is not None:
+            raise ValueError(
+                f"tau applies only to statistic='onesided', got tau={tau!r} "
+                f"with statistic={statistic!r}.")
+        self._statistic = statistic
+        self._tau = tau
+        self._max_lag = (None if max_lag is None
+                         else require_int("max_lag", max_lag, minimum=1))
+
+        self.labels = LagResolvedCorrelation.labels + [
+            self._TRAITS[statistic], "signed"]
+        self.identifier = f"lagcorr_{statistic}"
+        if statistic == "onesided":
+            self.identifier += f"_tau-{tau}"
+        self.identifier += f"_L-{self._max_lag}"
+
+    def _window(self, T):
+        L = T // _XCORR_MAX_LAG_FRACTION
+        if self._max_lag is not None:
+            L = min(L, self._max_lag)
+        if L < 1:
+            raise ValueError(
+                f"The lag window min(max_lag, T // 4) is {L} for T = {T}: "
+                f"at least one lag is needed.")
+        return L
+
+    def _tau_of(self, data, L):
+        """The ``onesided`` lag of each source process, as a function."""
+        if self._tau == "acf":
+            Z = data.to_numpy(squeeze=True)
+            taus = {}
+
+            def tau_of(p):
+                if p not in taus:
+                    taus[p] = _first_nonpositive_acf_lag(Z[p], L)
+                return taus[p]
+            return tau_of
+        if self._tau is not None and self._tau > L:
+            raise ValueError(
+                f"tau = {self._tau} is outside the lag window "
+                f"L = min(max_lag, T // 4) = {L}.")
+        return lambda p: self._tau
+
+    @staticmethod
+    def _lead_profile(data, i, j, L):
+        """``d[L + tau] = r_{i->j}(tau)`` for ``tau = -L .. L``.
+
+        The cached profile has ``P[c + l] = sum_t x_i[t + l] x_j[t] / (T s_i
+        s_j)`` with ``c = T // 4``, so ``r_{i->j}(tau)``, which pairs ``x_i[t]``
+        with ``x_j[t + tau]``, is ``P[c - tau]``: the window reversed.
+        """
+        P = _xcorr_profile(data, i, j)
+        c = (len(P) - 1) // 2
+        d = P[c - L: c + L + 1][::-1]
+        if not np.isfinite(d).all():
+            raise ValueError(
+                f"The cross-correlation profile of ({i}, {j}) is not finite "
+                f"(a constant or non-finite series).")
+        return d
+
+    def _pair(self, data, i, j, L, tau_of):
+        """``(A[i, j], A[j, i])``, both from the one profile of the pair."""
+        d = self._lead_profile(data, i, j, L)
+        stat = self._statistic
+        if stat in ("lag", "peak"):
+            # Lags in order of |l| (0, -1, +1, -2, ...), so argmax's first hit
+            # breaks an exact tie towards the shortest lag.
+            order = np.argsort(np.abs(np.arange(-L, L + 1)), kind="stable")
+            k = int(order[np.argmax(np.abs(d[order]))])
+            if stat == "lag":
+                lag = k - L  # an int, so the reverse of lag 0 is not -0.0
+                return float(lag), float(-lag)
+            peak = float(d[k])
+            return peak, peak
+        if stat == "asym":
+            forward = float(np.sum(d[L + 1:] ** 2))    # r_{i->j}(1..L)
+            backward = float(np.sum(d[:L] ** 2))       # r_{j->i}(1..L)
+            total = forward + backward
+            if total == 0:
+                return 0.0, 0.0
+            # x - y == -(y - x) exactly in floating point: antisymmetric.
+            return (forward - backward) / total, (backward - forward) / total
+        if stat == "onesided":
+            # r_{j->i}(tau) = r_{i->j}(-tau)
+            return float(d[L + tau_of(i)]), float(d[L - tau_of(j)])
+        raise TypeError(f"Unknown statistic: {stat}")
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        L = self._window(data.n_observations)
+        # One orientation per pair (the lower index first), as in
+        # `multivariate`, so the two agree exactly and `lag`/`asym` are
+        # exactly antisymmetric and `peak` exactly symmetric.
+        a, b = (i, j) if i <= j else (j, i)
+        v_ab, v_ba = self._pair(data, a, b, L, self._tau_of(data, L))
+        return v_ab if i <= j else v_ba
+
+    @parse_multivariate
+    def multivariate(self, data):
+        """Each unordered pair once: one profile fills both of its cells."""
+        M = data.n_processes
+        # A window or tau that cannot be met fails every pair alike: raise.
+        L = self._window(data.n_observations)
+        tau_of = self._tau_of(data, L)
+        pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
+        both = np.full((M, M, 2), np.nan)
+        # A failing pair is NaN in both of its cells (the scalar NaN that
+        # fill_pairwise stores broadcasts over the last axis).
+        fill_pairwise(self.identifier, both, pairs,
+                      lambda i, j: self._pair(data, i, j, L, tau_of))
+        A = np.full((M, M), np.nan)
+        iu = np.triu_indices(M, 1)
+        A[iu] = both[..., 0][iu]
+        A[iu[1], iu[0]] = both[..., 1][iu]
+        return A
 
 
 class SpearmanR(Undirected, Signed):
