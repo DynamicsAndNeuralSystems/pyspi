@@ -235,3 +235,28 @@ def test_hsic_of_a_rescaled_copy_is_one(biased):
     data = Data(np.stack([x, 3 * x]), dim_order="ps", zscore=False)
     A = HilbertSchmidtIndependenceCriterion(biased=biased).multivariate(data)
     assert A[0, 1] == pytest.approx(1.0, abs=1e-12)
+
+
+# --------------------------------------------------------------------------
+# Barycenter
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("statistic", ["mean", "max"])
+def test_barycenter_value_does_not_depend_on_call_order(statistic):
+    """One barycenter per unordered pair, whichever orientation is asked first.
+
+    tslearn's subgradient DBA visits the series in a random order drawn from
+    a fixed seed, so the barycenter of [x, y] differs from that of [y, x].
+    The cache stored whichever was computed first under both orientations,
+    so `bivariate(i=0, j=1)` on fresh data disagreed with
+    `multivariate()[0, 1]`, which reaches the pair as (1, 0).
+    """
+    from pyspi.statistics.distance import Barycenter
+
+    z = np.random.default_rng(8).standard_normal((3, 40))
+    spi = Barycenter(mode="sgddtw", statistic=statistic)
+    A = spi.multivariate(Data(z, dim_order="ps"))
+    assert np.array_equal(A, A.T, equal_nan=True)
+    for i, j in [(0, 1), (1, 0), (0, 2), (2, 1)]:
+        fresh = Data(z, dim_order="ps")
+        assert spi.bivariate(fresh, i=i, j=j) == A[i, j], (i, j)

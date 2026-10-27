@@ -527,7 +527,12 @@ class SoftDynamicTimeWarping(TimeWarping):
             z[i], z[j], global_constraint=self._global_constraint)
 
 
-class Barycenter(Directed, Signed):
+class Barycenter(Undirected, Signed):
+    """A statistic (mean or max, optionally of the square) of the barycenter
+    of the pair under the Euclidean, DTW (DBA), subgradient-DBA or soft-DTW
+    geometry. The barycenter of {x, y} is a function of the unordered pair,
+    so the measure is undirected.
+    """
 
     name = "Barycenter"
     identifier = "bary"
@@ -579,19 +584,24 @@ class Barycenter(Directed, Signed):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-
+        # One barycenter per unordered pair. The subgradient (sgddtw) fit is
+        # not symmetric in its inputs -- tslearn visits the series in a seeded
+        # random order -- so the pair is always fitted as [z[max], z[min]],
+        # the orientation the inherited loop reaches first. Caching whichever
+        # orientation was asked for first made `bivariate(i=0, j=1)` disagree
+        # with `multivariate()[0, 1]`.
+        key = (max(i, j), min(i, j))
         try:
-            bc = data.barycenter[self._mode][(i, j)]
+            bc = data.barycenter[self._mode][key]
         except (AttributeError, KeyError):
             z = data.to_numpy(squeeze=True)
-            bc = self._fn(z[[i, j]])
+            bc = self._fn(z[list(key)])
             try:
-                data.barycenter[self._mode][(i, j)] = bc
+                data.barycenter[self._mode][key] = bc
             except AttributeError:
-                data.barycenter = {self._mode: {(i, j): bc}}
+                data.barycenter = {self._mode: {key: bc}}
             except KeyError:
-                data.barycenter[self._mode] = {(i, j): bc}
-            data.barycenter[self._mode][(j, i)] = data.barycenter[self._mode][(i, j)]
+                data.barycenter[self._mode] = {key: bc}
 
         return self._statfn(bc)
 
