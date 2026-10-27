@@ -492,6 +492,20 @@ class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
 
 
 class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
+    """Debiased squared phase lag index (Vinck et al. 2011, NeuroImage 55, 1548).
+
+    The mean of ``sign(Im S_k) sign(Im S_l)`` over pairs ``k != l`` of the
+    ``n`` tapers (and trials), ``S_k`` being taper ``k``'s cross-spectrum:
+    ``((sum s)^2 - sum s^2) / (n (n - 1))``.
+
+    Computed here rather than by the backend, whose
+    ``(n PLI^2 - 1) / (n - 1)`` is the same expression only when every sign is
+    nonzero. At 0 Hz and at the Nyquist frequency the Fourier coefficients of a
+    real signal are real, so every ``Im S_k`` is exactly zero: the estimator is
+    0 there, and the backend's shortcut returned ``-1/(n - 1)`` (-0.25 at the
+    default five tapers) for every input.
+    """
+
     name = "Debiased squared phase lag index"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -499,6 +513,16 @@ class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected
         self.identifier = "dspli"
         super().__init__(**kwargs)
         self._measure = "debiased_squared_phase_lag_index"
+        self._recompute = True
+
+    def _get_statistic(self, C):
+        X = np.asarray(C.fourier_coefficients)  # (window, trial, taper, fft, signal)
+        X = X[..., : X.shape[-2] // 2 + 1, :]   # the backend's non-negative bins
+        sign = np.sign(np.imag(X[..., :, np.newaxis] * np.conj(X[..., np.newaxis, :])))
+        n = sign.shape[1] * sign.shape[2]
+        total = sign.sum(axis=(1, 2))
+        squares = np.abs(sign).sum(axis=(1, 2))
+        return (total ** 2 - squares) / (n * (n - 1))
 
 
 class DebiasedSquaredWeightedPhaseLagIndex(
