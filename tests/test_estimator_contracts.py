@@ -1734,7 +1734,8 @@ def test_multitaper_phase_slope_index_is_the_adjacent_frequency_sum(monkeypatch)
     """Nolte's definition, written out pair by pair from the coherency.
 
     Neighbours are one multitaper bandwidth apart, six FFT bins at the
-    backend's defaults.
+    backend's defaults, over the closed band less the real-valued bins (the
+    rule every phase measure follows since 3.0.0; PSI used the open band).
 
     Also: the backend's all-pairs sum, whose temporaries grow with the square
     of the number of frequencies, is never called.
@@ -1758,7 +1759,9 @@ def test_multitaper_phase_slope_index_is_the_adjacent_frequency_sum(monkeypatch)
         PhaseSlopeIndex._FREQUENCY_STEP)
 
     for fmin, fmax in ((0, 0.5), (0, 0.25), (0.25, 0.5)):
-        inside = [k for k, f in enumerate(freq) if fmin < f < fmax][::6]
+        # The phase rule: closed band less the real-valued bins 0 and fs/2.
+        inside = [k for k, f in enumerate(freq)
+                  if fmin <= f <= fmax and f != 0 and f != 0.5][::6]
         expected = np.zeros((3, 3))
         for i in range(3):
             for j in range(3):

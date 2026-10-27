@@ -342,3 +342,94 @@ def test_a_band_of_only_real_valued_bins_is_refused(cls_name, fmin, fmax):
     spi = getattr(spectral, cls_name)(fmin=fmin, fmax=fmax)
     with pytest.raises(ValueError, match="real-valued"):
         spi.multivariate(_kuramoto())
+
+
+# --------------------------------------------------------------------------
+# Closed band with a tolerant edge; PSI and GroupDelay follow the phase rule
+# --------------------------------------------------------------------------
+
+def _backend_frequencies(data, fs):
+    import spectral_connectivity as sc
+
+    z = np.transpose(data.to_numpy(squeeze=True))[:, None, :]
+    return np.asarray(sc.Connectivity.from_multitaper(
+        sc.Multitaper(z, sampling_frequency=fs)).frequencies)
+
+
+@pytest.mark.parametrize("fs", [3, 7, 250])
+def test_closed_band_keeps_the_nyquist_bin_at_any_sampling_rate(fs):
+    """``freq <= fs/2`` is false for the backend's Nyquist bin at fs=3, T=100.
+
+    The grid is ``k * fs / nfft``, whose last bin is 1.5000000000000002, so
+    the amplitude measures, the directed measures and GroupDelay silently
+    dropped the bin their ``fmax`` names. The shared ``_closed_band`` compares
+    with a relative 1e-9 tolerance; at fs=1 it is the exact comparison.
+    """
+    from pyspi.statistics.spectral import CoherenceMagnitude, _closed_band
+
+    rng = np.random.default_rng(0)
+    data = Data(rng.standard_normal((2, 100)), dim_order="ps")
+    freq = _backend_frequencies(data, fs)
+    assert freq[-1] != fs / 2 or fs == 250, "premise: an inexact Nyquist bin"
+    band = CoherenceMagnitude(fs=fs, fmin=0, fmax=fs / 2)._band(freq)
+    assert band.size == freq.size
+    exact = (freq >= 0) & (freq <= 0.5)
+    freq1 = _backend_frequencies(data, 1)
+    assert np.array_equal(_closed_band(freq1, 0, 0.5), (freq1 >= 0) & (freq1 <= 0.5))
+    assert np.array_equal(_closed_band(freq1, 0, 0.25), (freq1 >= 0) & (freq1 <= 0.25))
+    assert np.array_equal(_closed_band(freq1, 0.25, 0.5), (freq1 >= 0.25) & (freq1 <= 0.5))
+
+
+@pytest.mark.parametrize("fmin, fmax", [(0, 0.5), (0, 0.25), (0.25, 0.5)])
+def test_phase_slope_index_uses_the_closed_band_less_the_real_bins(fmin, fmax):
+    """PSI used the backend's open band, dropping an interior edge such as 0.25.
+
+    It now follows the phase rule: closed band less 0 Hz and fs/2, thinned to
+    one bin per multitaper bandwidth, and equals Nolte's sum computed directly
+    on that grid. For [0, 0.5] the open and closed-less-real bands coincide.
+    """
+    import spectral_connectivity as sc
+
+    from pyspi.statistics.spectral import PhaseSlopeIndex, _real_valued_bins
+
+    rng = np.random.default_rng(1)
+    x = rng.standard_normal(300)
+    y = np.r_[x[3:], rng.standard_normal(3)] + 0.3 * rng.standard_normal(300)
+    data = Data(np.vstack([x, y]), dim_order="ps")
+    z = np.transpose(data.to_numpy(squeeze=True))[:, None, :]
+    C = sc.Connectivity.from_multitaper(sc.Multitaper(z, sampling_frequency=1))
+    freq = np.asarray(C.frequencies)
+    keep = np.flatnonzero((freq >= fmin) & (freq <= fmax) & ~_real_valued_bins(freq, 1))
+    thinned = keep[::PhaseSlopeIndex._FREQUENCY_STEP]
+    coh = np.asarray(C.coherency())[0, thinned, 0, 1]
+    want = np.imag(np.sum(np.conj(coh[:-1]) * coh[1:]))
+
+    got = PhaseSlopeIndex(fmin=fmin, fmax=fmax).multivariate(data)
+    assert got[0, 1] == pytest.approx(want, rel=1e-12)
+    assert got[1, 0] == pytest.approx(-want, rel=1e-12)
+    assert 0.0 not in freq[keep] and 0.5 not in freq[keep]  # real-valued bins never kept
+    if fmin == 0.25:
+        assert 0.25 in freq[keep], "the interior edge the identifier names is kept"
+
+
+def test_group_delay_fit_leaves_out_the_real_valued_bins():
+    """0 Hz and fs/2 force the phase to 0 or pi whatever the delay.
+
+    They are no longer observations of the phase slope. On a delayed pair the
+    full-band fit must equal the fit on the band that stops one bin short of
+    both edges, since the two now see the same bins.
+    """
+    from pyspi.statistics.spectral import GroupDelay
+
+    rng = np.random.default_rng(2)
+    T, lag = 400, 3
+    x = rng.standard_normal(T + lag)
+    y = x[:-lag] + 0.2 * rng.standard_normal(T)
+    data = Data(np.vstack([x[lag:], y]), dim_order="ps")
+    freq = _backend_frequencies(data, 1)
+    df = freq[1] - freq[0]
+    full = GroupDelay(statistic="delay", fmin=0, fmax=0.5).multivariate(data)
+    interior = GroupDelay(statistic="delay", fmin=df, fmax=0.5 - df).multivariate(data)
+    assert np.isfinite(full[0, 1])
+    assert full[0, 1] == pytest.approx(interior[0, 1], rel=1e-12)
+    assert full[0, 1] == pytest.approx(lag, abs=0.5)

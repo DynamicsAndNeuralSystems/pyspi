@@ -7,7 +7,6 @@ from pyspi.base import (
     parse_multivariate,
 )
 import numpy as np
-import warnings
 from pyspi.utils import fmt_param
 from pyspi.statistics.spectral import _circular_nanmean
 
@@ -17,9 +16,8 @@ class mne(Unsigned):
         if fmax is None:
             fmax = fs / 2
 
+        # fs is passed to mne as sfreq and sets the frequency floor below.
         self._fs = fs
-        if fs != 1:
-            warnings.warn("Multiple sampling frequencies not yet handled.")
         self._fmin = fmin
         self._fmax = fmax
         if statistic == "mean":

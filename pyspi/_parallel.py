@@ -479,8 +479,10 @@ SCHEMA_VERSION = 1
 #   r12 -- the audit's deferred findings: coint_aeg regresses the column on
 #         the row (regressor on the row, as lmfit); GroupDelay thins its
 #         significant coherence run to one multitaper bandwidth; phase
-#         measures exclude the real-valued 0 Hz and Nyquist bins. Fifteen
-#         duplicate/constant/degenerate SPIs leave the bundled configs.
+#         measures, PSI and GroupDelay's fit exclude the real-valued 0 Hz
+#         and Nyquist bins; gwtau's distance vector includes the start.
+#         Fifteen duplicate/constant/degenerate SPIs leave the bundled
+#         configs.
 COMPUTATION_VERSION = "3.0.0.r12"
 
 

@@ -291,3 +291,38 @@ def test_hhg_statistic_is_bit_identical_to_hyppo(monkeypatch, chunk_rows):
                 warnings.simplefilter("ignore")
                 ref = HHG().statistic(a, b)
             assert distance._hhg_statistic(a, b) == ref, (n, name)
+
+
+# --------------------------------------------------------------------------
+# GW_tau: the intrinsic-distance vector includes the trajectory's start
+# --------------------------------------------------------------------------
+
+def test_gwtau_distance_vector_starts_at_zero_and_matches_the_paper():
+    """Kravtsova, McGee & Dawes (2023) define d_X(r_X, x_k) for k = 1..n.
+
+    The k = 1 entry is the empty sum, 0. pyspi (like the authors' MATLAB)
+    returned only the n - 1 cumulative sums, which at equal lengths rescales
+    GW_tau by sqrt((n - 1) / n). The value is now Proposition 1(e) of the
+    paper on the sorted n-vectors, computed here from scratch.
+    """
+    from pyspi.statistics.distance import GromovWasserstainTau
+
+    rng = np.random.default_rng(0)
+    x, y = rng.standard_normal(60), rng.standard_normal(60)
+
+    def paper_vector(v):
+        pts = np.column_stack([np.arange(len(v)), v])
+        return np.array([np.sum(np.linalg.norm(np.diff(pts[: k + 1], axis=0), axis=1))
+                         for k in range(len(v))])  # k = 0 is the empty sum
+
+    vx, vy = paper_vector(x), paper_vector(y)
+    assert vx[0] == 0 and vx.size == 60
+    assert np.allclose(GromovWasserstainTau.vec_geo_dist(np.column_stack([np.arange(60), x])), vx)
+    want = np.sqrt(np.mean((np.sort(vx) - np.sort(vy)) ** 2))
+    assert GromovWasserstainTau.gwtau(x, y) == pytest.approx(want, rel=1e-12)
+    assert GromovWasserstainTau.gwtau(x, x) == 0
+
+    # The old n-1 vector is larger by exactly sqrt(n / (n-1)): the same sum of
+    # squares (the two zeros pair up) divided by n-1 instead of n.
+    old = np.sqrt(np.mean((np.sort(vx[1:]) - np.sort(vy[1:])) ** 2))
+    assert old == pytest.approx(want * np.sqrt(60 / 59), rel=1e-12)

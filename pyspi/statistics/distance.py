@@ -702,9 +702,26 @@ class Barycenter(Undirected, Signed):
 
 
 class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
-    """Gromov-Wasserstain distance (GWTau)"""
+    """GW_tau (Kravtsova, McGee & Dawes 2023, Bull. Math. Biol. 85, 71).
 
-    name = "Gromov-Wasserstain Distance"
+    Each series becomes the planar trajectory ``(t, x_t)``; ``vec_geo_dist``
+    is the vector of intrinsic (arc-length) distances of every point from the
+    trajectory's start, and ``wass_sorted`` the closed-form 2-Wasserstein
+    distance between the two sorted vectors (Proposition 1(e) of the paper:
+    ``sqrt(mean((sorted v_i - sorted v_j)^2))`` at equal lengths).
+
+    The distance vector has one entry per point, the first being 0 for the
+    start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``). The
+    authors' reference MATLAB (``vec_geo_dist.m`` in github.com/kravtsova2/
+    GWtau) omits that entry and returns ``n - 1`` cumulative sums, and so did
+    pyspi until 3.0.0; at equal lengths the two differ by the constant factor
+    ``sqrt(n / (n - 1))``, so no comparison between pairs is affected.
+
+    The class name keeps its historical misspelling because configs and saved
+    results refer to it.
+    """
+
+    name = "Gromov-Wasserstein distance (GW_tau)"
     identifier = "gwtau"
     labels = ["unsigned", "distance", "unordered", "nonlinear", "undirected"]
 
@@ -712,7 +729,8 @@ class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
     def vec_geo_dist(x):
         diffs = np.diff(x, axis=0)
         distances = np.linalg.norm(diffs, axis=1)
-        return np.cumsum(distances)
+        # The start is at distance 0 from itself: one entry per point.
+        return np.concatenate([[0.0], np.cumsum(distances)])
 
     @staticmethod
     def wass_sorted(x1, x2):

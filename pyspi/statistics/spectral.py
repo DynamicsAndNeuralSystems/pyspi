@@ -119,6 +119,20 @@ def _real_valued_bins(freq, fs):
     return (freq == 0) | np.isclose(freq, fs / 2, rtol=1e-9, atol=0)
 
 
+def _closed_band(freq, fmin, fmax):
+    """Mask of ``fmin <= f <= fmax`` with a relative 1e-9 tolerance at both edges.
+
+    The backend's grid is ``k * fs / nfft``, so at fs=3, T=100 its Nyquist bin
+    is 1.5000000000000002 and an exact ``freq <= fs / 2`` silently dropped the
+    bin the identifier names. At fs=1 every shipped edge (0, 0.25, 0.5) is
+    exact on the grid and the mask is the exact comparison.
+    """
+    freq = np.asarray(freq)
+    above = (freq >= fmin) | np.isclose(freq, fmin, rtol=1e-9, atol=0)
+    below = (freq <= fmax) | np.isclose(freq, fmax, rtol=1e-9, atol=0)
+    return above & below
+
+
 class NonparametricSpectral(Unsigned):
     """Base class for the nonparametric spectral methods from the Eden-Kramer repo.
 
@@ -129,8 +143,7 @@ class NonparametricSpectral(Unsigned):
     ``fmax-0-5`` mean what they say wherever a value exists there:
 
     - Amplitude measures (``cohmag`` and the bivariate directed measures) use
-      the closed band, as does GroupDelay's search for a significant
-      coherence run.
+      the closed band.
     - Phase measures (``_phase_based``: ``phase``, ``icoh``, ``plv``, ``pli``,
       ``wpli``, ``dspli``, ``dswpli``, ``ppc``) use the closed band minus the
       real-valued bins, 0 Hz and ``fs / 2``. There every taper's Fourier
@@ -138,8 +151,15 @@ class NonparametricSpectral(Unsigned):
       exactly 0 or pi and none of these is an estimate: PLV and PPC are 1
       whenever the tapers agree in sign, PLI and dsPLI 0, wPLI 0/0. A band
       left with no frequency is refused with a ``ValueError``.
-    - PhaseSlopeIndex uses the open band ``fmin < f < fmax``, as the
-      backend's own band selection does.
+    - PhaseSlopeIndex follows the phase rule too (closed band less the
+      real-valued bins), then keeps one bin per multitaper bandwidth; until
+      3.0.0 it used the backend's open band ``fmin < f < fmax``.
+    - GroupDelay searches for its significant coherence run over the closed
+      band less the real-valued bins, where the phase is forced to 0 or pi.
+
+    The closed band compares with a relative tolerance of 1e-9 at both edges
+    (``_closed_band``): the backend's Nyquist bin at fs=3, T=100 is
+    1.5000000000000002 and an exact comparison dropped it.
 
     SpectralGrangerCausality raises a zero ``fmin`` to 1e-5 (its identifier
     says so) and then uses the closed band.
@@ -325,7 +345,7 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
         The closed band, less the real-valued bins for a phase measure (see
         ``NonparametricSpectral``).
         """
-        in_band = (freq >= self._fmin) & (freq <= self._fmax)
+        in_band = _closed_band(freq, self._fmin, self._fmax)
         if not self._phase_based:
             return np.flatnonzero(in_band)
         real = _real_valued_bins(freq, self._fs)
@@ -488,7 +508,7 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
         # Closed band, as in NonparametricSpectralMultivariate, spectral GC and
         # the wavelet SPIs. Strict inequalities here dropped the DC, 0.25 and
         # Nyquist bins from bands whose identifiers include them.
-        freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
+        freq_id = np.flatnonzero(_closed_band(freq, self._fmin, self._fmax))
         return self._statfn(bv_freq[freq_id])
 
 
@@ -842,6 +862,9 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     # accepted and ignored, returning the default variant's matrix under a
     # `_max_` identifier. `mean` is kept as the name the identifiers carry.
     _statistics = ("mean",)
+    # A function of the coherency's phase: the band leaves out the real-valued
+    # bins, as for the other phase measures (see NonparametricSpectral).
+    _phase_based = True
 
     # Frequency resolution of the multitaper estimate in FFT bins: twice the
     # backend's default time-halfbandwidth product of 3.
@@ -861,15 +884,18 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
         return (type(self).__name__, self._fs, self._fmin, self._fmax)
 
     def _get_statistic(self, C):
-        freq = C.frequencies
-        # Strictly inside the band, as the backend's own band selection is.
-        inside = np.flatnonzero((self._fmin < freq) & (freq < self._fmax))
+        freq = np.asarray(C.frequencies)
+        # The closed band less the real-valued bins (the phase rule), thinned
+        # to one bin per multitaper bandwidth. Until 3.0.0 this was the
+        # backend's open band, which also dropped an interior edge such as
+        # 0.25 Hz that the identifier names.
+        inside = self._band(freq)
         coherency = C.coherency()[..., inside[::self._FREQUENCY_STEP], :, :]
         if coherency.shape[-3] < 2:
             raise ValueError(
                 f"Phase slope index needs at least two independent frequencies "
-                f"inside ({self._fmin}, {self._fmax}); the series is too short "
-                f"for this band.")
+                f"in [{self._fmin}, {self._fmax}] besides 0 Hz and fs/2; the "
+                f"series is too short for this band.")
         return np.imag(np.sum(
             np.conj(coherency[..., :-1, :, :]) * coherency[..., 1:, :, :], axis=-3))
 
@@ -986,7 +1012,12 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
 
         coherency = np.asarray(C.coherency())
         freqs = np.asarray(C.frequencies)
-        in_band = (freqs >= self._fmin) & (freqs <= self._fmax)
+        # The closed band less the real-valued bins: at 0 Hz and fs/2 the phase
+        # is forced to 0 or pi whatever the delay, so those bins are not
+        # observations of the phase slope (for a pure delay they happen to lie
+        # on the line; for anything else they pull the fit).
+        in_band = (_closed_band(freqs, self._fmin, self._fmax)
+                   & ~_real_valued_bins(freqs, self._fs))
         f = freqs[in_band]
         coh = coherency[:, in_band]
         n_trials, _, M, _ = coh.shape
@@ -1233,7 +1264,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     def multivariate(self, data):
         try:
             cache, freq = self._get_cache(data)
-            freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
+            freq_id = np.flatnonzero(_closed_band(freq, self._fmin, self._fmax))
 
             result = _to_source_target(self, self._statfn(cache[0, freq_id, :, :], axis=0))
 

@@ -296,7 +296,26 @@ Each fix was first pinned by an independent reference test that the previous cod
   The eight phase measures (`phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli`, `dswpli`, `ppc`) now leave those bins out of the band before the mean or maximum, and a band holding nothing else is refused with a `ValueError`.
   Amplitude measures (`cohmag` and the directed measures) keep the closed band and `psi` its open one; the rule is stated once, in the `NonparametricSpectral` docstring.
   **33 values change**: the 18 `icoh`/`plv`/`ppc`/`pli`/`wpli`/`dspli` means by up to 0.039 and the three `phase` means by up to 0.44 rad, `plv_*_max` by up to 0.15, `ppc_*_max` by up to 0.35, and `pli_*_max`/`wpli_*_max` by up to 1.0 where every value inside the band is negative (these six maxima are no longer bundled, see **SPI set changes**). `dswpli_*` (already NaN at those bins) and `icoh_*_max` do not move.
-  `cohmag`'s `name` is now "Magnitude-squared coherence", which is what it computes; PSI's docstring says its `mean` is a sum over the band; the stale "multiple sampling frequencies not yet handled" warning is gone.
+  `cohmag`'s `name` is now "Magnitude-squared coherence", which is what it computes; PSI's docstring says its `mean` is a sum over the band; the stale "multiple sampling frequencies not yet handled" warning is gone from `spectral.py` and `wavelet.py` (both pass `fs` through).
+- **The phase slope index used the backend's open band.**
+  `psi_multitaper_*` summed over `fmin < f < fmax`, so the interior edge an identifier names (`0.25` in `fmin-0_fmax-0-25` and `fmin-0-25_fmax-0-5`) was left out while every other spectral SPI included it.
+  PSI now follows the phase rule above (closed band less the real-valued bins), then keeps one bin per multitaper bandwidth as before.
+  For `[0, 0.5]` the two bands coincide and nothing moves; **the six half-band `psi_multitaper_mean_*` values change** (by up to 0.72 on the fixtures, which is one term of a sum that scales with the band).
+  The wavelet PSI is unaffected.
+- **Group delay fitted its slope through the real-valued bins.**
+  At 0 Hz and `fs / 2` the phase is forced to 0 or π whatever the delay, so when GroupDelay's significant coherence run reached either edge that bin entered the regression as an observation.
+  For a pure delay it lies on the line anyway; for anything else it pulls the fit.
+  Those two bins are now left out of the run search (the closed band less the real-valued bins, as for the phase measures).
+  `gd_*` moves by at most 0.13 samples on `kuramoto_M7_T100` in the two bands that reach 0 Hz; the `[0.25, 0.5]` band is unchanged there.
+- **The closed band dropped the Nyquist bin at `fs != 1`.**
+  The band was `freq <= fmax` exactly, and the backend's grid is `k * fs / nfft`, whose last bin at `fs = 3, T = 100` is `1.5000000000000002`, so `cohmag`, the bivariate directed measures, `sgc` and GroupDelay silently lost the bin their `fmax` names.
+  One helper, `_closed_band`, now compares both edges with a relative tolerance of 1e-9.
+  At `fs = 1` every shipped edge is exact on the grid and no value moves.
+- **`gwtau` left the trajectory's start out of its distance vector.**
+  Kravtsova, McGee & Dawes (2023) define GW_tau on the vector of intrinsic distances `d(r, x_k)` of *every* point from the start, `k = 1..n`, whose first entry is 0.
+  pyspi, like the authors' reference MATLAB (`vec_geo_dist.m`), returned the `n - 1` cumulative sums without it, so the closed-form 2-Wasserstein distance divided the same sum of squares by `n - 1` instead of `n`.
+  The vector now has one entry per point and **`gwtau` changes by the constant factor `sqrt((T - 1) / T)`** (0.5% at T=100); no comparison between pairs is affected, and `gwtau(x, x)` is still 0.
+  The class keeps its historical misspelling `GromovWasserstainTau`, which configs and saved results refer to; its `name` is now "Gromov-Wasserstein distance (GW_tau)".
 
 ### Changed
 
@@ -536,5 +555,8 @@ r12 (relative to r11; same fixtures, same columns):
 | `icoh`, `plv`, `ppc`, `pli`, `wpli`, `dspli` `_multitaper_mean_*` | 18 | 0.035 / 0.035 / 0.039 | As above. |
 | `plv_multitaper_max_*`, `ppc_multitaper_max_*` | 6 | 0 / 0.26 / 0.35 | As above; the exact-1.0 entries (16 of 42 on kuramoto, 2 of 20 on cml) are gone. |
 | `pli_multitaper_max_*`, `wpli_multitaper_max_*` | 6 | 0.60 / 0 / 1.0 | As above (can now be negative); no longer bundled. |
+| `psi_multitaper_mean_fs-1_fmin-0_fmax-0-25`, `..._fmin-0-25_fmax-0-5` | 2 | 0.57 / 0.72 / 0.48 | Closed band less the real-valued bins in place of the backend's open band; the full-band PSI is unchanged. |
+| `gd_multitaper_delay_*` (again) | 2 | NaN / NaN / 0.13 | Real-valued bins left out of the fit; `[0.25, 0.5]` unchanged. |
+| `gwtau` | 1 | 0.041 / 0.053 / 0.017 | Constant factor `sqrt((T - 1) / T)`: the start of the trajectory is in the distance vector. |
 
-Everything else in `full` is unchanged to the bit between r11 and r12 on all three fixtures (`dswpli_*`, `icoh_*_max`, `cohmag_*` and `psi_*` included).
+Everything else in `full` is unchanged to the bit between r11 and r12 on all three fixtures (`dswpli_*`, `icoh_*_max`, `cohmag_*`, the full-band `psi` and the wavelet `psi` included).
