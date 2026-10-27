@@ -208,6 +208,43 @@ def test_gaussian_te_ar1_analytic(a, b):
     assert abs(result[1, 0]) < 0.01, f"TE(Y->X) should vanish, got {result[1, 0]}"
 
 
+@pytest.mark.parametrize("estimator, atol", [("gaussian", 0.01), ("kraskov", 0.02)])
+def test_te_matches_the_closed_form_of_a_bivariate_var1_with_feedback(estimator, atol):
+    """z_t = A z_{t-1} + e_t, z = (x, y), e ~ N(0, I), coupling in both directions.
+
+    With k = l = 1 the full-past regression of y_{t+1} on (y_t, x_t) leaves the
+    innovation variance 1, and the reduced one on y_t alone leaves
+    Gamma0_yy - Gamma1_yy^2 / Gamma0_yy, where Gamma0 is the stationary
+    covariance (discrete Lyapunov equation) and Gamma1 = A Gamma0 the lag-1
+    covariance. So TE(X->Y) = 0.5*ln(Gamma0_yy - Gamma1_yy^2 / Gamma0_yy), and
+    symmetrically for Y->X. Unlike the iid-driver test above, the source here
+    has its own dynamics and is itself driven by the target, so a swapped
+    index or a source embedding taken from the wrong series shows up in both
+    entries. Tolerances are ~6 sampling SDs (gaussian; 20 seeds: SD 0.0017 and
+    0.0006) and the KSG bias at N=20000, as in MI_ATOL.
+    """
+    from scipy.linalg import solve_discrete_lyapunov
+
+    A = np.array([[0.6, 0.1], [0.4, 0.3]])     # x -> y strong, y -> x weak
+    gamma0 = solve_discrete_lyapunov(A, np.eye(2))
+    gamma1 = A @ gamma0
+    expected = {
+        (0, 1): 0.5 * np.log(gamma0[1, 1] - gamma1[1, 1] ** 2 / gamma0[1, 1]),
+        (1, 0): 0.5 * np.log(gamma0[0, 0] - gamma1[0, 0] ** 2 / gamma0[0, 0]),
+    }
+
+    rng = np.random.default_rng(1)
+    z = np.zeros((2, N_LARGE))
+    e = rng.standard_normal((2, N_LARGE))
+    for t in range(1, N_LARGE):
+        z[:, t] = A @ z[:, t - 1] + e[:, t]
+
+    result = _spi(TransferEntropy, estimator).multivariate(Data(z, zscore=True))
+    for (i, j), value in expected.items():
+        assert result[i, j] == pytest.approx(value, abs=atol), (
+            f"{estimator} TE({i}->{j}): got {result[i, j]}, expected {value}")
+
+
 # ---------------------------------------------------------------------------
 # Independence: everything must collapse to ~0
 # ---------------------------------------------------------------------------
