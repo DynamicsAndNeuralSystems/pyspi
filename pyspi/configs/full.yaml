@@ -1559,3 +1559,25 @@
       - terms: 6
         pnorm: 'max'
         bandwidth: 0.5
+
+# Statistics read off one vector autoregressive (VAR) model of all processes
+.statistics.var:
+  # Conditional Granger causality from one VAR of all processes
+  # (Geweke 1984; Barnett & Seth 2014); statistic=coef is the signed net lagged coefficient.
+  ConditionalGrangerCausality:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - time-dependent
+      - M05
+    dependencies:
+    configs:
+      - order: 1
+      - order: 2
+      - order: bic
+      - order: bic
+        statistic: coef
+        labels:
+          - signed

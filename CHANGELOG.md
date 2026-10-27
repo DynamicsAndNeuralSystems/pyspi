@@ -261,6 +261,14 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (30 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
 - **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 
+### Added
+
+- **Conditional Granger causality, `cgc_*`** (new module `pyspi/statistics/var.py`).
+  One OLS VAR(p) is fitted to all processes, and `F[i, j] = ln(var_r / var_f)` compares target j's residual variance with and without the lags of source i (Geweke 1984; Barnett & Seth 2014).
+  Conditioning on every other process means an indirect link or a common driver gives about 0.
+  It is on Geweke's scale, twice that of `gc_gaussian_*`.
+  Bundled as `cgc_p-1`, `cgc_p-2`, `cgc_p-bic` (order 1-10 chosen by BIC; also in `fast`) and `cgc_p-bic_coef` (signed net lagged coefficient).
+
 ### Dependencies
 
 - **Floors, relative to 2.0.2** (`pyproject.toml` is the source of truth):
