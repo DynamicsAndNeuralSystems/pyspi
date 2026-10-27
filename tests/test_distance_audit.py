@@ -99,3 +99,70 @@ def test_cross_distance_statistics_are_source_by_target(cls_name, max_lag):
     A = np.asarray(spi.multivariate(_driven_pair()), dtype=float)
     assert A[0, 1] > A[1, 0] + 0.1, (
         f"{spi.identifier}: A[0,1]={A[0, 1]:.4f}, A[1,0]={A[1, 0]:.4f}")
+
+
+def _unbiased_dcorr(a, b):
+    """U-centred distance correlation (Szekely & Rizzo 2014), as `dcorr`."""
+    def u_centred(v):
+        n = len(v)
+        d = np.abs(v[:, None] - v[None, :])
+        u = (d - d.sum(0) / (n - 2) - d.sum(1)[:, None] / (n - 2)
+             + d.sum() / ((n - 1) * (n - 2)))
+        np.fill_diagonal(u, 0)
+        return u
+    A, B = u_centred(a), u_centred(b)
+    return (A * B).sum() / np.sqrt((A * A).sum() * (B * B).sum())
+
+
+def _mgc(a, b):
+    import warnings
+    from scipy.stats import multiscale_graphcorr
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return multiscale_graphcorr(a, b, reps=0).statistic
+
+
+@pytest.mark.parametrize("cls_name,stat", [
+    ("CrossDistanceCorrelation", _unbiased_dcorr),
+    ("CrossMultiscaleGraphCorrelation", _mgc),
+])
+@pytest.mark.parametrize("max_lag", [1, 3])
+def test_cross_distance_statistics_sum_the_lagged_statistic(cls_name, stat, max_lag):
+    """Mehta et al. (2020), as hyppo's own docstring states it:
+    sum_{l=0}^{L} (n - l)/n * S(target[l:], source[:n - l]).
+
+    hyppo 0.5.2 computes the l >= 1 terms by handing the sliced *distance
+    matrices* to an S that was built to compute Euclidean distances, so each
+    row of a distance matrix is treated as a point in R^(n-l) and S measures
+    the dependence between distance profiles, not between the lagged series.
+    Only the l = 0 term was right.
+    """
+    import pyspi.statistics.distance as distance
+
+    rng = np.random.default_rng(11)
+    n = 60
+    src = rng.standard_normal(n)
+    tgt = np.r_[0.0, np.tanh(2 * src[:-1])] + 0.5 * rng.standard_normal(n)
+    data = Data(np.vstack([src, tgt]), dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+
+    A = getattr(distance, cls_name)(max_lag=max_lag).multivariate(data)
+    for i, j in [(0, 1), (1, 0)]:
+        x, y = z[j], z[i]  # target, source
+        ref = sum((n - l) / n * stat(x[l:], y[:n - l]) for l in range(max_lag + 1))
+        assert A[i, j] == pytest.approx(ref, abs=1e-12), (i, j)
+
+
+@pytest.mark.parametrize("cross,plain", [
+    ("CrossDistanceCorrelation", "DistanceCorrelation"),
+    ("CrossMultiscaleGraphCorrelation", "MultiscaleGraphCorrelation"),
+])
+def test_cross_distance_statistics_at_lag_zero_are_the_plain_statistic(cross, plain):
+    import pyspi.statistics.distance as distance
+
+    data = Data(np.random.default_rng(2).standard_normal((3, 50)), dim_order="ps")
+    a = getattr(distance, cross)(max_lag=0).multivariate(data)
+    b = getattr(distance, plain)().multivariate(data)
+    # Not bit-identical: the cross statistic is evaluated as S(target, source)
+    # and the plain one as S(i, j); MGC is symmetric only to rounding.
+    np.testing.assert_allclose(a, b, rtol=1e-12, atol=1e-15)

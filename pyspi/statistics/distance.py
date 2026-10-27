@@ -16,7 +16,6 @@ from hyppo.independence import (
     HHG,
     Hsic,
 )
-from hyppo.time_series import MGCX, DcorrX
 
 from pyspi.base import (
     Directed,
@@ -168,8 +167,36 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
         return stat
 
 
+def _lagged_sum(test, x, y, max_lag):
+    """``sum_{l=0}^{L} (n - l)/n * S(x[l:], y[:n - l])`` (Mehta et al. 2020).
+
+    The cross-distance statistics of hyppo's ``DcorrX`` and ``MGCX``, as their
+    docstrings define them: the present of ``x`` against the past of ``y``,
+    i.e. the dependence of ``x`` on the history of ``y``. hyppo 0.5.2 computes
+    the ``l >= 1`` terms by passing the sliced distance matrices to an ``S``
+    built to compute Euclidean distances, so every row of a distance matrix is
+    treated as a point in ``R^(n-l)`` and only the ``l = 0`` term is right.
+    Here ``S`` is given the distance matrices as such: the distance matrix of
+    ``x[l:]`` is the block ``distx[l:, l:]`` of that of ``x``.
+    """
+    distx = pairwise_distances(x, metric="euclidean")
+    disty = pairwise_distances(y, metric="euclidean")
+    n = distx.shape[0]
+    dep_lag = [test.statistic(distx, disty)]
+    for lag in range(1, max_lag + 1):
+        sx = np.ascontiguousarray(distx[lag:, lag:])
+        sy = np.ascontiguousarray(disty[: n - lag, : n - lag])
+        dep_lag.append((n - lag) * test.statistic(sx, sy) / n)
+    return np.sum(dep_lag)
+
+
 class CrossDistanceCorrelation(Directed, Unsigned):
-    """Cross-distance correlation"""
+    """Cross-distance correlation (DcorrX; Mehta et al. 2020).
+
+    ``A[i, j] = sum_{l=0}^{max_lag} (T - l)/T * dcorr(z_j[l:], z_i[:T - l])``,
+    the unbiased distance correlation of target ``j`` with the lagged source
+    ``i``, summed over lags (see `_lagged_sum`).
+    """
 
     name = "Cross-distance correlation"
     identifier = "dcorrx"
@@ -181,17 +208,19 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        # hyppo pairs the present of its first argument with the past of its
-        # second, so DcorrX(x, y) measures y -> x. Source i goes second.
+        # `_lagged_sum(x, y)`, like hyppo's DcorrX(x, y), pairs the present
+        # of x with the past of y, so it measures y -> x: source i goes second.
         z = data.to_numpy()
         x = z[j]
         y = z[i]
-        stat, _ = DcorrX(max_lag=self._max_lag).statistic(x, y)
-        return stat
+        return _lagged_sum(Dcorr(compute_distance=None), x, y, self._max_lag)
 
 
 class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
-    """Cross-multiscale graph correlation"""
+    """Cross-multiscale graph correlation (MGCX; Mehta et al. 2020).
+
+    As `CrossDistanceCorrelation`, with MGC in place of dcorr.
+    """
 
     name = "Cross-multiscale graph correlation"
     identifier = "mgcx"
@@ -203,12 +232,11 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        # As for DcorrX: MGCX(x, y) measures y -> x, so source i goes second.
+        # As in CrossDistanceCorrelation: source i goes second.
         z = data.to_numpy()
         x = z[j]
         y = z[i]
-        stat, _, _ = MGCX(max_lag=self._max_lag).statistic(x, y)
-        return stat
+        return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)
 
 
 class TimeWarping(Undirected, Unsigned):
