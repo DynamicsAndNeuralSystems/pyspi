@@ -476,7 +476,12 @@ SCHEMA_VERSION = 1
 #         bivariate directed spectral band is closed, dDTF uses the partial
 #         coherence, and parametric spectral GC is fitted on the Yule-Walker
 #         autocovariance at the frequencies it is evaluated at.
-COMPUTATION_VERSION = "3.0.0.r11"
+#   r12 -- the audit's deferred findings: coint_aeg regresses the column on
+#         the row (regressor on the row, as lmfit); GroupDelay thins its
+#         significant coherence run to one multitaper bandwidth; phase
+#         measures exclude the real-valued 0 Hz and Nyquist bins. Fifteen
+#         duplicate/constant/degenerate SPIs leave the bundled configs.
+COMPUTATION_VERSION = "3.0.0.r12"
 
 
 def read_manifest(checkpoint_dir: Path):

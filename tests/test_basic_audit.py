@@ -311,15 +311,28 @@ def test_covariance_output_does_not_alias_the_cached_fit(cls, squared):
     assert np.isfinite(np.diag(getattr(fit, cls(squared=squared)._kind + "_"))).all()
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "sklearn's EllipticEnvelope.fit is MinCovDet.fit plus a decision "
-    "threshold (offset_), so with the shared fixed seed its covariance_ and "
-    "precision_ are MinCovDet's, bit for bit: cov_/cov-sq_/prec_/prec-sq_"
-    "EllipticEnvelope duplicate the MinCovDet SPIs on every input. Not "
-    "salvageable as a distinct estimate; drop the four from the configs."))
 def test_every_bundled_covariance_estimator_gives_a_distinct_matrix():
+    """No two bundled estimators may return the same matrix on the same input.
+
+    Until 3.0.0 `EllipticEnvelope` was bundled alongside `MinCovDet`: sklearn's
+    `EllipticEnvelope.fit` is `MinCovDet.fit` plus a decision threshold
+    (`offset_`), so with the shared fixed seed its `covariance_` and
+    `precision_` were MinCovDet's bit for bit and four SPIs duplicated four
+    others. The duplicate is pinned by the test below; this one guards the
+    bundled set.
+    """
+    assert "EllipticEnvelope" not in ESTIMATORS
     X = _series()
     d = _data(X)
     mats = {e: basic.Covariance(estimator=e).multivariate(d) for e in ESTIMATORS}
     for a, b in itertools.combinations(ESTIMATORS, 2):
         assert not np.array_equal(mats[a], mats[b], equal_nan=True), (a, b)
+
+
+def test_elliptic_envelope_is_mincovdet_which_is_why_it_is_not_bundled():
+    X = _series()
+    d = _data(X)
+    for cls in (basic.Covariance, basic.Precision):
+        a = cls(estimator="EllipticEnvelope").multivariate(d)
+        b = cls(estimator="MinCovDet").multivariate(d)
+        assert np.array_equal(a, b, equal_nan=True), cls.__name__

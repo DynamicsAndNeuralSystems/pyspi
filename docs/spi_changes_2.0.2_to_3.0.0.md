@@ -1,17 +1,18 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (317 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (302 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
 | 2.0.2 `config.yaml` | 285 |
-| identifier unchanged | 248 |
+| identifier unchanged | 233 |
 | renamed (same class and parameters; identifier changed) | 23 |
-| removed | 14 |
+| removed | 29 |
 | added | 46 |
-| 3.0.0 `full.yaml` | 317 |
+| 3.0.0 `full.yaml` | 302 |
 
-285 - 14 removed + 46 added = 317; 248 + 23 renamed + 46 added = 317.
+285 - 29 removed + 46 added = 302; 233 + 23 renamed + 46 added = 302.
+The 29 removals are the 14 made while porting away from JIDT and the 15 made after the per-SPI audit (duplicate, constant or degenerate SPIs); both groups are in the table below.
 
 ## Added (46)
 
@@ -71,10 +72,19 @@ Full list:
 - `xpdist_euclidean_tau-1_mean_rmse`
 - `xpdist_euclidean_tau-1_min_rmse`
 
-## Removed (14)
+## Removed (29)
 
 | Identifier (2.0.2) | Class | Why |
 |:--|:--|:--|
+| `cov_EllipticEnvelope`, `cov-sq_EllipticEnvelope` | `Covariance` | sklearn's `EllipticEnvelope.fit` is `MinCovDet.fit` plus a decision threshold, so the matrices are MinCovDet's bit for bit. Duplicate (audit). |
+| `prec_EllipticEnvelope`, `prec-sq_EllipticEnvelope` | `Precision` | As above. Duplicate (audit). |
+| `lmfit_Lasso` | `LinearModel` | `Lasso(alpha=1)` zeroes the slope for any z-scored regressor, so every entry is `var(y) = (T-1)/T`: a constant (audit). |
+| `lmfit_ElasticNet` | `LinearModel` | `ElasticNet(alpha=1)` zeroes the slope unless `|r| > 0.5`; constant on two of three fixtures (audit). |
+| `bary_euclidean_mean` | `Barycenter` | The Euclidean barycenter of two z-scored series has mean identically zero (`|value| < 1e-15`) (audit). |
+| `cce_kernel_W-0.5_n-5` | `CausalEntropy` | Fixed-width box kernel over the `n = 5` histories of both series (about ten dimensions) does not improve with `T`; the `di_kernel` defect (audit). |
+| `xme_kernel_W-0.5_k10` | `CrossmapEntropy` | Fixed-width box kernel in 11 dimensions; as above. `xme_kernel_W-0.5_k1` is kept (audit). |
+| `pli_multitaper_max_*` (3) | `PhaseLagIndex` | With one recording PLI at each frequency is a mean of signs over a few tapers, so the band maximum is exactly 1 for every pair once `T >= 1000`; the `dspli` maxima defect. `mean` variants kept (audit). |
+| `wpli_multitaper_max_*` (3) | `WeightedPhaseLagIndex` | As above (audit). |
 | `di_kernel_W-0.5` | `DirectedInfo` | DirectedInfo kernel variant dropped (3.8-4.4 on independent data at every T). |
 | `di_kozachenko` | `DirectedInfo` | DirectedInfo kozachenko variant dropped (negative values). |
 | `dspli_multitaper_max_fs-1_fmin-0-25_fmax-0-5` | `DebiasedSquaredPhaseLagIndex` | Constant 1.0 for essentially any input (few-taper debiased estimate); `mean` variants kept. |

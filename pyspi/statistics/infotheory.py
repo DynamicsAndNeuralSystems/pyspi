@@ -1673,6 +1673,15 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
 
 
 class TransferEntropy(InfoTheoryBase, Directed):
+    """Transfer entropy from the row (source) to the column (target).
+
+    Scale convention for ``gc_gaussian_*``: with the Gaussian estimator the
+    identifier is ``gc`` because the quantity is the Gaussian transfer entropy,
+    ``0.5 * ln(var_restricted / var_full)`` in nats (Barnett, Barrett & Seth
+    2009). That is **half** of Geweke's (1982) Granger causality
+    ``ln(var_restricted / var_full)``, the scale ``statsmodels`` and most
+    econometrics software report; multiply by 2 to compare with those.
+    """
 
     name = "Transfer entropy"
     identifier = "te"

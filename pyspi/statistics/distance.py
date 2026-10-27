@@ -598,8 +598,16 @@ class LongestCommonSubsequence(TimeWarping):
 
 
 class SoftDynamicTimeWarping(TimeWarping):
+    """Soft-DTW (Cuturi & Blondel 2017) at tslearn's default ``gamma = 1``.
 
-    name = "Dynamic time warping"
+    This is the raw soft-minimum alignment cost, which is **not a distance**:
+    it can be negative, and ``softdtw(x, x)`` is not 0. The non-negative
+    soft-DTW *divergence* of Blondel, Mensch & Vert (2021),
+    ``D(x, y) - (D(x, x) + D(y, y)) / 2``, is a different quantity and is not
+    what pyspi ships under this identifier.
+    """
+
+    name = "Soft dynamic time warping"
     identifier = "softdtw"
 
     @parse_bivariate

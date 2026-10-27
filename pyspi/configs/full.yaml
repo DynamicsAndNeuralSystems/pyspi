@@ -2,6 +2,9 @@
 .statistics.basic:
   # Covariance
   Covariance:
+    # EllipticEnvelope is not bundled: sklearn's EllipticEnvelope.fit is MinCovDet.fit
+    # plus an outlier threshold, so its covariance_ and precision_ are MinCovDet's
+    # bit for bit (test_basic_audit.py). Four duplicate SPIs removed in 3.0.0.
     labels:
       - undirected
       - linear
@@ -12,7 +15,6 @@
     dependencies:
     configs:
       - estimator: EmpiricalCovariance
-      - estimator: EllipticEnvelope
       - estimator: GraphicalLasso
       - estimator: GraphicalLassoCV
       - estimator: LedoitWolf
@@ -20,8 +22,6 @@
       - estimator: OAS
       - estimator: ShrunkCovariance
       - estimator: EmpiricalCovariance
-        squared: True
-      - estimator: EllipticEnvelope
         squared: True
       - estimator: GraphicalLasso
         squared: True
@@ -38,6 +38,7 @@
 
   # Precision
   Precision:
+    # EllipticEnvelope is not bundled; see Covariance.
     labels:
       - undirected
       - linear
@@ -48,7 +49,6 @@
     dependencies:
     configs:
       - estimator: EmpiricalCovariance
-      - estimator: EllipticEnvelope
       - estimator: GraphicalLasso
       - estimator: GraphicalLassoCV
       - estimator: LedoitWolf
@@ -56,8 +56,6 @@
       - estimator: OAS
       - estimator: ShrunkCovariance
       - estimator: EmpiricalCovariance
-        squared: True
-      - estimator: EllipticEnvelope
         squared: True
       - estimator: GraphicalLasso
         squared: True
@@ -355,6 +353,8 @@
       - global_constraint: sakoe_chiba
 
   Barycenter:
+    # bary_euclidean_mean is not bundled: the Euclidean barycenter of two z-scored
+    # series has mean identically zero (|value| < 1e-15 on every fixture).
     labels:
       - undirected
       - nonlinear
@@ -364,8 +364,6 @@
       - M14
     dependencies:
     configs:
-      - mode: euclidean
-        statistic: mean
       - mode: euclidean
         statistic: max
       - mode: dtw
@@ -541,6 +539,9 @@
       - estimator: kernel
 
   CausalEntropy: # No theiler window yet
+    # The kernel estimator is not bundled: a fixed-width box kernel over the n=5
+    # histories of both series (about ten dimensions) does not improve with T
+    # (the di_kernel defect).
     labels:
       - directed
       - nonlinear
@@ -551,9 +552,10 @@
     configs:
       - estimator: gaussian
       - estimator: kozachenko
-      - estimator: kernel
 
   CrossmapEntropy: # No theiler window yet
+    # The kernel estimator at history_length 10 is not bundled: a fixed-width box
+    # kernel in 11 dimensions does not improve with T (the di_kernel defect).
     labels:
       - unsigned
       - directed
@@ -576,8 +578,6 @@
       - estimator: kozachenko
         history_length: 10
 
-      - estimator: kernel
-        history_length: 10
 
   DirectedInfo: # No theiler window yet
       # Disabled: composing directed information from four separately-estimated
@@ -922,6 +922,10 @@
         statistic: max
 
   PhaseLagIndex:
+    # Only the `mean` band statistic is bundled. With one recording the PLI at each
+    # frequency is a mean of signs over a few tapers, so it takes a handful of
+    # values and its maximum over a band is exactly 1 for every pair once T >= 1000
+    # (same defect as the removed dspli/dswpli maxima).
     labels:
       - linear
       - unsigned
@@ -944,18 +948,9 @@
         labels:
           - M01
 
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
 
   WeightedPhaseLagIndex:
+    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - linear
       - unsigned
@@ -978,16 +973,6 @@
         labels:
           - M01
 
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
 
   DebiasedSquaredPhaseLagIndex:
     # NOTE: only the `mean` band statistic is bundled. The `max` variants were
@@ -1466,6 +1451,11 @@
 
 .statistics.misc:
   LinearModel:
+    # Lasso and ElasticNet are not bundled: at sklearn's default alpha=1 the L1
+    # penalty zeroes the slope of a z-scored regressor unless |r| > 0.5 (ElasticNet)
+    # or always (Lasso), so lmfit_Lasso was the constant 0.99 (the MSE of predicting the
+    # mean, i.e. the variance of the z-scored target) on every fixture and
+    # lmfit_ElasticNet on two of three.
     labels:
       - directed
       - linear
@@ -1476,9 +1466,7 @@
     dependencies:
     configs:
       - model: Ridge
-      - model: Lasso
       - model: SGDRegressor
-      - model: ElasticNet
       - model: BayesianRidge
 
   GPModel:

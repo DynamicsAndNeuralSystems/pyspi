@@ -84,8 +84,9 @@ LOOSE = (1e-6, 1e-2)
 # reproduce bit-exactly** -- max |difference| identically 0, including every
 # `anm`/`cds`/`reci`/`ccm`, every `coint_*`, `gpfit_*` (GaussianProcessRegressor
 # defaults to n_restarts_optimizer=0, so there are no random restarts),
-# `lmfit_*` (random_state pinned to 42) and `ids` (consumes the global RNG,
-# which the suite seeds). A module-wide 1e-2 band over 62 SPIs, ~50 of them
+# `lmfit_*` (random_state pinned to 42) and `ids` (deterministic: the only
+# RNG use in its library is a permutation-test helper pyspi never calls; see
+# `test_no_p90_spi_depends_on_the_global_rng`). A module-wide 1e-2 band over 62 SPIs, ~50 of them
 # deterministic, is slack that hides deterministic regressions -- exactly the
 # failure mode this suite exists to catch.
 #

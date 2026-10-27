@@ -45,6 +45,12 @@ class Cointegration(Directed, Unsigned):
     mean over orientations) is a scientific decision with no settled convention,
     and silently picking one is what caused the original problem. ``johansen``
     keeps the cache alias, since for it the two orientations are provably equal.
+
+    Orientation of ``aeg``: ``table[i, j]`` is the Engle-Granger t-statistic of
+    process *j* regressed on process *i*, i.e. the regressor sits on the row,
+    as it does for ``LinearModel`` (``lmfit_*``) and as pyspi's source-by-target
+    convention for directed SPIs reads. (Until 3.0.0 the call was
+    ``coint(z[i], z[j])``, which regresses the row on the column.)
     """
 
     name = "Cointegration"
@@ -116,9 +122,12 @@ class Cointegration(Directed, Unsigned):
             z = data.to_numpy(squeeze=True)
 
             if self._method == "aeg":
+                # statsmodels regresses its first argument on its second, so
+                # the column j is regressed on the row i: regressor on the row,
+                # as for LinearModel. See the class docstring.
                 stats = stattools.coint(
-                    z[i],
                     z[j],
+                    z[i],
                     autolag=self._autolag,
                     maxlag=self._maxlag,
                     trend=self._trend,
@@ -156,6 +165,16 @@ class Cointegration(Directed, Unsigned):
 
 
 class LinearModel(Directed, Unsigned):
+    """Mean squared error of a linear fit of the column on the row.
+
+    ``table[i, j]`` regresses process *j* on process *i* (regressor on the
+    row, as for ``coint_aeg``) and returns the in-sample MSE, so **lower means
+    a better linear prediction of the column from the row**. On z-scored data
+    the MSE of predicting the mean is ``(T - 1) / T``, the value a useless
+    regressor returns (and why ``Lasso``/``ElasticNet`` at ``alpha = 1`` are
+    not bundled).
+    """
+
     name = "Linear model regression"
     identifier = "lmfit"
     labels = ["misc", "unsigned", "unordered", "normal", "linear", "directed"]

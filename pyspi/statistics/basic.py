@@ -27,6 +27,14 @@ class Estimators(Undirected, Signed):
     """Base class for (functional) connectivity-based statistics
 
     Information on covariance estimators at: https://scikit-learn.org/stable/modules/covariance.html
+
+    ``GraphicalLassoCV`` caveat: when cross-validation selects an ``alpha``
+    near 0 the graphical-lasso solver can stop at ``max_iter`` without
+    converging, and the resulting ``prec_GraphicalLassoCV`` /
+    ``cov_GraphicalLassoCV`` are then solver-path dependent. scikit-learn's
+    ``ConvergenceWarning`` is suppressed with every other fit warning below,
+    so this is silent; on data whose true precision is dense, prefer
+    ``GraphicalLasso`` (fixed ``alpha``) or ``LedoitWolf``.
     """
 
     name = "Covariance"

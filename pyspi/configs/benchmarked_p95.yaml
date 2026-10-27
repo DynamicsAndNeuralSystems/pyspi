@@ -3,7 +3,7 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 305 / 322 SPIs. The original 2026-05-27 cut was 312 / 328
+# Current set: 284 / 302 SPIs (after the 3.0.0 removals; see CHANGELOG "SPI set changes"). The original 2026-05-27 cut was 312 / 328
 # before later removals.
 # Cutoff        : fastest kept <= 62.239s ; slowest dropped >= 62.259s.
 #
@@ -19,7 +19,6 @@
     dependencies:
     configs:
     - estimator: EmpiricalCovariance
-    - estimator: EllipticEnvelope
     - estimator: GraphicalLasso
     - estimator: GraphicalLassoCV
     - estimator: LedoitWolf
@@ -28,7 +27,6 @@
     - estimator: ShrunkCovariance
     - estimator: EmpiricalCovariance
       squared: true
-    - estimator: EllipticEnvelope
       squared: true
     - estimator: GraphicalLasso
       squared: true
@@ -54,7 +52,6 @@
     dependencies:
     configs:
     - estimator: EmpiricalCovariance
-    - estimator: EllipticEnvelope
     - estimator: GraphicalLasso
     - estimator: GraphicalLassoCV
     - estimator: LedoitWolf
@@ -63,7 +60,6 @@
     - estimator: ShrunkCovariance
     - estimator: EmpiricalCovariance
       squared: true
-    - estimator: EllipticEnvelope
       squared: true
     - estimator: GraphicalLasso
       squared: true
@@ -427,8 +423,6 @@
     dependencies:
     configs:
     - mode: euclidean
-      statistic: mean
-    - mode: euclidean
       statistic: max
     - mode: dtw
       statistic: mean
@@ -590,7 +584,6 @@
     configs:
     - estimator: gaussian
     - estimator: kozachenko
-    - estimator: kernel
 
   CrossmapEntropy:
     labels:
@@ -609,8 +602,6 @@
     - estimator: gaussian
       history_length: 10
     - estimator: kozachenko
-      history_length: 10
-    - estimator: kernel
       history_length: 10
 
   DirectedInfo:
@@ -902,14 +893,6 @@
       fmax: 0.5
       labels:
       - M01
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
 
   WeightedPhaseLagIndex:
     labels:
@@ -931,14 +914,6 @@
       fmax: 0.5
       labels:
       - M01
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
 
   DebiasedSquaredPhaseLagIndex:
     # NOTE: only the `mean` band statistic is bundled. The `max` variants were
@@ -1335,9 +1310,7 @@
     dependencies:
     configs:
     - model: Ridge
-    - model: Lasso
     - model: SGDRegressor
-    - model: ElasticNet
     - model: BayesianRidge
 
   # GPModel:

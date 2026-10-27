@@ -43,12 +43,15 @@ def test_lmfit_is_the_in_sample_mse_of_predicting_the_column_from_the_row():
     assert A[1, 0] == pytest.approx(_ridge_mse(y, x), rel=1e-10)
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "lmfit_Lasso is data-independent under the default z-scoring: sklearn's "
-    "Lasso(alpha=1) zeroes the slope whenever |x.y|/n < 1, which for z-scored "
-    "x and y is |r|(T-1)/T < 1, always. Every entry is var(y) = (T-1)/T. "
-    "Unsalvageable without choosing alpha; see the audit report."))
-def test_lmfit_lasso_depends_on_the_data():
+def test_lmfit_lasso_is_data_independent_which_is_why_it_is_not_bundled():
+    """sklearn's ``Lasso(alpha=1)`` zeroes the slope whenever ``|x.y|/n < 1``.
+
+    For z-scored ``x`` and ``y`` that is ``|r| (T-1)/T < 1``, always, so every
+    entry is ``var(y) = (T-1)/T`` whatever the data. ``ElasticNet(alpha=1)``
+    zeroes it unless ``|r| > 0.5``. Both were removed from the bundled configs
+    in 3.0.0 (the class still accepts them).
+    """
+    from pyspi.calculator import Calculator
     from pyspi.statistics.misc import LinearModel
 
     rng = np.random.default_rng(1)
@@ -58,8 +61,10 @@ def test_lmfit_lasso_depends_on_the_data():
                         dim_order="ps")
     a = LinearModel("Lasso").multivariate(independent)[0, 1]
     b = LinearModel("Lasso").multivariate(nearly_equal)[0, 1]
-    assert not np.isclose(a, b, rtol=1e-9, atol=1e-12), (
-        f"Lasso MSE is {a!r} for independent series and {b!r} for r~0.999")
+    assert a == pytest.approx(b) == pytest.approx(199 / 200)
+
+    bundled = set(Calculator(config="full").spis)
+    assert not {"lmfit_Lasso", "lmfit_ElasticNet"} & bundled
 
 
 # --------------------------------------------------------------------------
@@ -116,7 +121,15 @@ def test_johansen_reports_the_rank_zero_trace_and_max_eigenvalue_statistics():
         assert not np.allclose(lin[off], trace[off])
 
 
-def test_aeg_is_the_engle_granger_tstat_of_the_row_on_the_column():
+def test_aeg_is_the_engle_granger_tstat_of_the_column_regressed_on_the_row():
+    """``coint_aeg`` puts the regressor on the row, like ``lmfit_*``.
+
+    ``statsmodels.coint(y0, y1)`` regresses ``y0`` on ``y1`` and unit-root-tests
+    the residual, so ``table[i, j]`` must call ``coint(z[j], z[i])``. Until
+    3.0.0 the arguments were the other way round, so the two directed
+    regression families in ``full`` disagreed about which index is the
+    regressor.
+    """
     from statsmodels.tsa.stattools import coint
 
     from pyspi.statistics.misc import Cointegration
@@ -128,8 +141,38 @@ def test_aeg_is_the_engle_granger_tstat_of_the_row_on_the_column():
     for trend, autolag in (("c", "aic"), ("ct", "aic"), ("ct", "bic")):
         spi = Cointegration("aeg", "tstat", autolag=autolag, maxlag=10, trend=trend)
         A = spi.multivariate(data)
-        assert A[0, 1] == coint(z[0], z[1], trend=trend, autolag=autolag, maxlag=10)[0]
-        assert A[1, 0] == coint(z[1], z[0], trend=trend, autolag=autolag, maxlag=10)[0]
+        assert A[0, 1] == coint(z[1], z[0], trend=trend, autolag=autolag, maxlag=10)[0]
+        assert A[1, 0] == coint(z[0], z[1], trend=trend, autolag=autolag, maxlag=10)[0]
+        assert A[0, 1] != A[1, 0]
+
+
+def test_aeg_and_lmfit_agree_on_which_index_is_the_regressor():
+    """Both directed regression families regress the column on the row.
+
+    Checked against the libraries directly rather than against each other:
+    ``lmfit`` fits ``sklearn`` with ``X = z[i]`` and ``y = z[j]``, and ``aeg``
+    calls ``coint(z[j], z[i])``, whose first argument is the regressand.
+    """
+    from sklearn.linear_model import Ridge
+    from sklearn.metrics import mean_squared_error
+    from statsmodels.tsa.stattools import coint
+
+    from pyspi.statistics.misc import Cointegration, LinearModel
+
+    rng = np.random.default_rng(5)
+    x = rng.standard_normal(300).cumsum()
+    y = 2.0 * x + rng.standard_normal(300)
+    data = Data(np.vstack([x, y]), dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+    cols = data.to_numpy()  # (M, T, 1): sklearn wants a 2-d design matrix
+
+    lm = LinearModel("Ridge").multivariate(data)
+    fitted = Ridge(random_state=42).fit(cols[0], cols[1].ravel())
+    assert lm[0, 1] == pytest.approx(
+        mean_squared_error(fitted.predict(cols[0]), cols[1].ravel()))
+
+    aeg = Cointegration("aeg", "tstat", autolag="aic", maxlag=10, trend="c").multivariate(data)
+    assert aeg[0, 1] == coint(z[1], z[0], trend="c", autolag="aic", maxlag=10)[0]
 
 
 def test_cointegration_is_labelled_linear():

@@ -50,6 +50,14 @@ def _anm_scores(x, ys):
 
 
 class AdditiveNoiseModel(Directed, Unsigned):
+    """Additive-noise-model score for row (cause) -> column (effect).
+
+    Polarity: **lower is stronger evidence** for the row causing the column
+    (a small HSIC means the residual of the column regressed on the row is
+    independent of the row). ``cds`` and ``reci`` share this polarity; ``ccm``
+    and ``igci`` have the opposite one (higher means more). The polarities
+    are those of the published scores and are not harmonised.
+    """
 
     name = "Additive noise model"
     identifier = "anm"
@@ -81,6 +89,11 @@ class AdditiveNoiseModel(Directed, Unsigned):
 
 
 class ConditionalDistributionSimilarity(Directed, Unsigned):
+    """CDS score for row (cause) -> column (effect); lower is stronger evidence.
+
+    See ``AdditiveNoiseModel`` for the polarity convention across the causal
+    module.
+    """
 
     name = "Conditional distribution similarity statistic"
     identifier = "cds"
@@ -95,6 +108,11 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
 
 
 class RegressionErrorCausalInference(Directed, Unsigned):
+    """RECI score for row (cause) -> column (effect); lower is stronger evidence.
+
+    See ``AdditiveNoiseModel`` for the polarity convention across the causal
+    module.
+    """
 
     name = "Regression error-based causal inference"
     identifier = "reci"
@@ -316,6 +334,21 @@ def _cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=42):
 
 
 class ConvergentCrossMapping(Directed, Signed):
+    """Convergent cross-mapping skill, row (source) -> column (target).
+
+    ``table[i, j]`` is the skill with which the shadow manifold of *j*
+    recovers *i*, which Sugihara et al. (2012) read as *i* driving *j*; higher
+    means more (the opposite polarity to ``anm``/``cds``/``reci``). ``mean``
+    and ``max`` are over library sizes; ``diff`` is ``ccm(i->j) - ccm(j->i)``
+    and antisymmetric.
+
+    Embedding convention: with ``embedding_dimension=None`` each process gets
+    its own simplex-optimal dimension, and **each pair uses the larger of its
+    two in both directions**, rather than the library variable's own
+    dimension as in Sugihara et al. The two directions of a pair are then
+    computed on manifolds of the same dimension, at the cost of
+    over-embedding the lower-dimensional member.
+    """
 
     name = "Convergent cross-mapping"
     identifier = "ccm"

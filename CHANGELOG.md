@@ -7,7 +7,7 @@ A major overhaul. The Java/JIDT dependency is gone, the `Calculator` API is simp
 **Upgrading from 2.0.2 (the current PyPI release), at a glance:**
 
 - Python **>= 3.11** (2.0.2: >= 3.8), numpy **>= 2** (2.0.2: `<2`), scikit-learn **>= 1.8**, pyEDM **>= 2.5** (2.0.2: `==1.15.2.0`), mne **>= 1.6** (2.0.2: `==0.23.0`). No Java, `jpype`, `cdt` or `torch`. See [Dependencies](#dependencies).
-- The default `full` set goes from **285 SPIs (2.0.2) to 317**: 46 added, 14 removed, 23 renamed (identifier only), 248 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
+- The default `full` set goes from **285 SPIs (2.0.2) to 302**: 46 added, 29 removed, 23 renamed (identifier only), 233 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
 - The old `Calculator(subset=, configfile=, normalise=)` spellings still work, with a `DeprecationWarning`, until 4.0. See [Breaking changes and deprecations](#breaking-changes-and-deprecations).
 - Results tables written by 2.x (pickle) do not load; six directed spectral SPIs are transposed; many estimator values change (see [Changed](#changed) and the "Values changed" table).
 - The license is **GPL-3.0-or-later** (2.0.2: GPL-3.0), agreed by the maintainer, Ben Fulcher.
@@ -63,7 +63,7 @@ Tie-free series are not changed by pyspi's tie handling (see below), and for tho
 
 - **Java and JIDT** (above): `infodynamics.jar`, `jpype1` and the JVM start-up path.
 - **`cdt` and `torch`** (see Dependencies); `setup.py` and `requirements.txt` (packaging is `pyproject.toml` only); `pyspi/phiconf.yaml`; the 2.x config filenames (see the migration table); pickle and parquet output.
-- **Fourteen SPIs** (`full`: 285 to 317 net of 46 additions). See [SPI set changes](#spi-set-changes): six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`.
+- **Twenty-nine SPIs** (`full`: 285 to 302 net of 46 additions). See [SPI set changes](#spi-set-changes). Fourteen went with the port: six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`. Fifteen went after the per-SPI audit found them duplicate, constant or degenerate: the four `*_EllipticEnvelope` (bit-identical to `*_MinCovDet`), `lmfit_Lasso` and `lmfit_ElasticNet` (constant at `alpha = 1`), `bary_euclidean_mean` (identically 0), `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` (box kernel in ~10 dimensions), and the six `pli`/`wpli` multitaper maxima (exactly 1 at `T >= 1000`).
 
 ### Fixed: state, identity, and estimator contracts
 
@@ -192,7 +192,7 @@ Three group-delay SPIs that shipped as silent all-NaN columns are now recorded f
 
 The remaining entries in this section come from a per-SPI audit of the whole `full` set, run after the LCSS finding above.
 Each fix was first pinned by an independent reference test that the previous code failed; the tests live in `tests/test_*_audit.py` and the module test files.
-`COMPUTATION_VERSION` is `3.0.0.r11`, and the identifiers whose values change are listed under **Values changed in r11** below.
+`COMPUTATION_VERSION` is `3.0.0.r12` (r11 was the audit's fixes; r12 the deferred findings the maintainer then decided on: the `coint_aeg` orientation, the GroupDelay thinning step and the phase measures' real-valued bins), and the identifiers whose values change are listed under **Values changed in r11 and r12** below.
 
 - **All nine `ccm_*` SPIs were transposed, so every `ccm_*_diff` had the wrong sign.**
   pyEDM labels its output columns `library:target`: `a:b` is `a`'s shadow manifold predicting `b`, which Sugihara et al. (2012) read as evidence that `b` drives `a`.
@@ -283,8 +283,11 @@ Each fix was first pinned by an independent reference test that the previous cod
   `CrossmapEntropy(history_length=-2)` returned a finite value and `StochasticInteraction(delay=-1)` returned NaN; both now refuse non-positive integers.
   `CrossmapEntropy`'s docstring said `k` gives `k - 1` source lags; the shipped `k = 1` uses one lag and so computes the same quantity as `k = 2`, which is now stated and pinned by a test.
   `CrossCorrelation` had no docstring (its description sat after the class attributes); it now documents that the normalisation is biased and that `max` is the largest signed value.
+- **`coint_aeg_*` put the regressor on the column; `lmfit_*` puts it on the row.** The Engle-Granger call was `coint(z[i], z[j])`, which regresses the row *i* on the column *j*, while `LinearModel` fits `z[j]` on `z[i]`, so the two directed regression families in `full` disagreed about which index is the regressor. The asymmetry is real (the two orientations differ by ~0.8 on average on random walks, up to ~1.6), so this is not cosmetic. `aeg` now calls `coint(z[j], z[i])`: `table[i, j]` is the t-statistic of the column regressed on the row, regressor on the row, as for `lmfit_*` and as the source-by-target convention reads. **The three `coint_aeg_tstat_*` matrices are transposed** relative to r11 (and relative to 2.x, where the class was symmetrised and the orientation you got depended on visit order). `test_aeg_is_the_engle_granger_tstat_of_the_column_regressed_on_the_row` and `test_aeg_and_lmfit_agree_on_which_index_is_the_regressor` pin it against `statsmodels` and `sklearn` directly.
 
 ### Changed
+
+- **Conventions the audit found undocumented are now stated in the class docstrings** (no value changes). `gc_gaussian_*` is the Gaussian transfer entropy `0.5 ln(var_restricted / var_full)` in nats, **half** of Geweke's Granger causality (`TransferEntropy`). `xcorr_*_max` is the largest *signed* lagged correlation, so an anticorrelated pair scores a small positive value; `squared=True` gives strength without sign (`CrossCorrelation`). Score polarity differs across the causal module and is not harmonised: lower is stronger evidence for `anm`, `cds` and `reci`, higher for `ccm` and `igci` (`AdditiveNoiseModel` and siblings). `ccm_E-None_*` gives each pair the larger of its two simplex-optimal embedding dimensions in both directions, not the library variable's own (`ConvergentCrossMapping`). `softdtw*` is the raw soft-minimum cost at `gamma = 1`, which can be negative and is not the Blondel et al. (2021) divergence; its `name` was "Dynamic time warping" and is now "Soft dynamic time warping" (`SoftDynamicTimeWarping`). `lmfit_*` is the in-sample MSE of the column regressed on the row, lower meaning a better linear prediction (`LinearModel`). `prec_GraphicalLassoCV`/`cov_GraphicalLassoCV` are solver-path dependent when cross-validation picks `alpha` near 0, and the `ConvergenceWarning` is suppressed (`Estimators`). Two spectral facts are recorded here rather than in code: the multitaper estimates use `NW = 3` tapers whose bias does not shrink with `T`, and the Wilson factorisation behind the nonparametric `sgc_*` leaves residuals of 0.07-0.29 on the fixtures when run on the unpadded grid.
 
 - **`Calculator(subset=..., configfile=...)` collapsed into `config=`**, which accepts either a bundled name or a path to your own YAML.
 - **`normalise=` renamed to `zscore=`** on `Calculator` and `Data`. Behaviour is unchanged (per-process z-score along time); the old name collided with `utils.normalise`, which was min-max, and with the per-SPI `normalise` arguments in `statistics/distance.py`.
@@ -430,18 +433,18 @@ Definitions the corrected measures are checked against:
 
 ### SPI set changes
 
-**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 317.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
+**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 302.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
 
 | Change | SPIs | Families |
 |:-------|-----:|:---------|
 | 2.0.2 `config.yaml` | 285 | |
-| Unchanged identifier | 248 | (values may still change; see "Values changed") |
+| Unchanged identifier | 233 | (values may still change; see "Values changed") |
 | **Renamed** (identifier only, except DTW) | 23 | `sgc` (11), Kraskov DCE (4), `cce`/`di_gaussian` `n` (4), auto-embedding method (3), DTW Sakoe-Chiba (1) |
-| **Removed** | 14 | multitaper `dspli`/`dswpli` maxima (6), `phase_multitaper_max` (3), symbolic TE (2), `di_kernel`, `di_kozachenko`, `igci` |
+| **Removed** | 29 | with the port (14): multitaper `dspli`/`dswpli` maxima (6), `phase_multitaper_max` (3), symbolic TE (2), `di_kernel`, `di_kozachenko`, `igci`; after the audit (15): `*_EllipticEnvelope` (4), `pli`/`wpli` multitaper maxima (6), `lmfit_Lasso`, `lmfit_ElasticNet`, `bary_euclidean_mean`, `cce_kernel_W-0.5_n-5`, `xme_kernel_W-0.5_k10` |
 | **Added** | 46 | `LaggedCorrelation` (42), `CrossPairwiseDistance` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1) |
-| 3.0.0 `full.yaml` | 317 | 285 − 14 + 46 |
+| 3.0.0 `full.yaml` | 302 | 285 − 29 + 46 |
 
-Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 207, and `fabfour` (4) and `sonnet` (14) keep their size. The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (312, 299, 283 and 255 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
+Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 197, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with one substitution (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (297, 284, 269 and 242 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
 Every removal and rename below is deliberate. (An earlier draft of these notes said "328 to 322, nothing else moved"; that compared against an intermediate state of this branch, not against 2.0.2, and omitted the 44 additions and the IGCI removal.)
 
@@ -449,7 +452,9 @@ The unsupported coherence-phase maxima are removed from shipped configs. Other d
 
 **Removed: the multitaper `dspli`/`dswpli` maxima (6).** The `dspli_multitaper_max_*` and `dswpli_multitaper_max_*` variants (bands 0-0.25, 0.25-0.5 and 0-0.5) return exactly 1.0 for essentially any input, including white noise at T=100, 1,000 and 10,000, and coupled AR processes. With a single recording the debiased statistics are estimated across only a few tapers, so at any frequency where the tapers agree in sign the value is exactly 1 (28 of 501 frequency bins in a T=1000 noise test), and the maximum over frequencies is 1. The `mean` variants are kept. (Counts: `full` 322 to 316, `fast` 213 to 207, `benchmarked_p99` 318 to 312, `p95` 305 to 299, `p90` 289 to 283, `p80` 261 to 255.)
 
-**Removed (14)**
+**Removed after the audit (15).** The per-SPI audit (see **Fixed**) measured every bundled SPI on the three drift fixtures and at `M = 10, T = 1000`, and found fifteen that carry no information of their own. Bit-identical duplicates: the four `*_EllipticEnvelope` SPIs equal `*_MinCovDet` on every input, because `sklearn.covariance.EllipticEnvelope.fit` is `MinCovDet.fit` plus an outlier threshold. Constants: `lmfit_Lasso` is `(T - 1) / T` for every pair (`Lasso(alpha=1)` zeroes the slope of any z-scored regressor), `lmfit_ElasticNet` likewise unless `|r| > 0.5` (constant on two of three fixtures), and `bary_euclidean_mean` is identically 0 (the Euclidean barycenter of two zero-mean series). Degenerate: the six `pli_multitaper_max_*` and `wpli_multitaper_max_*` are exactly 1.0 for every pair once `T >= 1000`, by the same mechanism as the `dspli`/`dswpli` maxima above (a mean of a few taper signs takes a handful of values, and one bin in the band always reaches 1); and `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` are fixed-width box-kernel entropy estimates in ten to eleven dimensions whose bias does not shrink with `T` (the `di_kernel` defect). Every class remains constructible with these arguments; only the bundled configs change. (Counts: `full` 317 to 302, `fast` 207 to 197, `benchmarked_p99` 312 to 297, `p95` 299 to 284, `p90` 283 to 269, `p80` 255 to 242.) Deterministic derived quantities were *kept*: `je_gaussian`/`ce_gaussian` are a constant minus `mi_gaussian` under z-scoring, `ccm_*_diff` is `ccm_*_mean - ccm_*_mean.T`, bivariate `pdcoh_*`/`gpdcoh_*` reduce to `dtf_*`/`dcoh_*^2` by 2×2 algebra, and `phi_*_norm-1` is about `phi_*_norm-0 / 1.42`; they are redundant only given their partner and are listed here so a user selecting features knows.
+
+**Removed (29)**
 
 | SPI | Why |
 |:----|:----|
@@ -460,6 +465,11 @@ The unsupported coherence-phase maxima are removed from shipped configs. Other d
 | `phase_multitaper_max_*` (3) | Ordinary maxima of wrapped phase depend on the branch cut and were exactly π off-diagonal on the VAR fixture. The constructors now refuse this statistic. |
 | `dspli_multitaper_max_*`, `dswpli_multitaper_max_*` (6) | Constant 1.0 on essentially any input (above). |
 | `igci` | Active in 2.0.2's `config.yaml`; commented out of `full.yaml` as a disabled heuristic. The class remains as `InformationGeometricCausalInference`. |
+| `cov_EllipticEnvelope`, `cov-sq_EllipticEnvelope`, `prec_EllipticEnvelope`, `prec-sq_EllipticEnvelope` (4) | Bit-identical to the `*_MinCovDet` SPIs on every input (audit). |
+| `lmfit_Lasso`, `lmfit_ElasticNet` (2) | Constant `(T - 1) / T` (Lasso, always; ElasticNet unless `|r| > 0.5`) at sklearn's `alpha = 1` on z-scored data (audit). |
+| `bary_euclidean_mean` | Identically 0: the Euclidean barycenter of two zero-mean series has mean 0 (audit). |
+| `cce_kernel_W-0.5_n-5`, `xme_kernel_W-0.5_k10` (2) | Fixed-width box kernel in ten to eleven dimensions; the bias does not shrink with `T` (the `di_kernel` defect). `xme_kernel_W-0.5_k1` stays (audit). |
+| `pli_multitaper_max_*`, `wpli_multitaper_max_*` (6) | Exactly 1.0 for every pair at `T >= 1000` (the `dspli` maxima defect); `mean` variants kept (audit). |
 
 **Added (46)**
 
@@ -484,8 +494,8 @@ Symbolic transfer entropy identifiers also lose the three embedding parameters t
 
 Values for the six directed spectral SPIs listed under **Fixed** are also transposed relative to 2.x.
 
-**Values changed in r11** (the per-SPI audit; see **Fixed**).
-72 of the 317 `full` identifiers change value relative to r10.
+**Values changed in r11 and r12** (the per-SPI audit and its deferred findings; see **Fixed**).
+In r11, 72 of the then 317 `full` identifiers changed value relative to r10; r12 changes the further identifiers listed in the second table below, relative to r11.
 Maximum absolute change on the drift fixtures `var1_M3_T100` / `cml_M5_T100` / `kuramoto_M7_T100`:
 
 | SPIs | Count | Max change | Cause |
@@ -501,4 +511,12 @@ Maximum absolute change on the drift fixtures `var1_M3_T100` / `cml_M5_T100` / `
 | `ddtf_*` | 6 | 0.037 / 0.060 / 0.31 | Closed band, and partial coherence in place of `sqrt(PDC)`. |
 | `sgc_parametric_*` | 18 | 2.8 / 6.7 / 7.2 | Yule-Walker VAR fit and corrected frequency labels; the six `order-None` SPIs on `kuramoto_M7_T100` go from unestimable to finite, and the `[0.25, 0.5]` `order-1` and all `order-20` ones there from partly NaN to finite. |
 
-Everything else in `full` is unchanged to the bit on all three fixtures (`anm` to its documented platform tolerance).
+Everything else in `full` was unchanged to the bit on all three fixtures in r11 (`anm` to its documented platform tolerance).
+
+r12 (relative to r11; same fixtures, same columns):
+
+| SPIs | Count | Max change | Cause |
+|:-----|------:|:-----------|:------|
+| `coint_aeg_tstat_*` | 3 | 1.64 / 25.1 / 2.32 | Transposed: the column is regressed on the row, as for `lmfit_*`. |
+
+Everything else in `full` is unchanged to the bit between r11 and r12 on all three fixtures.
