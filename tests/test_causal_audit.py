@@ -100,3 +100,45 @@ def test_ccm_library_sizes_reach_the_largest_library():
         f"ccm max = {A[0, 1]:.4f} is below the skill at the largest library "
         f"(L={top}: {skill_at_top:.4f}); the largest library sizes are being "
         f"dropped.")
+
+
+# ---------------------------------------------------------------------------
+# IGCI
+# ---------------------------------------------------------------------------
+
+def test_igci_slope_estimator_follows_the_documented_sign():
+    """Both IGCI estimators must be > 0 for x -> y, as `igci_score` documents.
+
+    Daniusis et al. (2010), Eq. (13): the slope-based estimate of
+    C_{X->Y} = E[log |f'(X)|] is ``1/m * sum log |dy/dx|`` over x-sorted
+    neighbours, and X -> Y is inferred when C_{X->Y} < C_{Y->X}. The entropy
+    estimator (Eq. 12) estimates the same C_{X->Y} as H(Y) - H(X), and pyspi
+    reports ``H(x) - H(y)``, positive for x -> y. So the slope estimator must
+    report ``C_{Y->X} - C_{X->Y}``.
+
+    The system is deterministic and invertible, y = x**3 with x uniform, the
+    case IGCI is built for: under the uniform reference measure
+    C_{X->Y} = E[log 3X^2] = log 3 - 2 < 0, so x -> y is unambiguous.
+    """
+    from pyspi.lib.pairwise_causal import igci_score
+
+    rng = np.random.default_rng(3)
+    x = rng.uniform(0, 1, 500)
+    y = x ** 3
+    unit = lambda v: (v - v.min()) / (v.max() - v.min())
+
+    def slope_C(a, b):
+        a, b = unit(a), unit(b)
+        order = np.argsort(a)
+        da, db = np.diff(a[order]), np.diff(b[order])
+        keep = (da != 0) & (db != 0)
+        return np.sum(np.log(np.abs(db[keep] / da[keep]))) / len(a)
+
+    C_xy, C_yx = slope_C(x, y), slope_C(y, x)
+    assert C_xy < 0 < C_yx  # the paper's rule picks x -> y
+
+    assert igci_score(x, y, "uniform", "entropy") > 0
+    slope = igci_score(x, y, "uniform", "integral")
+    assert slope == pytest.approx(C_yx - C_xy, rel=1e-12), (
+        f"slope estimator returned {slope:.4f}; the paper's C_yx - C_xy is "
+        f"{C_yx - C_xy:.4f} (> 0 for x -> y, matching the entropy estimator)")
