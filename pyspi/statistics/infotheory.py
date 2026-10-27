@@ -36,7 +36,7 @@ import warnings
 from scipy.spatial import cKDTree
 from scipy.special import digamma, gammaln
 
-from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_bivariate, parse_multivariate
+from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_bivariate, parse_multivariate, fill_pairwise
 
 # ---------------------------------------------------------------------------
 # Pure-numpy entropy calculators (drop-in replacements for JIDT)
@@ -1457,17 +1457,28 @@ class InfoTheoryBase(Unsigned):
         """
         M = data.n_processes
         A = np.full((M, M), np.nan)
-        for i in range(M):
-            for j in range(i + 1, M):
-                A[i, j] = A[j, i] = self.bivariate(data, i=i, j=j)
-        return A
+        pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
+        return fill_pairwise(self.identifier, A, pairs,
+                             lambda i, j: self.bivariate(data, i=i, j=j),
+                             mirror=True)
 
     def _resolve_theiler(self, data, i, j):
         """Theiler/dynamic-correlation-exclusion window for pair (i, j).
 
         None -> 0 (no window); an integer -> that window; "AUTO" -> the
-        autocorrelation time 2*<acf(x_i), acf(x_j)>, cached per dataset.
-        Shared by MI/TLMI/TE; only the kNN (kraskov) paths consume it.
+        autocorrelation time 2*<acf(x_i), acf(x_j)>, capped at N // 10 and
+        cached per dataset. Shared by MI/TLMI/TE; only the kNN (kraskov)
+        paths consume it.
+
+        The cap follows hctsa's rule for every autocorrelation-derived
+        embedding or Theiler parameter (``if tau > N/10, tau = floor(N/10)``).
+        Without it the product of two slowly decaying autocorrelation
+        functions can exceed the series: on a near-periodic pair at T=250 it
+        reached 158 samples, leaving a negative number of usable neighbours
+        and raising for the pair (before 3.0.0, voiding the whole table); on
+        the kuramoto drift fixture it reached 33 of 100 samples, a Theiler
+        exclusion of two thirds of the pool. A window of N/10 already excludes
+        a fifth of the candidate neighbours of each point.
         """
         raw_w = getattr(self, '_dyn_corr_excl', None)
         if raw_w is None:
@@ -1476,12 +1487,12 @@ class InfoTheoryBase(Unsigned):
             if not hasattr(data, 'theiler'):
                 z = data.to_numpy()
                 M = data.n_processes
+                cap = data.n_observations // 10
                 theiler = -np.ones((M, M))
                 for _i in range(M):
                     for _j in range(_i + 1, M):
-                        theiler[_i, _j] = 2 * np.dot(
-                            utils.acf(z[_i]), utils.acf(z[_j])
-                        )
+                        w = 2 * np.dot(utils.acf(z[_i]), utils.acf(z[_j]))
+                        theiler[_i, _j] = min(int(w), cap)
                         theiler[_j, _i] = theiler[_i, _j]
                 data.theiler = theiler
             return int(data.theiler[i, j])
@@ -1595,12 +1606,11 @@ class MutualInfo(InfoTheoryBase, Undirected):
             M, N = Z.shape
             k = int(self._prop_k)
             result = np.full((M, M), np.nan)
-            for i in range(M):
-                for j in range(i + 1, M):
-                    w = self._resolve_theiler(data, i, j)
-                    mi = _ksg_mi_pair(Z[i], Z[j], k, w)
-                    result[i, j] = result[j, i] = mi
-            return result
+            pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
+            return fill_pairwise(
+                self.identifier, result, pairs,
+                lambda i, j: _ksg_mi_pair(Z[i], Z[j], k, self._resolve_theiler(data, i, j)),
+                mirror=True)
         return self._upper_triangle_multivariate(data)
 
 
@@ -1661,14 +1671,10 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
             Z_src = Z[:, :-1]
             Z_tgt = Z[:, 1:]
             result = np.full((M, M), np.nan)
-            for i in range(M):
-                for j in range(M):
-                    if i == j:
-                        continue
-                    w = self._resolve_theiler(data, i, j)
-                    mi = _ksg_mi_pair(Z_src[i], Z_tgt[j], k, w)
-                    result[i, j] = mi
-            return result
+            pairs = [(i, j) for i in range(M) for j in range(M) if i != j]
+            return fill_pairwise(
+                self.identifier, result, pairs,
+                lambda i, j: _ksg_mi_pair(Z_src[i], Z_tgt[j], k, self._resolve_theiler(data, i, j)))
         return super().multivariate(data)
 
 

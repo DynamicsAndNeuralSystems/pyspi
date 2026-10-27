@@ -91,6 +91,44 @@ def parse_multivariate(function):
 
     return parsed_function
 
+def fill_pairwise(identifier, A, pairs, compute, mirror=False):
+    """Evaluate ``compute(i, j)`` into ``A[i, j]`` for each pair, isolating failures.
+
+    A pair whose estimate is undefined (tied observations for a
+    Kozachenko-Leonenko entropy, a Theiler window longer than the series, a
+    singular fit) raises inside ``compute``. Before 3.0.0 that exception left
+    the SPI's whole ``M x M`` table NaN, so one quantised or periodic process
+    voided every other pair's value. Here the failing pair alone is NaN and
+    the failures are reported once, as a warning the Calculator re-emits
+    next to the SPI's name. If every pair fails the first exception is
+    re-raised, so ``_parallel.run_spi`` records the SPI as failed with the
+    estimator's own message, as before.
+
+    ``bivariate`` itself still raises, so a caller asking for one pair sees
+    the reason.
+    """
+    failures = []
+    for i, j in pairs:
+        try:
+            value = compute(i, j)
+        except Exception as err:  # the pair, not the table, is undefined
+            value = np.nan
+            failures.append(((i, j), err))
+        A[i, j] = value
+        if mirror:
+            A[j, i] = value
+    if failures and len(failures) == len(pairs):
+        raise failures[0][1]
+    if failures:
+        (i, j), err = failures[0]
+        warnings.warn(
+            f'SPI "{identifier}": {len(failures)} of {len(pairs)} pairs are '
+            f'undefined and set to NaN; first ({i}, {j}): '
+            f'{type(err).__name__}: {err}'
+        )
+    return A
+
+
 class Directed:
     """ Base class for directed statistics
     """
@@ -109,13 +147,11 @@ class Directed:
     def multivariate(self,data):
         """ Compute the dependency statistics for the entire multivariate dataset
         """
-        A = np.empty((data.n_processes,data.n_processes))
-        A[:] = np.nan
-
-        for j in range(data.n_processes):
-            for i in [ii for ii in range(data.n_processes) if ii != j]:
-                A[i,j] = self.bivariate(data,i=i,j=j)
-        return A
+        M = data.n_processes
+        A = np.full((M, M), np.nan)
+        pairs = [(i, j) for j in range(M) for i in range(M) if i != j]
+        return fill_pairwise(self.identifier, A, pairs,
+                             lambda i, j: self.bivariate(data, i=i, j=j))
 
     def get_group(self,classes):
         for i, i_cls in enumerate(classes):

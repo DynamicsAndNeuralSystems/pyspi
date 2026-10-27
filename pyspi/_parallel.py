@@ -485,7 +485,12 @@ SCHEMA_VERSION = 1
 #         Fifteen duplicate/constant/degenerate SPIs leave the bundled
 #         configs; the DTW-type barycenter `mean` SPIs become `corr`
 #         (2 E[b^2] - 1), new identifiers rather than changed values.
-COMPUTATION_VERSION = "3.0.0.r12"
+#   r13 -- the AUTO Theiler window is capped at N // 10 (hctsa's rule), so
+#         the five DCE-AUTO SPIs change where two autocorrelation functions
+#         decay slowly (the kuramoto fixture; near-periodic data, where the
+#         window used to exceed the series and the pair raised). An undefined
+#         pair is now NaN with a warning instead of voiding the SPI's table.
+COMPUTATION_VERSION = "3.0.0.r13"
 
 
 def read_manifest(checkpoint_dir: Path):

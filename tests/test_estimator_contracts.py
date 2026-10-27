@@ -549,11 +549,25 @@ def test_kozachenko_entropy_still_refuses_tied_data_rather_than_dithering():
     quantised data reports the dither level. pyspi names the problem instead
     of returning a number set by an implementation constant.
     """
+    import warnings
     import pyspi.statistics.infotheory as it
     from pyspi.data import load_dataset
 
-    with pytest.raises(ValueError, match="tied observations"):
-        it.JointEntropy(estimator="kozachenko").multivariate(load_dataset("forex"))
+    spi = it.JointEntropy(estimator="kozachenko")
+    data = load_dataset("forex")
+    # Since 3.0.0 an undefined pair is NaN with a warning rather than voiding
+    # the table (`pyspi.base.fill_pairwise`); the refusal is still named, at
+    # the pair level, and re-raised if every pair is tied.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            A = spi.multivariate(data)
+        except ValueError as err:
+            assert "tied observations" in str(err)
+        else:
+            msgs = [str(w.message) for w in caught if "tied observations" in str(w.message)]
+            assert msgs, "tied pairs were neither refused nor reported"
+            assert np.isnan(A).sum() > A.shape[0], "tied pairs returned a (dithered) number"
 
 
 # ---------------------------------------------------------------------------

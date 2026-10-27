@@ -192,7 +192,7 @@ Three group-delay SPIs that shipped as silent all-NaN columns are now recorded f
 
 The remaining entries in this section come from a per-SPI audit of the whole `full` set, run after the LCSS finding above.
 Each fix was first pinned by an independent reference test that the previous code failed; the tests live in `tests/test_*_audit.py` and the module test files.
-`COMPUTATION_VERSION` is `3.0.0.r12` (r11 was the audit's fixes; r12 the deferred findings the maintainer then decided on: the `coint_aeg` orientation, the GroupDelay thinning step and the phase measures' real-valued bins), and the identifiers whose values change are listed under **Values changed in r11 and r12** below.
+`COMPUTATION_VERSION` is `3.0.0.r13` (r11 was the audit's fixes; r12 the deferred findings the maintainer then decided on: the `coint_aeg` orientation, the GroupDelay thinning step and the phase measures' real-valued bins; r13 the capped AUTO Theiler window), and the identifiers whose values change are listed under **Values changed in r11 to r13** below.
 
 - **All nine `ccm_*` SPIs were transposed, so every `ccm_*_diff` had the wrong sign.**
   pyEDM labels its output columns `library:target`: `a:b` is `a`'s shadow manifold predicting `b`, which Sugihara et al. (2012) read as evidence that `b` drives `a`.
@@ -325,6 +325,12 @@ Each fix was first pinned by an independent reference test that the previous cod
   The three `psi_wavelet_max_*` identifiers are removed from every bundled config; the class still accepts `statistic="max"`.
   The three `mean` identifiers are unchanged, and their docstring now gives the lag range their sign holds over: right in every run for lags up to 5 samples, wrong in every run at lag 12 on the full band, where the fixed 10-point grid's phase step wraps (`1 / (2 df)`).
   A time-averaged Nolte wavelet PSI on a bandwidth-spaced grid was prototyped and rejected: its null sd at T=2000 was 0.29 against the current 0.11 and it reversed at the same lag on `[0.25, 0.5]`.
+- **One undefined pair no longer voids an SPI's whole table.**
+  An exception from any pair propagated out of `multivariate`, and the SPI was recorded as failed with an all-NaN table. On a 60-dataset battery this hit the five Kozachenko-based SPIs (a process on a period-6 orbit has tied values, for which the Kozachenko-Leonenko estimator is undefined) and the five `DCE-AUTO` SPIs (below), erasing every other pair's value.
+  The pairwise loops (`Directed.multivariate`, the infotheory upper-triangle and KSG loops) now go through `pyspi.base.fill_pairwise`: the failing pair alone is NaN and the failures are reported once as a warning that the Calculator re-emits next to the SPI's name (`calc.errors` stays empty). If every pair fails the SPI is still recorded as failed, as before. `bivariate` itself still raises, so a caller asking for one pair sees the reason.
+- **The AUTO Theiler window could exceed the series.**
+  `dyn_corr_excl="AUTO"` sets the window to the autocorrelation time `2 <acf(x_i), acf(x_j)>`, which for two slowly decaying autocorrelation functions is of the order of the series length: 158 of 250 samples on a near-periodic pair (a negative number of usable neighbours, so the pair raised), 33 of 100 on the kuramoto drift fixture (two thirds of the neighbour pool excluded).
+  The window is now capped at `N // 10`, hctsa's rule for every autocorrelation-derived embedding or Theiler parameter, so a KSG estimate always exists and never excludes more than a fifth of the candidate neighbours. **Five values change** where the uncapped window exceeded the cap (`mi_kraskov_NN-4_DCE-AUTO`, `tlmi_kraskov_NN-4_DCE-AUTO`, the three `te_kraskov_*_DCE-AUTO_*`; on the fixtures only kuramoto), and `COMPUTATION_VERSION` becomes `3.0.0.r13`.
 - **The DTW-type barycenter `mean` SPIs measured skewness, not coupling.**
   A barycenter of two zero-mean series has mean zero by construction, so `bary_{dtw,sgddtw,softdtw}_mean` reported the residue of warping: on a 60-dataset battery it correlated 0.03 with Pearson's r and tracked the sum of the two marginal skewnesses (the defect of the removed `bary_euclidean_mean`), and `bary_dtw_max` tracked the larger of the two series' own maxima (Spearman 0.88).
   The barycenter's energy is the part that carries pairwise information, so the class gains `statistic="corr"`, `2 mean(b^2) / mean_energy - 1`: exactly Pearson's r for the Euclidean barycenter, an alignment-adjusted correlation in [-1, 1] for the DTW geometries (1 for identical series under DBA).
@@ -555,7 +561,7 @@ Symbolic transfer entropy identifiers also lose the three embedding parameters t
 
 Values for the six directed spectral SPIs listed under **Fixed** are also transposed relative to 2.x.
 
-**Values changed in r11 and r12** (the per-SPI audit and its deferred findings; see **Fixed**).
+**Values changed in r11 to r13** (the per-SPI audit, its deferred findings and the make-up audit's fixes; see **Fixed** and **Changed**).
 In r11, 72 of the then 317 `full` identifiers changed value relative to r10; r12 changes the further identifiers listed in the second table below, relative to r11.
 Maximum absolute change on the drift fixtures `var1_M3_T100` / `cml_M5_T100` / `kuramoto_M7_T100`:
 
@@ -588,5 +594,6 @@ r12 (relative to r11; same fixtures, same columns):
 | `gd_multitaper_delay_*` (again) | 2 | NaN / NaN / 0.13 | Real-valued bins left out of the fit; `[0.25, 0.5]` unchanged. |
 | `gwtau` | 1 | 0.041 / 0.053 / 0.017 | Constant factor `sqrt((T - 1) / T)`: the start of the trajectory is in the distance vector. |
 | `gpfit_DotProduct`, `gpfit_RBF` | 2 | 0.030 / 0.11 / 0.098 | Leave-one-out MSE of the fitted GP in place of the in-sample MSE. |
+| `mi`, `tlmi`, `te` `_kraskov_NN-4_DCE-AUTO*` | 5 | 0 / 0 / 0.24 (`mi`), 0.19 (`tlmi`), 0.15, 0.055, 0.081 (`te`) | AUTO Theiler window capped at `N // 10` (hctsa's rule); only kuramoto's windows exceeded the cap at T=100. |
 
 Everything else in `full` is unchanged to the bit between r11 and r12 on all three fixtures (`dswpli_*`, `icoh_*_max`, `cohmag_*`, the full-band `psi` and the wavelet `psi` included).
