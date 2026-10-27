@@ -107,14 +107,53 @@ def _circular_nanmean(angles, axis):
     return np.where(undefined, np.nan, np.angle(mean))
 
 
+def _real_valued_bins(freq, fs):
+    """Mask of the bins where the cross-spectrum of real signals is real.
+
+    0 Hz always, and ``fs / 2`` when it is on the grid (an even FFT length; the
+    backend pads T=101 to 105 samples, whose last bin is below Nyquist). Not
+    ``freq == fs / 2``: at fs=3, T=100 the backend's Nyquist bin is
+    1.5000000000000002. A relative 1e-9 is far below the half-bin gap of an
+    odd-length grid.
+    """
+    return (freq == 0) | np.isclose(freq, fs / 2, rtol=1e-9, atol=0)
+
+
 class NonparametricSpectral(Unsigned):
-    """Base class for the nonparametric spectral methods from the Eden-Kramer repo"""
+    """Base class for the nonparametric spectral methods from the Eden-Kramer repo.
+
+    Frequency band
+    --------------
+    Every class reduces its spectrum over the band ``fmin <= f <= fmax`` of
+    the backend's grid, with two exceptions, so the identifiers' ``fmin-0`` and
+    ``fmax-0-5`` mean what they say wherever a value exists there:
+
+    - Amplitude measures (``cohmag`` and the bivariate directed measures) use
+      the closed band, as does GroupDelay's search for a significant
+      coherence run.
+    - Phase measures (``_phase_based``: ``phase``, ``icoh``, ``plv``, ``pli``,
+      ``wpli``, ``dspli``, ``dswpli``, ``ppc``) use the closed band minus the
+      real-valued bins, 0 Hz and ``fs / 2``. There every taper's Fourier
+      coefficient of a real signal is real, so the cross-spectrum's phase is
+      exactly 0 or pi and none of these is an estimate: PLV and PPC are 1
+      whenever the tapers agree in sign, PLI and dsPLI 0, wPLI 0/0. A band
+      left with no frequency is refused with a ``ValueError``.
+    - PhaseSlopeIndex uses the open band ``fmin < f < fmax``, as the
+      backend's own band selection does.
+
+    SpectralGrangerCausality raises a zero ``fmin`` to 1e-5 (its identifier
+    says so) and then uses the closed band.
+    """
 
     # The `statistic` values a class can apply. A band statistic reduces a
     # spectrum over frequency; GroupDelay's three are outputs of a regression.
     # Accepting one of GroupDelay's elsewhere used to fall through the
     # dispatcher in `multivariate` and return the spectrum's 0 Hz bin.
     _statistics = ("mean", "max")
+
+    # A function of the phase of the cross-spectrum: its band leaves out the
+    # real-valued bins (see the class docstring).
+    _phase_based = False
 
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean"):
         if fmax is None:
@@ -278,10 +317,30 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
         cache[self._freq_key] = freq
         return res, freq
 
+    def _band(self, freq):
+        """Indices of the frequencies the band statistic reduces over.
+
+        The closed band, less the real-valued bins for a phase measure (see
+        ``NonparametricSpectral``).
+        """
+        in_band = (freq >= self._fmin) & (freq <= self._fmax)
+        if not self._phase_based:
+            return np.flatnonzero(in_band)
+        real = _real_valued_bins(freq, self._fs)
+        if not (in_band & ~real).any():
+            what = ("only the real-valued bins (0 Hz and fs/2), where the "
+                    "cross-spectrum of real signals has no phase"
+                    if in_band.any() else "no frequency of the series' grid")
+            step = f" (grid step {freq[1] - freq[0]:.4g})" if freq.size > 1 else ""
+            raise ValueError(
+                f"{type(self).__name__}: the band [{self._fmin}, {self._fmax}] "
+                f"holds {what}{step}; widen it.")
+        return np.flatnonzero(in_band & ~real)
+
     @parse_multivariate
     def multivariate(self, data):
         adj_freq, freq = self._get_cache(data)
-        freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
+        freq_id = self._band(freq)
 
         try:
             adj = self._statfn(adj_freq[0, freq_id, :, :], axis=0)
@@ -444,6 +503,7 @@ class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
 class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
     # Antisymmetric in (i, j): phase difference: phi(i,j) = -phi(j,i).
     _antisymmetric_spectrum = True
+    _phase_based = True
     name = "Coherence phase"
     labels = ["signed", "spectral", "antisymmetric"]
 
@@ -462,8 +522,7 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
     @parse_multivariate
     def multivariate(self, data):
         adj_freq, freq = self._get_cache(data)
-        freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
-        adj = _circular_nanmean(adj_freq[0, freq_id, :, :], axis=0)
+        adj = _circular_nanmean(adj_freq[0, self._band(freq), :, :], axis=0)
 
         # Coherency phase is antisymmetric. Select one computed orientation and
         # construct its opposite explicitly so branch-cut representations at
@@ -475,6 +534,7 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
 
 
 class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
+    _phase_based = True
     name = "Imaginary coherence"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -485,6 +545,7 @@ class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
 
 
 class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
+    _phase_based = True
     name = "Phase locking value"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -500,6 +561,7 @@ class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
 class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     # Antisymmetric in (i, j): sign of the imaginary coherency.
     _antisymmetric_spectrum = True
+    _phase_based = True
     name = "Phase lag index"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -512,6 +574,7 @@ class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
 class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     # Antisymmetric in (i, j): imaginary-coherency weighted sign.
     _antisymmetric_spectrum = True
+    _phase_based = True
     name = "Weighted phase lag index"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -533,9 +596,11 @@ class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected
     nonzero. At 0 Hz and at the Nyquist frequency the Fourier coefficients of a
     real signal are real, so every ``Im S_k`` is exactly zero: the estimator is
     0 there, and the backend's shortcut returned ``-1/(n - 1)`` (-0.25 at the
-    default five tapers) for every input.
+    default five tapers) for every input. Those two bins carry no phase and
+    are left out of the band statistic (see ``NonparametricSpectral``).
     """
 
+    _phase_based = True
     name = "Debiased squared phase lag index"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -558,6 +623,7 @@ class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected
 class DebiasedSquaredWeightedPhaseLagIndex(
     NonparametricSpectralMultivariate, Undirected
 ):
+    _phase_based = True
     name = "Debiased squared weighted phase-lag index"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -568,6 +634,7 @@ class DebiasedSquaredWeightedPhaseLagIndex(
 
 
 class PairwisePhaseConsistency(NonparametricSpectralMultivariate, Undirected):
+    _phase_based = True
     name = "Pairwise phase consistency"
     labels = ["unsigned", "spectral", "undirected"]
 
