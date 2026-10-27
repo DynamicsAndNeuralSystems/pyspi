@@ -1414,6 +1414,36 @@
       - fmin: 0.25
         fmax: 0.5
 
+# statistics that couple different frequencies
+.statistics.crossfreq:
+  # Phase-amplitude coupling, row phase -> column amplitude: modulation index
+  # (Tort et al. 2010) and normalised mean vector length (Ozkurt & Schnitzler 2011)
+  PhaseAmplitudeCoupling:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - M11
+    dependencies:
+    configs:
+      - phase_band: [0.01, 0.05]
+        amp_band: [0.15, 0.4]
+        statistic: mi
+
+      - phase_band: [0.01, 0.05]
+        amp_band: [0.15, 0.4]
+        statistic: mvl
+
+      - phase_band: [0.05, 0.1]
+        amp_band: [0.2, 0.45]
+        statistic: mi
+
+      - phase_band: [0.05, 0.1]
+        amp_band: [0.2, 0.45]
+        statistic: mvl
+
 .statistics.misc:
   LinearModel:
     # Lasso and ElasticNet are not bundled: at sklearn's default alpha=1 the L1
