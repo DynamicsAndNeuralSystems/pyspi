@@ -159,9 +159,11 @@ class NonparametricSpectral(Unsigned):
         if fmax is None:
             fmax = fs / 2
 
+        # `fs` is honoured: it reaches the multitaper estimate, the frequency
+        # grid the band is applied to, every cache key, and GroupDelay's
+        # conversion to samples. (A warning here said it was "not yet
+        # handled" long after it was.)
         self._fs = fs
-        if fs != 1:
-            warnings.warn("Multiple sampling frequencies not yet handled.")
         self._fmin = fmin
         self._fmax = fmax
         if statistic == "mean":
@@ -491,7 +493,15 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
 
 
 class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
-    name = "Coherence magnitude"
+    """Magnitude-squared coherence, ``|S_xy|^2 / (S_xx S_yy)``, in [0, 1].
+
+    The squared modulus of the multitaper coherency, which is what the
+    backend's ``coherence_magnitude`` returns despite its name; ``cohmag``
+    keeps that name in its identifiers. ``sqrt`` of it is the coherence
+    magnitude ``|C|``.
+    """
+
+    name = "Magnitude-squared coherence"
     labels = ["unsigned", "spectral", "undirected"]
 
     def __init__(self, **kwargs):
@@ -813,7 +823,9 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
 
     This is the unnormalised index. Nolte et al. divide it by a jackknife
     standard deviation over epochs, which a single recording does not provide,
-    so the value scales with the number of frequencies in the band.
+    so the value scales with the number of frequencies in the band. The
+    ``mean`` in its identifiers (``psi_multitaper_mean_*``) is the only
+    statistic it accepts and names this *sum* over the band, not an average.
 
     Computed here rather than by ``Connectivity.phase_slope_index``. In
     spectral-connectivity 2.0 that method sums over *all* pairs of frequencies,
@@ -1096,7 +1108,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         ignore_nan=True,
         nan_threshold=0.5,
     ):
-        self._fs = fs  # Not yet implemented
+        self._fs = fs  # Reaches the multitaper estimate and the frequency labels.
         self._fmin = fmin
         self._fmax = fmax
         self.ignore_nan = ignore_nan
