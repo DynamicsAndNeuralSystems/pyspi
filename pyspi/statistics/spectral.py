@@ -110,6 +110,12 @@ def _circular_nanmean(angles, axis):
 class NonparametricSpectral(Unsigned):
     """Base class for the nonparametric spectral methods from the Eden-Kramer repo"""
 
+    # The `statistic` values a class can apply. A band statistic reduces a
+    # spectrum over frequency; GroupDelay's three are outputs of a regression.
+    # Accepting one of GroupDelay's elsewhere used to fall through the
+    # dispatcher in `multivariate` and return the spectrum's 0 Hz bin.
+    _statistics = ("mean", "max")
+
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean"):
         if fmax is None:
             fmax = fs / 2
@@ -127,6 +133,10 @@ class NonparametricSpectral(Unsigned):
             raise NameError(f"Unknown statistic: {statistic}")
         else:
             self._statfn = None
+        if statistic not in self._statistics:
+            raise ValueError(
+                f"{type(self).__name__} does not support statistic="
+                f"{statistic!r}; it supports {', '.join(self._statistics)}.")
         self._statistic = statistic
 
         # Structural trait, derived from the implementation rather than assumed.
@@ -693,6 +703,10 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     _antisymmetric_spectrum = True
     name = "Phase slope index"
     labels = ["unsigned", "spectral", "undirected"]
+    # A sum over the band, not a band statistic of a spectrum: `max` was
+    # accepted and ignored, returning the default variant's matrix under a
+    # `_max_` identifier. `mean` is kept as the name the identifiers carry.
+    _statistics = ("mean",)
 
     # Frequency resolution of the multitaper estimate in FFT bins: twice the
     # backend's default time-halfbandwidth product of 3.
@@ -758,6 +772,7 @@ def _independent_significant_frequencies(p_values, step, alpha=0.05,
 class GroupDelay(NonparametricSpectralMultivariate, Directed):
     name = "Group delay"
     labels = ["unsigned", "spectral", "directed", "lagged"]
+    _statistics = ("delay", "slope", "rvalue")
 
     def __init__(self, **kwargs):
         self.identifier = "gd"

@@ -1,4 +1,4 @@
-"""Multitaper phase measures and group delay against independent references.
+"""Multitaper phase measures against independent references and their contracts.
 
 The references here do not go through spectral_connectivity: tapered Fourier
 coefficients come from ``scipy.signal.windows.dpss`` and ``numpy.fft.rfft``
@@ -8,7 +8,6 @@ published definition.
 """
 import numpy as np
 import pytest
-from scipy import stats
 from scipy.signal.windows import dpss
 
 from pyspi.data import Data
@@ -77,3 +76,48 @@ def test_debiased_squared_pli_is_zero_where_the_cross_spectrum_is_real():
         Data(Z, dim_order="ps", zscore=False))
     off = ~np.eye(3, dtype=bool)
     assert np.all(got[off] == 0), got[off]
+
+
+# --------------------------------------------------------------------------
+# A `statistic` an SPI cannot apply must be refused, not silently replaced
+# --------------------------------------------------------------------------
+
+def test_phase_slope_index_refuses_a_band_statistic():
+    """PSI is a sum over the band; there is no spectrum to take a maximum of.
+
+    ``PhaseSlopeIndex(statistic="max")`` used to return exactly the default
+    variant's matrix under a ``psi_multitaper_max_*`` identifier, labelled
+    ``asymmetric`` although the values were antisymmetric.
+    """
+    from pyspi.statistics.spectral import PhaseSlopeIndex
+
+    for statistic in ("max", "delay"):
+        with pytest.raises(ValueError, match="PhaseSlopeIndex"):
+            PhaseSlopeIndex(statistic=statistic)
+
+
+@pytest.mark.parametrize("cls_name", [
+    "CoherenceMagnitude", "ImaginaryCoherence", "PhaseLockingValue",
+    "PhaseLagIndex", "WeightedPhaseLagIndex", "PairwisePhaseConsistency",
+    "DebiasedSquaredPhaseLagIndex", "DebiasedSquaredWeightedPhaseLagIndex"])
+@pytest.mark.parametrize("statistic", ["delay", "slope", "rvalue"])
+def test_regression_statistics_belong_to_group_delay_only(cls_name, statistic):
+    """``statistic="delay"`` on a spectrum used to return its 0 Hz bin.
+
+    The band-statistic dispatcher fell through to GroupDelay's tuple branch on
+    the ``TypeError`` from calling ``None``, which indexed the spectrum's first
+    frequency, under an identifier such as ``cohmag_multitaper_delay_*``.
+    """
+    import pyspi.statistics.spectral as spectral
+
+    with pytest.raises(ValueError, match=cls_name):
+        getattr(spectral, cls_name)(statistic=statistic)
+
+
+@pytest.mark.parametrize("statistic", ["mean", "max"])
+def test_group_delay_refuses_a_band_statistic(statistic):
+    """It reported an ``IndexError`` from inside ``multivariate`` instead."""
+    from pyspi.statistics.spectral import GroupDelay
+
+    with pytest.raises(ValueError, match="GroupDelay"):
+        GroupDelay(statistic=statistic)
