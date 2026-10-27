@@ -1431,6 +1431,37 @@ class InfoTheoryBase(Unsigned):
             H_Y = self._entropy_calc.computeAverageLocalOfObservations()
             return H_XY - H_Y
 
+    def _per_process(self, data, tag, i, compute):
+        """``compute()`` for process ``i``, cached on ``data.entropy``.
+
+        For a quantity of one series that a pairwise statistic would otherwise
+        recompute for every partner. ``tag`` names it and carries every
+        parameter it depends on beyond ``_getkey()``. ``data.entropy`` is in
+        ``Data._CACHE_ATTRS``, so the cache is dropped when the series change.
+        """
+        if not hasattr(data, "entropy"):
+            data.entropy = {}
+        key = self._getkey() + tag
+        if key not in data.entropy:
+            data.entropy[key] = np.full((data.n_processes,), -np.inf)
+        if data.entropy[key][i] == -np.inf:
+            data.entropy[key][i] = compute()
+        return data.entropy[key][i]
+
+    def _upper_triangle_multivariate(self, data):
+        """Each unordered pair once, mirrored.
+
+        ``Undirected.multivariate`` evaluates both orders of every pair and then
+        overwrites the lower triangle with the upper. This evaluates only the
+        ``i < j`` values it keeps, so the result is identical at half the cost.
+        """
+        M = data.n_processes
+        A = np.full((M, M), np.nan)
+        for i in range(M):
+            for j in range(i + 1, M):
+                A[i, j] = A[j, i] = self.bivariate(data, i=i, j=j)
+        return A
+
     def _resolve_theiler(self, data, i, j):
         """Theiler/dynamic-correlation-exclusion window for pair (i, j).
 
@@ -1570,7 +1601,7 @@ class MutualInfo(InfoTheoryBase, Undirected):
                     mi = _ksg_mi_pair(Z[i], Z[j], k, w)
                     result[i, j] = result[j, i] = mi
             return result
-        return super().multivariate(data)
+        return self._upper_triangle_multivariate(data)
 
 
 class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
@@ -1922,9 +1953,15 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
         self._entropy_calc.setObservations(joint)
         H_xy = self._entropy_calc.computeAverageLocalOfObservations()
 
-        self._entropy_calc.initialise(src_past.shape[1])
-        self._entropy_calc.setObservations(src_past)
-        H_y = self._entropy_calc.computeAverageLocalOfObservations()
+        # H(source past) depends on the source alone: once per process, not
+        # once per (source, target) pair.
+        def source_past_entropy():
+            self._entropy_calc.initialise(src_past.shape[1])
+            self._entropy_calc.setObservations(src_past)
+            return self._entropy_calc.computeAverageLocalOfObservations()
+
+        H_y = self._per_process(data, ("xme_source_past", k), i,
+                                source_past_entropy)
 
         return H_xy - H_y
 
@@ -2083,10 +2120,19 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
         tau = self._delay
 
         H_joint = self._compute_conditional_entropy(xy[tau:], xy[:-tau])
-        H_src = self._compute_conditional_entropy(x[tau:], x[:-tau])
-        H_targ = self._compute_conditional_entropy(y[tau:], y[:-tau])
+        # H(X_t | X_{t-tau}) depends on one series: once per process, not once
+        # per pair.
+        tag = ("si_conditional", tau)
+        H_src = self._per_process(data, tag, i, lambda: (
+            self._compute_conditional_entropy(x[tau:], x[:-tau])))
+        H_targ = self._per_process(data, tag, j, lambda: (
+            self._compute_conditional_entropy(y[tau:], y[:-tau])))
 
         return H_src + H_targ - H_joint
+
+    @parse_multivariate
+    def multivariate(self, data):
+        return self._upper_triangle_multivariate(data)
 
 
 class IntegratedInformation(Undirected, Unsigned):

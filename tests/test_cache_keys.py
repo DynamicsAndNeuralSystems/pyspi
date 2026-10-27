@@ -146,3 +146,40 @@ def test_cache_sharing_never_changes_a_value():
         "parameter that changes the cached value is missing from the cache "
         "key:\n  " + "\n  ".join(sorted(mismatched))
     )
+
+
+def test_infotheory_per_process_caches_key_on_every_parameter():
+    """Per-series entropies cached on `data.entropy` must not leak between SPIs.
+
+    `StochasticInteraction` caches H(X_t | X_{t-delay}) per process and
+    `CrossmapEntropy` caches H(source past) per process. Alternating the
+    parameters those depend on (delay, history length, estimator, kernel
+    width) on one shared Data must reproduce a fresh Data at every step.
+    """
+    from pyspi.statistics.infotheory import CrossmapEntropy, StochasticInteraction
+
+    rng = np.random.default_rng(5)
+    z = rng.standard_normal((3, 150))
+    z[1, 1:] += 0.8 * z[0, :-1]
+
+    def fresh():
+        return Data(data=z.copy(), dim_order="ps", zscore=False)
+
+    makers = [
+        lambda: StochasticInteraction(delay=1, estimator="kernel"),
+        lambda: StochasticInteraction(delay=2, estimator="kernel"),
+        lambda: StochasticInteraction(delay=1, estimator="kernel", kernel_width=0.25),
+        lambda: StochasticInteraction(delay=1, estimator="kozachenko"),
+        lambda: CrossmapEntropy(history_length=1, estimator="kernel"),
+        lambda: CrossmapEntropy(history_length=3, estimator="kernel"),
+        lambda: CrossmapEntropy(history_length=3, estimator="kozachenko"),
+        lambda: CrossmapEntropy(history_length=3, estimator="gaussian"),
+    ]
+    shared = fresh()
+    for step in range(2):
+        for make in makers:
+            spi = make()
+            got = np.asarray(spi.multivariate(shared), float)
+            want = np.asarray(make().multivariate(fresh()), float)
+            assert np.array_equal(got, want, equal_nan=True), (
+                f"{spi.identifier}: stale per-process cache on pass {step + 1}")
