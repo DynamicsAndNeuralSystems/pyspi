@@ -261,6 +261,17 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (30 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
 - **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 
+### Added
+
+- **`ccm_E-{None,1,10}_convergence` and `ccm_E-None_slope`: CCM convergence statistics** (`ConvergentCrossMapping(statistic="convergence" | "slope")`; Sugihara et al. 2012, Science 338:496).
+  `convergence` is `rho(L_max) - rho(L_min)`, the cross-map skill at the largest library size minus the skill at the smallest, and `slope` is the least-squares slope of skill against `ln L` over the finite library sizes.
+  Both are signed and directed (negative when skill falls with L) and are read off the cached CCM skill curve.
+  `ConvergentCrossMapping` also has a `bivariate` method.
+- **`lccm_E-None_k-5_{tp,skill}`: lagged convergent cross-mapping** (`LaggedConvergentCrossMapping`, Ye et al. 2015, Sci. Rep. 5:14750).
+  For each ordered pair and each prediction horizon `Tp` in `[-k, k]` it computes the cross-map skill at the largest library size, with the target's shadow manifold at time t estimating the source at `t + Tp`.
+  `tp` is the horizon of peak skill: negative for a causal row -> column link (the target's manifold recovers the source's past), `>= 0` under synchrony.
+  `skill` is the peak skill.
+
 ### Dependencies
 
 - **Floors, relative to 2.0.2** (`pyproject.toml` is the source of truth):
