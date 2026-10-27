@@ -314,3 +314,28 @@ def test_parametric_sgc_order_selection_converges_on_the_kuramoto_fixture():
         Data(data=fixture, dim_order="sp"))
     off = ~np.eye(table.shape[0], dtype=bool)
     assert np.isfinite(table[off]).all() and (table[off] >= 0).all()
+
+
+@pytest.mark.parametrize("fs", [1, 4])
+def test_parametric_sgc_frequency_axis_is_where_the_spectrum_was_evaluated(fs):
+    """Each value must carry the frequency it was computed at.
+
+    nitime's ``GrangerAnalyzer.frequencies`` is ``linspace(0, fs/2, 513)``, but
+    ``granger_causality_xy`` evaluates the model through ``scipy.signal.freqz``
+    with ``worN=513``: at ``k/1026`` cycles per sample on ``[0, 1/2)``. Every
+    label but DC was off, by up to one grid step (the bin labelled Nyquist is
+    0.499), so the band was applied on a slightly stretched axis.
+    """
+    from pyspi.statistics.spectral import SpectralGrangerCausality
+
+    X = _driven_pair(T=2000)
+    data = Data(data=X, dim_order="ps", zscore=False)
+    spi = SpectralGrangerCausality(method="parametric", order=1, fs=fs,
+                                   fmin=0, fmax=fs / 2)
+    F, freq = spi._get_cache(data)
+    want, _ = _yule_walker_geweke(X, 1, np.asarray(freq) / fs)
+    err = np.abs(F[0, :, 1, 0] - want[:, 0, 1]).max()
+    assert err < 1e-9, (
+        f"fs={fs}: values differ from Geweke at their labelled frequencies by "
+        f"{err:.3g}; last label {freq[-1]!r}"
+    )

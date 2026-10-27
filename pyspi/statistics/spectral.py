@@ -1074,12 +1074,14 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                 # returns (w, f_x_on_y, f_y_on_x, ...) for the pair (x, y) =
                 # (z[i], z[j]), i.e. i -> j and then j -> i.
                 F = np.full((n_proc, n_proc, _GC_N_FREQS // 2 + 1), np.nan)
+                # freqz's grid, which granger_causality_xy returns as `w`.
+                w = np.linspace(0, np.pi, _GC_N_FREQS // 2 + 1, endpoint=False)
                 try:
                     for i in range(n_proc):
                         for j in range(i + 1, n_proc):
                             coef, ecov = _fit_bivariate_var(
                                 z[[i, j]], self._order, self._max_order)
-                            _, F[i, j], F[j, i], _, _ = nt_alg.granger_causality_xy(
+                            w, F[i, j], F[j, i], _, _ = nt_alg.granger_causality_xy(
                                 coef, ecov, n_freqs=_GC_N_FREQS)
                 except ValueError as err:
                     # The order search walks the lag up to `max_order` and
@@ -1105,9 +1107,13 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                     ) from err
 
                 F = np.transpose(np.expand_dims(F, axis=3), axes=[3, 2, 1, 0])
-                # On the [0, fs/2] axis, not [0, 1/2]: `fs` is in this SPI's
-                # identifier and cache key, so the band must be applied in Hz.
-                freq = nt_utils.get_freqs(self._fs, _GC_N_FREQS)
+                # The frequencies the model was evaluated at, in Hz: `w` is
+                # scipy.signal.freqz's grid, k*pi/513 rad on [0, pi). nitime's
+                # GrangerAnalyzer.frequencies labels the same values
+                # linspace(0, fs/2, 513), up to one grid step off, so the band
+                # was applied on a stretched axis. And Hz, not cycles/sample:
+                # `fs` is in this SPI's identifier and cache key.
+                freq = w * self._fs / (2 * np.pi)
             try:
                 data.spectral_gc[key] = {"freq": freq, "F": F}
             except AttributeError:
