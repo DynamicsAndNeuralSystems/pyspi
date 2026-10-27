@@ -9,6 +9,20 @@ from pyspi.base import Undirected, Signed, parse_bivariate, parse_multivariate
 from pyspi.utils import require_int
 
 
+def _spearman_matrix(Z):
+    """Spearman's rho between the rows of ``Z``: Pearson on average ranks.
+
+    The ranking and the ``np.corrcoef`` that ``stats.spearmanr(Z, axis=1)``
+    performs, so values are bit-identical, without its special cases: it
+    checks only its *first two* variables for constancy and, if either is
+    constant, returns one scalar NaN for the whole matrix (and with two rows
+    it returns a scalar). The SPI then raised and every pair was lost -- but
+    only when the constant series was process 0 or 1. Here a constant row
+    gives NaN in its own row and column and nowhere else.
+    """
+    return np.corrcoef(np.apply_along_axis(stats.rankdata, 1, Z))
+
+
 class Estimators(Undirected, Signed):
     """Base class for (functional) connectivity-based statistics
 
@@ -260,11 +274,9 @@ class SpearmanR(Undirected, Signed):
 
     @parse_multivariate
     def multivariate(self, data):
-        """Vectorized: scipy.stats.spearmanr on full (M, T) matrix at once."""
+        """Vectorized: Spearman's rho on the full (M, T) matrix at once."""
         Z = data.to_numpy(squeeze=True)  # (M, T)
-        rho, _ = stats.spearmanr(Z, axis=1)
-        if Z.shape[0] == 2:
-            rho = np.array([[1.0, rho], [rho, 1.0]])
+        rho = _spearman_matrix(Z)
         if self._squared:
             rho = rho ** 2
         np.fill_diagonal(rho, np.nan)
@@ -384,9 +396,7 @@ class LaggedCorrelation(Undirected, Signed):
             if self._estimator == "pearson":
                 C = np.corrcoef(Z)
             elif self._estimator == "spearman":
-                C, _ = stats.spearmanr(Z, axis=1)
-                if M == 2:
-                    C = np.array([[1.0, C], [C, 1.0]])
+                C = _spearman_matrix(Z)
             elif self._estimator == "kendall":
                 C = np.asarray(
                     pd.DataFrame(Z.T).corr(method="kendall").values, dtype=float
@@ -408,9 +418,7 @@ class LaggedCorrelation(Undirected, Signed):
             backward = C_full[M:, :M]
         elif self._estimator == "spearman":
             stacked = np.vstack([Z_lead, Z_lag])
-            rho, _ = stats.spearmanr(stacked, axis=1)
-            if stacked.shape[0] == 2:
-                rho = np.array([[1.0, rho], [rho, 1.0]])
+            rho = _spearman_matrix(stacked)
             forward = rho[:M, M:]
             backward = rho[M:, :M]
         elif self._estimator == "kendall":

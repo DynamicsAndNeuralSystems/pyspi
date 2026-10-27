@@ -81,6 +81,40 @@ def test_spearman_is_pearson_on_average_ranks(squared):
         assert spi.bivariate(_data(X), i=i, j=j) == pytest.approx(ref, abs=1e-12)
 
 
+@pytest.mark.parametrize("make", [
+    lambda: basic.SpearmanR(),
+    lambda: basic.LaggedCorrelation(estimator="spearman", tau=0),
+    lambda: basic.LaggedCorrelation(estimator="spearman", tau=1),
+], ids=["spearmanr", "corr_spearman_tau-0", "corr_spearman_tau-1"])
+@pytest.mark.parametrize("pos", [0, 1, 2, 3])
+def test_spearman_matrix_survives_a_constant_series_in_any_position(make, pos):
+    """A constant series has no rank correlation; nobody else loses theirs.
+
+    ``scipy.stats.spearmanr(Z, axis=1)`` checks only its first two variables
+    for constancy, and if either is constant returns one scalar NaN for the
+    whole matrix. The SPI then raised (``'float' object is not
+    subscriptable`` / ``has no attribute 'ndim'``), so every pair of the
+    dataset was lost -- but only when the constant series (or, for a lagged
+    SPI, its lead segment ``x[tau:]``) happened to be process 0 or 1. In
+    position 2 or 3 the same data gave NaN for that series alone.
+    """
+    rng = np.random.default_rng(5)
+    X = rng.standard_normal((4, 80))
+    X[pos] = 1.5
+    spi = make()
+    got = spi.multivariate(_data(X, zscore=False))
+    tau = getattr(spi, "_tau", 0)
+    for i, j in _pairs(4):
+        if pos in (i, j):
+            assert np.isnan(got[i, j])
+            continue
+        x, y = X[i], X[j]
+        ref = (_rank_pearson(x, y) if tau == 0 else
+               0.5 * (_rank_pearson(x[tau:], y[:-tau])
+                      + _rank_pearson(y[tau:], x[:-tau])))
+        assert got[i, j] == pytest.approx(ref, abs=1e-12)
+
+
 @pytest.mark.parametrize("squared", [False, True])
 def test_kendall_is_tau_b_with_ties(squared):
     """scipy's default variant, tau-b: ties are discounted in the denominator."""
