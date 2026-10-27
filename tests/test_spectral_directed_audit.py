@@ -292,10 +292,17 @@ def test_parametric_sgc_is_yule_walker_plus_geweke(order, pair):
     want, Sigma = _yule_walker_geweke(x, order, np.arange(n) / (2 * n))
     assert np.linalg.eigvalsh(Sigma).min() > 0      # the reference is a valid model
 
+    # The LWR recursion and the dense solve are different algorithms on a
+    # Toeplitz system whose conditioning worsens with the order; at order 20
+    # they agree to 1e-10 on macOS Accelerate but only to 4e-8 on the Linux
+    # OpenBLAS runners. 1e-6 is the cross-platform tolerance the drift suite
+    # already applies to `sgc_parametric` (CHANGELOG, "Cross-platform drift
+    # tolerances"), and the code under audit missed this reference by 5.9.
+    tol = 1e-6 * max(1.0, np.abs(want).max())
     for src, tgt in ((0, 1), (1, 0)):
         got = F[0, :, tgt, src]
         err = np.nanmax(np.abs(got - want[:, src, tgt])) if np.isfinite(got).any() else np.inf
-        assert np.isfinite(got).all() and err < 1e-8 * max(1.0, np.abs(want).max()), (
+        assert np.isfinite(got).all() and err < tol, (
             f"pair {pair}, order {order}, {src}->{tgt}: max |pyspi - Yule-Walker/"
             f"Geweke| = {err:.3g} ({np.isnan(got).sum()} NaN of {got.size} "
             f"frequencies; min pyspi value {np.nanmin(got) if np.isfinite(got).any() else np.nan:.3g})"
