@@ -65,3 +65,37 @@ def test_soft_dtw_applies_its_global_constraint(constraint):
         # Restricting the alignments can only raise the soft minimum.
         plain = SoftDynamicTimeWarping().bivariate(data, i=0, j=1)
         assert value > plain + 1.0
+
+
+# --------------------------------------------------------------------------
+# Cross-distance correlation and cross-MGC (hyppo DcorrX / MGCX)
+# --------------------------------------------------------------------------
+
+def _driven_pair(T=300, seed=0):
+    """Process 0 drives process 1 at lag 1, with no feedback."""
+    rng = np.random.default_rng(seed)
+    x = np.zeros(T)
+    y = np.zeros(T)
+    ex, ey = rng.standard_normal(T), rng.standard_normal(T)
+    for t in range(1, T):
+        x[t] = 0.5 * x[t - 1] + ex[t]
+        y[t] = 0.5 * y[t - 1] + 0.8 * x[t - 1] + ey[t]
+    return Data(np.vstack([x, y]))
+
+
+@pytest.mark.parametrize("cls_name", ["CrossDistanceCorrelation",
+                                      "CrossMultiscaleGraphCorrelation"])
+@pytest.mark.parametrize("max_lag", [1, 10])
+def test_cross_distance_statistics_are_source_by_target(cls_name, max_lag):
+    """A[0, 1] (0 -> 1, the true direction) must exceed A[1, 0].
+
+    hyppo's `DcorrX(x, y)` pairs the present of `x` with the past of `y`, so
+    it measures y -> x; pyspi's convention (`base.Directed`) is row = source,
+    column = target.
+    """
+    import pyspi.statistics.distance as distance
+
+    spi = getattr(distance, cls_name)(max_lag=max_lag)
+    A = np.asarray(spi.multivariate(_driven_pair()), dtype=float)
+    assert A[0, 1] > A[1, 0] + 0.1, (
+        f"{spi.identifier}: A[0,1]={A[0, 1]:.4f}, A[1,0]={A[1, 0]:.4f}")

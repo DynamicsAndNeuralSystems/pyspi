@@ -181,9 +181,11 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        # hyppo pairs the present of its first argument with the past of its
+        # second, so DcorrX(x, y) measures y -> x. Source i goes second.
         z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x = z[j]
+        y = z[i]
         stat, _ = DcorrX(max_lag=self._max_lag).statistic(x, y)
         return stat
 
@@ -201,9 +203,10 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        # As for DcorrX: MGCX(x, y) measures y -> x, so source i goes second.
         z = data.to_numpy()
-        x = z[i]
-        y = z[j]
+        x = z[j]
+        y = z[i]
         stat, _, _ = MGCX(max_lag=self._max_lag).statistic(x, y)
         return stat
 
