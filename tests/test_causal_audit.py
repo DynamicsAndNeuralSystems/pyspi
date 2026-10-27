@@ -142,3 +142,49 @@ def test_igci_slope_estimator_follows_the_documented_sign():
     assert slope == pytest.approx(C_yx - C_xy, rel=1e-12), (
         f"slope estimator returned {slope:.4f}; the paper's C_yx - C_xy is "
         f"{C_yx - C_xy:.4f} (> 0 for x -> y, matching the entropy estimator)")
+
+
+@pytest.mark.parametrize("E", [1, 3])
+def test_ccm_cross_map_skill_is_bit_identical_to_pyedm(E):
+    """`_cross_map_skill` is pyEDM 2.5's CCM, computed once per library variable.
+
+    pyspi computes the simplex neighbours and weights of each variable's
+    shadow manifold once and applies them to every target, where
+    `pyEDM.CCM(columns=a, target=b)` recomputes them for each pair. That is
+    only a speedup if the numbers are exactly pyEDM's, both directions, for
+    one target or several at once. A pyEDM release that changes its CCM
+    algorithm or its seeding will fail here, which is the point.
+    """
+    import pandas as pd
+    import pyEDM
+
+    from pyspi.statistics.causal import _ccm_library_sizes, _cross_map_skill
+
+    rng = np.random.default_rng(11)
+    N = 70
+    z = np.vstack([_coupled_logistic(N)[0], _coupled_logistic(N)[1],
+                   rng.standard_normal(N)])
+    df = pd.DataFrame(np.column_stack([np.arange(N), z.T]),
+                      columns=["index", "a", "b", "c"])
+    names = ["a", "b", "c"]
+    lib_sizes = _ccm_library_sizes(N, E)
+    sample = 20
+
+    for i in range(3):
+        targets = [j for j in range(3) if j != i]
+        together = _cross_map_skill(z[i], [z[j] for j in targets], E,
+                                    lib_sizes, sample=sample, seed=42)
+        for row, j in zip(together, targets):
+            ref = pyEDM.CCM(dataFrame=df, E=E, columns=names[i],
+                            target=names[j], libSizes=lib_sizes, sample=sample,
+                            seed=42, parallel=False)
+            expected = ref[f"{names[i]}:{names[j]}"].to_numpy()
+            alone = _cross_map_skill(z[i], [z[j]], E, lib_sizes,
+                                     sample=sample, seed=42)[0]
+            assert np.array_equal(row, expected), (names[i], names[j])
+            assert np.array_equal(alone, expected), (names[i], names[j])
+            # and pyEDM's reverse column is the same computation from j's side
+            reverse = _cross_map_skill(z[j], [z[i]], E, lib_sizes,
+                                       sample=sample, seed=42)[0]
+            assert np.array_equal(
+                reverse, ref[f"{names[j]}:{names[i]}"].to_numpy())
