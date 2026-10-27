@@ -1918,6 +1918,11 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     consistent -- "k source lags" would need ``range(2, k + 1)`` -- and the
     implementation has always been the second one.
 
+    The exception is ``history_length=1``. The first source column,
+    ``X_{t-1}``, is always present, so k=1 also has one source lag and a
+    two-column joint space: the shipped ``xme_*_k1`` is ``H(Y_t | X_{t-1})``,
+    the same quantity as k=2 estimated on one more row, not ``H(Y_t)``.
+
     It is documented here rather than changed. Cross-map entropy has no
     canonical published definition to arbitrate between the two conventions,
     and silently re-picking one would change every ``xme_*`` value on a guess

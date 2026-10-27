@@ -452,6 +452,108 @@ def test_gaussian_ridge_is_equivariant_to_per_variable_rescaling():
 
 
 # ---------------------------------------------------------------------------
+# Composite measures on a VAR(1) with a closed-form joint distribution
+# ---------------------------------------------------------------------------
+
+def test_gaussian_composite_measures_match_the_var1_closed_form():
+    """Every Gaussian composite measure against its exact value on a VAR(1).
+
+    z_t = A z_{t-1} + e_t with x -> y coupling and correlated innovations. The
+    stationary lag covariances are Gamma_k = A^k Gamma_0, with Gamma_0 from the
+    discrete Lyapunov equation, so the entropy of any set of lagged variables
+    is closed-form. Elsewhere these classes are checked only for the sign of a
+    coupling effect, which a wrong lag, a missing current source sample or a
+    transposed table would survive. The definitions pinned here:
+
+        ConditionalEntropy[i, j]     = H(x_j | x_i)
+        TimeLaggedMutualInfo[i, j]   = I(x_i(t-1); x_j(t))
+        CausalEntropy(n)[i, j]       = sum_{m=1..n} H(Y_t | Y_{t-1..t-m+1}, X_{t..t-m+1})
+        DirectedInfo(n)[i, j]        = sum_{m=1..n} I(X_{t..t-m+1}; Y_t | Y_{t-1..t-m+1})
+        CrossmapEntropy(k)[i, j]     = H(Y_t | X_{t-1..t-max(k-1, 1)})
+        StochasticInteraction(tau)   = H(X_t|X_{t-tau}) + H(Y_t|Y_{t-tau})
+                                       - H(X_t, Y_t | X_{t-tau}, Y_{t-tau})
+
+    Each plausible misreading differs from these by 0.10-0.60 nats here
+    (reversed conditioning 0.60, CCE without the current source sample 0.13,
+    xme k=1 read as H(Y_t) 0.53, SI at the wrong delay 0.10, TLMI read as MI
+    0.19); the sampling error at T=100000 is ~0.005.
+    """
+    from scipy.linalg import solve_discrete_lyapunov
+
+    A = np.array([[0.8, 0.0], [0.7, 0.6]])
+    Se = np.array([[1.0, 0.3], [0.3, 1.5]])
+    G0 = solve_discrete_lyapunov(A, Se)
+
+    def lag_cov(k):        # E[z_t z_{t+k}^T] for k >= 0, i.e. Gamma_k^T
+        return (np.linalg.matrix_power(A, k) @ G0).T
+
+    def H(vs):             # vs: list of (process, lag), meaning z[process]_{t-lag}
+        if not vs:
+            return 0.0
+        C = np.empty((len(vs), len(vs)))
+        for a, (p, la) in enumerate(vs):
+            for b, (q, lb) in enumerate(vs):
+                C[a, b] = (lag_cov(la - lb)[p, q] if la >= lb
+                           else lag_cov(lb - la).T[p, q])
+        return 0.5 * len(vs) * np.log(2 * np.pi * np.e) + 0.5 * np.linalg.slogdet(C)[1]
+
+    def Hc(a, b):
+        return H(a + b) - H(b)
+
+    X, Y = 0, 1
+    rng = np.random.default_rng(0)
+    T = 100_000
+    e = np.linalg.cholesky(Se) @ rng.standard_normal((2, T + 500))
+    z = np.zeros_like(e)
+    for t in range(1, z.shape[1]):
+        z[:, t] = A @ z[:, t - 1] + e[:, t]
+    data = Data(z[:, 500:], dim_order="ps", zscore=False)
+
+    def cce(n):
+        return sum(Hc([(Y, 0)], [(Y, l) for l in range(1, m)]
+                      + [(X, l) for l in range(m)]) for m in range(1, n + 1))
+
+    def di(n):
+        return sum(Hc([(Y, 0)], [(Y, l) for l in range(1, m)])
+                   - Hc([(Y, 0)], [(Y, l) for l in range(1, m)]
+                        + [(X, l) for l in range(m)]) for m in range(1, n + 1))
+
+    def si(tau):
+        return (Hc([(X, 0)], [(X, tau)]) + Hc([(Y, 0)], [(Y, tau)])
+                - Hc([(X, 0), (Y, 0)], [(X, tau), (Y, tau)]))
+
+    def tlmi(src, tgt):
+        return H([(src, 1)]) + H([(tgt, 0)]) - H([(src, 1), (tgt, 0)])
+
+    ce = ConditionalEntropy(estimator="gaussian").multivariate(data)
+    tl = TimeLaggedMutualInfo(estimator="gaussian").multivariate(data)
+    cases = {
+        "JointEntropy": (JointEntropy(estimator="gaussian").multivariate(data)[0, 1],
+                         H([(X, 0), (Y, 0)])),
+        "ConditionalEntropy[x, y]": (ce[0, 1], Hc([(Y, 0)], [(X, 0)])),
+        "ConditionalEntropy[y, x]": (ce[1, 0], Hc([(X, 0)], [(Y, 0)])),
+        "TimeLaggedMutualInfo[x, y]": (tl[0, 1], tlmi(X, Y)),
+        "TimeLaggedMutualInfo[y, x]": (tl[1, 0], tlmi(Y, X)),
+        "CausalEntropy(n=3)": (CausalEntropy(estimator="gaussian", n=3)
+                               .bivariate(data, i=0, j=1), cce(3)),
+        "DirectedInfo(n=3)": (DirectedInfo(estimator="gaussian", n=3)
+                              .bivariate(data, i=0, j=1), di(3)),
+        "CrossmapEntropy(k=1)": (CrossmapEntropy(estimator="gaussian", history_length=1)
+                                 .bivariate(data, i=0, j=1), Hc([(Y, 0)], [(X, 1)])),
+        "CrossmapEntropy(k=4)": (CrossmapEntropy(estimator="gaussian", history_length=4)
+                                 .bivariate(data, i=0, j=1),
+                                 Hc([(Y, 0)], [(X, 1), (X, 2), (X, 3)])),
+        "StochasticInteraction(1)": (StochasticInteraction(estimator="gaussian")
+                                     .bivariate(data, i=0, j=1), si(1)),
+        "StochasticInteraction(2)": (StochasticInteraction(estimator="gaussian", delay=2)
+                                     .bivariate(data, i=0, j=1), si(2)),
+    }
+    bad = {name: f"got {got:.4f}, closed form {want:.4f}"
+           for name, (got, want) in cases.items() if abs(got - want) > 0.02}
+    assert not bad, bad
+
+
+# ---------------------------------------------------------------------------
 # Transfer-entropy auto-embedding
 # ---------------------------------------------------------------------------
 

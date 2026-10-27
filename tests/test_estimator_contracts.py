@@ -731,18 +731,19 @@ def test_dyn_corr_excl_value_reaches_the_identifier_and_the_cache_key():
     assert len({s._getkey() for s in spis}) == 3
 
 
-def test_crossmap_entropy_embedding_dimension():
+@pytest.mark.parametrize("k, dims", [(6, [6, 5]), (2, [2, 1]), (1, [2, 1])])
+def test_crossmap_entropy_embedding_dimension(k, dims):
     """`history_length=k` gives k-1 source lags and a k-column joint space.
 
     Pinned rather than corrected: both readings of the parameter are internally
     consistent, cross-map entropy has no canonical published definition to
     arbitrate between them, and re-picking one would change every `xme_*` value
-    on a guess about intent. See the class docstring.
+    on a guess about intent. See the class docstring. The exception is the
+    shipped k=1, which keeps the one source lag X_{t-1} (as k=2 does).
     """
     import pyspi.statistics.infotheory as it
     from pyspi.data import Data
 
-    k = 6
     rng = np.random.default_rng(0)
     data = Data(data=rng.standard_normal((2, 200)), dim_order="ps")
 
@@ -756,7 +757,7 @@ def test_crossmap_entropy_embedding_dimension():
 
     spi._entropy_calc.initialise = record
     spi.bivariate(data, i=0, j=1)
-    assert seen["dims"] == [k, k - 1], seen["dims"]
+    assert seen["dims"] == dims, seen["dims"]
 
 
 def test_cointegration_aeg_tstat_is_signed_and_johansen_is_not():
