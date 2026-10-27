@@ -89,7 +89,9 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         z = data.to_numpy()
-        return cds_score(z[i], z[j])
+        # Undefined (NaN), not 0, when fewer than two x-bins can be compared:
+        # 0 would be the strongest evidence for i -> j the statistic can give.
+        return cds_score(z[i], z[j], min_conditionals=2)
 
 
 class RegressionErrorCausalInference(Directed, Unsigned):

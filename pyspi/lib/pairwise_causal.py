@@ -128,8 +128,15 @@ def _discretized_sequence(x, ffactor, maxdev, norm=True):
     return x
 
 
-def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12):
-    """Std. of the rescaled y values after binning in x; lower favours x -> y."""
+def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12, min_conditionals=0):
+    """Std. of the rescaled y values after binning in x; lower favours x -> y.
+
+    The statistic is the spread of P(y | x = a) across the x-bins ``a`` holding
+    more than ``minc`` points. With fewer than two such bins there is nothing
+    to compare: cdt (and the default here) returns 0 when there are none and a
+    spread of exactly 0 when there is one -- the strongest possible evidence
+    for x -> y. ``min_conditionals=2`` returns NaN instead.
+    """
     if isinstance(x_te, np.ndarray):
         x_te = pd.Series(np.asarray(x_te).reshape(-1))
         y_te = pd.Series(np.asarray(y_te).reshape(-1))
@@ -167,6 +174,8 @@ def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12):
                             dtype=float)
         pyx.append(pyxa / pyxa.sum())
 
+    if len(pyx) < min_conditionals:
+        return np.nan
     if not pyx:
         return 0
     pyx = np.array(pyx)

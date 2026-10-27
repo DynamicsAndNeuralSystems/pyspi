@@ -171,6 +171,14 @@ OBSERVED_EMPTY_CASES = {
     for name in ("independent_gaussian", "binary", "four_level", "heavy_tailed")
     for seed in SEEDS
     for T in (T_SHORT, T_LONG)
+} | {
+    # CDS compares P(y | x = a) across x-bins with more than 12 points and is
+    # undefined (NaN) with fewer than two such bins. All three processes here
+    # are one series up to scale, and at T=64 it fills at most one bin; this
+    # used to come back as 0, the strongest evidence CDS can give, for every
+    # pair (tests/test_causal_audit.py).
+    ("cds", "duplicate_and_collinear", seed, T_SHORT)
+    for seed in SEEDS
 }
 
 # (SPI label, fixture, seed, T) -> (exception class, message regex).

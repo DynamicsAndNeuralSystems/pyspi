@@ -233,3 +233,56 @@ def test_anm_shared_factorisation_is_bit_identical_to_sklearn(T):
     assert np.array_equal(got, expected, equal_nan=True), np.nanmax(
         np.abs(got - expected))
     assert AdditiveNoiseModel().bivariate(data, i=2, j=1) == expected[2, 1]
+
+
+# ---------------------------------------------------------------------------
+# Conditional distribution similarity
+# ---------------------------------------------------------------------------
+
+def _cds_populated_bins(x, ffactor=2, maxdev=3, minc=12):
+    """How many x-bins hold more than `minc` points (Fonollosa 2016).
+
+    x is standardised, re-standardised on its points within `maxdev`
+    deviations, then rounded to a grid of 1/ffactor and clipped at
+    +/- ffactor*maxdev: the conditioning bins of the CDS statistic.
+    """
+    x = (x - x.mean()) / x.std()
+    core = x[np.abs(x) < maxdev]
+    x = np.clip(np.round((x - core.mean()) / core.std() * ffactor),
+                -ffactor * maxdev, ffactor * maxdev)
+    _, counts = np.unique(x, return_counts=True)
+    return int(np.sum(counts > minc))
+
+
+def test_cds_is_undefined_not_zero_when_conditionals_cannot_be_compared():
+    """CDS is the spread of P(y | x = a) across the x-bins a (Fonollosa 2016).
+
+    It needs at least two bins with more than `minc` = 12 points. With fewer,
+    cdt returns 0 -- with one bin the spread is trivially 0, with none it is a
+    hard-coded 0 -- and 0 is the *strongest* evidence the statistic can give
+    for x -> y (lower favours x -> y). At T=64 that is most series: on
+    independent Gaussian noise the SPI reported A[0, j] = A[1, j] = 0 (perfect
+    evidence that 0 and 1 drive everything) against ~0.02 for process 2.
+    Undefined must be NaN.
+    """
+    from pyspi.lib.pairwise_causal import cds_score
+    from pyspi.statistics.causal import ConditionalDistributionSimilarity
+
+    rng = np.random.default_rng(0)
+    Z = rng.standard_normal((3, 64))
+    data = Data(Z, dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+    A = np.asarray(ConditionalDistributionSimilarity().multivariate(data), float)
+
+    bins = [_cds_populated_bins(z[i]) for i in range(3)]
+    assert min(bins) < 2 <= max(bins), bins   # both cases occur here
+    for i in range(3):
+        for j in range(3):
+            if i == j:
+                continue
+            if bins[i] < 2:
+                assert np.isnan(A[i, j]), (
+                    f"x=process {i} has {bins[i]} usable bin(s); CDS is "
+                    f"undefined but the SPI returned {A[i, j]!r}")
+            else:
+                assert A[i, j] == cds_score(z[i], z[j]) > 0
