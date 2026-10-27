@@ -63,3 +63,40 @@ def test_ccm_rows_are_sources_on_sugiharas_coupled_logistic_map(x_drives_y):
         statistic="diff", embedding_dimension=2).multivariate(x_drives_y))
     assert D[X, Y] > 0.5 and D[Y, X] == -D[X, Y], (
         f"ccm diff must be positive from the driver: got D[X,Y]={D[X, Y]:.3f}")
+
+
+def test_ccm_library_sizes_reach_the_largest_library():
+    """The convergence statistics must include the largest library size.
+
+    `_from_cache` spans library sizes from ``ceil(2E/10)*10`` to
+    ``floor((N-E-1)/10)*10`` in ``nlibs = 21`` steps. Cross-map skill converges
+    *upwards* with library size (Sugihara et al. 2012, Fig. 2), so on a system
+    with genuine coupling the skill at the top library is where the evidence
+    is, and ``max`` over the advertised range can never be below it.
+
+    The oracle is pyEDM's own CCM evaluated at that single top library size,
+    with the same seed and sample count (pyEDM seeds every library size from
+    the same stream, so the value is exactly what a multi-size call computes
+    at that size).
+    """
+    import pandas as pd
+    import pyEDM
+
+    from pyspi.statistics.causal import ConvergentCrossMapping
+
+    T, E = 100, 2
+    data = Data(_coupled_logistic(T), dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+    df = pd.DataFrame(np.column_stack([np.arange(T), z.T]),
+                      columns=["index", "proc0", "proc1"])
+    top = int(np.floor((T - E - 1) / 10) * 10)
+    skill_at_top = float(pyEDM.CCM(
+        dataFrame=df, E=E, columns="proc1", target="proc0", libSizes=[top],
+        sample=100, seed=42, parallel=False)["proc1:proc0"].iloc[0])
+
+    A = np.asarray(ConvergentCrossMapping(
+        statistic="max", embedding_dimension=E).multivariate(data))
+    assert A[0, 1] >= skill_at_top - 1e-12, (
+        f"ccm max = {A[0, 1]:.4f} is below the skill at the largest library "
+        f"(L={top}: {skill_at_top:.4f}); the largest library sizes are being "
+        f"dropped.")

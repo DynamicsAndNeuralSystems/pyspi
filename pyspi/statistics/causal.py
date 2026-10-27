@@ -245,11 +245,21 @@ class ConvergentCrossMapping(Directed, Signed):
                     except NameError:
                         E = int(self._E)
 
-                    # Get list of library sizes given nlibs and lower/upper bounds based on embedding dimension
+                    # nlibs + 1 library sizes from lowerE to upperE inclusive
+                    # (fewer, NaN-padded, when the span is under nlibs).
+                    # This was "lowerE upperE inc" with inc rounded down, which
+                    # yields more than nlibs + 1 sizes whenever nlibs does not
+                    # divide the span (27 at N=100, E=1), and the excess -- the
+                    # largest libraries, where cross-map skill converges -- was
+                    # then cut off by a [: nlibs + 1] truncation.
                     upperE = int(np.floor((N - E - 1) / 10) * 10)
                     lowerE = int(np.ceil(2 * E / 10) * 10)
-                    inc = int((upperE - lowerE) / nlibs)
-                    lib_sizes = str(lowerE) + " " + str(upperE) + " " + str(inc)
+                    if upperE < lowerE:
+                        raise ValueError(
+                            f"CCM at E={E} needs library sizes from {lowerE} "
+                            f"to {upperE}; {N} observations are too few.")
+                    lib_sizes = [int(L) for L in np.unique(np.rint(
+                        np.linspace(lowerE, upperE, nlibs + 1)))]
                     srcname = df.columns.values[_i + 1]
                     targname = df.columns.values[_j + 1]
                     ccm_df = pyEDM.CCM(
@@ -267,8 +277,10 @@ class ConvergentCrossMapping(Directed, Signed):
                     # Sugihara et al. (2012) read as evidence that b drives a.
                     # Row = source, column = target, so the i -> j cell takes
                     # "j:i", the skill of j's manifold at recovering i.
-                    ccmf[_i, _j] = ccm_df[f"{targname}:{srcname}"].values[: (nlibs + 1)]
-                    ccmf[_j, _i] = ccm_df[f"{srcname}:{targname}"].values[: (nlibs + 1)]
+                    n = len(lib_sizes)
+                    ccmf[[_i, _j], [_j, _i], n:] = np.nan
+                    ccmf[_i, _j, :n] = ccm_df[f"{targname}:{srcname}"].values
+                    ccmf[_j, _i, :n] = ccm_df[f"{srcname}:{targname}"].values
 
             try:
                 data.ccm[self.key] = ccmf
