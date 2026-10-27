@@ -1,8 +1,9 @@
 """Audit checks for `pyspi.statistics.causal`, against published definitions.
 
 Each test has an independent oracle: a closed-form relation, a direct
-re-implementation from the paper, or a synthetic system whose causal direction
-is known by construction. Convergent cross-mapping is checked on the coupled
+re-implementation from the paper, a synthetic system whose causal direction
+is known by construction, or (for the two speedups, which must not move a
+value) the third-party implementation they replace. Convergent cross-mapping is checked on the coupled
 logistic maps of Sugihara et al. (2012), Science 338:496, where the result to
 reproduce is the paper's own: if X drives Y and not the reverse, the shadow
 manifold of Y cross-maps X with converging skill, and the shadow manifold of X
@@ -15,7 +16,7 @@ from pyspi.data import Data
 
 
 def _coupled_logistic(T, beta_xy=0.0, beta_yx=0.1, rx=3.8, ry=3.5, burn=300):
-    """Sugihara et al. (2012), Eq. (1) of the SOM.
+    """The coupled logistic maps of Sugihara et al. (2012), SOM.
 
     X(t+1) = X(t) [rx - rx X(t) - beta_xy Y(t)]
     Y(t+1) = Y(t) [ry - ry Y(t) - beta_yx X(t)]
