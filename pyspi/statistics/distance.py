@@ -2,6 +2,7 @@ import functools
 import os
 import warnings
 import numpy as np
+from scipy.stats import rankdata
 from sklearn.metrics import pairwise_distances, pairwise_kernels
 import tslearn.metrics
 from tslearn.barycenters import (
@@ -13,7 +14,6 @@ from tslearn.barycenters import (
 from hyppo.independence import (
     MGC,
     Dcorr,
-    HHG,
 )
 
 from pyspi.base import (
@@ -129,8 +129,89 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
         return Dcorr(bias=self._biased, compute_distance=None).statistic(dx, dy)
 
 
+def _row_dominance_counts(rx, ry):
+    """``c[i, j] = #{k : rx[i, k] <= rx[i, j] and ry[i, k] <= ry[i, j]}``.
+
+    ``rx`` and ``ry`` are row-wise max-ranks (1..n). Offline 2-D dominance
+    counting with one Fenwick tree per row, all rows at once: because ranks
+    are max-ranks, the ``k`` with ``rx[i, k] <= rx[i, j]`` are exactly the first
+    ``rx[i, j]`` entries of row ``i`` in ``rx`` order, so ``j``'s query is
+    answered once that many entries have been inserted. O(n log n) per row.
+    """
+    n_rows, n = rx.shape
+    n_bits = n.bit_length()
+    rows = np.arange(n_rows)
+    ry_in_rx_order = np.take_along_axis(
+        ry, np.argsort(rx, axis=1, kind="stable"), axis=1)
+    # Queries grouped by the prefix length p = rx at which they are answered.
+    q_order = np.argsort(rx, axis=None, kind="stable")
+    bounds = np.searchsorted(rx.ravel()[q_order], np.arange(1, n + 2))
+    q_rows = q_order // n
+    q_vals = ry.ravel()[q_order]
+    # Column n + 1 absorbs updates that run past the end of the tree.
+    tree = np.zeros((n_rows, n + 2), dtype=np.int64)
+    out = np.zeros(n_rows * n, dtype=np.int64)
+    for p in range(1, n + 1):
+        idx = ry_in_rx_order[:, p - 1].copy()
+        for _ in range(n_bits):
+            tree[rows, idx] += 1
+            idx += idx & -idx
+            np.minimum(idx, n + 1, out=idx)
+        lo, hi = bounds[p - 1], bounds[p]
+        if hi > lo:
+            q_r = q_rows[lo:hi]
+            idx = q_vals[lo:hi].copy()
+            acc = np.zeros(hi - lo, dtype=np.int64)
+            for _ in range(n_bits):
+                acc += tree[q_r, idx]  # tree[:, 0] stays 0
+                idx -= idx & -idx
+            out[q_order[lo:hi]] = acc
+    return out.reshape(n_rows, n)
+
+
+_HHG_CHUNK_ENTRIES = 2**22
+
+
+def _hhg_statistic(x, y):
+    """hyppo's ``HHG().statistic(x, y)``, bit for bit, in O(n^2 log n).
+
+    The sum over ``i != j`` of Pearson's chi-square for the 2x2 table that
+    splits the other samples by ``d_x(i, .) <= d_x(i, j)`` and
+    ``d_y(i, .) <= d_y(i, j)`` (Heller, Heller & Gorfine 2013). hyppo forms each
+    table by scanning all ``k``, O(n^3); its counts are row-wise ranks and 2-D
+    dominance counts, so they are computed that way here, as integers, then
+    combined with hyppo's int64 arithmetic and summed as hyppo sums them.
+    """
+    distx = pairwise_distances(x, metric="euclidean")
+    disty = pairwise_distances(y, metric="euclidean")
+    n = distx.shape[0]
+    S = np.zeros((n, n))
+    # Rows are independent; bound the int64 work arrays' size.
+    step = max(1, _HHG_CHUNK_ENTRIES // n)
+    for start in range(0, n, step):
+        stop = min(n, start + step)
+        # #{k : d[i, k] <= d[i, j]}, which counts k = i and k = j themselves.
+        na = rankdata(distx[start:stop], method="max", axis=1).astype(np.int64)
+        nb = rankdata(disty[start:stop], method="max", axis=1).astype(np.int64)
+        nab = _row_dominance_counts(na, nb)
+        t11 = nab - 2
+        t12 = na - nab
+        t21 = nb - nab
+        t22 = n - na - nb + nab
+        denom = (t11 + t12) * (t21 + t22) * (t11 + t21) * (t12 + t22)
+        num = (n - 2) * (t12 * t21 - t11 * t22) ** 2
+        block = np.zeros((stop - start, n))
+        ok = denom > 0
+        block[ok] = num[ok] / denom[ok]
+        S[start:stop] = block
+    np.fill_diagonal(S, 0)
+    mask = np.ones(S.shape, dtype=bool)
+    np.fill_diagonal(mask, 0)
+    return np.sum(S[mask])
+
+
 class HellerHellerGorfine(Undirected, Unsigned):
-    """Heller-Heller-Gorfine independence criterion"""
+    """Heller-Heller-Gorfine independence criterion (see `_hhg_statistic`)."""
 
     name = "Heller-Heller-Gorfine Independence Criterion"
     identifier = "hhg"
@@ -140,8 +221,7 @@ class HellerHellerGorfine(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        stat = HHG().statistic(x, y)
-        return stat
+        return _hhg_statistic(x, y)
 
 
 class DistanceCorrelation(Undirected, Unsigned):

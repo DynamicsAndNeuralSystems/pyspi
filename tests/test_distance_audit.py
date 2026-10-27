@@ -260,3 +260,34 @@ def test_barycenter_value_does_not_depend_on_call_order(statistic):
     for i, j in [(0, 1), (1, 0), (0, 2), (2, 1)]:
         fresh = Data(z, dim_order="ps")
         assert spi.bivariate(fresh, i=i, j=j) == A[i, j], (i, j)
+
+
+# --------------------------------------------------------------------------
+# HHG
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("chunk_rows", [None, 7])
+def test_hhg_statistic_is_bit_identical_to_hyppo(monkeypatch, chunk_rows):
+    """The O(n^2 log n) counts reproduce hyppo's O(n^3) scan exactly,
+    including tied distances, a constant series and row-chunking."""
+    import warnings
+    import pyspi.statistics.distance as distance
+    from hyppo.independence import HHG
+
+    rng = np.random.default_rng(12)
+    for n in [5, 6, 17, 64, 121]:
+        if chunk_rows is not None:
+            monkeypatch.setattr(distance, "_HHG_CHUNK_ENTRIES", chunk_rows * n)
+        x = rng.standard_normal((n, 1))
+        y = np.tanh(x) + rng.standard_normal((n, 1))
+        cases = {
+            "continuous": (x, y),
+            "tied": (np.round(2 * x) / 2, np.round(y)),
+            "binary": (np.round(x), (rng.uniform(size=(n, 1)) > 0.5) * 1.0),
+            "constant": (np.ones((n, 1)), y),
+        }
+        for name, (a, b) in cases.items():
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ref = HHG().statistic(a, b)
+            assert distance._hhg_statistic(a, b) == ref, (n, name)
