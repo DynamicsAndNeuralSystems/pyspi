@@ -58,10 +58,13 @@ public class JidtReference {
     out("mi_kernel_bits", km.computeAverageLocalOfObservations());
 
     // KSG (algorithm 1) MI at Theiler windows 0, 5, 20. No dither: JIDT's default
-    // ADD_NOISE would make the reference stochastic. NORMALISE stays at its default (true).
+    // NOISE_LEVEL_TO_ADD (1e-8) would make the reference stochastic, so it is set to 0.
+    // (An earlier revision set "ADD_NOISE", which is not a JIDT property and was
+    // ignored; the frozen values nevertheless match a noise-free reference to 9e-16.)
+    // NORMALISE stays at its default (true).
     for (int w : new int[]{0, 5, 20}) {
       MutualInfoCalculatorMultiVariateKraskov1 kr = new MutualInfoCalculatorMultiVariateKraskov1();
-      kr.setProperty("k", K); kr.setProperty("ADD_NOISE", "false");
+      kr.setProperty("k", K); kr.setProperty("NOISE_LEVEL_TO_ADD", "0");
       kr.setProperty("DYN_CORR_EXCL", "" + w);
       kr.initialise(1, 1); kr.setObservations(x, y);
       out("mi_ksg_w" + w, kr.computeAverageLocalOfObservations());
@@ -82,26 +85,26 @@ public class JidtReference {
     // KSG TE: fixed embeddings
     for (int kh : new int[]{1, 3}) {
       TransferEntropyCalculatorKraskov te = new TransferEntropyCalculatorKraskov();
-      te.setProperty("k", K); te.setProperty("ADD_NOISE", "false");
+      te.setProperty("k", K); te.setProperty("NOISE_LEVEL_TO_ADD", "0");
       te.setProperty("k_HISTORY", "" + kh); te.initialise(); te.setObservations(x, y);
       out("te_ksg_k" + kh, te.computeAverageLocalOfObservations());
     }
     { TransferEntropyCalculatorKraskov te = new TransferEntropyCalculatorKraskov();
-      te.setProperty("k", K); te.setProperty("ADD_NOISE", "false");
+      te.setProperty("k", K); te.setProperty("NOISE_LEVEL_TO_ADD", "0");
       te.setProperty("k_HISTORY", "2"); te.setProperty("k_TAU", "2");
       te.setProperty("l_HISTORY", "3"); te.setProperty("l_TAU", "2");
       te.initialise(); te.setObservations(x, y);
       out("te_ksg_k2t2_l3t2", te.computeAverageLocalOfObservations()); }
     // KSG TE with dynamic correlation exclusion (Theiler window 10)
     { TransferEntropyCalculatorKraskov te = new TransferEntropyCalculatorKraskov();
-      te.setProperty("k", K); te.setProperty("ADD_NOISE", "false");
+      te.setProperty("k", K); te.setProperty("NOISE_LEVEL_TO_ADD", "0");
       te.setProperty("k_HISTORY", "1"); te.setProperty("DYN_CORR_EXCL", "10");
       te.initialise(); te.setObservations(x, y);
       out("te_ksg_k1_dce10", te.computeAverageLocalOfObservations()); }
     // KSG TE with MAX_CORR_AIS auto-embedding and a Theiler window of 10 (DCE).
     // JIDT's AUTO_EMBED_* search is left to pick the embedding; it is printed too.
     { TransferEntropyCalculatorKraskov te = new TransferEntropyCalculatorKraskov();
-      te.setProperty("k", K); te.setProperty("ADD_NOISE", "false");
+      te.setProperty("k", K); te.setProperty("NOISE_LEVEL_TO_ADD", "0");
       te.setProperty("DYN_CORR_EXCL", "10");
       te.setProperty("AUTO_EMBED_METHOD", "MAX_CORR_AIS");
       te.setProperty("AUTO_EMBED_K_SEARCH_MAX", "10");
