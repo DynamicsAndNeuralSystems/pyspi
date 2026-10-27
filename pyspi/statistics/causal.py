@@ -262,8 +262,13 @@ class ConvergentCrossMapping(Directed, Signed):
                         seed=42,
                         parallel=False,
                     )
-                    ccmf[_i, _j] = ccm_df.iloc[:, 1].values[: (nlibs + 1)]
-                    ccmf[_j, _i] = ccm_df.iloc[:, 2].values[: (nlibs + 1)]
+                    # pyEDM names each skill "library:target": "a:b" is the
+                    # shadow manifold of a cross-mapping (predicting) b, which
+                    # Sugihara et al. (2012) read as evidence that b drives a.
+                    # Row = source, column = target, so the i -> j cell takes
+                    # "j:i", the skill of j's manifold at recovering i.
+                    ccmf[_i, _j] = ccm_df[f"{targname}:{srcname}"].values[: (nlibs + 1)]
+                    ccmf[_j, _i] = ccm_df[f"{srcname}:{targname}"].values[: (nlibs + 1)]
 
             try:
                 data.ccm[self.key] = ccmf
