@@ -3,8 +3,8 @@ import warnings
 import numpy as np
 import pandas as pd
 import pyEDM
+from scipy.linalg import cho_solve, cholesky
 from scipy.spatial import KDTree
-from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel, RBF
 
 from pyspi.lib.pairwise_causal import (
@@ -13,6 +13,40 @@ from pyspi.lib.pairwise_causal import (
 from pyspi.utils import require_int
 
 from pyspi.base import Directed, Unsigned, Signed, parse_bivariate, parse_multivariate
+
+
+# Explicit kernel: sklearn <=1.8's default (kernel=None) is this fixed
+# ConstantKernel * RBF, but 1.9 changed the default to an *optimised* kernel,
+# whose length scale collapses to its lower bound and changes every value. No
+# hyperparameters are tuned, so there is no optimiser (and no randomness) in
+# the fit. 1e-10 is GaussianProcessRegressor's default `alpha`.
+_ANM_KERNEL = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(
+    1.0, length_scale_bounds="fixed")
+_ANM_ALPHA = 1e-10
+
+
+def _anm_scores(x, ys):
+    """``normalized_hsic(residual, x)`` for the GP regression of each y on x.
+
+    The regression is ``GaussianProcessRegressor(kernel=_ANM_KERNEL,
+    optimizer=None).fit(x, y).predict(x)``: the posterior mean at the training
+    inputs (Rasmussen & Williams 2006, Alg. 2.1), computed with the same calls
+    in the same order as scikit-learn, so the values are bit-identical (pinned
+    in tests/test_causal_audit.py). What differs is that the kernel matrix,
+    its Cholesky factor and K(x, x) depend on the cause x alone, so they are
+    built once per cause and shared by every effect, where a fit per pair
+    rebuilt them for each -- and also computed the log marginal likelihood, a
+    second Cholesky pyspi never read.
+    """
+    K = _ANM_KERNEL(x)
+    K[np.diag_indices_from(K)] += _ANM_ALPHA
+    L = cholesky(K, lower=True, check_finite=False)
+    K_trans = _ANM_KERNEL(x, x)
+    scores = []
+    for y in ys:
+        y_predict = K_trans @ cho_solve((L, True), y, check_finite=False)
+        scores.append(normalized_hsic(y_predict.reshape(-1, 1) - y, x))
+    return scores
 
 
 class AdditiveNoiseModel(Directed, Unsigned):
@@ -32,17 +66,18 @@ class AdditiveNoiseModel(Directed, Unsigned):
         HSIC came from cdt, and it is now `pyspi.lib.pairwise_causal`.
         """
         z = data.to_numpy()
-        x, y = z[i], z[j]
-        # Explicit kernel: sklearn <=1.8's default (kernel=None) is this fixed
-        # ConstantKernel * RBF, but 1.9 changed the default to an *optimised*
-        # kernel, whose length scale collapses to its lower bound and changes
-        # every value. No hyperparameters are tuned, so there is no optimiser
-        # (and no randomness) in the fit.
-        kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(
-            1.0, length_scale_bounds="fixed")
-        gp = GaussianProcessRegressor(kernel=kernel, optimizer=None).fit(x, y)
-        y_predict = gp.predict(x).reshape(-1, 1)
-        return normalized_hsic(y_predict - y, x)
+        return _anm_scores(z[i], [z[j]])[0]
+
+    @parse_multivariate
+    def multivariate(self, data):
+        """`bivariate` for every pair, sharing each cause's GP factorisation."""
+        z = data.to_numpy()
+        M = data.n_processes
+        A = np.full((M, M), np.nan)
+        for i in range(M):
+            effects = [j for j in range(M) if j != i]
+            A[i, effects] = _anm_scores(z[i], [z[j] for j in effects])
+        return A
 
 
 class ConditionalDistributionSimilarity(Directed, Unsigned):

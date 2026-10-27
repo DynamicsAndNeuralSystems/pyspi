@@ -188,3 +188,48 @@ def test_ccm_cross_map_skill_is_bit_identical_to_pyedm(E):
                                        sample=sample, seed=42)[0]
             assert np.array_equal(
                 reverse, ref[f"{names[j]}:{names[i]}"].to_numpy())
+
+
+# ---------------------------------------------------------------------------
+# Additive noise model
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("T", [150, 260])
+def test_anm_shared_factorisation_is_bit_identical_to_sklearn(T):
+    """ANM factorises each cause's GP kernel once and reuses it per effect.
+
+    The reference is the per-pair scikit-learn fit pyspi used before:
+    ``GaussianProcessRegressor(kernel=C(1)*RBF(1) fixed, optimizer=None)``,
+    residual ``predict(x) - y``, then the normalised HSIC against x. The
+    kernel matrix is ill-conditioned (CHANGELOG: condition number ~6e11), so
+    anything short of the same operations in the same order would show up
+    here as drift. T=260 also engages the HSIC's 200-point subsampling.
+    """
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from sklearn.gaussian_process.kernels import ConstantKernel, RBF
+
+    from pyspi.lib.pairwise_causal import normalized_hsic
+    from pyspi.statistics.causal import AdditiveNoiseModel
+
+    rng = np.random.default_rng(T)
+    x = rng.standard_normal(T)
+    Z = np.vstack([x, np.tanh(2 * x) + 0.3 * rng.standard_normal(T),
+                   rng.standard_normal(T).cumsum(), rng.standard_normal(T)])
+    data = Data(Z, dim_order="ps")
+    z = data.to_numpy()
+
+    expected = np.full((4, 4), np.nan)
+    for i in range(4):
+        for j in range(4):
+            if i == j:
+                continue
+            kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(
+                1.0, length_scale_bounds="fixed")
+            gp = GaussianProcessRegressor(kernel=kernel, optimizer=None)
+            y_predict = gp.fit(z[i], z[j]).predict(z[i]).reshape(-1, 1)
+            expected[i, j] = normalized_hsic(y_predict - z[j], z[i])
+
+    got = np.asarray(AdditiveNoiseModel().multivariate(data), float)
+    assert np.array_equal(got, expected, equal_nan=True), np.nanmax(
+        np.abs(got - expected))
+    assert AdditiveNoiseModel().bivariate(data, i=2, j=1) == expected[2, 1]
