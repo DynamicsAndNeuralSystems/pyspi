@@ -261,6 +261,13 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (30 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
 - **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 
+### Added
+
+- **`nli_*`: nonlinear interdependence S, H, N and L from delay-embedded neighbourhoods** (Arnhold et al. 1999, Physica D 134:419; Quian Quiroga et al. 2002, PRE 65:041903; Chicharro & Andrzejak 2009, PRE 80:026217), class `NonlinearInterdependence` in `pyspi/statistics/causal.py`.
+  Each measures how well close delay vectors (dimension `m`, delay `tau`) of the column process map onto close delay vectors of the row process, using `k` nearest neighbours and a Theiler window (default `m * tau`).
+  It is directed with `A[i, j] = A(x_i | x_j)`, read as `i -> j` (row = source); only the asymmetry `A[i, j] - A[j, i]` indicates direction.
+  `full` bundles `nli_L_m-5_tau-1_k-5`, `nli_N_m-5_tau-1_k-5`, `nli_H_m-5_tau-1_k-5` and `nli_L_m-3_tau-1_k-5`, and `fast` bundles `nli_L_m-5_tau-1_k-5`.
+
 ### Dependencies
 
 - **Floors, relative to 2.0.2** (`pyproject.toml` is the source of truth):

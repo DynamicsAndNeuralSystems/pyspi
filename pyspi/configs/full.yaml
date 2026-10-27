@@ -491,6 +491,35 @@
       - statistic: diff
         embedding_dimension: 10
 
+  # Nonlinear interdependence H, N and L from delay embeddings (Arnhold et al. 1999;
+  # Quian Quiroga et al. 2002; Chicharro & Andrzejak 2009): A[i, j] = A(x_i | x_j), read as i -> j
+  NonlinearInterdependence:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: L
+        m: 5
+        tau: 1
+        k: 5
+      - statistic: N
+        m: 5
+        tau: 1
+        k: 5
+      - statistic: H
+        m: 5
+        tau: 1
+        k: 5
+      - statistic: L
+        m: 3
+        tau: 1
+        k: 5
+
 # Information-theoretic statistics
 .statistics.infotheory:
   JointEntropy: # No theiler window yet

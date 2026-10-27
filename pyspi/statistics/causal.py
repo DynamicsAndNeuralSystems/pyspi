@@ -12,7 +12,9 @@ from pyspi.lib.pairwise_causal import (
 )
 from pyspi.utils import require_int
 
-from pyspi.base import Directed, Unsigned, Signed, parse_bivariate, parse_multivariate
+from pyspi.base import (
+    Directed, Unsigned, Signed, fill_pairwise, parse_bivariate, parse_multivariate,
+)
 
 
 # A fixed (untuned) ConstantKernel * RBF, as in cdt's ANM; set explicitly
@@ -432,3 +434,297 @@ class ConvergentCrossMapping(Directed, Signed):
             return np.nanmean(ccmf - np.transpose(ccmf, axes=[1, 0, 2]), axis=2)
         else:
             raise TypeError(f"Unknown statistic: {self._statistic}")
+
+
+def _nli_embed(x, m, tau):
+    """Delay vectors ``(x_n, x_{n-tau}, ..., x_{n-(m-1)tau})``, one per row.
+
+    Rows run over ``n = (m-1)tau, ..., T-1``, so every process of a dataset
+    gives the same ``N = T - (m-1)tau`` time indices and row ``n`` of two
+    processes' embeddings is the same instant.
+    """
+    T = x.shape[0]
+    span = (m - 1) * tau
+    return np.ascontiguousarray(
+        np.column_stack([x[span - l * tau:T - l * tau] for l in range(m)]))
+
+
+def _nli_neighbours(emb, k, theiler):
+    """Time indices of the ``k`` nearest neighbours of every delay vector.
+
+    Neighbours with ``|n - r| <= theiler`` (the point itself included) are
+    excluded. At most ``2 * theiler + 1`` points are excluded per row, so the
+    ``k + 2 * theiler + 1`` nearest always contain ``k`` admissible ones and
+    no second query is needed. Returns ``(N, k)``, nearest first.
+    """
+    N = emb.shape[0]
+    _, idx = KDTree(emb).query(emb, k=k + 2 * theiler + 1)
+    admissible = np.abs(idx - np.arange(N)[:, np.newaxis]) > theiler
+    # A stable sort of the inadmissible flags keeps the admissible neighbours
+    # first, in increasing distance; the first k of them are the k nearest.
+    first = np.argsort(~admissible, axis=1, kind="stable")[:, :k]
+    return np.take_along_axis(idx, first, axis=1)
+
+
+def _nli_mean_sq_dist(emb, idx):
+    """``(1/k) sum_l |x_n - x_{idx[n, l]}|^2`` for every row ``n``."""
+    diff = emb[idx] - emb[:, np.newaxis, :]
+    return np.square(diff).sum(axis=2).mean(axis=1)
+
+
+def _nli_mean_sq_dist_all(emb, theiler):
+    """Mean squared distance from each ``x_n`` to every admissible ``x_j``.
+
+    Admissible means ``|n - j| > theiler``. Returns ``(R, n_admissible)``.
+    The sum over all ``j`` uses ``sum_j |c_n - c_j|^2 = N|c_n|^2 + sum_j
+    |c_j|^2`` for the centred vectors ``c`` (``sum_j c_j = 0``), O(N m); the
+    ``2 * theiler + 1`` excluded offsets are then subtracted one offset at a
+    time, O(N m theiler).
+    """
+    N = emb.shape[0]
+    c = emb - emb.mean(axis=0)
+    sq = np.square(c).sum(axis=1)
+    total = N * sq + sq.sum() - 2.0 * (c @ c.sum(axis=0))
+    excluded = np.zeros(N)
+    n_excluded = np.ones(N, dtype=np.int64)  # the point itself
+    for d in range(1, min(theiler, N - 1) + 1):
+        s = np.square(c[d:] - c[:-d]).sum(axis=1)
+        excluded[d:] += s
+        excluded[:-d] += s
+        n_excluded[d:] += 1
+        n_excluded[:-d] += 1
+    n_admissible = N - n_excluded
+    return (total - excluded) / n_admissible, n_admissible
+
+
+def _nli_ranks(emb, theiler, queries, block=128):
+    """Rank of ``|x_n - x_{queries[n, l]}|`` among ``x_n``'s admissible distances.
+
+    For each row ``n`` the distances to every ``x_j`` with ``|n - j| >
+    theiler`` are ranked in ascending order (1 = nearest); entry ``[n, l]`` is
+    the rank of the distance to ``x_{queries[n, l]}``, which must itself be
+    admissible. Tied distances take their average rank, as in
+    ``scipy.stats.rankdata``, so the result does not depend on tie-breaking.
+
+    One sort of each row serves every query column, so the ranks a process
+    needs for all of its conditioning partners cost one O(N^2 log N) pass.
+    """
+    N = emb.shape[0]
+    out = np.empty(queries.shape)
+    times = np.arange(N)
+    for a in range(0, N, block):
+        b = min(N, a + block)
+        D = np.zeros((b - a, N))
+        for d in range(emb.shape[1]):
+            D += np.square(emb[a:b, d, np.newaxis] - emb[np.newaxis, :, d])
+        D[np.abs(times[a:b, np.newaxis] - times) <= theiler] = np.inf
+        q = np.take_along_axis(D, queries[a:b], axis=1)
+        D.sort(axis=1)
+        for r in range(b - a):
+            below = np.searchsorted(D[r], q[r], side="left")
+            through = np.searchsorted(D[r], q[r], side="right")
+            out[a + r] = (below + through + 1) / 2.0
+    return out
+
+
+class NonlinearInterdependence(Directed, Unsigned):
+    """Nonlinear interdependence S, H, N or L from delay-embedded neighbourhoods.
+
+    State-space measures of whether close states of one process occur at the
+    same times as close states of another (Arnhold et al. 1999; Quian Quiroga
+    et al. 2002; Chicharro & Andrzejak 2009). Each process is delay-embedded,
+    ``x_n = (x_n, x_{n-tau}, ..., x_{n-(m-1)tau})`` for ``n = 1..N`` with
+    ``N = T - (m-1)tau``. Let
+    ``r_{n,l}`` and ``s_{n,l}`` (``l = 1..k``) be the time indices of the ``k``
+    nearest neighbours of ``x_n`` and of ``y_n`` (Euclidean distance), with
+    temporal neighbours ``|n - r| <= theiler`` excluded. Then
+
+    * ``R_n^k(X)   = (1/k) sum_l |x_n - x_{r_{n,l}}|^2``  (own neighbours),
+    * ``R_n^k(X|Y) = (1/k) sum_l |x_n - x_{s_{n,l}}|^2``  (Y's neighbours'
+      time indices, measured in X),
+    * ``R_n(X)``, the mean of ``|x_n - x_j|^2`` over every admissible ``j``,
+
+    and, averaging over ``n``,
+
+    * ``S(X|Y) = <R_n^k(X) / R_n^k(X|Y)>`` (Arnhold et al. 1999), in [0, 1];
+    * ``H(X|Y) = <log(R_n(X) / R_n^k(X|Y))>`` (Arnhold et al. 1999), in nats,
+      about 0 for independent processes;
+    * ``N(X|Y) = <(R_n(X) - R_n^k(X|Y)) / R_n(X)>`` (Quian Quiroga et al.
+      2002), at most 1, about 0 for independent processes;
+    * ``L(X|Y) = <(G_n(X) - G_n^k(X|Y)) / (G_n(X) - G_n^k(X))>`` (Chicharro &
+      Andrzejak 2009, eq. 4), at most 1, about 0 for independent processes.
+      ``G_n^k(X|Y)`` is the mean rank of the ``k`` distances
+      ``|x_n - x_{s_{n,l}}|`` among all of ``x_n``'s admissible distances
+      (1 = nearest; ties take their average rank), ``G_n^k(X) = (k+1)/2`` is
+      the smallest possible mean rank and ``G_n(X) = (N_n + 1)/2`` the mean
+      rank, ``N_n`` being the number of admissible ``j`` for ``x_n``.
+
+    With ``theiler = W`` every average over ``j`` (the neighbour searches,
+    ``R_n(X)`` and the ranks) runs over ``|n - j| > W`` only, so ``N_n =
+    N - 1 - #{j != n: |n - j| <= W}`` (``N - 2W - 1`` away from the ends), as
+    in Chicharro & Andrzejak (2009), note 24.
+
+    **Direction.** ``A[i, j] = A(x_i | x_j)`` (``A`` one of S, H, N, L): the
+    row is the conditioned process X, whose distances are measured, and the
+    column is the conditioning process Y, whose neighbourhoods are mapped onto
+    X. The entry is large when close states of ``x_j`` are mapped to close
+    states of ``x_i``, which Chicharro & Andrzejak (2009) read as a coupling
+    ``x_i -> x_j`` (as in convergent cross-mapping). So with pyspi's
+    row = source convention, ``A[i, j] > A[j, i]`` points to ``i -> j``.
+
+    **Caveats.** Both entries of a coupled pair rise, so only the asymmetry
+    indicates direction, and it is unreliable near generalised
+    synchronisation. S and H depend on the effective dimension of each
+    process, so their asymmetry can point the wrong way (Quian Quiroga et al.
+    2000); L, which uses only ranks, is the most reliable for direction
+    (Chicharro & Andrzejak 2009).
+
+    **Undefined pairs.** S and H divide by ``R_n^k(X|Y)``, which is zero when
+    every conditioned neighbour of some ``x_n`` coincides with it (repeated
+    delay vectors, e.g. quantised data). That pair raises, and is NaN in the
+    multivariate table.
+
+    Args:
+        statistic (str): ``"S"``, ``"H"``, ``"N"`` or ``"L"``.
+        m (int): embedding dimension, default 5.
+        tau (int): embedding delay in samples, default 1.
+        k (int): number of nearest neighbours, default 5.
+        theiler (int or None): Theiler window ``W`` in samples; neighbours
+            with ``|n - j| <= W`` are excluded. ``None`` (default) uses
+            ``m * tau``, which excludes every pair of delay vectors sharing a
+            sample. Needs ``N = T - (m-1)tau > k + 2W + 1``.
+
+    References:
+        J. Arnhold, P. Grassberger, K. Lehnertz, C. E. Elger, Physica D 134,
+        419 (1999).
+        R. Quian Quiroga, J. Arnhold, P. Grassberger, Phys. Rev. E 61, 5142
+        (2000).
+        R. Quian Quiroga, A. Kraskov, T. Kreuz, P. Grassberger, Phys. Rev. E
+        65, 041903 (2002).
+        D. Chicharro, R. G. Andrzejak, Phys. Rev. E 80, 026217 (2009).
+    """
+
+    name = "Nonlinear interdependence"
+    identifier = "nli"
+    labels = ["causal", "directed", "nonlinear", "temporal", "unsigned"]
+    _STATISTICS = ("S", "H", "N", "L")
+    # All statistics share data.nli[(m, tau, k, theiler)]: embeddings,
+    # neighbours, R_n and the conditioned ranks.
+    _cache_namespace = "nli"
+
+    @property
+    def _cache_subkey(self):
+        return self._key
+
+    def __init__(self, statistic="L", m=5, tau=1, k=5, theiler=None):
+        if statistic not in self._STATISTICS:
+            raise ValueError(
+                f"statistic must be one of {self._STATISTICS}, got {statistic!r}.")
+        self._statistic = statistic
+        self._m = require_int("m", m, minimum=1)
+        self._tau = require_int("tau", tau, minimum=1)
+        self._k = require_int("k", k, minimum=1)
+        self._theiler = (self._m * self._tau if theiler is None
+                         else require_int("theiler", theiler, minimum=0))
+        self.identifier += f"_{statistic}_m-{self._m}_tau-{self._tau}_k-{self._k}"
+        if theiler is not None:
+            self.identifier += f"_theiler-{self._theiler}"
+
+    @property
+    def _key(self):
+        return (self._m, self._tau, self._k, self._theiler)
+
+    def _cache(self, data):
+        try:
+            return data.nli[self._key]
+        except AttributeError:
+            data.nli = {}
+        except KeyError:
+            pass
+        data.nli[self._key] = {"process": {}, "ranks": {}}
+        return data.nli[self._key]
+
+    def _process(self, data, cache, p):
+        """Embedding, neighbours, ``R_n^k``, ``R_n`` and ``N_n`` of process p."""
+        if p not in cache["process"]:
+            m, tau, k, W = self._key
+            x = data.to_numpy()[p, :, 0]
+            N = x.shape[0] - (m - 1) * tau
+            if N <= k + 2 * W + 1:
+                raise ValueError(
+                    f"{self.identifier} needs more than k + 2*theiler + 1 = "
+                    f"{k + 2 * W + 1} delay vectors so that every point keeps "
+                    f"more than k admissible neighbours; T = {x.shape[0]} "
+                    f"observations give N = T - (m-1)*tau = {N}.")
+            emb = _nli_embed(np.asarray(x, dtype=np.float64), m, tau)
+            nbrs = _nli_neighbours(emb, k, W)
+            R, n_admissible = _nli_mean_sq_dist_all(emb, W)
+            cache["process"][p] = (emb, nbrs, _nli_mean_sq_dist(emb, nbrs),
+                                   R, n_admissible)
+        return cache["process"][p]
+
+    def _conditioned_ranks(self, data, cache, i, conditioners):
+        """Fill ``cache["ranks"][(i, j)] = G_n^k(x_i | x_j)`` for each j given.
+
+        All of process i's conditioning partners are ranked in one pass over
+        its distance rows.
+        """
+        todo = [j for j in conditioners if (i, j) not in cache["ranks"]]
+        if not todo:
+            return
+        emb = self._process(data, cache, i)[0]
+        queries = np.hstack([self._process(data, cache, j)[1] for j in todo])
+        ranks = _nli_ranks(emb, self._theiler, queries)
+        k = self._k
+        for c, j in enumerate(todo):
+            cache["ranks"][(i, j)] = ranks[:, c * k:(c + 1) * k].mean(axis=1)
+
+    def _pair(self, data, i, j):
+        """``A(x_i | x_j)``: row i conditioned on column j's neighbourhoods."""
+        cache = self._cache(data)
+        emb, nbrs, Rk, R, n_admissible = self._process(data, cache, i)
+        if self._statistic == "L":
+            self._conditioned_ranks(data, cache, i, [j])
+            G = (n_admissible + 1) / 2.0
+            G_min = (self._k + 1) / 2.0
+            return float(np.mean((G - cache["ranks"][(i, j)]) / (G - G_min)))
+
+        Rk_cond = _nli_mean_sq_dist(emb, self._process(data, cache, j)[1])
+        if self._statistic in ("S", "H") and not np.all(Rk_cond > 0):
+            # Repeated delay vectors give R_n^k(X|Y) = 0: the ratio is undefined.
+            raise ValueError(
+                f"{self.identifier}: a Y-conditioned neighbourhood has zero "
+                f"mean squared distance (repeated delay vectors), so "
+                f"{self._statistic}(X|Y) is undefined.")
+        if self._statistic == "S":
+            return float(np.mean(Rk / Rk_cond))
+        if self._statistic == "H":
+            return float(np.mean(np.log(R / Rk_cond)))
+        return float(np.mean((R - Rk_cond) / R))
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        """``A(x_i | x_j)``, the ``[i, j]`` entry of ``multivariate``."""
+        return self._pair(data, i, j)
+
+    @parse_multivariate
+    def multivariate(self, data):
+        """Every ordered pair, from per-process embeddings and neighbours.
+
+        Each process is embedded and searched once (O(N log N) with a
+        KD-tree); a pair then costs O(N k m). L additionally ranks each
+        process's distance rows once for all of its conditioning partners
+        (O(N^2 log N) per process).
+        """
+        M = data.n_processes
+        cache = self._cache(data)
+        for p in range(M):
+            self._process(data, cache, p)
+        if self._statistic == "L":
+            for i in range(M):
+                self._conditioned_ranks(
+                    data, cache, i, [j for j in range(M) if j != i])
+        A = np.full((M, M), np.nan)
+        pairs = [(i, j) for i in range(M) for j in range(M) if i != j]
+        return fill_pairwise(self.identifier, A, pairs,
+                             lambda i, j: self._pair(data, i, j))
