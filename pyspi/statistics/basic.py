@@ -5,7 +5,14 @@ from scipy import stats, signal
 import numpy as np
 import pandas as pd
 
-from pyspi.base import Undirected, Signed, parse_bivariate, parse_multivariate
+from pyspi.base import (
+    Directed,
+    Undirected,
+    Signed,
+    Unsigned,
+    parse_bivariate,
+    parse_multivariate,
+)
 from pyspi.utils import require_int
 
 
@@ -316,6 +323,125 @@ class KendallTau(Undirected, Signed):
             tau = tau ** 2
         np.fill_diagonal(tau, np.nan)
         return tau
+
+
+# Seed of the permutation that breaks ties in ChatterjeeXi's source reproducibly.
+_XI_TIE_SEED = 0
+
+
+def _xi_source_order(x):
+    """Indices that sort ``x``, with ties broken by a fixed seeded permutation."""
+    perm = np.random.default_rng(_XI_TIE_SEED).permutation(x.size)
+    return perm[np.argsort(x[perm], kind="stable")]
+
+
+def _xi_target_terms(y):
+    """``(r, denominator)`` for the target ``y``.
+
+    ``r[k] = #{j : y_j <= y_k}`` and the denominator is
+    ``2 * sum_k l_k (n - l_k) / n`` with ``l_k = #{j : y_j >= y_k}``.
+    The denominator is 0 (xi undefined) when ``y`` is constant.
+    """
+    n = y.size
+    r = stats.rankdata(y, method="max").astype(np.int64)
+    l = n - stats.rankdata(y, method="min").astype(np.int64) + 1
+    return r, 2 * np.sum(l * (n - l)) / n
+
+
+class ChatterjeeXi(Directed, Unsigned):
+    r"""Chatterjee's rank correlation coefficient xi (Chatterjee 2021).
+
+    For a source ``X`` and a target ``Y`` of length ``n``, sort the pairs by
+    ``X`` and let ``Y_(1), ..., Y_(n)`` be the targets in that order. With
+    ``r_k = #{j : Y_j <= Y_(k)}`` and ``l_k = #{j : Y_j >= Y_(k)}``,
+
+    .. math::
+
+        \xi_n(X, Y) = 1 - \frac{n \sum_{k=1}^{n-1} |r_{k+1} - r_k|}
+                               {2 \sum_{k=1}^{n} l_k (n - l_k)}.
+
+    As ``n -> infinity``, ``xi`` tends to 0 if and only if ``Y`` is
+    independent of ``X`` and to 1 if and only if ``Y`` is a measurable
+    function of ``X``. It uses ranks only.
+
+    ``xi`` is asymmetric and unsigned: ``A[i, j] = xi(X = x_i, Y = x_j)``
+    (row = source) measures how nearly the column process is a function of
+    the row process. Under independence it can be slightly negative.
+
+    Chatterjee breaks ties in ``X`` at random; here they are broken by a
+    fixed seeded permutation, so values are reproducible.
+
+    Parameters
+    ----------
+    tau : int, default 0
+        Lag in samples. For ``tau > 0`` the SPI is
+        ``xi(x_i[:-tau], x_j[tau:])``: how much ``x_j[t]`` is a function of
+        ``x_i[t - tau]``.
+
+    References
+    ----------
+    S. Chatterjee, "A new coefficient of correlation", Journal of the
+    American Statistical Association 116, 2009-2022 (2021).
+    doi:10.1080/01621459.2020.1758115
+    """
+
+    name = "Chatterjee's xi correlation"
+    identifier = "xi"
+    labels = ["basic", "rank", "nonlinear", "directed", "unsigned"]
+
+    def __init__(self, tau=0):
+        self._tau = require_int("tau", tau, minimum=0)
+        self.identifier = f"xi_tau-{self._tau}"
+        self.labels = ChatterjeeXi.labels + (
+            ["unordered"] if self._tau == 0 else ["temporal"]
+        )
+
+    @staticmethod
+    def _xi(order, r, denom):
+        if not denom > 0:
+            return np.nan
+        steps = np.abs(np.diff(r[order])).sum()
+        return float(1.0 - steps / denom)
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        z = data.to_numpy(squeeze=True)
+        if z.shape[-1] - self._tau < 2:
+            return np.nan
+        tau = self._tau
+        x, y = (z[i], z[j]) if tau == 0 else (z[i, :-tau], z[j, tau:])
+        if not (np.all(np.isfinite(x)) and np.all(np.isfinite(y))):
+            return np.nan
+        r, denom = _xi_target_terms(y)
+        return self._xi(_xi_source_order(x), r, denom)
+
+    @parse_multivariate
+    def multivariate(self, data):
+        """Sort each source once and rank each target once."""
+        Z = data.to_numpy(squeeze=True)  # (M, T)
+        M, T = Z.shape
+        A = np.full((M, M), np.nan)
+        if T - self._tau < 2:
+            return A
+        tau = self._tau
+        X, Y = (Z, Z) if tau == 0 else (Z[:, :-tau], Z[:, tau:])
+        finite_x = np.all(np.isfinite(X), axis=1)
+        finite_y = np.all(np.isfinite(Y), axis=1)
+        orders = [_xi_source_order(X[i]) if finite_x[i] else None for i in range(M)]
+        R = np.zeros(Y.shape, dtype=np.int64)
+        denoms = np.full(M, np.nan)
+        for j in range(M):
+            if finite_y[j]:
+                R[j], denoms[j] = _xi_target_terms(Y[j])
+        valid_y = finite_y & (denoms > 0)
+        for i in range(M):
+            if orders[i] is None:
+                continue
+            # steps[j] = sum_k |R[j, order_k+1] - R[j, order_k]| for every target
+            steps = np.abs(np.diff(R[:, orders[i]], axis=1)).sum(axis=1)
+            A[i, valid_y] = 1.0 - steps[valid_y] / denoms[valid_y]
+        np.fill_diagonal(A, np.nan)
+        return A
 
 
 class LaggedCorrelation(Undirected, Signed):

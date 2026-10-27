@@ -83,6 +83,21 @@
       - squared: True
       - squared: False
 
+  # Chatterjee's rank correlation xi (Chatterjee 2021): directed, row = source;
+  # tau > 0 pairs x_i[:-tau] with x_j[tau:]
+  ChatterjeeXi:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - M14
+    dependencies:
+    configs:
+      - tau: 0
+        labels:
+          - contemporaneous
+
   # statistics based on cross-correlation (squared means we square the xcorr, not the output)
   CrossCorrelation:
     labels:
