@@ -2,7 +2,7 @@ import functools
 import os
 import warnings
 import numpy as np
-from sklearn.metrics import pairwise_distances
+from sklearn.metrics import pairwise_distances, pairwise_kernels
 import tslearn.metrics
 from tslearn.barycenters import (
     euclidean_barycenter,
@@ -14,7 +14,6 @@ from hyppo.independence import (
     MGC,
     Dcorr,
     HHG,
-    Hsic,
 )
 
 from pyspi.base import (
@@ -86,8 +85,32 @@ class PairwiseDistance(Undirected, Unsigned):
 """
 
 
+def _median_gaussian_distance(v):
+    """``1 - K / max(K)`` for a Gaussian kernel ``K`` of median-heuristic width.
+
+    hyppo's ``Hsic`` statistic is dcorr of these induced distances. Its
+    ``compute_kern(x, y)`` takes the width from ``x`` alone and applies it to
+    ``y`` as well, so ``Hsic().statistic(x, y) != Hsic().statistic(y, x)``.
+    Gretton et al. (2005, 2008) give each variable the median distance between
+    its own samples; this is hyppo's arithmetic with that width.
+    """
+    l2 = pairwise_distances(v, metric="l2")
+    n = l2.shape[0]
+    med = np.median(l2[~np.eye(n, dtype=bool)])
+    # As hyppo: a zero median (mostly tied samples) falls back to width 1.
+    med = med if med else 1
+    K = pairwise_kernels(v, metric="rbf", gamma=1.0 / (2 * (med**2)))
+    return 1 - K / np.max(K)
+
+
 class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
-    """Hilbert-Schmidt Independence Criterion (HSIC)"""
+    """Normalised Hilbert-Schmidt Independence Criterion (HSIC).
+
+    hyppo's statistic: dcorr of the distances ``1 - K / max(K)`` induced by a
+    Gaussian kernel, each variable with its own median-heuristic width (see
+    `_median_gaussian_distance`). Like `DistanceCorrelation`, the unbiased
+    variant is not square-rooted and the biased one is.
+    """
 
     name = "Hilbert-Schmidt Independence Criterion"
     identifier = "hsic"
@@ -101,8 +124,9 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        stat = Hsic(bias=self._biased).statistic(x, y)
-        return stat
+        dx = _median_gaussian_distance(x)
+        dy = _median_gaussian_distance(y)
+        return Dcorr(bias=self._biased, compute_distance=None).statistic(dx, dy)
 
 
 class HellerHellerGorfine(Undirected, Unsigned):

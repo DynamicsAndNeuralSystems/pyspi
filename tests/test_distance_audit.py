@@ -166,3 +166,72 @@ def test_cross_distance_statistics_at_lag_zero_are_the_plain_statistic(cross, pl
     # Not bit-identical: the cross statistic is evaluated as S(target, source)
     # and the plain one as S(i, j); MGC is symmetric only to rounding.
     np.testing.assert_allclose(a, b, rtol=1e-12, atol=1e-15)
+
+
+# --------------------------------------------------------------------------
+# HSIC
+# --------------------------------------------------------------------------
+
+def _normalised_hsic(a, b, biased):
+    """Normalised HSIC with a Gaussian median-heuristic kernel *per variable*.
+
+    Gretton et al. (2005, 2008) set each variable's kernel width to the median
+    distance between that variable's samples. hyppo's `Hsic` statistic is
+    the kernel analogue of its `Dcorr`: dcorr of the induced distances
+    1 - K / max(K), so U-centred and unsquared when unbiased, double-centred
+    and square-rooted when biased.
+    """
+    n = len(a)
+
+    def induced_distance(v):
+        d = np.abs(v[:, None] - v[None, :])
+        med = np.median(d[~np.eye(n, dtype=bool)])
+        K = np.exp(-(d ** 2) / (2 * med ** 2))
+        return 1 - K / K.max()
+
+    def centred(d):
+        if biased:
+            return d - d.mean(0) - d.mean(1)[:, None] + d.mean()
+        u = (d - d.sum(0) / (n - 2) - d.sum(1)[:, None] / (n - 2)
+             + d.sum() / ((n - 1) * (n - 2)))
+        np.fill_diagonal(u, 0)
+        return u
+
+    A, B = centred(induced_distance(a)), centred(induced_distance(b))
+    ratio = (A * B).sum() / np.sqrt((A * A).sum() * (B * B).sum())
+    return np.sqrt(ratio) if biased else ratio
+
+
+@pytest.mark.parametrize("biased", [False, True])
+def test_hsic_uses_each_variables_own_kernel_width(biased):
+    """hyppo 0.5.2 takes the median-heuristic width from `x` alone and uses it
+    for `y` too, so hsic(x, y) != hsic(y, x) and the value pyspi reported for
+    a pair depended on which process came first. Gaussian, exponential and
+    uniform marginals keep different median distances after z-scoring."""
+    from pyspi.statistics.distance import HilbertSchmidtIndependenceCriterion
+
+    rng = np.random.default_rng(4)
+    n = 80
+    g = rng.standard_normal(n)
+    series = np.stack([g, np.exp(g + 0.5 * rng.standard_normal(n)),
+                       rng.uniform(size=n) + 0.3 * g])
+    data = Data(series, dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+    spi = HilbertSchmidtIndependenceCriterion(biased=biased)
+    for i in range(3):
+        for j in range(3):
+            if i != j:
+                assert spi.bivariate(data, i=i, j=j) == pytest.approx(
+                    _normalised_hsic(z[i], z[j], biased), abs=1e-12), (i, j)
+
+
+@pytest.mark.parametrize("biased", [False, True])
+def test_hsic_of_a_rescaled_copy_is_one(biased):
+    """With a width per variable the Gaussian kernel matrix is scale-free, so a
+    series and a rescaled copy have identical kernels and HSIC exactly 1."""
+    from pyspi.statistics.distance import HilbertSchmidtIndependenceCriterion
+
+    x = np.random.default_rng(6).standard_normal(60)
+    data = Data(np.stack([x, 3 * x]), dim_order="ps", zscore=False)
+    A = HilbertSchmidtIndependenceCriterion(biased=biased).multivariate(data)
+    assert A[0, 1] == pytest.approx(1.0, abs=1e-12)
