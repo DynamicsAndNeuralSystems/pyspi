@@ -427,11 +427,16 @@ class LaggedCorrelation(Undirected, Signed):
             forward = rho[:M, M:]
             backward = rho[M:, :M]
         elif self._estimator == "kendall":
-            stacked = np.vstack([Z_lead, Z_lag])
-            df = pd.DataFrame(stacked.T)
-            C_full = df.corr(method="kendall").values
-            forward = C_full[:M, M:]
-            backward = C_full[M:, :M]
+            # Only the lead x lag block is needed, and `backward` is its
+            # transpose. pandas' 2M x 2M matrix also paid for every lead-lead
+            # and lag-lag pair, about twice the work. Same scipy call, same
+            # argument order as pandas (lead first), so bit-identical.
+            forward = np.full((M, M), np.nan)
+            for a in range(M):
+                for b in range(M):
+                    if a != b:
+                        forward[a, b] = stats.kendalltau(Z_lead[a], Z_lag[b])[0]
+            backward = forward.T
         else:
             raise ValueError(f"Unknown estimator: {self._estimator}")
 
