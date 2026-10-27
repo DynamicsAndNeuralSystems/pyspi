@@ -478,22 +478,29 @@ def test_spectral_gc_parametric_honours_the_sampling_frequency():
 
 
 def test_spectral_gc_names_the_cause_when_order_selection_does_not_converge():
-    """The documented exception in KNOWN_UNESTIMABLE, tested rather than assumed.
+    """A search that never turns over is a recorded failure, with its cause.
 
     nitime's own message -- "Model estimation order did not converge at
     max_order = 50" -- says nothing about the data, and pyspi used to swallow it
     into an all-NaN return plus a warning, so `Calculator.errors` recorded only
     the generic "returned no finite off-diagonal values".
-    """
-    import os
 
+    This used the kuramoto_M7_T100 fixture, the KNOWN_UNESTIMABLE case. That
+    search failed only because nitime's unbiased autocovariance gave an
+    indefinite innovation covariance, so BIC's ``log det`` was NaN and never
+    compared greater; with the Yule-Walker autocovariance it turns over at
+    orders 1-5 (see test_spectral_directed_audit.py). Here the criterion
+    genuinely improves to the cap: an MA(1) process has an infinite-order AR
+    representation, and max_order=3 stops the search inside it.
+    """
     from pyspi.statistics.spectral import SpectralGrangerCausality
 
-    fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           "data", "fixtures", "kuramoto_M7_T100.npy")
-    spi = SpectralGrangerCausality(method="parametric", order=None, max_order=50)
+    rng = np.random.default_rng(SEED)
+    e = rng.standard_normal((2, 2001))
+    X = e[:, 1:] + 0.9 * e[:, :-1]
+    spi = SpectralGrangerCausality(method="parametric", order=None, max_order=3)
     with pytest.raises(ValueError, match="order selection did not converge"):
-        spi.multivariate(Data(data=fixture, dim_order="sp"))
+        spi.multivariate(Data(data=X, dim_order="ps"))
 
 
 @pytest.mark.parametrize("fs", [1, 2, 4])

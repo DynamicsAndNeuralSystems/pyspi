@@ -12,8 +12,8 @@ from pyspi.base import (
     parse_bivariate,
     parse_multivariate,
 )
-import nitime.analysis as nta
-import nitime.timeseries as ts
+import nitime.algorithms as nt_alg
+import nitime.utils as nt_utils
 import warnings
 from scipy import signal
 from pyspi.utils import fmt_param, require_int
@@ -933,6 +933,56 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         return self._fs * slope / (2 * np.pi), slope, r_value
 
 
+# nitime.GrangerAnalyzer's frequency grid: n_freqs // 2 + 1 points on [0, fs/2].
+_GC_N_FREQS = 1024
+
+
+def _fit_bivariate_var(x, order=None, max_order=50):
+    """Yule-Walker fit of the two-process VAR behind parametric spectral GC.
+
+    This is ``nitime.analysis.granger.fit_model`` -- Whittle's (LWR)
+    recursion, and with ``order=None`` the lowest order at which nitime's BIC
+    first stops improving -- with one difference: the autocovariance. nitime's
+    ``autocov_vector`` averages lag ``k`` over ``T - k`` products and does not
+    remove the mean. That "unbiased" block-Toeplitz matrix is not guaranteed to
+    be positive semidefinite, and when it is not the recursion returns an
+    indefinite innovation covariance and an unstable model: on the bundled
+    ``kuramoto_M7_T100`` fixture, 7 of 21 pairs at order 1 and all 21 at
+    orders 2 and 20, so Geweke's ratio came out negative or NaN, and the NaN
+    in BIC's ``log det`` stopped the order search from ever turning over.
+
+    The Yule-Walker estimator is defined on the sample autocovariance about
+    the mean normalised by ``T`` (Brockwell & Davis 1991, sec. 11.5;
+    Luetkepohl 2005, sec. 3.3.4), whose Toeplitz matrix is positive
+    semidefinite by construction; that is what makes the fitted model stable
+    with a positive-definite innovation covariance. It is computed once, to
+    the largest lag needed, and sliced for each candidate order.
+
+    ``max_order`` is the largest order tried (nitime stopped at
+    ``max_order - 2``). Returns ``(coef, ecov)`` in nitime's convention,
+    ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
+    """
+    x = x - x.mean(axis=-1, keepdims=True)
+    n_obs = x.shape[-1]
+    n_lags = (max_order if order is None else order) + 1
+    # R[k] = (1/T) sum_t x(t+k) x(t)^T: nitime's lag orientation.
+    R = np.stack([x[:, k:] @ x[:, :n_obs - k].T for k in range(n_lags)]) / n_obs
+    if order is not None:
+        return nt_alg.lwr_recursion(R)
+
+    best = None
+    for p in range(max_order + 1):
+        coef, ecov = nt_alg.lwr_recursion(R[: p + 1])
+        # nitime's criterion and arguments: (ecov, n_process, order, n_process * T).
+        crit = nt_utils.bayesian_information_criterion(ecov, 2, p, 2 * n_obs)
+        if best is not None and crit > best[0]:
+            return best[1:]
+        best = (crit, coef, ecov)
+    raise ValueError(
+        f"Model estimation order did not converge at max_order = {max_order}"
+    )
+
+
 class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsigned):
     name = "Spectral Granger causality"
     identifier = "sgc"
@@ -1019,29 +1069,24 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                 F, freq = super()._get_cache(data)
             else:
                 z = data.to_numpy(squeeze=True)
-                # 1/fs, not 1. `fs` is in this SPI's identifier and in its
-                # cache key, but the parametric branch hard-coded a unit
-                # sampling interval, so `GA.frequencies` came back in units of
-                # 1/1 whatever `fs` said and the [fmin, fmax] band was applied
-                # on the wrong axis. Two SPIs differing only in `fs` therefore
-                # advertised different sampling rates and computed the same
-                # numbers. No effect at the shipped fs=1.
-                time_series = ts.TimeSeries(z, sampling_interval=1.0 / self._fs)
-                GA = nta.GrangerAnalyzer(
-                    time_series, order=self._order, max_order=self._max_order
-                )
-
-                triu_id = np.triu_indices(data.n_processes)
-
+                n_proc = data.n_processes
+                # F[source, target, f]. nitime's `granger_causality_xy(...)`
+                # returns (w, f_x_on_y, f_y_on_x, ...) for the pair (x, y) =
+                # (z[i], z[j]), i.e. i -> j and then j -> i.
+                F = np.full((n_proc, n_proc, _GC_N_FREQS // 2 + 1), np.nan)
                 try:
-                    causality_xy = GA.causality_xy
-                    causality_yx = GA.causality_yx
+                    for i in range(n_proc):
+                        for j in range(i + 1, n_proc):
+                            coef, ecov = _fit_bivariate_var(
+                                z[[i, j]], self._order, self._max_order)
+                            _, F[i, j], F[j, i], _, _ = nt_alg.granger_causality_xy(
+                                coef, ecov, n_freqs=_GC_N_FREQS)
                 except ValueError as err:
-                    # nitime's order search walks the lag up to `max_order` and
+                    # The order search walks the lag up to `max_order` and
                     # raises if the information criterion never turns over.
                     # That is the signature of over-fitting at this record
-                    # length, not of a transient numerical problem, and its own
-                    # message ("Model estimation order did not converge at
+                    # length, not of a transient numerical problem, and the
+                    # bare message ("Model estimation order did not converge at
                     # max_order = 50") says nothing about the data. Relaying it
                     # as an all-NaN return buried the cause under pyspi's
                     # generic "returned no finite off-diagonal values".
@@ -1059,16 +1104,10 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                         f"or use a longer series."
                     ) from err
 
-                F = np.full(causality_xy.shape, np.nan)
-                F[triu_id[0], triu_id[1], :] = causality_xy[
-                    triu_id[0], triu_id[1], :
-                ]
-                F[triu_id[1], triu_id[0], :] = causality_yx[
-                    triu_id[0], triu_id[1], :
-                ]
-
                 F = np.transpose(np.expand_dims(F, axis=3), axes=[3, 2, 1, 0])
-                freq = GA.frequencies
+                # On the [0, fs/2] axis, not [0, 1/2]: `fs` is in this SPI's
+                # identifier and cache key, so the band must be applied in Hz.
+                freq = nt_utils.get_freqs(self._fs, _GC_N_FREQS)
             try:
                 data.spectral_gc[key] = {"freq": freq, "F": F}
             except AttributeError:

@@ -60,27 +60,14 @@ META_PREFIX = "__"
 # with any other failure is not frozen. Imported by tests/test_baseline_drift.py
 # so the test suite and the generator cannot drift apart on what is expected.
 #
-# `sgc_parametric_*_order-None`: nitime's automatic AR order search walks the
-# lag up to `max_order` and raises if the information criterion never turns
-# over. On kuramoto_M7_T100 -- 100 observations, a smooth oscillatory process
-# -- BIC improves all the way to lag 49, which at that length is over-fitting
-# rather than a genuinely high order. The fixed-order variants (order-1,
-# order-20) are estimated normally on the same fixture, and the automatic
-# variant is estimated normally on var1_M3_T100 and cml_M5_T100, so this is a
-# property of the record, not of the estimator.
-KNOWN_UNESTIMABLE = {
-    "kuramoto_M7_T100": {
-        key: "automatic AR order selection does not converge at T=100"
-        for key in (
-            "sgc_parametric_mean_fs-1_fmin-1e-05_fmax-0-5_order-None",
-            "sgc_parametric_mean_fs-1_fmin-1e-05_fmax-0-25_order-None",
-            "sgc_parametric_mean_fs-1_fmin-0-25_fmax-0-5_order-None",
-            "sgc_parametric_max_fs-1_fmin-1e-05_fmax-0-5_order-None",
-            "sgc_parametric_max_fs-1_fmin-1e-05_fmax-0-25_order-None",
-            "sgc_parametric_max_fs-1_fmin-0-25_fmax-0-5_order-None",
-        )
-    },
-}
+# None at present. Until pyspi fitted the parametric spectral-GC VAR itself,
+# `sgc_parametric_*_order-None` was listed here for kuramoto_M7_T100 as "BIC
+# improves all the way to lag 49". It did not: nitime's unbiased
+# autocovariance gave an indefinite innovation covariance from order 2 on
+# every pair, BIC's `log det` was NaN, and NaN never compares greater, so the
+# search never turned over. With the Yule-Walker autocovariance it turns over
+# at orders 1-5 (`spectral._fit_bivariate_var`).
+KNOWN_UNESTIMABLE = {}
 
 
 def build_tables(dataset_name, config="full", seed=42):
