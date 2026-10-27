@@ -369,12 +369,11 @@ class LaggedCorrelation(Undirected, Signed):
         return self._corr(x[tau:], y[:-tau])
 
     def _symmetric_lagged_corr(self, x, y, tau):
+        # The mean of the two one-sided correlations is undefined when either
+        # is, as in `multivariate`. Falling back to the defined direction
+        # reported a one-sided correlation under the symmetric SPI's name.
         forward = self._lagged_corr(x, y, tau)
         backward = self._lagged_corr(y, x, tau)
-        if np.isnan(forward):
-            return backward
-        if np.isnan(backward):
-            return forward
         return 0.5 * (forward + backward)
 
     @parse_bivariate

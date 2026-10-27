@@ -152,6 +152,28 @@ def test_lagged_correlation_matches_its_definition(estimator, tau, squared):
         assert spi.bivariate(_data(X), i=i, j=j) == pytest.approx(ref, abs=1e-12)
 
 
+@pytest.mark.parametrize("estimator", ["pearson", "spearman", "kendall"])
+def test_lagged_correlation_bivariate_does_not_fall_back_to_one_direction(estimator):
+    """An undefined direction makes the documented average undefined.
+
+    x is a single spike followed by a constant, so x[1:] has no variance and
+    corr(x[1:], y[:-1]) does not exist while corr(y[1:], x[:-1]) does.
+    ``multivariate`` (the Calculator's path) returned NaN; ``bivariate``
+    silently returned the one defined direction -- a one-sided lagged
+    correlation reported under the symmetric SPI's name, and a value the same
+    SPI gave differently depending on which entry point was called.
+    """
+    rng = np.random.default_rng(0)
+    x = np.zeros(50)
+    x[0] = 1.0
+    y = rng.standard_normal(50)
+    spi = basic.LaggedCorrelation(estimator=estimator, tau=1)
+    mv = spi.multivariate(_data([x, y]))[0, 1]
+    bv = spi.bivariate(_data([x, y]), i=0, j=1)
+    assert np.isnan(mv)
+    assert np.isnan(bv), f"bivariate returned {bv!r}, multivariate NaN"
+
+
 # ---------------------------------------------------------------------------
 # CrossCorrelation
 # ---------------------------------------------------------------------------
