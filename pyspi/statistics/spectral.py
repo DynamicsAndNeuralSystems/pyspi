@@ -950,7 +950,8 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         return self._fs * slope / (2 * np.pi), slope, r_value
 
 
-# nitime.GrangerAnalyzer's frequency grid: n_freqs // 2 + 1 points on [0, fs/2].
+# nitime.GrangerAnalyzer's grid size: granger_causality_xy evaluates the model at
+# n_freqs // 2 + 1 points on [0, fs/2) (scipy.signal.freqz, endpoint excluded).
 _GC_N_FREQS = 1024
 
 
