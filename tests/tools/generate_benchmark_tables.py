@@ -60,14 +60,29 @@ META_PREFIX = "__"
 # with any other failure is not frozen. Imported by tests/test_baseline_drift.py
 # so the test suite and the generator cannot drift apart on what is expected.
 #
-# None at present. Until pyspi fitted the parametric spectral-GC VAR itself,
+# Group delay regresses coherence phase on at least three *independent*
+# frequencies, one multitaper bandwidth (six bins) apart, so a pair needs a
+# significant coherence run of at least 13 of the 51 bins at T=100. The longest
+# run on any pair is 12 bins on var1_M3_T100 and 10 on cml_M5_T100, in every
+# band. Their former values were fits to 3-12 adjacent, correlated bins.
+#
+# Until pyspi fitted the parametric spectral-GC VAR itself,
 # `sgc_parametric_*_order-None` was listed here for kuramoto_M7_T100 as "BIC
 # improves all the way to lag 49". It did not: nitime's unbiased
 # autocovariance gave an indefinite innovation covariance from order 2 on
 # every pair, BIC's `log det` was NaN, and NaN never compares greater, so the
 # search never turned over. With the Yule-Walker autocovariance it turns over
 # at orders 1-5 (`spectral._fit_bivariate_var`).
-KNOWN_UNESTIMABLE = {}
+_GD_SHORT_RUNS = ("no significant coherence run spans three independent "
+                  "frequencies (13 bins) at T=100")
+KNOWN_UNESTIMABLE = {
+    dataset: {
+        f"gd_multitaper_delay_fs-1_{band}": _GD_SHORT_RUNS
+        for band in ("fmin-0_fmax-0-5", "fmin-0_fmax-0-25",
+                     "fmin-0-25_fmax-0-5")
+    }
+    for dataset in ("var1_M3_T100", "cml_M5_T100")
+}
 
 
 def build_tables(dataset_name, config="full", seed=42):

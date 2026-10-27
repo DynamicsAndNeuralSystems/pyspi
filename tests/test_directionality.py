@@ -382,7 +382,21 @@ def test_group_delay_recovers_a_known_lag(lag):
     assert r[0, 1] > 0.99 and r[0, 1] == pytest.approx(r[1, 0])
 
 
-def test_group_delay_is_estimable_on_the_bundled_fixtures():
+# At T=100 the three independent frequencies the fit requires are one
+# multitaper bandwidth (six bins) apart, so a significant run must span 13 of
+# the 51 bins. No pair of these two fixtures has one: their former values were
+# fits to 3-12 *adjacent*, correlated bins, when the thinning step was
+# (fmax - fmin) / 50 = one bin. See test_spectral_phase_audit.py.
+_GD_SHORT_RUNS = pytest.mark.xfail(strict=True, reason=(
+    "no significant coherence run spans three independent frequencies at T=100"))
+
+
+@pytest.mark.parametrize("name", [
+    pytest.param("var1_M3_T100.npy", marks=_GD_SHORT_RUNS),
+    pytest.param("cml_M5_T100.npy", marks=_GD_SHORT_RUNS),
+    "kuramoto_M7_T100.npy",
+])
+def test_group_delay_is_estimable_on_the_bundled_fixtures(name):
     """Not a repeat of the lag test: it pins that real data now produces values.
 
     Partial NaN is correct here and is not the defect being guarded against --
@@ -396,11 +410,10 @@ def test_group_delay_is_estimable_on_the_bundled_fixtures():
 
     fixtures = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "data", "fixtures")
-    for name in ("var1_M3_T100.npy", "cml_M5_T100.npy", "kuramoto_M7_T100.npy"):
-        data = Data(data=os.path.join(fixtures, name), dim_order="sp")
-        table = GroupDelay(statistic="delay", fmin=0, fmax=0.5).multivariate(data)
-        off = ~np.eye(table.shape[0], dtype=bool)
-        assert np.isfinite(table[off]).any(), f"{name}: gd is entirely NaN"
+    data = Data(data=os.path.join(fixtures, name), dim_order="sp")
+    table = GroupDelay(statistic="delay", fmin=0, fmax=0.5).multivariate(data)
+    off = ~np.eye(table.shape[0], dtype=bool)
+    assert np.isfinite(table[off]).any(), f"{name}: gd is entirely NaN"
 
 
 def test_group_delay_of_independent_processes_is_undefined():

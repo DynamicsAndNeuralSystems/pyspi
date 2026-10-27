@@ -876,17 +876,28 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         masked array, and the result is NaN. Confirmed at 5, 11, 19 and 39
         tapers, T up to 4000, on a pair with median coherence 0.998.
 
-        The one-sample test is the standard Enochson-Goodman/Bokil form: for
-        coherence estimated from ``n`` independent spectral estimates,
-        ``arctanh|C|`` is approximately normal with mean ``arctanh|Gamma|`` plus
-        a bias ``b = 1/(2n - 2)`` and *variance* ``b``, so the null z-score is
-        ``(arctanh|C| - b) / sqrt(b)``. That is what the second ``coherence_bias``
-        term was meant to be and is what is used here.
+        The per-bin screen is the Enochson-Goodman/Bokil Fisher-z
+        approximation: for coherence estimated from ``n`` independent spectral
+        estimates, ``arctanh|C|`` is taken as normal with mean
+        ``arctanh|Gamma|`` plus a bias ``b = 1/(2n - 2)`` and *variance* ``b``,
+        so the null z-score is ``(arctanh|C| - b) / sqrt(b)``. That is what the
+        second ``coherence_bias`` term was meant to be and is what is used
+        here. It is an approximation, not an exact test: at the backend's
+        default five tapers the normal tail is too light, and on independent
+        white noise a bin passes at nominal 5% about 16% of the time (the
+        exact null law ``P(|C|^2 > x) = (1 - x)^(n-1)`` gives 15.7%; measured
+        16.0-16.7% at T=100 and 1000). The screen is kept because the cluster
+        and three-point requirements below, not the per-bin level, are what
+        control false estimates (none of 600 independent white-noise pairs
+        gets a value at T=100 or at T=1000, in any shipped band); the exact
+        law would lower power.
 
         The rest follows the backend's own recipe: Benjamini-Hochberg over the
         in-band frequencies, keep the largest contiguous significant run,
-        subsample it to statistically independent points, require at least
-        three, and regress the unwrapped coherence phase on frequency.
+        thin it to independent points one multitaper bandwidth
+        (``PhaseSlopeIndex._FREQUENCY_STEP`` = six FFT bins) apart, require at
+        least three, and regress the unwrapped coherence phase on frequency.
+        At T=100 that means a significant run of at least 13 of the 51 bins.
         ``fs * slope / (2*pi)`` is the delay in samples; the unscaled
         ``slope/(2*pi)`` would be in seconds, because the regression runs
         against physical frequency. ``rvalue`` is |r|, which is orientation-
@@ -901,12 +912,12 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         coh = coherency[:, in_band]
         n_trials, _, M, _ = coh.shape
 
-        # Independent frequency spacing, as the backend defines it: the band is
-        # resolved into 50 pieces and points closer than that are not
-        # independent estimates.
-        df = float(freqs[1] - freqs[0])
-        resolution = (self._fmax - self._fmin) / 50
-        step = max(1, int(np.ceil(resolution / df)))
+        # Independent frequency spacing: one multitaper bandwidth, as for
+        # PhaseSlopeIndex. Closer estimates share the tapers' main lobes. The
+        # band used to be cut into 50 pieces whatever T, so at T=100 three
+        # adjacent, correlated bins passed as three independent points, and
+        # at T=20000 a 0.016-wide coupled band gave only three.
+        step = PhaseSlopeIndex._FREQUENCY_STEP
 
         bias = 1.0 / (2 * C.n_observations - 2)
         magnitude = np.minimum(np.abs(coh), 1 - np.finfo(float).eps)

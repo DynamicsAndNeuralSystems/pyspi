@@ -179,6 +179,13 @@ OBSERVED_EMPTY_CASES = {
     # pair (tests/test_causal_audit.py).
     ("cds", "duplicate_and_collinear", seed, T_SHORT)
     for seed in SEEDS
+} | {
+    # At T=64 the three independent frequencies GroupDelay fits are six bins
+    # apart, so its significant run must cover 13 of the 33 bins. These three
+    # had runs of adjacent, correlated bins when the step was one bin.
+    ("gd_delay", "correlated_gaussian", 0, T_SHORT),
+    ("gd_delay", "delayed_oscillation", 0, T_SHORT),
+    ("gd_delay", "delayed_oscillation", 7, T_SHORT),
 }
 
 # (SPI label, fixture, seed, T) -> (exception class, message regex).

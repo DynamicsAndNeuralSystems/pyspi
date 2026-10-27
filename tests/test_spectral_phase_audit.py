@@ -121,3 +121,38 @@ def test_group_delay_refuses_a_band_statistic(statistic):
 
     with pytest.raises(ValueError, match="GroupDelay"):
         GroupDelay(statistic=statistic)
+
+
+# --------------------------------------------------------------------------
+# Group delay: independent frequencies are one multitaper bandwidth apart
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("seed", range(6))
+def test_group_delay_uses_every_independent_frequency_of_a_narrow_band(seed):
+    """A 0.016-wide coupled band at T=20000 holds about 50 independent estimates.
+
+    Multitaper estimates are approximately independent one bandwidth
+    ``2 NW / T`` apart: six FFT bins at the backend's defaults, the spacing
+    PhaseSlopeIndex uses. GroupDelay instead thinned its significant run to
+    one point per ``(fmax - fmin) / 50`` whatever ``T`` -- 200 bins here -- so
+    the fit rested on three points and missed a 4-sample delay by 0.5 to 2.0
+    samples on every one of these seeds (now 0.03 to 0.13); for a 0.005-wide
+    band it returned NaN. (At T=100 the same rule is a 1-bin step, and three
+    *adjacent*, strongly correlated bins passed the
+    three-independent-points requirement.)
+    """
+    from scipy import signal
+
+    from pyspi.statistics.spectral import GroupDelay
+
+    rng = np.random.default_rng(seed)
+    T, lag = 20000, 4
+    x = rng.standard_normal(T + lag)
+    narrow = signal.filtfilt(
+        *signal.butter(3, [0.192, 0.208], btype="band", fs=1), x)
+    y = narrow[:-lag] / narrow.std() + 0.05 * rng.standard_normal(T)
+    data = Data(np.vstack([x[lag:], y]), dim_order="ps", zscore=False)
+
+    delay = GroupDelay(statistic="delay", fmin=0, fmax=0.5).multivariate(data)
+    assert delay[0, 1] == pytest.approx(lag, abs=0.5)
+    assert delay[1, 0] == pytest.approx(-lag, abs=0.5)
