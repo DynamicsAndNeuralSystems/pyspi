@@ -35,7 +35,7 @@ def test_phi_native_basic():
 
     try:
         # Create calculator with phi config
-        calc = Calculator(dt, configfile=config_path)
+        calc = Calculator(dt, config=config_path)
 
         # Compute phi values
         calc.compute()
@@ -79,7 +79,7 @@ def test_phi_types():
         config_path = f.name
 
     try:
-        calc = Calculator(dt, configfile=config_path)
+        calc = Calculator(dt, config=config_path)
         calc.compute()
 
         # Should have at least one table with multiple phi configurations
@@ -134,7 +134,3 @@ def test_phi_comp_direct():
     result = phi_comp(X, Z, params, options)
     assert np.isfinite(result), "phi_comp should return finite value"
     assert isinstance(result, (int, float, np.number)), "phi_comp should return numeric value"
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])

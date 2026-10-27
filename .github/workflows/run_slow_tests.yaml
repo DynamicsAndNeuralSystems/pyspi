@@ -1,0 +1,61 @@
+name: Slow Regression Suite
+
+# The slow suite compares every SPI against frozen baseline tables and takes
+# a couple of minutes plus three full-config computations, so it is not run
+# per-push to branches. Pull requests, pushes to main, weekly, and on demand.
+#
+# The baselines were frozen against uv.lock, so the blocking job installs from
+# the lock: a failure there is ours. The advisory job floats to the latest
+# dependencies and never blocks; it exists so upstream drift is visible.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # 04:00 UTC every Monday.
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  slow-test:
+    name: regression (ubuntu / python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Run regression tests against the locked resolution
+        run: |
+          uv sync --locked --extra testing
+          uv run pytest -m slow
+
+  slow-test-latest:
+    name: regression (latest deps, advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Not a merge gate: failures here mean an upstream release moved a number.
+    continue-on-error: true
+    env:
+      # Looser per-family tolerances; see tests/test_baseline_drift.py.
+      PYSPI_DRIFT_TIER: latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Install pyspi with the latest compatible dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[testing]'
+
+      - name: Run regression tests
+        run: pytest -m slow

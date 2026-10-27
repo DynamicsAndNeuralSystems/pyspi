@@ -1,0 +1,41 @@
+pyspi/statistics/infotheory.py implements the Kraskov-Stoegbauer-Grassberger
+(KSG), box-kernel, Gaussian and symbolic estimators of mutual information and
+transfer entropy, and the Kozachenko-Leonenko entropy estimator, following --
+and validated against -- the Java Information Dynamics Toolkit (JIDT),
+https://github.com/jlizier/jidt, which pyspi 2.x called through JPype. The
+estimator definitions, parameter names (k_HISTORY, DYN_CORR_EXCL, KERNEL_WIDTH,
+AUTO_EMBED_METHOD, ...) and default behaviours derive from JIDT.
+
+The JIDT jar is no longer distributed with pyspi. Its notice is reproduced here.
+
+    Java Information Dynamics Toolkit (JIDT)
+    Copyright (C) 2012-2014 Joseph T. Lizier
+    Copyright (C) 2014-2016 Joseph T. Lizier and Ipek Özdemir
+    Copyright (C) 2016-2019 Joseph T. Lizier, Ipek Özdemir and Pedro Mediano
+    Copyright (C) 2019-2022 Joseph T. Lizier, Ipek Özdemir, Pedro Mediano,
+                            Emanuele Crosato, Sooraj Sekhar and Oscar Huaigu Xu
+    Copyright (C) 2022-     Joseph T. Lizier, Ipek Özdemir, Pedro Mediano,
+                            Emanuele Crosato, Sooraj Sekhar, Oscar Huaigu Xu
+                            and David Shorten
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+JIDT and pyspi are both distributed under GPL-3.0-or-later, so pyspi's own
+licence (LICENSE.txt, the verbatim GPL v3 text) is the licence text that
+applies to the combined work.
+
+Citation:
+    Lizier, J. T. (2014). JIDT: An information-theoretic toolkit for studying
+    the dynamics of complex systems. Frontiers in Robotics and AI 1:11.
+    https://doi.org/10.3389/frobt.2014.00011
