@@ -241,7 +241,7 @@ def test_hsic_of_a_rescaled_copy_is_one(biased):
 # Barycenter
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize("statistic", ["mean", "max"])
+@pytest.mark.parametrize("statistic", ["mean", "max", "corr"])
 def test_barycenter_value_does_not_depend_on_call_order(statistic):
     """One barycenter per unordered pair, whichever orientation is asked first.
 
@@ -326,3 +326,45 @@ def test_gwtau_distance_vector_starts_at_zero_and_matches_the_paper():
     # squares (the two zeros pair up) divided by n-1 instead of n.
     old = np.sqrt(np.mean((np.sort(vx[1:]) - np.sort(vy[1:])) ** 2))
     assert old == pytest.approx(want * np.sqrt(60 / 59), rel=1e-12)
+
+
+def test_barycenter_corr_is_pearson_for_the_euclidean_mode():
+    """2 E[b^2] - 1 of the Euclidean barycenter (x + y) / 2 of two z-scored
+    series is exactly Pearson's r, since E[b^2] = (1 + r) / 2."""
+    from pyspi.statistics.distance import Barycenter
+
+    z = np.random.default_rng(9).standard_normal((4, 80))
+    z[1] = 0.6 * z[0] + 0.8 * z[1]
+    data = Data(z, dim_order="ps")
+    A = Barycenter(mode="euclidean", statistic="corr").multivariate(data)
+    r = np.corrcoef(data.to_numpy(squeeze=True))
+    off = ~np.eye(4, dtype=bool)
+    assert A[off] == pytest.approx(r[off], abs=1e-12)
+
+
+@pytest.mark.parametrize("mode", ["dtw", "softdtw"])
+def test_barycenter_corr_is_largest_for_identical_series_and_bounded(mode):
+    """DBA of a series with itself is the series, so the alignment-adjusted
+    correlation is exactly 1. The soft-DTW barycenter is a smoothed version
+    even then (at gamma=1 it keeps ~93% of the energy of a random walk), so
+    for it the identical pair is only the largest value. Nothing leaves
+    [-1, 1]."""
+    from pyspi.statistics.distance import Barycenter
+
+    rng = np.random.default_rng(10)
+    x = np.cumsum(rng.standard_normal(60))
+    z = np.stack([x, x, rng.standard_normal(60)])
+    A = Barycenter(mode=mode, statistic="corr").multivariate(Data(z, dim_order="ps"))
+    if mode == "dtw":
+        assert A[0, 1] == pytest.approx(1.0, abs=1e-9)
+    else:
+        assert A[0, 1] > 0.8 and A[0, 1] == np.nanmax(A)
+    off = ~np.eye(3, dtype=bool)
+    assert np.all(A[off] <= 1 + 1e-9) and np.all(A[off] >= -1 - 1e-9)
+
+
+def test_barycenter_corr_refuses_squared():
+    from pyspi.statistics.distance import Barycenter
+
+    with pytest.raises(ValueError, match="corr"):
+        Barycenter(mode="dtw", statistic="corr", squared=True)

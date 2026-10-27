@@ -1,25 +1,26 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (299 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (296 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
 | 2.0.2 `config.yaml` | 285 |
-| identifier unchanged | 230 |
+| identifier unchanged | 224 |
 | renamed (same class and parameters; identifier changed) | 23 |
-| removed | 32 |
-| added | 46 |
-| 3.0.0 `full.yaml` | 299 |
+| removed | 38 |
+| added | 49 |
+| 3.0.0 `full.yaml` | 296 |
 
-285 - 32 removed + 46 added = 299; 230 + 23 renamed + 46 added = 299.
-The 32 removals are the 14 made while porting away from JIDT, the 15 made after the per-SPI audit (duplicate, constant or degenerate SPIs), and the 3 `psi_wavelet_max_*` made after the follow-up simulations; all are in the table below.
+285 - 38 removed + 49 added = 296; 224 + 23 renamed + 49 added = 296.
+The 38 removals are the 14 made while porting away from JIDT, the 15 made after the per-SPI audit (duplicate, constant or degenerate SPIs), the 3 `psi_wavelet_max_*` made after the follow-up simulations, and the 6 DTW-type barycenter `mean` SPIs replaced by `bary_*_corr` in the make-up audit; all are in the table below.
 
-## Added (46)
+## Added (49)
 
 | Family | Count | Identifiers |
 |:--|--:|:--|
 | `LaggedCorrelation` (Pearson, Spearman, Kendall at lags 1, 2, 3, 4, 5, 10, 20; each plain and squared) | 42 | `corr_{pearson,spearman,kendall}_tau-{1,2,3,4,5,10,20}[-sq]` |
 | `CrossPairwiseDistance` | 2 | `xpdist_euclidean_tau-1_mean_rmse`, `xpdist_euclidean_tau-1_min_rmse` |
+| `Barycenter` (alignment-adjusted correlation `2 mean(b^2) / mean_energy - 1`; replaces the `mean` statistic) | 3 | `bary_dtw_corr`, `bary_sgddtw_corr`, `bary_softdtw_corr` |
 | `DirectedInfo` (KSG/Frenzel-Pompe) | 1 | `di_kraskov_NN-4_n-5` |
 | `PhaseAlignedCorrelation` (Welch, automatic segment length) | 1 | `phasealigned_welch_nperseg-auto` |
 
@@ -69,10 +70,13 @@ Full list:
 - `corr_spearman_tau-5-sq`
 - `di_kraskov_NN-4_n-5`
 - `phasealigned_welch_nperseg-auto`
+- `bary_dtw_corr`
+- `bary_sgddtw_corr`
+- `bary_softdtw_corr`
 - `xpdist_euclidean_tau-1_mean_rmse`
 - `xpdist_euclidean_tau-1_min_rmse`
 
-## Removed (32)
+## Removed (38)
 
 | Identifier (2.0.2) | Class | Why |
 |:--|:--|:--|
@@ -86,6 +90,8 @@ Full list:
 | `pli_multitaper_max_*` (3) | `PhaseLagIndex` | With one recording PLI at each frequency is a mean of signs over a few tapers, so the band maximum is exactly 1 for every pair once `T >= 1000`; the `dspli` maxima defect. `mean` variants kept (audit). |
 | `wpli_multitaper_max_*` (3) | `WeightedPhaseLagIndex` | As above (audit). |
 | `psi_wavelet_max_*` (3) | `PhaseSlopeIndex` (wavelet) | Maximum over time of a bounded instantaneous phase slope; positive under the null both ways round (simulation). `mean` variants kept. |
+| `bary_dtw_mean`, `bary_sgddtw_mean`, `bary_softdtw_mean` (3) | `Barycenter` | The mean of a barycenter of two zero-mean series is zero up to warping residue; tracked marginal skewness, not coupling (make-up audit). Replaced by `bary_*_corr`. |
+| `bary-sq_dtw_mean`, `bary-sq_sgddtw_mean`, `bary-sq_softdtw_mean` (3) | `Barycenter` | Monotone function of the new `bary_*_corr` (make-up audit). |
 | `di_kernel_W-0.5` | `DirectedInfo` | DirectedInfo kernel variant dropped (3.8-4.4 on independent data at every T). |
 | `di_kozachenko` | `DirectedInfo` | DirectedInfo kozachenko variant dropped (negative values). |
 | `dspli_multitaper_max_fs-1_fmin-0-25_fmax-0-5` | `DebiasedSquaredPhaseLagIndex` | Constant 1.0 for essentially any input (few-taper debiased estimate); `mean` variants kept. |

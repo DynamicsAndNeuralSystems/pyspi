@@ -353,6 +353,10 @@
       - global_constraint: sakoe_chiba
 
   Barycenter:
+    # Only the `corr` statistic (2 mean(b^2) / mean_energy - 1, an alignment-adjusted
+    # correlation) is bundled for the DTW-type barycenters: the unsquared mean of
+    # a barycenter of z-scored series is zero up to warping residue, and the
+    # squared mean is a monotone function of `corr` (3.0.0 make-up audit).
     # bary_euclidean_mean is not bundled: the Euclidean barycenter of two z-scored
     # series has mean identically zero (|value| < 1e-15 on every fixture).
     labels:
@@ -367,19 +371,19 @@
       - mode: euclidean
         statistic: max
       - mode: dtw
-        statistic: mean
+        statistic: corr
         labels:
           - M09
       - mode: dtw
         statistic: max
       - mode: sgddtw
-        statistic: mean
+        statistic: corr
         labels:
           - M09
       - mode: sgddtw
         statistic: max
       - mode: softdtw
-        statistic: mean
+        statistic: corr
         labels:
           - M09
       - mode: softdtw
@@ -394,30 +398,12 @@
         squared: True
 
       - mode: dtw
-        statistic: mean
-        squared: True
-        labels:
-          - M09
-
-      - mode: dtw
         statistic: max
         squared: True
 
       - mode: sgddtw
-        statistic: mean
-        squared: True
-        labels:
-          - M09
-
-      - mode: sgddtw
         statistic: max
         squared: True
-
-      - mode: softdtw
-        statistic: mean
-        squared: True
-        labels:
-          - M09
 
       - mode: softdtw
         statistic: max

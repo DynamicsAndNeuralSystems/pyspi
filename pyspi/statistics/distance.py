@@ -623,10 +623,27 @@ class SoftDynamicTimeWarping(TimeWarping):
 
 
 class Barycenter(Undirected, Signed):
-    """A statistic (mean or max, optionally of the square) of the barycenter
-    of the pair under the Euclidean, DTW (DBA), subgradient-DBA or soft-DTW
-    geometry. The barycenter of {x, y} is a function of the unordered pair,
-    so the measure is undirected.
+    """A statistic of the barycenter of the pair under the Euclidean, DTW
+    (DBA), subgradient-DBA or soft-DTW geometry. The barycenter of {x, y} is a
+    function of the unordered pair, so the measure is undirected.
+
+    ``statistic="corr"`` is the alignment-adjusted correlation
+    ``2 * mean(b**2) / mean_energy - 1`` of the barycenter ``b``, where
+    ``mean_energy`` is the average of ``mean(x**2)`` and ``mean(y**2)``. For
+    the Euclidean barycenter ``(x + y) / 2`` of two zero-mean series this is
+    exactly Pearson's r (``mean(b**2) = (var_x + var_y + 2 cov) / 4``); for
+    the DTW geometries it is the share of the pair's amplitude that survives
+    averaging after optimal alignment, on the same [-1, 1] scale (exactly 1
+    for identical series under DBA; soft-DTW's barycenter is smoothed even
+    then, so its value for an identical pair is below 1, about 0.87 at
+    ``gamma=1`` on a random walk). It is the
+    only statistic of the barycenter that carries pairwise information: the
+    barycenter of two zero-mean series has mean zero by construction, so
+    ``statistic="mean"`` without ``squared`` reports the residue of warping
+    (it tracked marginal skewness, not coupling, in the 3.0.0 make-up audit),
+    and its maximum tracks the larger of the two series' own maxima. The
+    squared mean is a monotone function of ``corr`` and is not bundled; the
+    ``mean`` and ``max`` statistics remain constructible.
     """
 
     name = "Barycenter"
@@ -666,7 +683,16 @@ class Barycenter(Undirected, Signed):
             self._preproc = lambda x: x**2
             self.identifier += f"-sq"
 
-        if statistic == "mean":
+        self._statistic = statistic
+        if statistic == "corr":
+            if squared:
+                raise ValueError("statistic='corr' already squares the barycenter; "
+                                 "squared=True is not meaningful with it.")
+            # 2 E[b^2] / E[energy] - 1, with the pair's energy supplied by
+            # `bivariate`: Pearson's r for the Euclidean barycenter, an
+            # alignment-adjusted correlation otherwise.
+            self._statfn = lambda x, e: 2.0 * np.nanmean(x ** 2) / e - 1.0
+        elif statistic == "mean":
             self._statfn = lambda x: np.nanmean(self._preproc(x))
         elif statistic == "max":
             self._statfn = lambda x: np.nanmax(self._preproc(x))
@@ -698,6 +724,10 @@ class Barycenter(Undirected, Signed):
             except KeyError:
                 data.barycenter[self._mode] = {key: bc}
 
+        if self._statistic == "corr":
+            z = data.to_numpy(squeeze=True)
+            energy = 0.5 * (np.mean(z[i] ** 2) + np.mean(z[j] ** 2))
+            return self._statfn(bc, energy)
         return self._statfn(bc)
 
 

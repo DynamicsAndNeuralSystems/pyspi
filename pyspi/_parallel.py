@@ -483,7 +483,8 @@ SCHEMA_VERSION = 1
 #         and Nyquist bins; gwtau's distance vector includes the start;
 #         gpfit scores the leave-one-out error of the fitted GP.
 #         Fifteen duplicate/constant/degenerate SPIs leave the bundled
-#         configs.
+#         configs; the DTW-type barycenter `mean` SPIs become `corr`
+#         (2 E[b^2] - 1), new identifiers rather than changed values.
 COMPUTATION_VERSION = "3.0.0.r12"
 
 
