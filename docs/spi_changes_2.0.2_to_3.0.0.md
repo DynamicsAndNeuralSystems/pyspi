@@ -1,18 +1,18 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (302 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (299 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
 | 2.0.2 `config.yaml` | 285 |
-| identifier unchanged | 233 |
+| identifier unchanged | 230 |
 | renamed (same class and parameters; identifier changed) | 23 |
-| removed | 29 |
+| removed | 32 |
 | added | 46 |
-| 3.0.0 `full.yaml` | 302 |
+| 3.0.0 `full.yaml` | 299 |
 
-285 - 29 removed + 46 added = 302; 233 + 23 renamed + 46 added = 302.
-The 29 removals are the 14 made while porting away from JIDT and the 15 made after the per-SPI audit (duplicate, constant or degenerate SPIs); both groups are in the table below.
+285 - 32 removed + 46 added = 299; 230 + 23 renamed + 46 added = 299.
+The 32 removals are the 14 made while porting away from JIDT, the 15 made after the per-SPI audit (duplicate, constant or degenerate SPIs), and the 3 `psi_wavelet_max_*` made after the follow-up simulations; all are in the table below.
 
 ## Added (46)
 
@@ -72,7 +72,7 @@ Full list:
 - `xpdist_euclidean_tau-1_mean_rmse`
 - `xpdist_euclidean_tau-1_min_rmse`
 
-## Removed (29)
+## Removed (32)
 
 | Identifier (2.0.2) | Class | Why |
 |:--|:--|:--|
@@ -85,6 +85,7 @@ Full list:
 | `xme_kernel_W-0.5_k10` | `CrossmapEntropy` | Fixed-width box kernel in 11 dimensions; as above. `xme_kernel_W-0.5_k1` is kept (audit). |
 | `pli_multitaper_max_*` (3) | `PhaseLagIndex` | With one recording PLI at each frequency is a mean of signs over a few tapers, so the band maximum is exactly 1 for every pair once `T >= 1000`; the `dspli` maxima defect. `mean` variants kept (audit). |
 | `wpli_multitaper_max_*` (3) | `WeightedPhaseLagIndex` | As above (audit). |
+| `psi_wavelet_max_*` (3) | `PhaseSlopeIndex` (wavelet) | Maximum over time of a bounded instantaneous phase slope; positive under the null both ways round (simulation). `mean` variants kept. |
 | `di_kernel_W-0.5` | `DirectedInfo` | DirectedInfo kernel variant dropped (3.8-4.4 on independent data at every T). |
 | `di_kozachenko` | `DirectedInfo` | DirectedInfo kozachenko variant dropped (negative values). |
 | `dspli_multitaper_max_fs-1_fmin-0-25_fmax-0-5` | `DebiasedSquaredPhaseLagIndex` | Constant 1.0 for essentially any input (few-taper debiased estimate); `mean` variants kept. |
