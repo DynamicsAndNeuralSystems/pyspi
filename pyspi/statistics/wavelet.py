@@ -215,6 +215,44 @@ class debiased_weighted_squared_PhaseLagIndex(mne, Undirected):
 
 
 class PhaseSlopeIndex(mne, Undirected):
+    """Time-averaged instantaneous phase slope from Morlet wavelets.
+
+    Not Nolte et al.'s (2008) phase slope index, which weights each phase
+    difference by the coherence; that index is ``statistics.spectral``'s
+    ``PhaseSlopeIndex``. What this class computes, through mne-connectivity's
+    ``phase_slope_index(mode="cwt_morlet")`` on the record as one epoch:
+
+    - Morlet coefficients ``W_i(f, t)`` at 10 frequencies spaced linearly from
+      ``max(fmin, 5 fs / T)`` to ``fmax`` (7 cycles, fewer where the wavelet
+      would not fit the record);
+    - the coherency at every time point. mne-connectivity averages the
+      cross-spectrum over epochs and nothing else, so with one epoch
+      ``C(f, t) = exp(i dphi(f, t))`` with ``dphi`` the phase of
+      ``W_i W_j*``: ``|C| = 1`` and no coherence weighting;
+    - ``psi(t) = sum_k sin(dphi(f_{k+1}, t) - dphi(f_k, t))`` over the 8
+      interior frequencies (the backend's band is open, so both ends drop out),
+      bounded by 7 in magnitude.
+
+    ``mean`` is the time average of ``psi(t)``. It is positive when ``i``
+    leads ``j``, zero in expectation for independent series, with a standard
+    deviation that falls as ``1 / sqrt(T)`` (0.37, 0.21, 0.11 on [0, 0.5] at
+    T = 100, 500, 2000 for white noise). The grid step
+    ``df = (fmax - fmin) / 9``, with ``fmin`` resolved as above, barely changes
+    with T, so neighbouring phases differ by ``2 pi lag df`` and the sign
+    turns over near ``lag = 1 / (2 df)``: about 9 samples at fs=1 on [0, 0.5]
+    and 18 on [0, 0.25]. On [0.25, 0.5] the index falls to about zero sooner,
+    by 8 samples, as the short wavelets stop overlapping. In simulation (white
+    noise and a delayed copy, T = 500 and 2000, 50 runs each) the sign was
+    right in every run for lags up to 5 samples in all three bands and up to
+    12 on [0, 0.25]; on [0, 0.5] it was near zero at lag 8 and wrong in every
+    run at lag 12. The value is not proportional to the lag: on [0, 0.5] it
+    peaks near lag 3.
+
+    ``max`` is the maximum of ``psi(t)`` over time. It tends to the bound
+    whatever the data and is positive both ways round on independent noise,
+    so it carries no lead/lag information and is not bundled.
+    """
+
     name = "Phase slope index (wavelet)"
     labels = ["unsigned", "wavelet"]
 
