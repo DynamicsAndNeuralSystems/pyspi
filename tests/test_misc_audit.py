@@ -247,3 +247,89 @@ def test_bundled_pec_signedness_follows_absolute():
         expect_signed = not ident.endswith("_abs")
         assert spi.issigned() is expect_signed, ident
         assert ("signed" if expect_signed else "unsigned") in spi.labels, ident
+
+
+# --------------------------------------------------------------------------
+# GPModel
+# --------------------------------------------------------------------------
+
+def _gp_kernel(name):
+    from sklearn.gaussian_process import kernels
+    return kernels.ConstantKernel() + kernels.WhiteKernel() + getattr(kernels, name)()
+
+
+@pytest.mark.parametrize("kernel", ["DotProduct", "RBF"])
+def test_gpfit_is_the_leave_one_out_mse_of_the_fitted_gp(kernel):
+    """`gpfit_*[i, j]` is the leave-one-out MSE of a GP predicting j from i.
+
+    Reference by brute force: fit the GP once (hyperparameters by maximum
+    marginal likelihood, sklearn defaults), then for every t refit the same
+    kernel with the optimizer off on the other T-1 points and predict y_t.
+    """
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from pyspi.statistics.misc import GPModel
+
+    rng = np.random.default_rng(3)
+    x = rng.standard_normal(80)
+    y = np.sin(2 * x) + 0.5 * rng.standard_normal(80)
+    data = Data(np.vstack([x, y]), dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        gp = GaussianProcessRegressor(kernel=_gp_kernel(kernel)).fit(z[0][:, None], z[1])
+        resid = []
+        for t in range(len(x)):
+            keep = np.arange(len(x)) != t
+            g = GaussianProcessRegressor(kernel=gp.kernel_, optimizer=None)
+            g.fit(z[0][keep, None], z[1][keep])
+            resid.append(z[1][t] - g.predict(z[0][[t], None])[0])
+    assert GPModel(kernel).multivariate(data)[0, 1] == pytest.approx(
+        np.mean(np.square(resid)), rel=1e-8)
+
+
+def test_gpfit_rbf_does_not_interpolate_an_unrelated_pair():
+    """An independent pair must score ~var(y) (nothing to predict), not ~0.
+
+    The kernel's RBF term has unit amplitude, so at a vanishing length scale it
+    is white noise of variance 1 and the likelihood cannot tell it from the
+    WhiteKernel. That solution interpolates y: its in-sample prediction is y
+    itself. With x in large units (zscore=False) the optimizer starts inside
+    it, and the in-sample MSE the SPI used to return was ~0 (mean 0.05 of
+    var(y) at T=300, sd(x)=100). Its leave-one-out prediction is ~0.
+    """
+    from pyspi.statistics.misc import GPModel
+
+    for seed in range(3):
+        rng = np.random.default_rng(seed)
+        x = 100.0 * rng.standard_normal(300)
+        y = rng.standard_normal(300)
+        data = Data(np.vstack([x, y]), dim_order="ps", zscore=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            value = GPModel("RBF").multivariate(data)[0, 1]
+        assert value > 0.9 * y.var(), (seed, value, y.var())
+
+
+@pytest.mark.parametrize("kernel", ["DotProduct", "RBF"])
+def test_gpfit_recovers_the_noise_variance_and_the_null(kernel):
+    """Known answers on z-scored data (T=300).
+
+    y = x + 0.6 e: the best predictor's MSE is the noise variance after
+    z-scoring, 0.36 / 1.36 = 0.265, for both kernels. Independent pair:
+    (T-1)/T = 0.997.
+    """
+    from pyspi.statistics.misc import GPModel
+
+    sig, nul = [], []
+    for seed in range(5):
+        rng = np.random.default_rng([seed, 11])
+        x = rng.standard_normal(300)
+        e = rng.standard_normal(300)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            sig.append(GPModel(kernel).multivariate(
+                Data(np.vstack([x, x + 0.6 * e]), dim_order="ps"))[0, 1])
+            nul.append(GPModel(kernel).multivariate(
+                Data(np.vstack([x, rng.standard_normal(300)]), dim_order="ps"))[0, 1])
+    assert np.mean(sig) == pytest.approx(0.36 / 1.36, abs=0.03)
+    assert np.mean(nul) == pytest.approx(299 / 300, abs=0.02)

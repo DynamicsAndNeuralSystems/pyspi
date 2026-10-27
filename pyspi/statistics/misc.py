@@ -2,6 +2,7 @@ import warnings
 import inspect
 import numpy as np
 
+from scipy.linalg import solve_triangular
 from statsmodels.tsa import stattools
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from sklearn.gaussian_process import kernels, GaussianProcessRegressor
@@ -199,6 +200,32 @@ class LinearModel(Directed, Unsigned):
 
 
 class GPModel(Directed, Unsigned):
+    """Gaussian process regression of process j on process i.
+
+    ``table[i, j]`` is the leave-one-out mean squared error of a GP that
+    predicts ``z[j]`` from ``z[i]`` (row = predictor, column = target; lower
+    is better prediction; about 1, the variance of ``z[j]``, for an unrelated
+    pair of z-scored series). The kernel is ``ConstantKernel() + WhiteKernel()
+    + {RBF, DotProduct}()`` at sklearn's defaults (bounds 1e-5 to 1e5, one
+    optimizer start), its hyperparameters maximising the log marginal
+    likelihood. ``DotProduct`` makes it Bayesian linear regression.
+
+    The error is leave-one-out with the hyperparameters fixed at the fit
+    (Rasmussen & Williams 2006, eq. 5.12), not in-sample. The RBF term has unit
+    amplitude, so at a vanishing length scale it is white noise of variance 1
+    and the likelihood cannot tell it from the WhiteKernel. On an unrelated
+    pair that interpolating solution is usually the global optimum, and its
+    in-sample prediction is y itself: with ten random restarts of the
+    optimizer, the in-sample MSE returned before 3.0.0 fell below 0.05 on 41
+    of the 68 RBF fixture pairs. The default start reaches it when x is in
+    large units (``zscore=False``). Its leave-one-out prediction is ~0, so the
+    score is right at either optimum.
+
+    Hyperparameters at a bound are expected rather than a failure: on
+    z-scored data the constant (and DotProduct's ``sigma_0``) sits at 1e-5,
+    and the RBF length scale goes to 1e5 when there is no relation.
+    """
+
     name = "Gaussian process regression"
     identifier = "gpfit"
     labels = ["misc", "unsigned", "unordered", "normal", "nonlinear", "directed"]
@@ -215,8 +242,12 @@ class GPModel(Directed, Unsigned):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             gp = GaussianProcessRegressor(kernel=self._kernel).fit(z[i], np.ravel(z[j]))
-        y_predict = gp.predict(z[i])
-        return mean_squared_error(y_predict, np.ravel(z[j]))
+        # Leave-one-out residuals y_t - mu_{-t} = [K^-1 y]_t / [K^-1]_tt, from
+        # the lower Cholesky factor of K (noise included) the fit already holds.
+        L_inv = solve_triangular(gp.L_, np.eye(len(gp.alpha_)), lower=True,
+                                 check_finite=False)
+        resid = gp.alpha_ / np.einsum("ij,ij->j", L_inv, L_inv)
+        return float(np.mean(resid ** 2))
 
 
 class PowerEnvelopeCorrelation(Undirected, Unsigned):
