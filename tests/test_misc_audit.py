@@ -145,3 +145,62 @@ def test_cointegration_is_labelled_linear():
     wrong = sorted(k for k, v in coint.items()
                    if "linear" not in v.labels or "nonlinear" in v.labels)
     assert not wrong, f"cointegration SPIs not labelled linear: {wrong}"
+
+
+# --------------------------------------------------------------------------
+# PowerEnvelopeCorrelation
+# --------------------------------------------------------------------------
+
+def _anticorrelated_envelopes(t=2000):
+    n = np.arange(t)
+    env = 1.5 + np.sin(2 * np.pi * 0.004 * n)
+    x = env * np.sin(2 * np.pi * 0.11 * n)
+    y = (3.0 - env) * np.sin(2 * np.pi * 0.17 * n + 1.0)
+    return np.vstack([x, y])
+
+
+def test_pec_reports_the_envelope_correlation_with_its_sign():
+    """Two carriers whose amplitude envelopes move in antiphase.
+
+    The independent reference is the Pearson correlation of the Hilbert
+    amplitude envelopes (of their logs for `log`), exactly -1 up to edge
+    effects. A correlation coefficient carries its sign, so unless `absolute`
+    is applied the SPI must report itself as signed: as unsigned,
+    `Calculator._rmmin` shifted the column by its minimum and `set_group`
+    correlated it through `abs()`, folding anticorrelated envelopes onto
+    correlated ones.
+    """
+    from scipy.signal import hilbert
+
+    from pyspi.statistics.misc import PowerEnvelopeCorrelation
+
+    arr = _anticorrelated_envelopes()
+    data = Data(arr, dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+    amp = np.abs(hilbert(z, axis=-1))
+    for log in (False, True):
+        e = np.log(amp ** 2) if log else amp
+        ref = np.corrcoef(e)[0, 1]
+        got = PowerEnvelopeCorrelation(log=log).multivariate(data)[0, 1]
+        assert got == pytest.approx(ref, abs=1e-9)
+        assert got < -0.9
+
+    for orth in (False, True):
+        for log in (False, True):
+            spi = PowerEnvelopeCorrelation(orth=orth, log=log)
+            value = spi.multivariate(data)[0, 1]
+            assert value < 0, (spi.identifier, value)
+            assert spi.issigned(), f"{spi.identifier} = {value:.3f} reports unsigned"
+    for log in (False, True):
+        spi = PowerEnvelopeCorrelation(orth=True, log=log, absolute=True)
+        assert spi.multivariate(data)[0, 1] >= 0
+        assert not spi.issigned()
+
+
+def test_bundled_pec_signedness_follows_absolute():
+    pec = _full_spis("pec")
+    assert len(pec) == 6
+    for ident, spi in pec.items():
+        expect_signed = not ident.endswith("_abs")
+        assert spi.issigned() is expect_signed, ident
+        assert ("signed" if expect_signed else "unsigned") in spi.labels, ident

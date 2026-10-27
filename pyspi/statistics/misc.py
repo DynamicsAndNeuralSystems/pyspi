@@ -216,6 +216,15 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
         self._absolute = absolute
         if absolute:
             self.identifier += "_abs"
+        # A correlation coefficient carries its sign: negative means the two
+        # envelopes move in antiphase. As unsigned, `Calculator._rmmin` would
+        # shift the column by its minimum and `set_group` would correlate it
+        # through `abs()`, folding anticorrelation onto correlation. Only the
+        # orthogonalised variant with `absolute` is non-negative; MNE ignores
+        # `absolute` without orthogonalisation.
+        if not (self._orth and absolute):
+            self.labels = [l for l in self.labels if l != "unsigned"] + ["signed"]
+            self.issigned = lambda: True
 
     @parse_multivariate
     def multivariate(self, data):
