@@ -669,6 +669,27 @@ class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
 
 
 class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
+    """Direct directed transfer function (Korzeniewska et al. 2003).
+
+    ``dDTF_ij(f) = eta_ij(f) |P_ij(f)|``: the full-frequency DTF
+    ``eta_ij(f) = |H_ij(f)| / sqrt(sum_f sum_k |H_ik(f)|^2)`` times the
+    magnitude of the partial coherence ``P_ij = -Q_ij / sqrt(Q_ii Q_jj)``,
+    ``Q = S(f)^-1``, with ``H`` in the backend's ``[target, source]``
+    convention. This is the square root of the published
+    ``delta_ij^2 = eta_ij^2 P_ij^2``, i.e. the magnitude scale the backend
+    reports.
+
+    The backend's ``direct_directed_transfer_function()`` multiplies ffDTF by
+    ``sqrt(partial_directed_coherence())`` -- |PDC|, a different and itself
+    directed quantity -- although its docstring describes "the directed
+    transfer function and partial coherence". ``S`` here is the spectrum of
+    the fitted model, ``H Sigma H^H``, so like the other four measures dDTF is
+    read entirely off the pair's spectral factorisation.
+
+    On a pair there is nothing to partial out: ``P`` is the ordinary
+    coherency, and dDTF is ffDTF weighted by the pair's coherence.
+    """
+
     name = "Direct directed transfer function"
     labels = ["unsigned", "spectral", "directed", "lagged"]
 
@@ -676,6 +697,21 @@ class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
         self.identifier = "ddtf"
         super().__init__(**kwargs)
         self._measure = "direct_directed_transfer_function"
+        self._recompute = True
+
+    def _get_statistic(self, C):
+        # Only the two private properties DirectedCoherence already depends on
+        # (see test_directed_coherence_uses_only_the_documented_backend_privates).
+        H = C._transfer_function                       # (..., f, target, source)
+        Sigma = C._noise_covariance[..., np.newaxis, :, :]
+        S = H @ Sigma @ np.conj(np.swapaxes(H, -1, -2))
+        Q = np.linalg.inv(S)
+        q = np.abs(np.diagonal(Q, axis1=-1, axis2=-2))
+        partial_coherence = np.abs(Q) / np.sqrt(
+            q[..., :, np.newaxis] * q[..., np.newaxis, :])
+        mag = np.abs(H)
+        ffdtf = mag / np.sqrt(np.sum(mag ** 2, axis=(-1, -3), keepdims=True))
+        return ffdtf * partial_coherence
 
 
 class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
