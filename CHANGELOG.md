@@ -263,7 +263,7 @@ Each fix was first pinned by an independent reference test that the previous cod
   pyspi now fits the pair itself with the same LWR recursion, criterion and first-turn-over rule, on the Yule-Walker autocovariance (about the mean, divided by `T`), which is positive semidefinite by construction; `max_order` is now the largest order tried, where nitime stopped at `max_order - 2`.
   Against a dense Yule-Walker solve plus Geweke's formula the fixture values agree to rounding; in a Monte Carlo on a bivariate VAR(1) at T=100 the order-20 RMSE falls 1.5-3.7x and invalid fits on a persistent process go from 37 of 300 runs to 0.
   Automatic order selection at T=100 now picks 1 on `var1_M3_T100` (the true order), 1-2 on `cml_M5_T100` and 1-5 on `kuramoto_M7_T100`.
-  **All 18 `sgc_parametric_*` values change**; the six `order-None` SPIs on `kuramoto_M7_T100` go from unestimable to finite, and `KNOWN_UNESTIMABLE` is empty.
+  **All 18 `sgc_parametric_*` values change**; the six `order-None` SPIs on `kuramoto_M7_T100` go from unestimable to finite, and `KNOWN_UNESTIMABLE` was left empty (the GroupDelay entry below later adds the six `gd_*` cases on `var1` and `cml`).
 - **Parametric spectral Granger causality labelled its frequencies wrongly.**
   nitime's `GrangerAnalyzer.frequencies` is `linspace(0, fs/2, 513)`, but the values are evaluated by `freqz` at `k/1026` cycles per sample, so the bin labelled 0.5 is really 0.499.
   pyspi now uses the frequencies the spectrum was evaluated at.
@@ -284,6 +284,19 @@ Each fix was first pinned by an independent reference test that the previous cod
   `CrossmapEntropy`'s docstring said `k` gives `k - 1` source lags; the shipped `k = 1` uses one lag and so computes the same quantity as `k = 2`, which is now stated and pinned by a test.
   `CrossCorrelation` had no docstring (its description sat after the class attributes); it now documents that the normalisation is biased and that `max` is the largest signed value.
 - **`coint_aeg_*` put the regressor on the column; `lmfit_*` puts it on the row.** The Engle-Granger call was `coint(z[i], z[j])`, which regresses the row *i* on the column *j*, while `LinearModel` fits `z[j]` on `z[i]`, so the two directed regression families in `full` disagreed about which index is the regressor. The asymmetry is real (the two orientations differ by ~0.8 on average on random walks, up to ~1.6), so this is not cosmetic. `aeg` now calls `coint(z[j], z[i])`: `table[i, j]` is the t-statistic of the column regressed on the row, regressor on the row, as for `lmfit_*` and as the source-by-target convention reads. **The three `coint_aeg_tstat_*` matrices are transposed** relative to r11 (and relative to 2.x, where the class was symmetrised and the orientation you got depended on visit order). `test_aeg_is_the_engle_granger_tstat_of_the_column_regressed_on_the_row` and `test_aeg_and_lmfit_agree_on_which_index_is_the_regressor` pin it against `statsmodels` and `sklearn` directly.
+- **Group delay fitted its phase slope to correlated frequencies.**
+  `gd_*` regresses the coherence phase on at least three independent frequencies from the largest significant coherence run, and it thinned that run to one point per `(fmax - fmin) / 50` whatever the series length.
+  At T=100 that is one bin, so three adjacent bins, which share the tapers' main lobes, passed as three independent estimates, and 8% of independent white-noise pairs got a value; at T=20000 it is 200 bins, so a 0.016-wide coupled band gave three points and missed a 4-sample delay by 0.5 to 2.0 samples, and a 0.005-wide band gave nothing.
+  The step is now one multitaper bandwidth, six bins at the backend's defaults, as `psi` already used: the same delay comes back within 0.13 samples, and none of 600 independent pairs gets a value at T=100 or T=1000.
+  The per-bin Fisher-z coherence screen is kept; its docstring now says it is an approximation that passes about 16% of bins at nominal 5% on independent noise at five tapers.
+  **All three `gd_*` values change.** On `var1_M3_T100` and `cml_M5_T100` no pair has the 13-bin significant run that three independent points need at T=100 (the longest are 12 and 10 bins), so all six are now unestimable and listed in `KNOWN_UNESTIMABLE`; on `kuramoto_M7_T100` they move by up to 0.34 samples and 30 of 68 finite entries become NaN.
+- **Phase measures included the two frequencies where phase does not exist.**
+  At 0 Hz and at the Nyquist frequency every tapered Fourier coefficient of a real signal is real, so the cross-spectrum's phase is exactly 0 or π and no phase statistic estimates anything there: PLV and PPC are 1 whenever the five tapers agree in sign, PLI, dsPLI and imaginary coherence are 0, wPLI is 0/0 (returned as 0), and the coherence phase is 0 or π.
+  Each shipped band (`[0, 0.5]`, `[0, 0.25]`, `[0.25, 0.5]` at fs=1) contains one of the two, so every band mean carried a term that measured nothing, `plv_*_max` and `ppc_*_max` were exactly 1.0 on 16 of 42 `kuramoto_M7_T100` entries (2 of 20 on `cml_M5_T100`) for that reason alone, and `pli_*_max` and `wpli_*_max` could never fall below 0.
+  The eight phase measures (`phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli`, `dswpli`, `ppc`) now leave those bins out of the band before the mean or maximum, and a band holding nothing else is refused with a `ValueError`.
+  Amplitude measures (`cohmag` and the directed measures) keep the closed band and `psi` its open one; the rule is stated once, in the `NonparametricSpectral` docstring.
+  **33 values change**: the 18 `icoh`/`plv`/`ppc`/`pli`/`wpli`/`dspli` means by up to 0.039 and the three `phase` means by up to 0.44 rad, `plv_*_max` by up to 0.15, `ppc_*_max` by up to 0.35, and `pli_*_max`/`wpli_*_max` by up to 1.0 where every value inside the band is negative (these six maxima are no longer bundled, see **SPI set changes**). `dswpli_*` (already NaN at those bins) and `icoh_*_max` do not move.
+  `cohmag`'s `name` is now "Magnitude-squared coherence", which is what it computes; PSI's docstring says its `mean` is a sum over the band; the stale "multiple sampling frequencies not yet handled" warning is gone.
 
 ### Changed
 
@@ -518,5 +531,10 @@ r12 (relative to r11; same fixtures, same columns):
 | SPIs | Count | Max change | Cause |
 |:-----|------:|:-----------|:------|
 | `coint_aeg_tstat_*` | 3 | 1.64 / 25.1 / 2.32 | Transposed: the column is regressed on the row, as for `lmfit_*`. |
+| `gd_multitaper_delay_*` | 3 | all NaN / all NaN / 0.34 (30 of 68 finite entries become NaN) | Independent frequencies one multitaper bandwidth apart; `var1` and `cml` have no 13-bin significant run at T=100. |
+| `phase_multitaper_mean_*` | 3 | 0.19 / 0.44 / 0.41 rad | Real-valued 0 Hz and Nyquist bins left out of the band. |
+| `icoh`, `plv`, `ppc`, `pli`, `wpli`, `dspli` `_multitaper_mean_*` | 18 | 0.035 / 0.035 / 0.039 | As above. |
+| `plv_multitaper_max_*`, `ppc_multitaper_max_*` | 6 | 0 / 0.26 / 0.35 | As above; the exact-1.0 entries (16 of 42 on kuramoto, 2 of 20 on cml) are gone. |
+| `pli_multitaper_max_*`, `wpli_multitaper_max_*` | 6 | 0.60 / 0 / 1.0 | As above (can now be negative); no longer bundled. |
 
-Everything else in `full` is unchanged to the bit between r11 and r12 on all three fixtures.
+Everything else in `full` is unchanged to the bit between r11 and r12 on all three fixtures (`dswpli_*`, `icoh_*_max`, `cohmag_*` and `psi_*` included).
