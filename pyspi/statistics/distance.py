@@ -462,8 +462,14 @@ class SoftDynamicTimeWarping(TimeWarping):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        # The constraint used to be dropped here, so both constrained SPIs
+        # equalled `softdtw`. tslearn holds cells outside the band at +inf,
+        # which for a soft minimum over paths is exactly "no admissible path
+        # passes through them" (unlike LCSS; see `_banded_lcss`). Its defaults
+        # apply: Sakoe-Chiba radius 1, Itakura slope 2.
         z = data.to_numpy(squeeze=True)
-        return tslearn.metrics.soft_dtw(z[i], z[j])
+        return tslearn.metrics.soft_dtw(
+            z[i], z[j], global_constraint=self._global_constraint)
 
 
 class Barycenter(Directed, Signed):
