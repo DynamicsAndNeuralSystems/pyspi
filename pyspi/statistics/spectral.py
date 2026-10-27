@@ -343,6 +343,22 @@ class _FactoredConnectivity(sc.Connectivity):
         return super()._MVAR_Fourier_coefficients
 
 
+@functools.lru_cache(maxsize=8)
+def _whole_record_tapers(n_time_samples, fs):
+    """The DPSS tapers ``sc.Multitaper`` uses for one whole-record window.
+
+    They depend on the record length and sampling rate only, but a Multitaper
+    computes them again on construction, and the bivariate class builds one
+    per ordered pair: at M=10, T=1000 that was ~40% of the directed spectral
+    measures' time. Taken from a Multitaper built with the same arguments, so
+    they are the same array the pair would have computed.
+    """
+    tapers = sc.Multitaper(np.zeros((n_time_samples, 1, 1)),
+                           sampling_frequency=fs).tapers
+    tapers.setflags(write=False)
+    return tapers
+
+
 class NonparametricSpectralBivariate(NonparametricSpectral):
     _cache_namespace = "spectral_bv"
 
@@ -379,7 +395,8 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
         if conn is None:
             z = np.transpose(data.to_numpy(squeeze=True)[[i, j]])
             z = _ensure_time_series_3d(z)
-            m = sc.Multitaper(z, sampling_frequency=self._fs)
+            m = sc.Multitaper(z, sampling_frequency=self._fs,
+                              tapers=_whole_record_tapers(z.shape[0], self._fs))
             conn = _FactoredConnectivity.from_multitaper(m)
             conns[conn_key] = conn
 
