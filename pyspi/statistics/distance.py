@@ -45,6 +45,26 @@ def _auto_sakoe_radius(length):
     return min(radius, length - 1)
 
 
+class _RetainedHalf:
+    """Evaluate only the half of the pairs that `Undirected` keeps.
+
+    `Undirected.multivariate` evaluates both orders of every pair and keeps
+    bivariate(i, j) with i < j for both entries. For a statistic that holds no
+    state between calls, evaluating only the kept half, in the order the
+    inherited loop reaches it, gives the same matrix bit for bit at half the
+    cost. List it before `Undirected` in the bases.
+    """
+
+    @parse_multivariate
+    def multivariate(self, data):
+        M = data.n_processes
+        A = np.full((M, M), np.nan)
+        for j in range(M):
+            for i in range(j):
+                A[i, j] = A[j, i] = self.bivariate(data, i=i, j=j)
+        return A
+
+
 class PairwiseDistance(Undirected, Unsigned):
     """``metric`` distance between each pair of processes, optionally / sqrt(T).
 
@@ -103,7 +123,7 @@ def _median_gaussian_distance(v):
     return 1 - K / np.max(K)
 
 
-class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
+class HilbertSchmidtIndependenceCriterion(_RetainedHalf, Undirected, Unsigned):
     """Normalised Hilbert-Schmidt Independence Criterion (HSIC).
 
     hyppo's statistic: dcorr of the distances ``1 - K / max(K)`` induced by a
@@ -210,7 +230,7 @@ def _hhg_statistic(x, y):
     return np.sum(S[mask])
 
 
-class HellerHellerGorfine(Undirected, Unsigned):
+class HellerHellerGorfine(_RetainedHalf, Undirected, Unsigned):
     """Heller-Heller-Gorfine independence criterion (see `_hhg_statistic`)."""
 
     name = "Heller-Heller-Gorfine Independence Criterion"
@@ -224,7 +244,7 @@ class HellerHellerGorfine(Undirected, Unsigned):
         return _hhg_statistic(x, y)
 
 
-class DistanceCorrelation(Undirected, Unsigned):
+class DistanceCorrelation(_RetainedHalf, Undirected, Unsigned):
     """Distance correlation"""
 
     name = "Distance correlation"
@@ -243,21 +263,8 @@ class DistanceCorrelation(Undirected, Unsigned):
         stat = Dcorr(bias=self._biased).statistic(x, y)
         return stat
 
-    @parse_multivariate
-    def multivariate(self, data):
-        # The inherited loop evaluates both orders of every pair and keeps
-        # bivariate(i, j) with i < j for both entries. This statistic holds no
-        # state between calls, so only the kept half is evaluated, in the order
-        # the inherited loop reaches it.
-        M = data.n_processes
-        A = np.full((M, M), np.nan)
-        for j in range(M):
-            for i in range(j):
-                A[i, j] = A[j, i] = self.bivariate(data, i=i, j=j)
-        return A
 
-
-class MultiscaleGraphCorrelation(Undirected, Unsigned):
+class MultiscaleGraphCorrelation(_RetainedHalf, Undirected, Unsigned):
     """Multiscale graph correlation"""
 
     name = "Multiscale graph correlation"
@@ -343,7 +350,7 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
         return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)
 
 
-class TimeWarping(Undirected, Unsigned):
+class TimeWarping(_RetainedHalf, Undirected, Unsigned):
 
     labels = ["unsigned", "distance", "temporal", "undirected", "nonlinear"]
 
@@ -686,7 +693,7 @@ class Barycenter(Undirected, Signed):
         return self._statfn(bc)
 
 
-class GromovWasserstainTau(Undirected, Unsigned):
+class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
     """Gromov-Wasserstain distance (GWTau)"""
 
     name = "Gromov-Wasserstain Distance"
