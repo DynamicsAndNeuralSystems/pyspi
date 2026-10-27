@@ -407,7 +407,10 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         bv_freq, freq = self._get_cache(data, i, j)
-        freq_id = np.where((freq > self._fmin) * (freq < self._fmax))[0]
+        # Closed band, as in NonparametricSpectralMultivariate, spectral GC and
+        # the wavelet SPIs. Strict inequalities here dropped the DC, 0.25 and
+        # Nyquist bins from bands whose identifiers include them.
+        freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
         return self._statfn(bv_freq[freq_id])
 
 
