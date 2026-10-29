@@ -122,6 +122,14 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     return A
 
 
+# The four symmetry traits a matrix can declare, in the order `_merge_spi_labels`
+# resolves them. Exactly one survives on every configured SPI.
+DIRECTEDNESS_TRAITS = ("antisymmetric", "asymmetric", "undirected", "directed")
+# Traits whose matrix holds one independent value per unordered pair: the lower
+# triangle is the upper one copied (undirected) or negated (antisymmetric).
+ONE_VALUE_PER_PAIR = ("undirected", "antisymmetric")
+
+
 class Directed:
     """ Base class for directed statistics
     """
@@ -129,6 +137,25 @@ class Directed:
     name = 'Bivariate base class'
     identifier = 'bivariate_base'
     labels = ['signed']
+
+    def directedness(self):
+        """The one symmetry trait this SPI's matrix ``A`` obeys.
+
+        One of ``"undirected"`` (``A[i, j] == A[j, i]``), ``"antisymmetric"``
+        (``A[i, j] == -A[j, i]``), ``"directed"`` or ``"asymmetric"`` (no
+        relation between the two orientations). The first two carry one
+        independent value per pair, the last two carry two;
+        :func:`pyspi.calculator.feature_vector` keys on this.
+
+        Read from the instance's labels, which hold exactly one trait once
+        ``Calculator`` has merged them. With no trait declared,
+        :class:`Undirected` subclasses are ``"undirected"`` and anything else
+        is ``"directed"``.
+        """
+        own = [t for t in DIRECTEDNESS_TRAITS if t in self.labels]
+        if own:
+            return own[0]
+        return "undirected" if isinstance(self, Undirected) else "directed"
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):

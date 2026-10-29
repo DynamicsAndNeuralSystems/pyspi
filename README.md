@@ -87,6 +87,7 @@ calc.compute()                         # compute every SPI
 
 calc.table                             # rows = processes, columns = (SPI, process)
 calc.table["cov_EmpiricalCovariance"]  # one SPI's 5x5 matrix
+calc.feature_vector()                  # one value per independent pair, for ML
 
 calc.save("results.npz")               # canonical on-disk format
 pyspi.load_table("results.npz")        # round-trips exactly
@@ -95,6 +96,13 @@ pyspi.load_table("results.npz")        # round-trips exactly
 Results are stored as an `(n_spis, M, M)` array plus the SPI and process names,
 which is the data's natural shape. `.csv` is also accepted for eyeballing small
 results, but it is one-way and impractical for the full SPI set.
+
+`feature_vector()` turns a table into features for classification or regression, one value per independent pair.
+Undirected SPIs store each pair twice (the lower triangle mirrors the upper), and antisymmetric SPIs such as `phase`, `pli`, `wpli`, `psi` and the `gd` delay store it twice with the sign flipped.
+For these the vector keeps only the pairs `(i, j)` with `i < j`, and a positive antisymmetric value means process `i` leads process `j`.
+Directed SPIs keep both orientations.
+Self-pairs are dropped unless `include_self=True`.
+`pyspi.feature_vector(pyspi.load_table("results.npz"))` does the same for a saved table.
 
 Or from the command line, writing a results table next to your data:
 

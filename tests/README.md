@@ -18,6 +18,7 @@ corrupt baseline can never break collection of unrelated tests.
 | --- | --- |
 | `test_infotheory_analytic.py` | **Closed-form correctness** of the pure-NumPy info-theory estimators: bivariate-Gaussian MI vs `-0.5*ln(1-rho^2)` for all four estimators, differential entropy of `N(0, sigma^2)`, Gaussian TE on an analytic AR(1), independence collapsing to ~0, and the entropy identities. The only place a `return np.zeros(...)` stub would be caught. |
 | `test_calculator.py` | `Calculator` / `Data` API: `config=` resolution, `zscore=`, labels, grouping, dataset loading. |
+| `test_feature_vector.py` | `feature_vector` keeps one triangle for undirected and antisymmetric SPIs and both for directed ones; `directedness()` of every configured SPI; `load_table` round trip. |
 | `test_utils.py` | Utility helpers. |
 | `test_smoke.py` | Cheap shape / finiteness / sign checks across SPI families. Sanity, not correctness. |
 | `test_parallel.py` | `Calculator.compute()` parallel path, checkpointing, per-SPI failure isolation. |

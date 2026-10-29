@@ -261,6 +261,18 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (30 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
 - **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 
+### Added
+
+- **`Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature.**
+  The table holds every SPI as a full `M x M` matrix.
+  For an `undirected` SPI the lower triangle copies the upper one, and for an `antisymmetric` SPI (`phase`, `pli`, `wpli`, `psi`, the `gd` delay, `ccm_*_diff`) it is the negation, so the vector keeps only the pairs `(i, j)` with `i < j` for these.
+  A positive antisymmetric value at `(i, j)` means process `i` leads process `j` (row = source).
+  `directed` and `asymmetric` SPIs keep both orientations.
+  Self-pairs are dropped unless `include_self=True`, and NaNs are kept, so the length and order depend only on the config and `M`.
+  The result is a `pandas.Series` indexed by `(spi, source, target)`, as in `to_frame()`.
+  `pyspi.feature_vector(table)` takes a table from `load_table` and rebuilds each SPI's trait from the config recorded in `table.attrs["run_spec"]`, or takes an explicit `directedness={identifier: trait}`.
+- **`Directed.directedness()`** returns the one symmetry trait an SPI carries: `undirected`, `antisymmetric`, `directed` or `asymmetric`.
+
 ### Dependencies
 
 - **Floors, relative to 2.0.2** (`pyproject.toml` is the source of truth):
