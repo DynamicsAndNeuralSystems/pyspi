@@ -232,6 +232,16 @@ class GPModel(Directed, Unsigned):
 
 
 class PowerEnvelopeCorrelation(Undirected, Unsigned):
+    """Correlation of the Hilbert amplitude envelopes of each pair of processes.
+
+    mne-connectivity's ``envelope_correlation`` on the record as one epoch.
+    ``orth=True`` orthogonalises each pair before taking envelopes (Hipp,
+    Hawellek, Corbetta, Siegel & Engel 2012, Nat. Neurosci. 15, 884),
+    ``log=True`` correlates the log envelopes, ``absolute=True`` reports
+    ``|r|`` (MNE applies it only with ``orth``). Signed, as a correlation is,
+    except for the orthogonalised absolute variant.
+    """
+
     name = "Power envelope correlation"
     identifier = "pec"
     labels = ["unsigned", "misc", "undirected"]
@@ -264,6 +274,18 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
         return adj
 
 class InterDependenceScore(Undirected, Unsigned):
+    """Interdependence score (IDS) from correlations between kernel features of the pair.
+
+    Each series is mapped to the first ``terms`` terms of the Taylor expansion
+    of a Gaussian kernel, ``exp(-b x^2) x^k / sqrt(k!)`` with ``b =
+    bandwidth``, and the ``terms x terms`` absolute correlations between the
+    two feature sets are reduced by ``pnorm``: ``"max"`` (IDS-max) takes the
+    largest, ``1`` or ``2`` the mean or root-mean-square. In [0, 1], symmetric, and sensitive to
+    nonlinear dependence. After Radhakrishnan's implementation
+    (https://github.com/aradha/interdependence_scores); see
+    ``pyspi.lib.ids``.
+    """
+
     name = "Interdependence score"
     identifier = "ids"
     labels = ["unsigned", "misc", "undirected", "nonlinear"]

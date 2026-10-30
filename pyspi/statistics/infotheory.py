@@ -1485,6 +1485,11 @@ class InfoTheoryBase(Unsigned):
 
 
 class JointEntropy(InfoTheoryBase, Undirected):
+    """Joint differential entropy ``H(X_i, X_j)`` of each pair, in nats.
+
+    Symmetric. The estimator (``gaussian``, ``kozachenko``, ``kernel``) and
+    its parameters are those of :class:`InfoTheoryBase`.
+    """
 
     name = "Joint entropy"
     identifier = "je"
@@ -1507,6 +1512,11 @@ class JointEntropy(InfoTheoryBase, Undirected):
 
 
 class ConditionalEntropy(InfoTheoryBase, Directed):
+    """Conditional entropy ``H(X_j | X_i)`` of the column given the row, in nats.
+
+    Computed as ``H(X_i, X_j) - H(X_i)``. Directed, since ``H(X|Y)`` and
+    ``H(Y|X)`` differ unless the marginal entropies are equal.
+    """
 
     name = "Conditional entropy"
     identifier = "ce"
@@ -1542,6 +1552,14 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
 
 
 class MutualInfo(InfoTheoryBase, Undirected):
+    """Mutual information ``I(X_i; X_j)`` between each pair of processes, in nats.
+
+    ``gaussian`` is ``-0.5 ln(1 - r^2)`` of the Pearson correlation,
+    ``kraskov`` the Kraskov-Stoegbauer-Grassberger nearest-neighbour estimator
+    (``prop_k`` neighbours, Theiler window ``dyn_corr_excl``), ``kernel`` a
+    box kernel of width ``kernel_width``. Symmetric.
+    """
+
     name = "Mutual information"
     identifier = "mi"
     labels = ["unsigned", "infotheory", "unordered", "undirected"]
@@ -1600,6 +1618,12 @@ class MutualInfo(InfoTheoryBase, Undirected):
 
 
 class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
+    """Mutual information ``I(X_i[t-1]; X_j[t])`` from the row to the column, in nats.
+
+    The row's previous sample against the column's current one; estimators
+    as in :class:`MutualInfo`.
+    """
+
     name = "Time-lagged mutual information"
     identifier = "tlmi"
     labels = ["unsigned", "infotheory", "temporal", "directed"]
@@ -1969,6 +1993,14 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
 
 
 class CausalEntropy(InfoTheoryBase, Directed):
+    """Causally conditioned entropy of the column given the row's past, in nats.
+
+    Kramer's (1998) ``H(Y^n || X^n) = sum_{i=1}^{n} H(Y_i | Y^{i-1}, X^i)``
+    over a horizon of ``n`` samples, each term estimated on delay embeddings
+    of the two series; ``n`` is appended to the identifier as ``_n-<n>``.
+    An entropy, not a dependence: it is also low for a column that is
+    predictable from its own past (:class:`DirectedInfo` is the dependence).
+    """
 
     name = "Causally conditioned entropy"
     identifier = "cce"
@@ -2015,6 +2047,12 @@ class CausalEntropy(InfoTheoryBase, Directed):
 
 
 class DirectedInfo(CausalEntropy, Directed):
+    """Directed information ``I(X^n -> Y^n)`` from the row to the column, in nats.
+
+    Massey's (1990) ``sum_{i=1}^{n} I(X^i; Y_i | Y^{i-1})`` over a horizon of
+    ``n`` samples; see :meth:`bivariate` for the estimator. ``n`` and its
+    identifier suffix come from :class:`CausalEntropy`.
+    """
 
     name = "Directed information"
     identifier = "di"
@@ -2145,6 +2183,16 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
 
 
 class IntegratedInformation(Undirected, Unsigned):
+    """Integrated information of the pair treated as a two-element system, Gaussian estimate.
+
+    ``phitype`` selects the measure: ``"star"`` for phi* (Oizumi, Amari,
+    Yanagawa, Fujii & Tsuchiya 2016, PLoS Comput. Biol. 12, e1004654) or
+    ``"Geo"`` for geometric integrated information (Oizumi, Tsuchiya & Amari
+    2016, PNAS 113, 14817); ``delay`` is the lag between past and present
+    states and ``normalization=1`` divides by the entropy. Computed by
+    ``pyspi.lib.phi_native`` (a port of the Practical PHI Toolbox) from the
+    pair's covariances, so it is a linear measure. NaN if the estimate fails.
+    """
 
     name = "Integrated information"
     identifier = "phi"

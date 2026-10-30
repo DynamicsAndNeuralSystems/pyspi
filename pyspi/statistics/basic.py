@@ -91,6 +91,14 @@ class Estimators(Undirected, Signed):
 
 
 class Covariance(Estimators):
+    """Covariance matrix of the processes from a scikit-learn covariance estimator.
+
+    ``estimator`` names a class in ``sklearn.covariance`` (e.g.
+    ``EmpiricalCovariance``, ``LedoitWolf``, ``OAS``, ``GraphicalLasso``,
+    ``MinCovDet``), whose fit is shared with :class:`Precision`;
+    ``squared=True`` reports the squared, unsigned entries. See
+    :class:`Estimators` for the ``GraphicalLassoCV`` caveat.
+    """
 
     name = "Covariance"
     identifier = "cov"
@@ -100,6 +108,14 @@ class Covariance(Estimators):
 
 
 class Precision(Estimators):
+    """Precision (inverse covariance) matrix from a scikit-learn covariance estimator.
+
+    Entry ``(i, j)`` is the estimator's ``precision_[i, j]``; off the diagonal
+    it is ``-rho_ij sqrt(P_ii P_jj)`` with ``rho_ij`` the partial correlation
+    of i and j given all other processes, so a positive entry means a
+    *negative* conditional association. ``squared=True`` reports the squared,
+    unsigned entries.
+    """
 
     name = "Precision"
     identifier = "prec"
@@ -250,6 +266,11 @@ class CrossCorrelation(Undirected, Signed):
 
 
 class SpearmanR(Undirected, Signed):
+    """Spearman's rank correlation coefficient between each pair of processes.
+
+    Pearson's r of the ranks (``scipy.stats.spearmanr``); ``squared=True``
+    reports ``rho**2`` and is unsigned.
+    """
 
     name = "Spearman's correlation coefficient"
     identifier = "spearmanr"
@@ -284,6 +305,11 @@ class SpearmanR(Undirected, Signed):
 
 
 class KendallTau(Undirected, Signed):
+    """Kendall's tau rank correlation between each pair of processes.
+
+    ``scipy.stats.kendalltau``'s default tau-b, which adjusts for ties;
+    ``squared=True`` reports ``tau**2`` and is unsigned.
+    """
 
     name = "Kendall's tau"
     identifier = "kendalltau"

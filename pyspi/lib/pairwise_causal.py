@@ -129,7 +129,7 @@ def _discretized_sequence(x, ffactor, maxdev, norm=True):
 
 
 def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12, min_conditionals=0):
-    """Std. of the rescaled y values after binning in x; lower favours x -> y.
+    """Spread of the conditional distributions of y across the x-bins; lower favours x -> y.
 
     The statistic is the spread of P(y | x = a) across the x-bins ``a`` holding
     more than ``minc`` points. Returns NaN when fewer than ``min_conditionals``

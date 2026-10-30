@@ -341,6 +341,14 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
 
 
 class TimeWarping(_RetainedHalf, Undirected, Unsigned):
+    """Base for the elastic alignment measures (DTW, soft-DTW, LCSS).
+
+    A subclass sets ``_simfn(x, y, global_constraint=...)``.
+    ``global_constraint`` is ``None``, ``"sakoe_chiba"`` or ``"itakura"``
+    (tslearn's default band widths) and is appended to the identifier as
+    ``_constraint-sakoe-chiba`` or ``_constraint-itakura``. Symmetric in the
+    pair, so only one orientation is evaluated (:class:`_RetainedHalf`).
+    """
 
     labels = ["unsigned", "distance", "temporal", "undirected", "nonlinear"]
 
@@ -578,6 +586,13 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
 
 
 class LongestCommonSubsequence(TimeWarping):
+    """Longest common subsequence similarity, as a fraction of the shorter series.
+
+    Two samples match when ``|x_t - y_s| <= 1`` (tslearn's ``eps``); the
+    length of the longest matching subsequence is divided by ``min(T_x, T_y)``,
+    so the value is in [0, 1] with 1 for identical series. Under a global
+    constraint only pairs inside the band may match; see ``_banded_lcss``.
+    """
 
     name = "Longest common subsequence"
     identifier = "lcss"
@@ -617,11 +632,22 @@ class Barycenter(Undirected, Signed):
     ``2 * mean(b**2) / mean_energy - 1`` of the barycenter ``b``, where
     ``mean_energy`` is the average of ``mean(x**2)`` and ``mean(y**2)``. For
     the Euclidean barycenter ``(x + y) / 2`` of two zero-mean series this is
-    exactly Pearson's r; for the DTW geometries it is the share of the pair's
-    amplitude that survives averaging after optimal alignment, in [-1, 1]
-    (soft-DTW smooths the barycenter, so identical series give less than 1).
-    The barycenter of two zero-mean series has mean ~0, so ``corr`` is
-    preferred to ``mean``.
+    ``2 cov / (var_x + var_y)``, which is Pearson's r when the two variances
+    are equal, as after pyspi's default z-scoring; for the DTW geometries it
+    is the share of the pair's amplitude that survives averaging after optimal
+    alignment, in [-1, 1] (soft-DTW smooths the barycenter, so identical
+    series give less than 1). The barycenter of two zero-mean series has mean
+    ~0, so ``corr`` is preferred to ``mean``.
+
+    For z-scored inputs ``max = sqrt((1 + corr) / 2) * max(b) / rms(b)``:
+    ``corr`` scaled by the barycenter's crest factor, which mostly follows the
+    marginals, although it can register coincident extremes that ``corr``
+    misses (e.g. y a noisy square of x).
+
+    tslearn's DBA starts from the Euclidean mean ``(x + y) / 2`` and stays
+    near it when the pair is out of phase, so under ``mode="dtw"`` a
+    time-shifted copy of a smooth series can score as low as an independent
+    pair.
     """
 
     name = "Barycenter"
@@ -717,6 +743,16 @@ class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
     The distance vector has one entry per point, the first being 0 for the
     start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``; the authors'
     MATLAB omits it, which only rescales the value by a constant).
+
+    The distance vector is a cumulative sum of non-negative steps, so it is
+    already sorted: at equal lengths ``gwtau`` is the RMS difference of the
+    two arc-length profiles ``L(k) = sum_{m<k} sqrt(1 + (x_{m+1} - x_m)^2)``.
+    It depends on each series only through its sequence of step lengths
+    ``|x_{m+1} - x_m|``, not their signs (it is 0 for ``y = -x``). For
+    z-scored series the mean squared step is about ``2 (1 - ac1)``, so the
+    value largely reflects the difference between the two lag-1
+    autocorrelations, and independent observation noise, which dominates the
+    step lengths of a smooth signal, hides shared shape.
 
     The class name keeps its misspelling because configs refer to it.
     """
