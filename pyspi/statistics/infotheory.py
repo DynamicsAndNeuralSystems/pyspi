@@ -22,8 +22,7 @@ deviations: kernel TE differs from JIDT by up to 1.9e-4 bits (per-column rather
 than whole-series normalisation); Gaussian estimators carry a deterministic
 1e-8 relative ridge; KSG breaks ties with a small seeded jitter (hctsa-style)
 where JIDT adds random noise by default; with a Theiler window, KSG MI takes
-its psi(N) term over the window-reduced neighbour pool where JIDT keeps N
-(see _ksg_pool_digamma).
+its psi(N) term over the reduced neighbour pool (see _ksg_pool_digamma).
 """
 
 import math
@@ -776,16 +775,11 @@ def _ksg_pool_digamma(N, w):
     """KSG's ``psi(N)`` term for a neighbour pool reduced by a Theiler window.
 
     ``psi(N)`` is ``psi(m + 1)`` for a pool of ``m = N - 1`` candidate
-    neighbours: it is the expected log probability mass of the ball holding k
-    of them. The window removes ``|j - i| <= w`` from point i's pool, leaving
-    ``m_i = N - 1 - min(i, w) - min(N - 1 - i, w)``, so the term is the mean
-    of ``psi(m_i + 1)``. Keeping ``psi(N)`` with the reduced pool, as JIDT 1.6.1
-    does (its source flags this as an open TODO), adds about
-    ``ln(N / (N - 2w))`` to every MI: 0.27 nats at N=500, w=60 on independent
-    i.i.d. data. At ``w == 0`` this is exactly ``digamma(N)``.
-
-    Only MI needs it. In the Frenzel-Pompe CMI the pool term enters each of
-    the four entropies once and cancels.
+    neighbours. The window removes ``|j - i| <= w`` from point i's pool,
+    leaving ``m_i = N - 1 - min(i, w) - min(N - 1 - i, w)``, so the term is
+    the mean of ``psi(m_i + 1)``; at ``w == 0`` it is ``digamma(N)``. (JIDT
+    keeps ``psi(N)``, which biases MI upward by about ``ln(N / (N - 2w))``.)
+    In the Frenzel-Pompe CMI the pool term cancels, so only MI needs it.
     """
     if w == 0:
         return digamma(N)
@@ -823,9 +817,7 @@ def _ksg_mi_pair(x, y, k, w):
     n_x = _ksg_counts(tree_x, x, eps, w)
     n_y = _ksg_counts(tree_y, y, eps, w)
 
-    # psi(N) is psi(pool size + 1); a Theiler window shrinks the pool. JIDT
-    # keeps the unreduced N here, which biases MI upward with w; see
-    # _ksg_pool_digamma.
+    # psi(pool size + 1); a Theiler window shrinks the pool (_ksg_pool_digamma).
     mi = (digamma(k) - np.mean(digamma(n_x + 1) + digamma(n_y + 1))
           + _ksg_pool_digamma(N, w))
     return float(mi)
@@ -1451,9 +1443,8 @@ class InfoTheoryBase(Unsigned):
     def _upper_triangle_multivariate(self, data):
         """Each unordered pair once, mirrored.
 
-        ``Undirected.multivariate`` evaluates both orders of every pair and then
-        overwrites the lower triangle with the upper. This evaluates only the
-        ``i < j`` values it keeps, so the result is identical at half the cost.
+        Same result as ``Undirected.multivariate``, which evaluates both
+        orders and keeps ``i < j``, at half the cost.
         """
         M = data.n_processes
         A = np.full((M, M), np.nan)
@@ -1470,15 +1461,9 @@ class InfoTheoryBase(Unsigned):
         cached per dataset. Shared by MI/TLMI/TE; only the kNN (kraskov)
         paths consume it.
 
-        The cap follows hctsa's rule for every autocorrelation-derived
-        embedding or Theiler parameter (``if tau > N/10, tau = floor(N/10)``).
-        Without it the product of two slowly decaying autocorrelation
-        functions can exceed the series: on a near-periodic pair at T=250 it
-        reached 158 samples, leaving a negative number of usable neighbours
-        and raising for the pair (before 3.0.0, voiding the whole table); on
-        the kuramoto drift fixture it reached 33 of 100 samples, a Theiler
-        exclusion of two thirds of the pool. A window of N/10 already excludes
-        a fifth of the candidate neighbours of each point.
+        The cap is hctsa's rule for autocorrelation-derived parameters. For
+        two slowly decaying autocorrelation functions the uncapped window can
+        approach or exceed the series length, leaving too few neighbours.
         """
         raw_w = getattr(self, '_dyn_corr_excl', None)
         if raw_w is None:
@@ -1681,12 +1666,10 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
 class TransferEntropy(InfoTheoryBase, Directed):
     """Transfer entropy from the row (source) to the column (target).
 
-    Scale convention for ``gc_gaussian_*``: with the Gaussian estimator the
-    identifier is ``gc`` because the quantity is the Gaussian transfer entropy,
+    With the Gaussian estimator (identifier ``gc``) this is
     ``0.5 * ln(var_restricted / var_full)`` in nats (Barnett, Barrett & Seth
-    2009). That is **half** of Geweke's (1982) Granger causality
-    ``ln(var_restricted / var_full)``, the scale ``statsmodels`` and most
-    econometrics software report; multiply by 2 to compare with those.
+    2009): half of Geweke's (1982) Granger causality as reported by
+    ``statsmodels``.
     """
 
     name = "Transfer entropy"
@@ -1933,10 +1916,8 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     consistent -- "k source lags" would need ``range(2, k + 1)`` -- and the
     implementation has always been the second one.
 
-    The exception is ``history_length=1``. The first source column,
-    ``X_{t-1}``, is always present, so k=1 also has one source lag and a
-    two-column joint space: the shipped ``xme_*_k1`` is ``H(Y_t | X_{t-1})``,
-    the same quantity as k=2 estimated on one more row, not ``H(Y_t)``.
+    The exception is ``history_length=1``: the first source column is always
+    present, so ``xme_*_k1`` is ``H(Y_t | X_{t-1})``, the same quantity as k=2.
 
     It is documented here rather than changed. Cross-map entropy has no
     canonical published definition to arbitrate between the two conventions,
@@ -1952,7 +1933,6 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
 
     def __init__(self, history_length=10, **kwargs):
         super().__init__(**kwargs)
-        # A negative length wrapped the slices and returned a finite number.
         history_length = utils.require_int("history_length", history_length,
                                            minimum=1)
         self.identifier += f"_k{history_length}"
@@ -1976,8 +1956,7 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
         self._entropy_calc.setObservations(joint)
         H_xy = self._entropy_calc.computeAverageLocalOfObservations()
 
-        # H(source past) depends on the source alone: once per process, not
-        # once per (source, target) pair.
+        # H(source past) depends on the source alone: computed once per process.
         def source_past_entropy():
             self._entropy_calc.initialise(src_past.shape[1])
             self._entropy_calc.setObservations(src_past)
@@ -2128,15 +2107,10 @@ class DirectedInfo(CausalEntropy, Directed):
 class StochasticInteraction(InfoTheoryBase, Undirected):
     """Stochastic interaction ``H(X_t|X_{t-d}) + H(Y_t|Y_{t-d}) - H(X_t,Y_t|X_{t-d},Y_{t-d})``.
 
-    Estimator note for ``si_kernel_W-0.5_k-1``: the fixed-width box kernel is
-    consistent here (the largest set is 4-D), unlike the removed ``di``/``cce``/
-    ``xme`` kernel variants: on independent data its bias falls from about
-    +1.0 nats at T=100 to +0.05 at T=10000 (roughly ``T**-0.65``), and it
-    converges on the closed-form value for a Gaussian VAR(1). But at T of
-    about 100 the value is dominated by that positive finite-sample bias, so
-    compare pairs within a dataset rather than reading the absolute level;
-    ``si_gaussian`` is unbiased to 0.02 at T=100 when the data are near
-    Gaussian.
+    With the kernel estimator (``si_kernel_W-0.5_k-1``) the estimate is
+    consistent but positively biased at short lengths (the bias falls roughly
+    as ``T**-0.65``, about +1 nat at T=100), so compare pairs within a dataset
+    rather than reading the absolute level.
     """
 
     name = "Stochastic interaction"
@@ -2145,7 +2119,6 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
 
     def __init__(self, delay=1, **kwargs):
         super().__init__(**kwargs)
-        # A negative delay wrapped the slices and returned NaN.
         delay = utils.require_int("delay", delay, minimum=1)
         self._delay = delay
         self.identifier += f"_k-{delay}"
@@ -2157,8 +2130,7 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
         tau = self._delay
 
         H_joint = self._compute_conditional_entropy(xy[tau:], xy[:-tau])
-        # H(X_t | X_{t-tau}) depends on one series: once per process, not once
-        # per pair.
+        # H(X_t | X_{t-tau}) depends on one series: computed once per process.
         tag = ("si_conditional", tau)
         H_src = self._per_process(data, tag, i, lambda: (
             self._compute_conditional_entropy(x[tau:], x[:-tau])))

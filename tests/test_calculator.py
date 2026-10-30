@@ -29,9 +29,9 @@ def test_whether_calculator_computes():
     # frequencies (13 bins, a band 0.065 wide at T=200) in each of its bands.
     # The VAR(1) pairs are coherent only at low frequencies (|C| ~ 0.4 near
     # Nyquist, not significant at five tapers whatever T), so on the VAR(1)
-    # alone `gd_*_fmin-0-25_fmax-0-5` was empty. The copy is coherent across the
-    # band (|C| >= 0.9) and gives a delay of 1.8-2.2 samples in every band on
-    # ten seeds.
+    # alone `gd_*_fmin-0-25_fmax-0-5` would be empty. The copy is coherent
+    # across the band (|C| >= 0.9) and gives a delay of about 2 samples in
+    # every band.
     rng = np.random.default_rng(0)
     T, lag = 200, 2
     A = np.array([[0.5, 0.0], [0.7, 0.4]])

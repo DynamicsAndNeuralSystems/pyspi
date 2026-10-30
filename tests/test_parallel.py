@@ -319,13 +319,8 @@ def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):
     the (empty) error record are all compared. The serial runs differ in the
     global NumPy seed; the parallel ones in worker count. The last run resumes
     from every other checkpoint with a different worker count, so cache groups
-    are entered part-way through.
-
-    Until r11 the six ``sgc_parametric_*_order-None`` SPIs failed on this
-    fixture and the test also compared the order of six recorded errors; the
-    parametric VAR fit now converges there (see ``spectral._fit_bivariate_var``),
-    so every SPI succeeds. Parity of *failure* semantics between serial and
-    parallel runs is covered by ``test_execution_parity.py``.
+    are entered part-way through. Parity of *failure* semantics between serial
+    and parallel runs is covered by ``test_execution_parity.py``.
     """
     import warnings
 

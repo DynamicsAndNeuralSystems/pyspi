@@ -233,24 +233,15 @@ class PhaseSlopeIndex(mne, Undirected):
       interior frequencies (the backend's band is open, so both ends drop out),
       bounded by 7 in magnitude.
 
-    ``mean`` is the time average of ``psi(t)``. It is positive when ``i``
-    leads ``j``, zero in expectation for independent series, with a standard
-    deviation that falls as ``1 / sqrt(T)`` (0.37, 0.21, 0.11 on [0, 0.5] at
-    T = 100, 500, 2000 for white noise). The grid step
-    ``df = (fmax - fmin) / 9``, with ``fmin`` resolved as above, barely changes
-    with T, so neighbouring phases differ by ``2 pi lag df`` and the sign
-    turns over near ``lag = 1 / (2 df)``: about 9 samples at fs=1 on [0, 0.5]
-    and 18 on [0, 0.25]. On [0.25, 0.5] the index falls to about zero sooner,
-    by 8 samples, as the short wavelets stop overlapping. In simulation (white
-    noise and a delayed copy, T = 500 and 2000, 50 runs each) the sign was
-    right in every run for lags up to 5 samples in all three bands and up to
-    12 on [0, 0.25]; on [0, 0.5] it was near zero at lag 8 and wrong in every
-    run at lag 12. The value is not proportional to the lag: on [0, 0.5] it
-    peaks near lag 3.
+    ``mean`` is the time average of ``psi(t)``: positive when ``i`` leads
+    ``j`` and zero in expectation for independent series, with a standard
+    deviation that falls as ``1 / sqrt(T)``. Neighbouring
+    frequencies are ``df = (fmax - fmin) / 9`` apart, so for a delay longer
+    than about ``1 / (2 df)`` samples the sign reverses (about 9 samples at
+    fs=1 on [0, 0.5]). The value is not proportional to the delay.
 
     ``max`` is the maximum of ``psi(t)`` over time. It tends to the bound
-    whatever the data and is positive both ways round on independent noise,
-    so it carries no lead/lag information and is not bundled.
+    whatever the data, so it carries no lead/lag information.
     """
 
     name = "Phase slope index (wavelet)"
@@ -280,13 +271,8 @@ class PhaseSlopeIndex(mne, Undirected):
         inside [fmin, fmax], so each band needs its own call. Cached per band
         on the dataset to share across PSI variants with the same band.
         """
-        # Resolve fmin against the frequency the data can actually support.
-        # fmin=0 asks for an unbounded period: MNE reports an unreliable
-        # spectrum and builds an ~11.1-million-sample Morlet wavelet for T=100.
-        # The floor is five cycles over the record, the same criterion the
-        # sibling wavelet path applies (see mne._get_cache). It is a frequency
-        # in the units of fs: 5 * fs / T Hz, not 5 / T, which is in cycles per
-        # sample and is only the right number at fs=1.
+        # Floor fmin at five cycles over the record (5 * fs / T Hz), as in
+        # mne._get_cache: lower frequencies are not resolved by the data.
         fmin = max(self._fmin, 5.0 * self._fs / data.n_observations)
         # Key on the resolved fmin, not the requested one, so two bands that
         # collapse onto the same floor share correctly.

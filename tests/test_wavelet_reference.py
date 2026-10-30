@@ -1,9 +1,6 @@
-"""Wavelet phase slope index against independent references.
+"""Wavelet phase slope index (mne-connectivity, Morlet wavelets) against references.
 
-`PhaseSlopeIndex` (statistics/wavelet.py) delegates to mne-connectivity's
-`phase_slope_index` with Morlet wavelets. These tests pin what pyspi itself
-decides around that call: the sign convention and matrix orientation, and the
-units of the frequency band.
+Pins the single-epoch value, its sign convention and orientation, and the band's units.
 """
 import warnings
 
@@ -47,10 +44,7 @@ def test_wavelet_psi_is_invariant_to_the_unit_of_frequency(band):
     `fs` is in the identifier and the band is in Hz, so
     `PhaseSlopeIndex(fs=F, fmin=F*lo, fmax=F*hi)` asks for the same band of the
     same samples as `PhaseSlopeIndex(fs=1, fmin=lo, fmax=hi)`. The data-supported
-    floor for `fmin` is five cycles over the record, `5 * fs / T` Hz; it used to
-    be computed as `5 / T` whatever `fs` was, so at fs=250 it let `fmin=0` reach
-    1/250 of the supported floor and summed phase slopes over wavelets far
-    longer than the signal.
+    floor for `fmin` is five cycles over the record, `5 * fs / T` Hz.
     """
     lo, hi = band
     arr = _lagged()
@@ -112,9 +106,7 @@ def test_wavelet_psi_mean_sign_holds_for_short_lags_and_reverses_beyond_half_a_g
     The grid step is ``df = (fmax - fmin) / 9`` whatever T, so neighbouring
     phases differ by ``2 pi lag df`` and the sign turns over near
     ``lag = 1 / (2 df)``: 9.2 samples for [0, 0.5] at T=500, 18.75 for
-    [0, 0.25]. In the round-3 simulation (50 white-noise seeds at T=500 and
-    2000) every seed had the right sign for lags 1-5 in all three bands, and
-    at lag 12 every seed had the wrong sign on [0, 0.5].
+    [0, 0.25].
     """
     for seed in range(3):
         for lag in (1, 2, 3, 5):
@@ -130,11 +122,9 @@ def test_wavelet_psi_max_is_noise_which_is_why_it_is_not_bundled():
     """The maximum over time of the instantaneous slope tends to its bound.
 
     The bound is 7, one per neighbouring pair of the eight interior frequencies.
-    On independent white noise the maximum is positive both ways round and
-    grows with T (4.4, 5.3, 5.8 on [0, 0.5] at T = 100, 500, 2000), and in the
-    round-3 simulation it exceeded the median for a pair at lag 2 in 85-100% of
-    200 independent pairs, in every band. The three ``max`` variants were
-    removed from every bundled config; the class still accepts
+    On independent white noise the maximum is positive both ways round, grows
+    with T, and exceeds that of a pair coupled at lag 2. No bundled config
+    includes the three ``max`` variants; the class still accepts
     ``statistic="max"``.
     """
     from pyspi.calculator import bundled_configs, load_spis_from_yaml, resolve_config

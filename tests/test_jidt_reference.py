@@ -158,7 +158,7 @@ def test_ksg_mi_theiler_window(data, w):
     jidt_psi_n_offset = digamma(n) - np.mean(digamma(pool + 1))
     _close(v + jidt_psi_n_offset, JIDT[f"mi_ksg_w{w}"], KSG_TOL, f"mi_ksg_w{w}")
     if w:
-        # And pyspi's value no longer drifts with the window.
+        # pyspi's value does not drift with the window.
         assert abs(v - JIDT["mi_ksg_w0"]) < 0.002
 
 

@@ -12,7 +12,7 @@ Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs
 | 3.0.0 `full.yaml` | 296 |
 
 285 - 38 removed + 49 added = 296; 224 + 23 renamed + 49 added = 296.
-The 38 removals are the 14 made while porting away from JIDT, the 15 made after the per-SPI audit (duplicate, constant or degenerate SPIs), the 3 `psi_wavelet_max_*` made after the follow-up simulations, and the 6 DTW-type barycenter `mean` SPIs replaced by `bary_*_corr` in the make-up audit; all are in the table below.
+The 38 removals are 14 made while porting away from JIDT and 24 duplicate, constant or degenerate SPIs; all are in the table below.
 
 ## Added (49)
 
@@ -80,18 +80,18 @@ Full list:
 
 | Identifier (2.0.2) | Class | Why |
 |:--|:--|:--|
-| `cov_EllipticEnvelope`, `cov-sq_EllipticEnvelope` | `Covariance` | sklearn's `EllipticEnvelope.fit` is `MinCovDet.fit` plus a decision threshold, so the matrices are MinCovDet's bit for bit. Duplicate (audit). |
-| `prec_EllipticEnvelope`, `prec-sq_EllipticEnvelope` | `Precision` | As above. Duplicate (audit). |
-| `lmfit_Lasso` | `LinearModel` | `Lasso(alpha=1)` zeroes the slope for any z-scored regressor, so every entry is `var(y) = (T-1)/T`: a constant (audit). |
-| `lmfit_ElasticNet` | `LinearModel` | `ElasticNet(alpha=1)` zeroes the slope unless `|r| > 0.5`; constant on two of three fixtures (audit). |
-| `bary_euclidean_mean` | `Barycenter` | The Euclidean barycenter of two z-scored series has mean identically zero (`|value| < 1e-15`) (audit). |
-| `cce_kernel_W-0.5_n-5` | `CausalEntropy` | Fixed-width box kernel over the `n = 5` histories of both series (about ten dimensions) does not improve with `T`; the `di_kernel` defect (audit). |
-| `xme_kernel_W-0.5_k10` | `CrossmapEntropy` | Fixed-width box kernel in 11 dimensions; as above. `xme_kernel_W-0.5_k1` is kept (audit). |
-| `pli_multitaper_max_*` (3) | `PhaseLagIndex` | With one recording PLI at each frequency is a mean of signs over a few tapers, so the band maximum is exactly 1 for every pair once `T >= 1000`; the `dspli` maxima defect. `mean` variants kept (audit). |
-| `wpli_multitaper_max_*` (3) | `WeightedPhaseLagIndex` | As above (audit). |
-| `psi_wavelet_max_*` (3) | `PhaseSlopeIndex` (wavelet) | Maximum over time of a bounded instantaneous phase slope; positive under the null both ways round (simulation). `mean` variants kept. |
-| `bary_dtw_mean`, `bary_sgddtw_mean`, `bary_softdtw_mean` (3) | `Barycenter` | The mean of a barycenter of two zero-mean series is zero up to warping residue; tracked marginal skewness, not coupling (make-up audit). Replaced by `bary_*_corr`. |
-| `bary-sq_dtw_mean`, `bary-sq_sgddtw_mean`, `bary-sq_softdtw_mean` (3) | `Barycenter` | Monotone function of the new `bary_*_corr` (make-up audit). |
+| `cov_EllipticEnvelope`, `cov-sq_EllipticEnvelope` | `Covariance` | sklearn's `EllipticEnvelope.fit` is `MinCovDet.fit` plus a decision threshold, so the matrices are MinCovDet's. |
+| `prec_EllipticEnvelope`, `prec-sq_EllipticEnvelope` | `Precision` | As above. |
+| `lmfit_Lasso` | `LinearModel` | `Lasso(alpha=1)` zeroes the slope for any z-scored regressor, so every entry is `var(y) = (T-1)/T`: a constant. |
+| `lmfit_ElasticNet` | `LinearModel` | `ElasticNet(alpha=1)` zeroes the slope unless `|r| > 0.5`, so it is mostly constant. |
+| `bary_euclidean_mean` | `Barycenter` | The Euclidean barycenter of two z-scored series has mean identically zero. |
+| `cce_kernel_W-0.5_n-5` | `CausalEntropy` | Fixed-width box kernel over the `n = 5` histories of both series (about ten dimensions) does not converge with `T`. |
+| `xme_kernel_W-0.5_k10` | `CrossmapEntropy` | Fixed-width box kernel in 11 dimensions; as above. `xme_kernel_W-0.5_k1` is kept. |
+| `pli_multitaper_max_*` (3) | `PhaseLagIndex` | With one recording PLI at each frequency is a mean of signs over a few tapers, so the band maximum saturates at 1 once `T >= 1000`. `mean` variants kept. |
+| `wpli_multitaper_max_*` (3) | `WeightedPhaseLagIndex` | As above. |
+| `psi_wavelet_max_*` (3) | `PhaseSlopeIndex` (wavelet) | Maximum over time of a bounded instantaneous phase slope; tends to its bound whatever the data. `mean` variants kept. |
+| `bary_dtw_mean`, `bary_sgddtw_mean`, `bary_softdtw_mean` (3) | `Barycenter` | The mean of a barycenter of two zero-mean series is close to zero. Replaced by `bary_*_corr`. |
+| `bary-sq_dtw_mean`, `bary-sq_sgddtw_mean`, `bary-sq_softdtw_mean` (3) | `Barycenter` | Monotone function of `bary_*_corr`. |
 | `di_kernel_W-0.5` | `DirectedInfo` | DirectedInfo kernel variant dropped (3.8-4.4 on independent data at every T). |
 | `di_kozachenko` | `DirectedInfo` | DirectedInfo kozachenko variant dropped (negative values). |
 | `dspli_multitaper_max_fs-1_fmin-0-25_fmax-0-5` | `DebiasedSquaredPhaseLagIndex` | Constant 1.0 for essentially any input (few-taper debiased estimate); `mean` variants kept. |

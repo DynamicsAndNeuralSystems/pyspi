@@ -132,10 +132,8 @@ def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12, min_conditionals=0):
     """Std. of the rescaled y values after binning in x; lower favours x -> y.
 
     The statistic is the spread of P(y | x = a) across the x-bins ``a`` holding
-    more than ``minc`` points. With fewer than two such bins there is nothing
-    to compare: cdt (and the default here) returns 0 when there are none and a
-    spread of exactly 0 when there is one -- the strongest possible evidence
-    for x -> y. ``min_conditionals=2`` returns NaN instead.
+    more than ``minc`` points. Returns NaN when fewer than ``min_conditionals``
+    such bins exist; the default of 0 keeps cdt's behaviour, which returns 0.
     """
     if isinstance(x_te, np.ndarray):
         x_te = pd.Series(np.asarray(x_te).reshape(-1))
@@ -190,10 +188,8 @@ def reci_score(x, y, degree=3):
     """Mean squared error of a monomial fit of y on x, both min-max scaled.
 
     The polynomial columns for x and x**2 are zeroed (the intercept is fitted
-    by `LinearRegression`), which is cdt's implementation of the paper's
-    shifted monomial regressor a*x**n + b: at the default degree=3 the fit is
-    a*x**3 + b. (For degree > 3 it would be a polynomial in x**3..x**degree,
-    not a monomial.)
+    by `LinearRegression`), so at the default degree=3 the fit is the paper's
+    monomial a*x**3 + b (as in cdt).
     """
     x = np.reshape(minmax_scale(np.asarray(x, dtype=float).reshape(-1, 1)), (-1, 1))
     y = np.reshape(minmax_scale(np.asarray(y, dtype=float).reshape(-1, 1)), (-1, 1))
@@ -224,9 +220,6 @@ def _integral_approx_estimator(x, y):
 
     ``a`` and ``b`` are about (m-1) * C_{X->Y} and (m-1) * C_{Y->X}, and the
     paper infers X -> Y when C_{X->Y} < C_{Y->X}, so the score is ``b - a``.
-    cdt returned ``a - b`` under a docstring promising > 0 for x -> y, so its
-    slope estimator disagreed in sign with its own entropy estimator. No SPI
-    reaches this branch (the IGCI SPI uses the entropy estimator).
     """
     a = b = 0.0
     x = np.asarray(x).ravel()

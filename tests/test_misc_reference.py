@@ -48,8 +48,8 @@ def test_lmfit_lasso_is_data_independent_which_is_why_it_is_not_bundled():
 
     For z-scored ``x`` and ``y`` that is ``|r| (T-1)/T < 1``, always, so every
     entry is ``var(y) = (T-1)/T`` whatever the data. ``ElasticNet(alpha=1)``
-    zeroes it unless ``|r| > 0.5``. Both were removed from the bundled configs
-    in 3.0.0 (the class still accepts them).
+    zeroes it unless ``|r| > 0.5``. Neither is in the bundled configs (the
+    class still accepts them).
     """
     from pyspi.calculator import Calculator
     from pyspi.statistics.misc import LinearModel
@@ -125,10 +125,7 @@ def test_aeg_is_the_engle_granger_tstat_of_the_column_regressed_on_the_row():
     """``coint_aeg`` puts the regressor on the row, like ``lmfit_*``.
 
     ``statsmodels.coint(y0, y1)`` regresses ``y0`` on ``y1`` and unit-root-tests
-    the residual, so ``table[i, j]`` must call ``coint(z[j], z[i])``. Until
-    3.0.0 the arguments were the other way round, so the two directed
-    regression families in ``full`` disagreed about which index is the
-    regressor.
+    the residual, so ``table[i, j]`` must call ``coint(z[j], z[i])``.
     """
     from statsmodels.tsa.stattools import coint
 
@@ -178,10 +175,8 @@ def test_aeg_and_lmfit_agree_on_which_index_is_the_regressor():
 def test_cointegration_is_labelled_linear():
     """Johansen's VECM and Engle-Granger's OLS are linear models.
 
-    Every bundled config declares `linear`, but the class carried `nonlinear`,
-    and label merging lets the class's linearity win, so all eleven `coint_*`
-    SPIs came out `nonlinear` and `filter_spis` sorted them with the
-    nonlinear measures.
+    Label merging lets the class's linearity win over the config's, so the
+    class must say `linear` too for all eleven `coint_*` SPIs to be linear.
     """
     coint = _full_spis("coint_")
     assert len(coint) == 11
@@ -208,10 +203,9 @@ def test_pec_reports_the_envelope_correlation_with_its_sign():
     The independent reference is the Pearson correlation of the Hilbert
     amplitude envelopes (of their logs for `log`), exactly -1 up to edge
     effects. A correlation coefficient carries its sign, so unless `absolute`
-    is applied the SPI must report itself as signed: as unsigned,
-    `Calculator._rmmin` shifted the column by its minimum and `set_group`
-    correlated it through `abs()`, folding anticorrelated envelopes onto
-    correlated ones.
+    is applied the SPI must report itself as signed (an unsigned SPI is
+    min-shifted by `Calculator._rmmin` and passed through `abs()` by
+    `set_group`, folding anticorrelated envelopes onto correlated ones).
     """
     from scipy.signal import hilbert
 
@@ -293,9 +287,9 @@ def test_gpfit_rbf_does_not_interpolate_an_unrelated_pair():
     The kernel's RBF term has unit amplitude, so at a vanishing length scale it
     is white noise of variance 1 and the likelihood cannot tell it from the
     WhiteKernel. That solution interpolates y: its in-sample prediction is y
-    itself. With x in large units (zscore=False) the optimizer starts inside
-    it, and the in-sample MSE the SPI used to return was ~0 (mean 0.05 of
-    var(y) at T=300, sd(x)=100). Its leave-one-out prediction is ~0.
+    itself, so its in-sample MSE is ~0. With x in large units (zscore=False)
+    the optimizer starts inside it; its leave-one-out prediction is ~0, so the
+    leave-one-out MSE is ~var(y).
     """
     from pyspi.statistics.misc import GPModel
 

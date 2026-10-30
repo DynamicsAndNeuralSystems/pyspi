@@ -287,12 +287,8 @@ def phi_g_gauss_al(Cov_X, Cov_E, A, Z, normalization=0, maxiter=100000, error=1e
 
     Cov_E_p = Cov_E.copy()
     val_constraint_past = 0
-    # Converged means the objective has stopped moving *and* the iterate is a
-    # disconnected model. PhiToolbox tests the first only, and on weakly
-    # coupled, strongly autocorrelated pairs log|Cov_E_p| changes by < 1e-10
-    # from the start, so it stopped at iteration 3 with ~80% of the
-    # cross-unit coupling still in A_p: phi_G was low by up to 99% (kuramoto
-    # pair (1, 5): 1.39e-6 against the constrained minimum 6.09e-5).
+    # Converged: the objective has stopped moving and the iterate satisfies
+    # the disconnection constraint (PhiToolbox tests only the first).
     feasibility_tol = (1e-8 * np.linalg.norm(A)) ** 2
     converged = False
 
@@ -348,12 +344,8 @@ def phi_g_gauss_al(Cov_X, Cov_E, A, Z, normalization=0, maxiter=100000, error=1e
     if not converged:
         warnings.warn(f"phi_G did not converge in {maxiter} iterations")
 
-    # Evaluate phi_G at a disconnected model: the block-diagonal part of the
-    # final iterate, with its optimal noise covariance. The iterate itself is
-    # feasible only to feasibility_tol, and any cross-unit coefficient left in
-    # it lowers phi_G at first order; projecting makes the value the KL
-    # divergence to a genuinely disconnected model, so an upper bound on the
-    # minimum that is tight to second order in the diagonal blocks.
+    # Evaluate phi_G at an exactly disconnected model: the block-diagonal part
+    # of the final iterate, with its optimal noise covariance.
     A_disconnected = np.zeros((n, n))
     for M in M_cells:
         A_disconnected[np.ix_(M, M)] = A_p[np.ix_(M, M)]

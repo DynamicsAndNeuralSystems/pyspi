@@ -47,17 +47,13 @@ class Cointegration(Directed, Unsigned):
     and silently picking one is what caused the original problem. ``johansen``
     keeps the cache alias, since for it the two orientations are provably equal.
 
-    Orientation of ``aeg``: ``table[i, j]`` is the Engle-Granger t-statistic of
-    process *j* regressed on process *i*, i.e. the regressor sits on the row,
-    as it does for ``LinearModel`` (``lmfit_*``) and as pyspi's source-by-target
-    convention for directed SPIs reads. (Until 3.0.0 the call was
-    ``coint(z[i], z[j])``, which regresses the row on the column.)
+    For ``aeg``, ``table[i, j]`` is the Engle-Granger t-statistic of process
+    *j* regressed on process *i* (regressor on the row, as for ``lmfit``).
     """
 
     name = "Cointegration"
     identifier = "coint"
-    # Linear: Johansen fits a VECM and Engle-Granger an OLS regression. The
-    # class's linearity overrides the config's when labels merge.
+    # Johansen fits a VECM and Engle-Granger an OLS regression.
     labels = ["misc", "unsigned", "temporal", "undirected", "linear"]
     _cache_namespace = "coint"
 
@@ -123,9 +119,7 @@ class Cointegration(Directed, Unsigned):
             z = data.to_numpy(squeeze=True)
 
             if self._method == "aeg":
-                # statsmodels regresses its first argument on its second, so
-                # the column j is regressed on the row i: regressor on the row,
-                # as for LinearModel. See the class docstring.
+                # statsmodels regresses its first argument on its second.
                 stats = stattools.coint(
                     z[j],
                     z[i],
@@ -168,12 +162,9 @@ class Cointegration(Directed, Unsigned):
 class LinearModel(Directed, Unsigned):
     """Mean squared error of a linear fit of the column on the row.
 
-    ``table[i, j]`` regresses process *j* on process *i* (regressor on the
-    row, as for ``coint_aeg``) and returns the in-sample MSE, so **lower means
-    a better linear prediction of the column from the row**. On z-scored data
-    the MSE of predicting the mean is ``(T - 1) / T``, the value a useless
-    regressor returns (and why ``Lasso``/``ElasticNet`` at ``alpha = 1`` are
-    not bundled).
+    ``table[i, j]`` regresses process *j* on process *i* and returns the
+    in-sample MSE, so lower means a better prediction of the column from the
+    row. On z-scored data an uninformative regressor gives ``(T - 1) / T``.
     """
 
     name = "Linear model regression"
@@ -203,27 +194,14 @@ class GPModel(Directed, Unsigned):
     """Gaussian process regression of process j on process i.
 
     ``table[i, j]`` is the leave-one-out mean squared error of a GP that
-    predicts ``z[j]`` from ``z[i]`` (row = predictor, column = target; lower
-    is better prediction; about 1, the variance of ``z[j]``, for an unrelated
+    predicts ``z[j]`` from ``z[i]`` (lower is better; about 1 for an unrelated
     pair of z-scored series). The kernel is ``ConstantKernel() + WhiteKernel()
-    + {RBF, DotProduct}()`` at sklearn's defaults (bounds 1e-5 to 1e5, one
-    optimizer start), its hyperparameters maximising the log marginal
-    likelihood. ``DotProduct`` makes it Bayesian linear regression.
+    + {RBF, DotProduct}()``, with hyperparameters maximising the log marginal
+    likelihood; ``DotProduct`` makes it Bayesian linear regression.
 
-    The error is leave-one-out with the hyperparameters fixed at the fit
-    (Rasmussen & Williams 2006, eq. 5.12), not in-sample. The RBF term has unit
-    amplitude, so at a vanishing length scale it is white noise of variance 1
-    and the likelihood cannot tell it from the WhiteKernel. On an unrelated
-    pair that interpolating solution is usually the global optimum, and its
-    in-sample prediction is y itself: with ten random restarts of the
-    optimizer, the in-sample MSE returned before 3.0.0 fell below 0.05 on 41
-    of the 68 RBF fixture pairs. The default start reaches it when x is in
-    large units (``zscore=False``). Its leave-one-out prediction is ~0, so the
-    score is right at either optimum.
-
-    Hyperparameters at a bound are expected rather than a failure: on
-    z-scored data the constant (and DotProduct's ``sigma_0``) sits at 1e-5,
-    and the RBF length scale goes to 1e5 when there is no relation.
+    The error is leave-one-out at the fitted hyperparameters (Rasmussen &
+    Williams 2006, eq. 5.12). The in-sample error is not used because the RBF
+    fit can interpolate the data, driving it to zero on unrelated pairs.
     """
 
     name = "Gaussian process regression"
@@ -233,8 +211,7 @@ class GPModel(Directed, Unsigned):
     def __init__(self, kernel="RBF"):
         self.identifier += f"_{kernel}"
         if kernel == "DotProduct":
-            # A GP with a dot-product kernel is Bayesian linear regression; the
-            # class-level `nonlinear` describes the RBF variant only.
+            # Bayesian linear regression.
             self.labels = [l for l in self.labels if l != "nonlinear"] + ["linear"]
         self._kernel = kernels.ConstantKernel() + kernels.WhiteKernel()
         self._kernel += getattr(kernels, kernel)()
@@ -270,12 +247,8 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
         self._absolute = absolute
         if absolute:
             self.identifier += "_abs"
-        # A correlation coefficient carries its sign: negative means the two
-        # envelopes move in antiphase. As unsigned, `Calculator._rmmin` would
-        # shift the column by its minimum and `set_group` would correlate it
-        # through `abs()`, folding anticorrelation onto correlation. Only the
-        # orthogonalised variant with `absolute` is non-negative; MNE ignores
-        # `absolute` without orthogonalisation.
+        # A correlation in [-1, 1]; only the orthogonalised variant with
+        # `absolute` is non-negative (MNE ignores `absolute` otherwise).
         if not (self._orth and absolute):
             self.labels = [l for l in self.labels if l != "unsigned"] + ["signed"]
             self.issigned = lambda: True

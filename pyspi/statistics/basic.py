@@ -12,13 +12,8 @@ from pyspi.utils import require_int
 def _spearman_matrix(Z):
     """Spearman's rho between the rows of ``Z``: Pearson on average ranks.
 
-    The ranking and the ``np.corrcoef`` that ``stats.spearmanr(Z, axis=1)``
-    performs, so values are bit-identical, without its special cases: it
-    checks only its *first two* variables for constancy and, if either is
-    constant, returns one scalar NaN for the whole matrix (and with two rows
-    it returns a scalar). The SPI then raised and every pair was lost -- but
-    only when the constant series was process 0 or 1. Here a constant row
-    gives NaN in its own row and column and nowhere else.
+    Same values as ``stats.spearmanr(Z, axis=1)``, but always a matrix, and a
+    constant row gives NaN only in its own row and column.
     """
     return np.corrcoef(np.apply_along_axis(stats.rankdata, 1, Z))
 
@@ -28,13 +23,9 @@ class Estimators(Undirected, Signed):
 
     Information on covariance estimators at: https://scikit-learn.org/stable/modules/covariance.html
 
-    ``GraphicalLassoCV`` caveat: when cross-validation selects an ``alpha``
-    near 0 the graphical-lasso solver can stop at ``max_iter`` without
-    converging, and the resulting ``prec_GraphicalLassoCV`` /
-    ``cov_GraphicalLassoCV`` are then solver-path dependent. scikit-learn's
-    ``ConvergenceWarning`` is suppressed with every other fit warning below,
-    so this is silent; on data whose true precision is dense, prefer
-    ``GraphicalLasso`` (fixed ``alpha``) or ``LedoitWolf``.
+    When cross-validation selects an ``alpha`` near 0, ``GraphicalLassoCV`` may
+    not converge (silently, as fit warnings are suppressed); on data with a
+    dense precision matrix, prefer ``GraphicalLasso`` or ``LedoitWolf``.
     """
 
     name = "Covariance"
@@ -90,9 +81,7 @@ class Estimators(Undirected, Signed):
     @parse_multivariate
     def multivariate(self, data):
         mycov = self._from_cache(data)
-        # Copied: the fitted estimator's array *is* the cache. Filling its
-        # diagonal in place and returning it handed the caller the cache, so
-        # any edit to the result reached every later SPI read from this Data.
+        # Copy, so the cached fit is not modified.
         matrix = getattr(mycov, self._kind + "_").copy()
         np.fill_diagonal(matrix, np.nan)
         if self._squared:
@@ -122,12 +111,9 @@ class Precision(Estimators):
 class CrossCorrelation(Undirected, Signed):
     """Sample cross-correlation over lags in [-T//4, +T//4].
 
-    ``r(l) = sum_t x[t+l] y[t] / (T sd_x sd_y)`` on the demeaned series: the
-    biased (divide-by-T) estimator, so ``r(0)`` is Pearson's r and
-    ``|r(l)| <= 1``; a pure delay of L samples peaks near ``1 - L/T``.
-    ``statistic`` reduces the retained lags: ``max`` is the largest *signed*
-    value (not the largest ``|r|``; ``squared=True`` gives strength without
-    sign), ``mean`` is their mean.
+    ``r(l) = sum_t x[t+l] y[t] / (T sd_x sd_y)`` on the demeaned series (the
+    biased estimator, so ``r(0)`` is Pearson's r). ``statistic`` reduces the
+    retained lags: ``max`` is the largest signed value, ``mean`` their mean.
 
     ``sigonly`` is a historical misnomer kept for compatibility. It is a
     pointwise amplitude threshold -- keep the lags with
@@ -383,9 +369,7 @@ class LaggedCorrelation(Undirected, Signed):
         return self._corr(x[tau:], y[:-tau])
 
     def _symmetric_lagged_corr(self, x, y, tau):
-        # The mean of the two one-sided correlations is undefined when either
-        # is, as in `multivariate`. Falling back to the defined direction
-        # reported a one-sided correlation under the symmetric SPI's name.
+        # NaN if either direction is undefined, as in `multivariate`.
         forward = self._lagged_corr(x, y, tau)
         backward = self._lagged_corr(y, x, tau)
         return 0.5 * (forward + backward)
@@ -435,10 +419,7 @@ class LaggedCorrelation(Undirected, Signed):
             forward = rho[:M, M:]
             backward = rho[M:, :M]
         elif self._estimator == "kendall":
-            # Only the lead x lag block is needed, and `backward` is its
-            # transpose. pandas' 2M x 2M matrix also paid for every lead-lead
-            # and lag-lag pair, about twice the work. Same scipy call, same
-            # argument order as pandas (lead first), so bit-identical.
+            # Only the lead x lag block is needed; `backward` is its transpose.
             forward = np.full((M, M), np.nan)
             for a in range(M):
                 for b in range(M):

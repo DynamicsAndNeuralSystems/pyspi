@@ -110,11 +110,9 @@ def _circular_nanmean(angles, axis):
 def _real_valued_bins(freq, fs):
     """Mask of the bins where the cross-spectrum of real signals is real.
 
-    0 Hz always, and ``fs / 2`` when it is on the grid (an even FFT length; the
-    backend pads T=101 to 105 samples, whose last bin is below Nyquist). Not
-    ``freq == fs / 2``: at fs=3, T=100 the backend's Nyquist bin is
-    1.5000000000000002. A relative 1e-9 is far below the half-bin gap of an
-    odd-length grid.
+    0 Hz always, and ``fs / 2`` when it is on the grid (an even FFT length),
+    compared with a relative tolerance because the backend's grid is
+    ``k * fs / nfft`` in floating point.
     """
     return (freq == 0) | np.isclose(freq, fs / 2, rtol=1e-9, atol=0)
 
@@ -122,10 +120,8 @@ def _real_valued_bins(freq, fs):
 def _closed_band(freq, fmin, fmax):
     """Mask of ``fmin <= f <= fmax`` with a relative 1e-9 tolerance at both edges.
 
-    The backend's grid is ``k * fs / nfft``, so at fs=3, T=100 its Nyquist bin
-    is 1.5000000000000002 and an exact ``freq <= fs / 2`` silently dropped the
-    bin the identifier names. At fs=1 every shipped edge (0, 0.25, 0.5) is
-    exact on the grid and the mask is the exact comparison.
+    The tolerance keeps edge bins such as Nyquist, which the backend's
+    floating-point grid ``k * fs / nfft`` can place just past ``fs / 2``.
     """
     freq = np.asarray(freq)
     above = (freq >= fmin) | np.isclose(freq, fmin, rtol=1e-9, atol=0)
@@ -151,15 +147,13 @@ class NonparametricSpectral(Unsigned):
       exactly 0 or pi and none of these is an estimate: PLV and PPC are 1
       whenever the tapers agree in sign, PLI and dsPLI 0, wPLI 0/0. A band
       left with no frequency is refused with a ``ValueError``.
-    - PhaseSlopeIndex follows the phase rule too (closed band less the
-      real-valued bins), then keeps one bin per multitaper bandwidth; until
-      3.0.0 it used the backend's open band ``fmin < f < fmax``.
+    - PhaseSlopeIndex follows the phase rule too, then keeps one bin per
+      multitaper bandwidth.
     - GroupDelay searches for its significant coherence run over the closed
       band less the real-valued bins, where the phase is forced to 0 or pi.
 
     The closed band compares with a relative tolerance of 1e-9 at both edges
-    (``_closed_band``): the backend's Nyquist bin at fs=3, T=100 is
-    1.5000000000000002 and an exact comparison dropped it.
+    (``_closed_band``).
 
     SpectralGrangerCausality raises a zero ``fmin`` to 1e-5 (its identifier
     says so) and then uses the closed band.
@@ -167,8 +161,6 @@ class NonparametricSpectral(Unsigned):
 
     # The `statistic` values a class can apply. A band statistic reduces a
     # spectrum over frequency; GroupDelay's three are outputs of a regression.
-    # Accepting one of GroupDelay's elsewhere used to fall through the
-    # dispatcher in `multivariate` and return the spectrum's 0 Hz bin.
     _statistics = ("mean", "max")
 
     # A function of the phase of the cross-spectrum: its band leaves out the
@@ -179,10 +171,8 @@ class NonparametricSpectral(Unsigned):
         if fmax is None:
             fmax = fs / 2
 
-        # `fs` is honoured: it reaches the multitaper estimate, the frequency
-        # grid the band is applied to, every cache key, and GroupDelay's
-        # conversion to samples. (A warning here said it was "not yet
-        # handled" long after it was.)
+        # `fs` reaches the multitaper estimate, the frequency grid, every cache
+        # key, and GroupDelay's conversion to samples.
         self._fs = fs
         self._fmin = fmin
         self._fmax = fmax
@@ -428,11 +418,8 @@ class _FactoredConnectivity(sc.Connectivity):
 def _whole_record_tapers(n_time_samples, fs):
     """The DPSS tapers ``sc.Multitaper`` uses for one whole-record window.
 
-    They depend on the record length and sampling rate only, but a Multitaper
-    computes them again on construction, and the bivariate class builds one
-    per ordered pair: at M=10, T=1000 that was ~40% of the directed spectral
-    measures' time. Taken from a Multitaper built with the same arguments, so
-    they are the same array the pair would have computed.
+    They depend on the record length and sampling rate only, so they are
+    computed once rather than for every pair's Multitaper.
     """
     tapers = sc.Multitaper(np.zeros((n_time_samples, 1, 1)),
                            sampling_frequency=fs).tapers
@@ -505,9 +492,7 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         bv_freq, freq = self._get_cache(data, i, j)
-        # Closed band, as in NonparametricSpectralMultivariate, spectral GC and
-        # the wavelet SPIs. Strict inequalities here dropped the DC, 0.25 and
-        # Nyquist bins from bands whose identifiers include them.
+        # Closed band, as in NonparametricSpectralMultivariate.
         freq_id = np.flatnonzero(_closed_band(freq, self._fmin, self._fmax))
         return self._statfn(bv_freq[freq_id])
 
@@ -515,10 +500,8 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
 class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
     """Magnitude-squared coherence, ``|S_xy|^2 / (S_xx S_yy)``, in [0, 1].
 
-    The squared modulus of the multitaper coherency, which is what the
-    backend's ``coherence_magnitude`` returns despite its name; ``cohmag``
-    keeps that name in its identifiers. ``sqrt`` of it is the coherence
-    magnitude ``|C|``.
+    The squared modulus of the multitaper coherency (the backend's
+    ``coherence_magnitude``, whose name ``cohmag`` keeps).
     """
 
     name = "Magnitude-squared coherence"
@@ -621,13 +604,9 @@ class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected
     ``n`` tapers (and trials), ``S_k`` being taper ``k``'s cross-spectrum:
     ``((sum s)^2 - sum s^2) / (n (n - 1))``.
 
-    Computed here rather than by the backend, whose
-    ``(n PLI^2 - 1) / (n - 1)`` is the same expression only when every sign is
-    nonzero. At 0 Hz and at the Nyquist frequency the Fourier coefficients of a
-    real signal are real, so every ``Im S_k`` is exactly zero: the estimator is
-    0 there, and the backend's shortcut returned ``-1/(n - 1)`` (-0.25 at the
-    default five tapers) for every input. Those two bins carry no phase and
-    are left out of the band statistic (see ``NonparametricSpectral``).
+    Computed here rather than by the backend, whose shortcut
+    ``(n PLI^2 - 1) / (n - 1)`` equals this only when every sign is nonzero
+    (it gives ``-1/(n - 1)`` where the cross-spectrum is real).
     """
 
     _phase_based = True
@@ -793,15 +772,10 @@ class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
     ``delta_ij^2 = eta_ij^2 P_ij^2``, i.e. the magnitude scale the backend
     reports.
 
-    The backend's ``direct_directed_transfer_function()`` multiplies ffDTF by
-    ``sqrt(partial_directed_coherence())`` -- |PDC|, a different and itself
-    directed quantity -- although its docstring describes "the directed
-    transfer function and partial coherence". ``S`` here is the spectrum of
-    the fitted model, ``H Sigma H^H``, so like the other four measures dDTF is
-    read entirely off the pair's spectral factorisation.
-
-    On a pair there is nothing to partial out: ``P`` is the ordinary
-    coherency, and dDTF is ffDTF weighted by the pair's coherence.
+    ``S`` is the spectrum of the fitted model, ``H Sigma H^H``. (The
+    backend's ``direct_directed_transfer_function()`` uses ``sqrt(PDC)`` in
+    place of the partial coherence, so it is not used.) On a pair, ``P`` is
+    the ordinary coherency.
     """
 
     name = "Direct directed transfer function"
@@ -858,12 +832,9 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     _antisymmetric_spectrum = True
     name = "Phase slope index"
     labels = ["unsigned", "spectral", "undirected"]
-    # A sum over the band, not a band statistic of a spectrum: `max` was
-    # accepted and ignored, returning the default variant's matrix under a
-    # `_max_` identifier. `mean` is kept as the name the identifiers carry.
+    # A sum over the band, not a band statistic; `mean` is the name the
+    # identifiers carry.
     _statistics = ("mean",)
-    # A function of the coherency's phase: the band leaves out the real-valued
-    # bins, as for the other phase measures (see NonparametricSpectral).
     _phase_based = True
 
     # Frequency resolution of the multitaper estimate in FFT bins: twice the
@@ -885,10 +856,8 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
 
     def _get_statistic(self, C):
         freq = np.asarray(C.frequencies)
-        # The closed band less the real-valued bins (the phase rule), thinned
-        # to one bin per multitaper bandwidth. Until 3.0.0 this was the
-        # backend's open band, which also dropped an interior edge such as
-        # 0.25 Hz that the identifier names.
+        # The closed band less the real-valued bins, thinned to one bin per
+        # multitaper bandwidth.
         inside = self._band(freq)
         coherency = C.coherency()[..., inside[::self._FREQUENCY_STEP], :, :]
         if coherency.shape[-3] < 2:
@@ -987,22 +956,15 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         ``arctanh|Gamma|`` plus a bias ``b = 1/(2n - 2)`` and *variance* ``b``,
         so the null z-score is ``(arctanh|C| - b) / sqrt(b)``. That is what the
         second ``coherence_bias`` term was meant to be and is what is used
-        here. It is an approximation, not an exact test: at the backend's
-        default five tapers the normal tail is too light, and on independent
-        white noise a bin passes at nominal 5% about 16% of the time (the
-        exact null law ``P(|C|^2 > x) = (1 - x)^(n-1)`` gives 15.7%; measured
-        16.0-16.7% at T=100 and 1000). The screen is kept because the cluster
-        and three-point requirements below, not the per-bin level, are what
-        control false estimates (none of 600 independent white-noise pairs
-        gets a value at T=100 or at T=1000, in any shipped band); the exact
-        law would lower power.
+        here. It is an approximation: with five tapers a bin passes at nominal
+        5% about 16% of the time under the null, so false estimates are
+        controlled by the cluster and three-point requirements below.
 
         The rest follows the backend's own recipe: Benjamini-Hochberg over the
         in-band frequencies, keep the largest contiguous significant run,
         thin it to independent points one multitaper bandwidth
         (``PhaseSlopeIndex._FREQUENCY_STEP`` = six FFT bins) apart, require at
         least three, and regress the unwrapped coherence phase on frequency.
-        At T=100 that means a significant run of at least 13 of the 51 bins.
         ``fs * slope / (2*pi)`` is the delay in samples; the unscaled
         ``slope/(2*pi)`` would be in seconds, because the regression runs
         against physical frequency. ``rvalue`` is |r|, which is orientation-
@@ -1012,10 +974,8 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
 
         coherency = np.asarray(C.coherency())
         freqs = np.asarray(C.frequencies)
-        # The closed band less the real-valued bins: at 0 Hz and fs/2 the phase
-        # is forced to 0 or pi whatever the delay, so those bins are not
-        # observations of the phase slope (for a pure delay they happen to lie
-        # on the line; for anything else they pull the fit).
+        # The closed band less the real-valued bins, where the phase is forced
+        # to 0 or pi whatever the delay.
         in_band = (_closed_band(freqs, self._fmin, self._fmax)
                    & ~_real_valued_bins(freqs, self._fs))
         f = freqs[in_band]
@@ -1023,10 +983,7 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         n_trials, _, M, _ = coh.shape
 
         # Independent frequency spacing: one multitaper bandwidth, as for
-        # PhaseSlopeIndex. Closer estimates share the tapers' main lobes. The
-        # band used to be cut into 50 pieces whatever T, so at T=100 three
-        # adjacent, correlated bins passed as three independent points, and
-        # at T=20000 a 0.016-wide coupled band gave only three.
+        # PhaseSlopeIndex (closer estimates share the tapers' main lobes).
         step = PhaseSlopeIndex._FREQUENCY_STEP
 
         bias = 1.0 / (2 * C.n_observations - 2)
@@ -1079,27 +1036,16 @@ _GC_N_FREQS = 1024
 def _fit_bivariate_var(x, order=None, max_order=50):
     """Yule-Walker fit of the two-process VAR behind parametric spectral GC.
 
-    This is ``nitime.analysis.granger.fit_model`` -- Whittle's (LWR)
-    recursion, and with ``order=None`` the lowest order at which nitime's BIC
-    first stops improving -- with one difference: the autocovariance. nitime's
-    ``autocov_vector`` averages lag ``k`` over ``T - k`` products and does not
-    remove the mean. That "unbiased" block-Toeplitz matrix is not guaranteed to
-    be positive semidefinite, and when it is not the recursion returns an
-    indefinite innovation covariance and an unstable model: on the bundled
-    ``kuramoto_M7_T100`` fixture, 7 of 21 pairs at order 1 and all 21 at
-    orders 2 and 20, so Geweke's ratio came out negative or NaN, and the NaN
-    in BIC's ``log det`` stopped the order search from ever turning over.
+    As ``nitime.analysis.granger.fit_model`` (Whittle's LWR recursion; with
+    ``order=None``, the lowest order at which BIC stops improving), but on the
+    Yule-Walker autocovariance: about the mean and normalised by ``T``
+    (Brockwell & Davis 1991, sec. 11.5; Luetkepohl 2005, sec. 3.3.4). Its
+    Toeplitz matrix is positive semidefinite, so the fitted model is stable;
+    nitime's ``autocov_vector`` (normalised by ``T - k``, not demeaned) need
+    not be.
 
-    The Yule-Walker estimator is defined on the sample autocovariance about
-    the mean normalised by ``T`` (Brockwell & Davis 1991, sec. 11.5;
-    Luetkepohl 2005, sec. 3.3.4), whose Toeplitz matrix is positive
-    semidefinite by construction; that is what makes the fitted model stable
-    with a positive-definite innovation covariance. It is computed once, to
-    the largest lag needed, and sliced for each candidate order.
-
-    ``max_order`` is the largest order tried (nitime stopped at
-    ``max_order - 2``). Returns ``(coef, ecov)`` in nitime's convention,
-    ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
+    ``max_order`` is the largest order tried. Returns ``(coef, ecov)`` in
+    nitime's convention, ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
     """
     x = x - x.mean(axis=-1, keepdims=True)
     n_obs = x.shape[-1]
@@ -1246,12 +1192,8 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                     ) from err
 
                 F = np.transpose(np.expand_dims(F, axis=3), axes=[3, 2, 1, 0])
-                # The frequencies the model was evaluated at, in Hz: `w` is
-                # scipy.signal.freqz's grid, k*pi/513 rad on [0, pi). nitime's
-                # GrangerAnalyzer.frequencies labels the same values
-                # linspace(0, fs/2, 513), up to one grid step off, so the band
-                # was applied on a stretched axis. And Hz, not cycles/sample:
-                # `fs` is in this SPI's identifier and cache key.
+                # The frequencies the model was evaluated at, in Hz (`w` is
+                # scipy.signal.freqz's grid, k*pi/513 rad on [0, pi)).
                 freq = w * self._fs / (2 * np.pi)
             try:
                 data.spectral_gc[key] = {"freq": freq, "F": F}

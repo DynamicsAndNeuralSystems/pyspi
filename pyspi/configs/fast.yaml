@@ -570,10 +570,7 @@
 
 
   DebiasedSquaredPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled. The `max` variants were
-    # removed: the debiased estimates rest on a few tapers of one recording,
-    # and the maximum over frequencies returned exactly 1 for essentially any
-    # input (white noise included), so carried no information.
+    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -1187,11 +1184,8 @@
   #     statistic: max
 
   PhaseSlopeIndex:
-    # The `max` variants are not bundled: they take the maximum over time of the
-    # instantaneous phase slope, which tends to its bound of 7 whatever the data.
-    # On independent white noise it exceeded the value for a pair at lag 2 in
-    # 85-100% of 200 runs at T=500 and 2000, in every band, and it is positive
-    # both ways round (test_wavelet_audit.py). Three SPIs removed in 3.0.0.
+    # The `max` variants are not bundled: the maximum over time of the
+    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent

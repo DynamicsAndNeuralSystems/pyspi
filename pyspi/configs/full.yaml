@@ -2,9 +2,7 @@
 .statistics.basic:
   # Covariance
   Covariance:
-    # EllipticEnvelope is not bundled: sklearn's EllipticEnvelope.fit is MinCovDet.fit
-    # plus an outlier threshold, so its covariance_ and precision_ are MinCovDet's
-    # bit for bit (test_basic_audit.py). Four duplicate SPIs removed in 3.0.0.
+    # EllipticEnvelope is not bundled: its covariance_ and precision_ are MinCovDet's.
     labels:
       - undirected
       - linear
@@ -98,7 +96,7 @@
       - squared: True
       - squared: False
 
-  # Lagged correlation coefficient (fork-added; class in pyspi/statistics/basic.py)
+  # Lagged correlation coefficient (class in pyspi/statistics/basic.py)
   LaggedCorrelation:
     labels:
       - undirected
@@ -305,7 +303,7 @@
       - global_constraint: itakura
       - global_constraint: sakoe_chiba
 
-  # Cross pairwise distance (fork-added; class in pyspi/statistics/distance.py)
+  # Cross pairwise distance (class in pyspi/statistics/distance.py)
   # Shifted-path Euclidean upper bound on DTW.
   CrossPairwiseDistance:
     labels:
@@ -353,12 +351,9 @@
       - global_constraint: sakoe_chiba
 
   Barycenter:
-    # Only the `corr` statistic (2 mean(b^2) / mean_energy - 1, an alignment-adjusted
-    # correlation) is bundled for the DTW-type barycenters: the unsquared mean of
-    # a barycenter of z-scored series is zero up to warping residue, and the
-    # squared mean is a monotone function of `corr` (3.0.0 make-up audit).
-    # bary_euclidean_mean is not bundled: the Euclidean barycenter of two z-scored
-    # series has mean identically zero (|value| < 1e-15 on every fixture).
+    # The DTW-type barycenters bundle `corr` rather than `mean`: the barycenter of
+    # z-scored series has mean ~0, and its squared mean is a monotone function of `corr`.
+    # bary_euclidean_mean is not bundled: it is identically zero on z-scored data.
     labels:
       - undirected
       - nonlinear
@@ -525,9 +520,8 @@
       - estimator: kernel
 
   CausalEntropy: # No theiler window yet
-    # The kernel estimator is not bundled: a fixed-width box kernel over the n=5
-    # histories of both series (about ten dimensions) does not improve with T
-    # (the di_kernel defect).
+    # The kernel estimator is not bundled: a fixed-width box kernel in about ten
+    # dimensions does not converge with T.
     labels:
       - directed
       - nonlinear
@@ -541,7 +535,7 @@
 
   CrossmapEntropy: # No theiler window yet
     # The kernel estimator at history_length 10 is not bundled: a fixed-width box
-    # kernel in 11 dimensions does not improve with T (the di_kernel defect).
+    # kernel in 11 dimensions does not converge with T.
     labels:
       - unsigned
       - directed
@@ -812,7 +806,7 @@
         fmax: 0.5
         statistic: max
 
-  # Phase-aligned correlation (fork-added): zero-lag correlation maximised over
+  # Phase-aligned correlation: zero-lag correlation maximised over
   # all-pass filters, from Welch cross-spectra. nperseg null = automatic length.
   PhaseAlignedCorrelation:
     labels:
@@ -908,10 +902,8 @@
         statistic: max
 
   PhaseLagIndex:
-    # Only the `mean` band statistic is bundled. With one recording the PLI at each
-    # frequency is a mean of signs over a few tapers, so it takes a handful of
-    # values and its maximum over a band is exactly 1 for every pair once T >= 1000
-    # (same defect as the removed dspli/dswpli maxima).
+    # Only the `mean` band statistic is bundled: with one recording the PLI at each
+    # frequency is a mean of signs over a few tapers, so its band maximum saturates at 1.
     labels:
       - linear
       - unsigned
@@ -961,10 +953,7 @@
 
 
   DebiasedSquaredPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled. The `max` variants were
-    # removed: the debiased estimates rest on a few tapers of one recording,
-    # and the maximum over frequencies returned exactly 1 for essentially any
-    # input (white noise included), so carried no information.
+    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -1408,11 +1397,8 @@
 # statistics that analyse in the wavelet-domain (only Mortlet wavelet's at the moment)
 .statistics.wavelet:
   PhaseSlopeIndex:
-    # The `max` variants are not bundled: they take the maximum over time of the
-    # instantaneous phase slope, which tends to its bound of 7 whatever the data.
-    # On independent white noise it exceeded the value for a pair at lag 2 in
-    # 85-100% of 200 runs at T=500 and 2000, in every band, and it is positive
-    # both ways round (test_wavelet_audit.py). Three SPIs removed in 3.0.0.
+    # The `max` variants are not bundled: the maximum over time of the
+    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent
@@ -1431,10 +1417,8 @@
 .statistics.misc:
   LinearModel:
     # Lasso and ElasticNet are not bundled: at sklearn's default alpha=1 the L1
-    # penalty zeroes the slope of a z-scored regressor unless |r| > 0.5 (ElasticNet)
-    # or always (Lasso), so lmfit_Lasso was the constant 0.99 (the MSE of predicting the
-    # mean, i.e. the variance of the z-scored target) on every fixture and
-    # lmfit_ElasticNet on two of three.
+    # penalty zeroes the slope on z-scored data (always for Lasso, unless |r| > 0.5
+    # for ElasticNet), so the MSE is mostly the constant (T-1)/T.
     labels:
       - directed
       - linear

@@ -1,11 +1,7 @@
-"""Independent references for every class in ``pyspi.statistics.basic``.
+"""``pyspi.statistics.basic`` against textbook definitions recomputed here.
 
-Each statistic is recomputed here from its textbook definition -- brute-force
-pair counting for Kendall's tau-b, Pearson on average ranks for Spearman,
-explicit lag sums for the cross-correlation profile, ``numpy`` for the
-empirical covariance and its inverse -- on data with ties, a lagged pair and an
-anticorrelated pair, and compared with what the SPI returns through
-``multivariate`` (the path the Calculator takes) and ``bivariate``.
+Brute-force tau-b, Pearson on average ranks, explicit lag sums and ``numpy``
+covariances, on data with ties, a lagged pair and an anticorrelated pair.
 """
 import itertools
 
@@ -90,13 +86,10 @@ def test_spearman_is_pearson_on_average_ranks(squared):
 def test_spearman_matrix_survives_a_constant_series_in_any_position(make, pos):
     """A constant series has no rank correlation; nobody else loses theirs.
 
-    ``scipy.stats.spearmanr(Z, axis=1)`` checks only its first two variables
-    for constancy, and if either is constant returns one scalar NaN for the
-    whole matrix. The SPI then raised (``'float' object is not
-    subscriptable`` / ``has no attribute 'ndim'``), so every pair of the
-    dataset was lost -- but only when the constant series (or, for a lagged
-    SPI, its lead segment ``x[tau:]``) happened to be process 0 or 1. In
-    position 2 or 3 the same data gave NaN for that series alone.
+    ``scipy.stats.spearmanr(Z, axis=1)`` returns one scalar NaN for the whole
+    matrix when either of its first two variables is constant. Whatever the
+    position of the constant series (or, for a lagged SPI, its lead segment
+    ``x[tau:]``), only its own pairs may be NaN.
     """
     rng = np.random.default_rng(5)
     X = rng.standard_normal((4, 80))
@@ -157,11 +150,9 @@ def test_lagged_correlation_bivariate_does_not_fall_back_to_one_direction(estima
     """An undefined direction makes the documented average undefined.
 
     x is a single spike followed by a constant, so x[1:] has no variance and
-    corr(x[1:], y[:-1]) does not exist while corr(y[1:], x[:-1]) does.
-    ``multivariate`` (the Calculator's path) returned NaN; ``bivariate``
-    silently returned the one defined direction -- a one-sided lagged
-    correlation reported under the symmetric SPI's name, and a value the same
-    SPI gave differently depending on which entry point was called.
+    corr(x[1:], y[:-1]) does not exist while corr(y[1:], x[:-1]) does. Both
+    ``multivariate`` and ``bivariate`` must return NaN, not the one defined
+    direction.
     """
     rng = np.random.default_rng(0)
     x = np.zeros(50)
@@ -223,8 +214,7 @@ def test_cross_correlation_matches_direct_lag_sums(params, zscore):
 
 
 def test_cross_correlation_class_has_its_docstring():
-    """The description sat after `name`/`labels`, so it was a bare string
-    expression and ``CrossCorrelation.__doc__`` was None."""
+    """The class description is its docstring, not a bare string expression."""
     assert basic.CrossCorrelation.__doc__ is not None
     assert "sigonly" in basic.CrossCorrelation.__doc__
 
@@ -293,11 +283,9 @@ def test_covariance_estimator_is_the_named_one_and_is_deterministic(estimator):
 def test_covariance_output_does_not_alias_the_cached_fit(cls, squared):
     """The matrix handed back must be the caller's, not the cache's.
 
-    ``multivariate`` returned ``fit.covariance_`` (or ``precision_``) itself,
-    after writing NaN into the fitted estimator's diagonal. Anything the caller
-    then did to the result -- thresholding, taking absolute values -- was
-    written into the cache, and every later SPI read from the same Data
-    (including the squared variant) silently returned the edited numbers.
+    Editing the result must change neither the fitted estimator cached on the
+    Data (whose diagonal stays finite) nor what later SPIs, including the
+    squared variant, read from it.
     """
     X = _series()
     d = _data(X)
@@ -314,12 +302,10 @@ def test_covariance_output_does_not_alias_the_cached_fit(cls, squared):
 def test_every_bundled_covariance_estimator_gives_a_distinct_matrix():
     """No two bundled estimators may return the same matrix on the same input.
 
-    Until 3.0.0 `EllipticEnvelope` was bundled alongside `MinCovDet`: sklearn's
-    `EllipticEnvelope.fit` is `MinCovDet.fit` plus a decision threshold
-    (`offset_`), so with the shared fixed seed its `covariance_` and
-    `precision_` were MinCovDet's bit for bit and four SPIs duplicated four
-    others. The duplicate is pinned by the test below; this one guards the
-    bundled set.
+    sklearn's `EllipticEnvelope.fit` is `MinCovDet.fit` plus a decision
+    threshold (`offset_`), so with the same fixed seed its `covariance_` and
+    `precision_` are MinCovDet's bit for bit (pinned by the test below); it is
+    not bundled.
     """
     assert "EllipticEnvelope" not in ESTIMATORS
     X = _series()

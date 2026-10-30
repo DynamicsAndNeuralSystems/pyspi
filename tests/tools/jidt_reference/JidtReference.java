@@ -59,8 +59,6 @@ public class JidtReference {
 
     // KSG (algorithm 1) MI at Theiler windows 0, 5, 20. No dither: JIDT's default
     // NOISE_LEVEL_TO_ADD (1e-8) would make the reference stochastic, so it is set to 0.
-    // (An earlier revision set "ADD_NOISE", which is not a JIDT property and was
-    // ignored; the frozen values nevertheless match a noise-free reference to 9e-16.)
     // NORMALISE stays at its default (true).
     for (int w : new int[]{0, 5, 20}) {
       MutualInfoCalculatorMultiVariateKraskov1 kr = new MutualInfoCalculatorMultiVariateKraskov1();

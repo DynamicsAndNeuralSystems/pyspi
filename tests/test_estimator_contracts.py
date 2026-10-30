@@ -555,9 +555,8 @@ def test_kozachenko_entropy_still_refuses_tied_data_rather_than_dithering():
 
     spi = it.JointEntropy(estimator="kozachenko")
     data = load_dataset("forex")
-    # Since 3.0.0 an undefined pair is NaN with a warning rather than voiding
-    # the table (`pyspi.base.fill_pairwise`); the refusal is still named, at
-    # the pair level, and re-raised if every pair is tied.
+    # An undefined pair is NaN with a warning (`pyspi.base.fill_pairwise`); the
+    # refusal is named at the pair level, and re-raised if every pair is tied.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         try:
@@ -751,12 +750,10 @@ def test_dyn_corr_excl_value_reaches_the_identifier_and_the_cache_key():
 ])
 @pytest.mark.parametrize("bad", [-2, 0])
 def test_history_and_delay_must_be_positive_integers(cls_name, param, bad):
-    """Refused at construction, as CausalEntropy's ``n`` already is.
+    """Refused at construction, as CausalEntropy's ``n`` is.
 
-    Unvalidated, ``CrossmapEntropy(history_length=-2)`` became
-    ``xme_gaussian_k-2`` and returned a finite -10.33 from wrapped negative
-    slices, and ``StochasticInteraction(delay=-1)`` returned NaN under
-    ``si_gaussian_k--1``; zero failed later with an unrelated shape error.
+    A negative value would index wrapped slices, and zero would fail later
+    with an unrelated shape error; a float is a type error.
     """
     import pyspi.statistics.infotheory as it
 
@@ -1749,7 +1746,7 @@ def test_multitaper_phase_slope_index_is_the_adjacent_frequency_sum(monkeypatch)
 
     Neighbours are one multitaper bandwidth apart, six FFT bins at the
     backend's defaults, over the closed band less the real-valued bins (the
-    rule every phase measure follows since 3.0.0; PSI used the open band).
+    rule every phase measure follows).
 
     Also: the backend's all-pairs sum, whose temporaries grow with the square
     of the number of frequencies, is never called.

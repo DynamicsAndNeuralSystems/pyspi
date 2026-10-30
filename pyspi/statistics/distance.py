@@ -49,10 +49,8 @@ class _RetainedHalf:
     """Evaluate only the half of the pairs that `Undirected` keeps.
 
     `Undirected.multivariate` evaluates both orders of every pair and keeps
-    bivariate(i, j) with i < j for both entries. For a statistic that holds no
-    state between calls, evaluating only the kept half, in the order the
-    inherited loop reaches it, gives the same matrix bit for bit at half the
-    cost. List it before `Undirected` in the bases.
+    bivariate(i, j) with i < j. For a stateless statistic this gives the same
+    matrix at half the cost. List it before `Undirected` in the bases.
     """
 
     @parse_multivariate
@@ -108,11 +106,10 @@ class PairwiseDistance(Undirected, Unsigned):
 def _median_gaussian_distance(v):
     """``1 - K / max(K)`` for a Gaussian kernel ``K`` of median-heuristic width.
 
-    hyppo's ``Hsic`` statistic is dcorr of these induced distances. Its
-    ``compute_kern(x, y)`` takes the width from ``x`` alone and applies it to
-    ``y`` as well, so ``Hsic().statistic(x, y) != Hsic().statistic(y, x)``.
-    Gretton et al. (2005, 2008) give each variable the median distance between
-    its own samples; this is hyppo's arithmetic with that width.
+    hyppo's ``Hsic`` statistic is dcorr of these induced distances. Here each
+    variable's width is the median distance between its own samples (Gretton
+    et al. 2005, 2008); hyppo applies ``x``'s width to ``y`` as well, which
+    makes its statistic depend on argument order.
     """
     l2 = pairwise_distances(v, metric="l2")
     n = l2.shape[0]
@@ -128,8 +125,7 @@ class HilbertSchmidtIndependenceCriterion(_RetainedHalf, Undirected, Unsigned):
 
     hyppo's statistic: dcorr of the distances ``1 - K / max(K)`` induced by a
     Gaussian kernel, each variable with its own median-heuristic width (see
-    `_median_gaussian_distance`). Like `DistanceCorrelation`, the unbiased
-    variant is not square-rooted and the biased one is.
+    `_median_gaussian_distance`).
     """
 
     name = "Hilbert-Schmidt Independence Criterion"
@@ -193,14 +189,12 @@ _HHG_CHUNK_ENTRIES = 2**22
 
 
 def _hhg_statistic(x, y):
-    """hyppo's ``HHG().statistic(x, y)``, bit for bit, in O(n^2 log n).
+    """hyppo's ``HHG().statistic(x, y)`` in O(n^2 log n) rather than O(n^3).
 
     The sum over ``i != j`` of Pearson's chi-square for the 2x2 table that
     splits the other samples by ``d_x(i, .) <= d_x(i, j)`` and
-    ``d_y(i, .) <= d_y(i, j)`` (Heller, Heller & Gorfine 2013). hyppo forms each
-    table by scanning all ``k``, O(n^3); its counts are row-wise ranks and 2-D
-    dominance counts, so they are computed that way here, as integers, then
-    combined with hyppo's int64 arithmetic and summed as hyppo sums them.
+    ``d_y(i, .) <= d_y(i, j)`` (Heller, Heller & Gorfine 2013). The table
+    counts are row-wise ranks and 2-D dominance counts.
     """
     distx = pairwise_distances(x, metric="euclidean")
     disty = pairwise_distances(y, metric="euclidean")
@@ -281,14 +275,11 @@ class MultiscaleGraphCorrelation(_RetainedHalf, Undirected, Unsigned):
 def _lagged_sum(test, x, y, max_lag):
     """``sum_{l=0}^{L} (n - l)/n * S(x[l:], y[:n - l])`` (Mehta et al. 2020).
 
-    The cross-distance statistics of hyppo's ``DcorrX`` and ``MGCX``, as their
-    docstrings define them: the present of ``x`` against the past of ``y``,
-    i.e. the dependence of ``x`` on the history of ``y``. hyppo 0.5.2 computes
-    the ``l >= 1`` terms by passing the sliced distance matrices to an ``S``
-    built to compute Euclidean distances, so every row of a distance matrix is
-    treated as a point in ``R^(n-l)`` and only the ``l = 0`` term is right.
-    Here ``S`` is given the distance matrices as such: the distance matrix of
-    ``x[l:]`` is the block ``distx[l:, l:]`` of that of ``x``.
+    The cross-distance statistic of hyppo's ``DcorrX`` and ``MGCX`` as their
+    docstrings define it: the present of ``x`` against the past of ``y``, i.e.
+    the dependence of ``x`` on the history of ``y``. The distance matrix of
+    ``x[l:]`` is the block ``distx[l:, l:]``. (hyppo 0.5.2's own ``l >= 1``
+    terms treat rows of the distance matrices as points, so it is not used.)
     """
     distx = pairwise_distances(x, metric="euclidean")
     disty = pairwise_distances(y, metric="euclidean")
@@ -319,8 +310,7 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        # `_lagged_sum(x, y)`, like hyppo's DcorrX(x, y), pairs the present
-        # of x with the past of y, so it measures y -> x: source i goes second.
+        # `_lagged_sum(x, y)` measures y -> x, so the source i goes second.
         z = data.to_numpy()
         x = z[j]
         y = z[i]
@@ -612,11 +602,7 @@ class SoftDynamicTimeWarping(TimeWarping):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        # The constraint used to be dropped here, so both constrained SPIs
-        # equalled `softdtw`. tslearn holds cells outside the band at +inf,
-        # which for a soft minimum over paths is exactly "no admissible path
-        # passes through them" (unlike LCSS; see `_banded_lcss`). Its defaults
-        # apply: Sakoe-Chiba radius 1, Itakura slope 2.
+        # tslearn's defaults apply: Sakoe-Chiba radius 1, Itakura slope 2.
         z = data.to_numpy(squeeze=True)
         return tslearn.metrics.soft_dtw(
             z[i], z[j], global_constraint=self._global_constraint)
@@ -631,19 +617,11 @@ class Barycenter(Undirected, Signed):
     ``2 * mean(b**2) / mean_energy - 1`` of the barycenter ``b``, where
     ``mean_energy`` is the average of ``mean(x**2)`` and ``mean(y**2)``. For
     the Euclidean barycenter ``(x + y) / 2`` of two zero-mean series this is
-    exactly Pearson's r (``mean(b**2) = (var_x + var_y + 2 cov) / 4``); for
-    the DTW geometries it is the share of the pair's amplitude that survives
-    averaging after optimal alignment, on the same [-1, 1] scale (exactly 1
-    for identical series under DBA; soft-DTW's barycenter is smoothed even
-    then, so its value for an identical pair is below 1, about 0.87 at
-    ``gamma=1`` on a random walk). It is the
-    only statistic of the barycenter that carries pairwise information: the
-    barycenter of two zero-mean series has mean zero by construction, so
-    ``statistic="mean"`` without ``squared`` reports the residue of warping
-    (it tracked marginal skewness, not coupling, in the 3.0.0 make-up audit),
-    and its maximum tracks the larger of the two series' own maxima. The
-    squared mean is a monotone function of ``corr`` and is not bundled; the
-    ``mean`` and ``max`` statistics remain constructible.
+    exactly Pearson's r; for the DTW geometries it is the share of the pair's
+    amplitude that survives averaging after optimal alignment, in [-1, 1]
+    (soft-DTW smooths the barycenter, so identical series give less than 1).
+    The barycenter of two zero-mean series has mean ~0, so ``corr`` is
+    preferred to ``mean``.
     """
 
     name = "Barycenter"
@@ -705,12 +683,8 @@ class Barycenter(Undirected, Signed):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        # One barycenter per unordered pair. The subgradient (sgddtw) fit is
-        # not symmetric in its inputs -- tslearn visits the series in a seeded
-        # random order -- so the pair is always fitted as [z[max], z[min]],
-        # the orientation the inherited loop reaches first. Caching whichever
-        # orientation was asked for first made `bivariate(i=0, j=1)` disagree
-        # with `multivariate()[0, 1]`.
+        # One barycenter per unordered pair, always fitted in the same order
+        # because the subgradient (sgddtw) fit depends on input order.
         key = (max(i, j), min(i, j))
         try:
             bc = data.barycenter[self._mode][key]
@@ -741,14 +715,10 @@ class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
     ``sqrt(mean((sorted v_i - sorted v_j)^2))`` at equal lengths).
 
     The distance vector has one entry per point, the first being 0 for the
-    start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``). The
-    authors' reference MATLAB (``vec_geo_dist.m`` in github.com/kravtsova2/
-    GWtau) omits that entry and returns ``n - 1`` cumulative sums, and so did
-    pyspi until 3.0.0; at equal lengths the two differ by the constant factor
-    ``sqrt(n / (n - 1))``, so no comparison between pairs is affected.
+    start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``; the authors'
+    MATLAB omits it, which only rescales the value by a constant).
 
-    The class name keeps its historical misspelling because configs and saved
-    results refer to it.
+    The class name keeps its misspelling because configs refer to it.
     """
 
     name = "Gromov-Wasserstein distance (GW_tau)"

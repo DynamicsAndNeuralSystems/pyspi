@@ -1,12 +1,7 @@
-"""Multitaper phase measures against independent references and their contracts.
+"""Multitaper phase measures against their published definitions and band contracts.
 
-The per-frequency references here do not go through spectral_connectivity:
-tapered Fourier coefficients come from ``scipy.signal.windows.dpss`` and
-``numpy.fft.rfft`` (which, like the backend, returns exactly real coefficients
-at 0 and at the Nyquist frequency of a real signal), and each measure is
-written out from its published definition. The band-selection tests are the
-exception: what they check is which frequencies pyspi reduces over, so their
-reference is the backend's own per-frequency array reduced by hand.
+Per-frequency references use ``scipy`` DPSS tapers and ``numpy.fft.rfft``; the
+band-selection tests reduce the backend's own per-frequency array by hand.
 """
 import os
 
@@ -51,11 +46,10 @@ def test_debiased_squared_pli_is_the_pairwise_sign_product_mean(fmin, fmax):
 
     At 0 and at the Nyquist frequency every taper's Fourier coefficient of a
     real signal is real, so ``Im S_k = 0`` for every taper: the pairwise
-    products are all zero and so is the estimator. The backend's shortcut
-    ``(K PLI^2 - 1)/(K - 1)`` assumes ``sign^2 == 1`` and returns
-    ``-1/(K - 1) = -0.25`` there for every input, which pulled each
-    ``dspli_multitaper_mean_*`` down by about 0.25 / 26 at T=100. The band
-    means now leave those two bins out, as every phase measure does
+    products are all zero and so is the estimator (the backend's shortcut
+    ``(K PLI^2 - 1)/(K - 1)`` assumes ``sign^2 == 1`` and gives
+    ``-1/(K - 1) = -0.25`` there). The band means leave those two bins out, as
+    every phase measure does
     (test_phase_measures_reduce_over_the_band_without_the_real_valued_bins),
     so the spectrum itself is compared bin by bin, real-valued bins included.
     """
@@ -97,12 +91,7 @@ def test_debiased_squared_pli_is_zero_where_the_cross_spectrum_is_real():
 # --------------------------------------------------------------------------
 
 def test_phase_slope_index_refuses_a_band_statistic():
-    """PSI is a sum over the band; there is no spectrum to take a maximum of.
-
-    ``PhaseSlopeIndex(statistic="max")`` used to return exactly the default
-    variant's matrix under a ``psi_multitaper_max_*`` identifier, labelled
-    ``asymmetric`` although the values were antisymmetric.
-    """
+    """PSI is a sum over the band; there is no spectrum to take a maximum of."""
     from pyspi.statistics.spectral import PhaseSlopeIndex
 
     for statistic in ("max", "delay"):
@@ -116,11 +105,9 @@ def test_phase_slope_index_refuses_a_band_statistic():
     "DebiasedSquaredPhaseLagIndex", "DebiasedSquaredWeightedPhaseLagIndex"])
 @pytest.mark.parametrize("statistic", ["delay", "slope", "rvalue"])
 def test_regression_statistics_belong_to_group_delay_only(cls_name, statistic):
-    """``statistic="delay"`` on a spectrum used to return its 0 Hz bin.
+    """``delay``, ``slope`` and ``rvalue`` are GroupDelay's regression outputs.
 
-    The band-statistic dispatcher fell through to GroupDelay's tuple branch on
-    the ``TypeError`` from calling ``None``, which indexed the spectrum's first
-    frequency, under an identifier such as ``cohmag_multitaper_delay_*``.
+    A spectral measure has no regression to report, so it must refuse them.
     """
     import pyspi.statistics.spectral as spectral
 
@@ -130,7 +117,7 @@ def test_regression_statistics_belong_to_group_delay_only(cls_name, statistic):
 
 @pytest.mark.parametrize("statistic", ["mean", "max"])
 def test_group_delay_refuses_a_band_statistic(statistic):
-    """It reported an ``IndexError`` from inside ``multivariate`` instead."""
+    """``mean`` and ``max`` are band statistics; GroupDelay refuses them."""
     from pyspi.statistics.spectral import GroupDelay
 
     with pytest.raises(ValueError, match="GroupDelay"):
@@ -147,13 +134,9 @@ def test_group_delay_uses_every_independent_frequency_of_a_narrow_band(seed):
 
     Multitaper estimates are approximately independent one bandwidth
     ``2 NW / T`` apart: six FFT bins at the backend's defaults, the spacing
-    PhaseSlopeIndex uses. GroupDelay instead thinned its significant run to
-    one point per ``(fmax - fmin) / 50`` whatever ``T`` -- 200 bins here -- so
-    the fit rested on three points and missed a 4-sample delay by 0.5 to 2.0
-    samples on every one of these seeds (now 0.03 to 0.13); for a 0.005-wide
-    band it returned NaN. (At T=100 the same rule is a 1-bin step, and three
-    *adjacent*, strongly correlated bins passed the
-    three-independent-points requirement.)
+    PhaseSlopeIndex uses. GroupDelay thins its significant run to that spacing
+    (not to a fixed fraction of the band), so the fit uses all of them and
+    recovers a 4-sample delay to within 0.5 samples.
     """
     from scipy import signal
 
@@ -242,9 +225,9 @@ def test_phase_measures_reduce_over_the_band_without_the_real_valued_bins(
     coherence are 0, wPLI is 0/0 (the backend returns 0, dswPLI NaN), and
     PLV and PPC count how many of the five tapers agree in sign -- 1.0
     whenever all do. The shipped bands are closed and each contains one of the
-    two, so every value was a reduction over the band *plus* a constant that
-    measures nothing. Here the reference is the backend's own per-frequency
-    array, reduced over the band without those bins.
+    two, which would add a constant that measures nothing. Here the reference
+    is the backend's own per-frequency array, reduced over the band without
+    those bins.
 
     The T=101 case has an odd FFT length and therefore no Nyquist bin: its
     last bin (0.4952) carries phase and must stay in the band.
@@ -271,8 +254,8 @@ def test_coherence_phase_is_the_circular_mean_without_the_real_valued_bins(
         fmin, fmax, make):
     """At 0 Hz and Nyquist the coherence phase is exactly 0 or pi.
 
-    On kuramoto_M7_T100 that is 0 at some pairs and pi at others, so each band
-    mean was pulled toward an arbitrary axis by a bin with no phase in it.
+    On kuramoto_M7_T100 that is 0 at some pairs and pi at others, so including
+    those bins would pull each band mean toward an arbitrary axis.
     """
     from pyspi.statistics.spectral import CoherencePhase
 
@@ -296,12 +279,11 @@ def test_coherence_phase_is_the_circular_mean_without_the_real_valued_bins(
                                       "PairwisePhaseConsistency"])
 @pytest.mark.parametrize("fmin, fmax", _BANDS)
 def test_plv_and_ppc_maxima_are_not_set_by_a_real_valued_bin(cls_name, fmin, fmax):
-    """``plv_*_max`` and ``ppc_*_max`` were exactly 1.0 on 16 of 42 entries.
+    """``plv_*_max`` and ``ppc_*_max`` are below 1 on kuramoto_M7_T100.
 
-    On kuramoto_M7_T100 (full band; 6 and 12 of 42 in the half bands) the
-    maximum was exactly 1.0 for no reason but that the five tapers' real
-    cross-spectra at 0 Hz or Nyquist had one sign. No interior bin of any pair
-    reaches 1.0 (the largest is 0.99999).
+    At 0 Hz or Nyquist both are exactly 1.0 whenever the five tapers' real
+    cross-spectra share a sign. No interior bin of any pair reaches 1.0 (the
+    largest is 0.99999).
     """
     import pyspi.statistics.spectral as spectral
 
@@ -334,8 +316,6 @@ def test_a_band_of_only_real_valued_bins_is_refused(cls_name, fmin, fmax):
     """No phase measure has a value on a band holding nothing but 0 Hz or Nyquist.
 
     ``(0, 0.005)`` at T=100 holds only the 0 Hz bin (the grid step is 0.01).
-    It used to return the measure at that bin -- PLV 0.2, 0.6 or 1.0 -- as if
-    it were a band estimate.
     """
     import pyspi.statistics.spectral as spectral
 
@@ -360,10 +340,10 @@ def _backend_frequencies(data, fs):
 def test_closed_band_keeps_the_nyquist_bin_at_any_sampling_rate(fs):
     """``freq <= fs/2`` is false for the backend's Nyquist bin at fs=3, T=100.
 
-    The grid is ``k * fs / nfft``, whose last bin is 1.5000000000000002, so
-    the amplitude measures, the directed measures and GroupDelay silently
-    dropped the bin their ``fmax`` names. The shared ``_closed_band`` compares
-    with a relative 1e-9 tolerance; at fs=1 it is the exact comparison.
+    The grid is ``k * fs / nfft``, whose last bin is 1.5000000000000002, so an
+    exact comparison drops the bin ``fmax`` names. The shared ``_closed_band``
+    compares with a relative 1e-9 tolerance; at fs=1 it is the exact
+    comparison.
     """
     from pyspi.statistics.spectral import CoherenceMagnitude, _closed_band
 
@@ -382,11 +362,11 @@ def test_closed_band_keeps_the_nyquist_bin_at_any_sampling_rate(fs):
 
 @pytest.mark.parametrize("fmin, fmax", [(0, 0.5), (0, 0.25), (0.25, 0.5)])
 def test_phase_slope_index_uses_the_closed_band_less_the_real_bins(fmin, fmax):
-    """PSI used the backend's open band, dropping an interior edge such as 0.25.
+    """PSI keeps an interior band edge such as 0.25.
 
-    It now follows the phase rule: closed band less 0 Hz and fs/2, thinned to
-    one bin per multitaper bandwidth, and equals Nolte's sum computed directly
-    on that grid. For [0, 0.5] the open and closed-less-real bands coincide.
+    It follows the phase rule: closed band less 0 Hz and fs/2, thinned to one
+    bin per multitaper bandwidth, and equals Nolte's sum computed directly on
+    that grid.
     """
     import spectral_connectivity as sc
 
@@ -415,9 +395,9 @@ def test_phase_slope_index_uses_the_closed_band_less_the_real_bins(fmin, fmax):
 def test_group_delay_fit_leaves_out_the_real_valued_bins():
     """0 Hz and fs/2 force the phase to 0 or pi whatever the delay.
 
-    They are no longer observations of the phase slope. On a delayed pair the
+    They are not observations of the phase slope. On a delayed pair the
     full-band fit must equal the fit on the band that stops one bin short of
-    both edges, since the two now see the same bins.
+    both edges, since the two see the same bins.
     """
     from pyspi.statistics.spectral import GroupDelay
 

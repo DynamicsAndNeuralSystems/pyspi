@@ -467,29 +467,12 @@ SCHEMA_VERSION = 1
 #         in pyspi (both variants had equalled plain `lcss`). tslearn >= 0.10,
 #         whose subgradient DBA behind the four `bary*_sgddtw_*` SPIs changed
 #         its update and stopping rule.
-#   r11 -- the per-SPI audit: CCM puts the cause on the row and reaches its
-#         largest library; soft-DTW applies its band; dcorrx/mgcx are
-#         source-by-target with the published lagged sum; HSIC uses each
-#         variable's own kernel width; KSG MI under a Theiler window drops
-#         psi(N) for the reduced-pool term; phi_G runs to a disconnected
-#         model; debiased squared PLI is the taper-pair sign product; the
-#         bivariate directed spectral band is closed, dDTF uses the partial
-#         coherence, and parametric spectral GC is fitted on the Yule-Walker
-#         autocovariance at the frequencies it is evaluated at.
-#   r12 -- the audit's deferred findings: coint_aeg regresses the column on
-#         the row (regressor on the row, as lmfit); GroupDelay thins its
-#         significant coherence run to one multitaper bandwidth; phase
-#         measures, PSI and GroupDelay's fit exclude the real-valued 0 Hz
-#         and Nyquist bins; gwtau's distance vector includes the start;
-#         gpfit scores the leave-one-out error of the fitted GP.
-#         Fifteen duplicate/constant/degenerate SPIs leave the bundled
-#         configs; the DTW-type barycenter `mean` SPIs become `corr`
-#         (2 E[b^2] - 1), new identifiers rather than changed values.
-#   r13 -- the AUTO Theiler window is capped at N // 10 (hctsa's rule), so
-#         the five DCE-AUTO SPIs change where two autocorrelation functions
-#         decay slowly (the kuramoto fixture; near-periodic data, where the
-#         window used to exceed the series and the pair raised). An undefined
-#         pair is now NaN with a warning instead of voiding the SPI's table.
+#   r11 -- ccm, softdtw constraints, dcorrx/mgcx, hsic, KSG MI with a Theiler
+#         window, phi_Geo, dspli, the bivariate directed spectral measures and
+#         parametric spectral GC.
+#   r12 -- coint_aeg, gd, the phase measures' band, psi_multitaper, gwtau and
+#         gpfit.
+#   r13 -- the AUTO Theiler window is capped at N // 10.
 COMPUTATION_VERSION = "3.0.0.r13"
 
 

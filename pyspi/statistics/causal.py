@@ -15,11 +15,9 @@ from pyspi.utils import require_int
 from pyspi.base import Directed, Unsigned, Signed, parse_bivariate, parse_multivariate
 
 
-# Explicit kernel: sklearn <=1.8's default (kernel=None) is this fixed
-# ConstantKernel * RBF, but 1.9 changed the default to an *optimised* kernel,
-# whose length scale collapses to its lower bound and changes every value. No
-# hyperparameters are tuned, so there is no optimiser (and no randomness) in
-# the fit. 1e-10 is GaussianProcessRegressor's default `alpha`.
+# A fixed (untuned) ConstantKernel * RBF, as in cdt's ANM; set explicitly
+# because sklearn 1.9 changed the default kernel. 1e-10 is
+# GaussianProcessRegressor's default `alpha`.
 _ANM_KERNEL = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(
     1.0, length_scale_bounds="fixed")
 _ANM_ALPHA = 1e-10
@@ -29,14 +27,11 @@ def _anm_scores(x, ys):
     """``normalized_hsic(residual, x)`` for the GP regression of each y on x.
 
     The regression is ``GaussianProcessRegressor(kernel=_ANM_KERNEL,
-    optimizer=None).fit(x, y).predict(x)``: the posterior mean at the training
-    inputs (Rasmussen & Williams 2006, Alg. 2.1), computed with the same calls
-    in the same order as scikit-learn, so the values are bit-identical (pinned
-    in tests/test_causal_audit.py). What differs is that the kernel matrix,
-    its Cholesky factor and K(x, x) depend on the cause x alone, so they are
-    built once per cause and shared by every effect, where a fit per pair
-    rebuilt them for each -- and also computed the log marginal likelihood, a
-    second Cholesky pyspi never read.
+    optimizer=None).fit(x, y).predict(x)``, the posterior mean at the training
+    inputs (Rasmussen & Williams 2006, Alg. 2.1), computed with the same
+    operations as scikit-learn. The kernel matrix and its Cholesky factor
+    depend on the cause x alone, so they are built once and shared by every
+    effect.
     """
     K = _ANM_KERNEL(x)
     K[np.diag_indices_from(K)] += _ANM_ALPHA
@@ -52,11 +47,10 @@ def _anm_scores(x, ys):
 class AdditiveNoiseModel(Directed, Unsigned):
     """Additive-noise-model score for row (cause) -> column (effect).
 
-    Polarity: **lower is stronger evidence** for the row causing the column
-    (a small HSIC means the residual of the column regressed on the row is
-    independent of the row). ``cds`` and ``reci`` share this polarity; ``ccm``
-    and ``igci`` have the opposite one (higher means more). The polarities
-    are those of the published scores and are not harmonised.
+    Lower is stronger evidence for the row causing the column (a small HSIC
+    means the residual of the column regressed on the row is independent of
+    the row). ``cds`` and ``reci`` share this polarity; for ``ccm`` and
+    ``igci`` higher means more.
     """
 
     name = "Additive noise model"
@@ -102,8 +96,7 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         z = data.to_numpy()
-        # Undefined (NaN), not 0, when fewer than two x-bins can be compared:
-        # 0 would be the strongest evidence for i -> j the statistic can give.
+        # NaN when fewer than two x-bins can be compared.
         return cds_score(z[i], z[j], min_conditionals=2)
 
 
@@ -213,10 +206,7 @@ def _ccm_library_sizes(N, E, nlibs=21):
     """``nlibs + 1`` library sizes from ``ceil(2E/10)*10`` to ``floor((N-E-1)/10)*10``.
 
     Inclusive at both ends; fewer (the caller NaN-pads) when the span is under
-    ``nlibs``. This used to be pyEDM's "start stop increment" with the increment
-    rounded down, which yields more than ``nlibs + 1`` sizes whenever ``nlibs``
-    does not divide the span (27 at N=100, E=1), and the excess -- the largest
-    libraries, where cross-map skill converges -- was then cut off.
+    ``nlibs``.
     """
     upper = int(np.floor((N - E - 1) / 10) * 10)
     lower = int(np.ceil(2 * E / 10) * 10)
@@ -250,20 +240,15 @@ def _cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=42):
     ``library`` (lag 1, Tp = 0, E + 1 neighbours, the query point itself left
     out) -- "library xmap target", in Sugihara et al.'s (2012) terms.
 
-    This is pyEDM 2.5's CCM (``pyEDM.CCM._ccm_for_libsize``) reproduced
-    operation for operation, so the values are bit-identical to
-    ``pyEDM.CCM(columns=library, target=...)`` (pinned in
-    tests/test_causal_audit.py). It exists for speed: everything up to the
-    simplex weights -- the random libraries, the KD-tree, the neighbours and
-    their weights -- depends on the library variable alone, never on the
-    target, yet ``pyEDM.CCM`` recomputes it for every pair the variable is in
-    (M - 1 times per variable over all pairs). Here it is computed once per
-    library variable and applied to all of its targets.
-
-    The random libraries match pyEDM's: it seeds each (direction, library
-    size) task with ``SeedSequence(child.entropy)`` for a child spawned from
-    ``SeedSequence(seed)``, and a spawned child carries its parent's entropy,
-    so every task starts from ``SeedSequence(seed)``.
+    This reproduces pyEDM 2.5's CCM (``pyEDM.CCM._ccm_for_libsize``),
+    including its random libraries (every library size starts from
+    ``SeedSequence(seed)``), so values equal
+    ``pyEDM.CCM(columns=library, target=...)``. The difference is the
+    organisation of the work: ``pyEDM.CCM`` handles one (library, target)
+    pair per call, whereas here the random libraries, KD-tree neighbours and
+    simplex weights, which depend on the library variable alone, are built
+    once and applied to all of that variable's targets. pyEDM's process pools
+    are not used (they re-import the caller's ``__main__``).
 
     Requires finite data (``Data`` guarantees it), so every row from ``E - 1``
     on is a valid embedding point.
@@ -342,12 +327,9 @@ class ConvergentCrossMapping(Directed, Signed):
     and ``max`` are over library sizes; ``diff`` is ``ccm(i->j) - ccm(j->i)``
     and antisymmetric.
 
-    Embedding convention: with ``embedding_dimension=None`` each process gets
-    its own simplex-optimal dimension, and **each pair uses the larger of its
-    two in both directions**, rather than the library variable's own
-    dimension as in Sugihara et al. The two directions of a pair are then
-    computed on manifolds of the same dimension, at the cost of
-    over-embedding the lower-dimensional member.
+    With ``embedding_dimension=None`` each process gets its own
+    simplex-optimal dimension, and each pair uses the larger of its two in
+    both directions.
     """
 
     name = "Convergent cross-mapping"
@@ -386,12 +368,9 @@ class ConvergentCrossMapping(Directed, Signed):
         try:
             ccmf = data.ccm[self.key]
         except (AttributeError, KeyError):
-            # pyEDM's multiprocessing pools are never started: they use
-            # forkserver/spawn, which re-import an unguarded caller's
-            # `__main__` and left every `ccm_*` SPI all-NaN when pyspi ran from
-            # a plain script (see CHANGELOG 3.0.0). Embedding selection loops
-            # over `pyEDM.Simplex`, and cross-mapping is `_cross_map_skill`,
-            # pyEDM 2.5's CCM computed serially and once per library variable.
+            # Serial throughout: pyEDM's process pools (forkserver/spawn)
+            # re-import the caller's `__main__`, which fails from an unguarded
+            # script. Parallelism is at the SPI level (`Calculator.compute`).
             z = data.to_numpy(squeeze=True)
 
             M = data.n_processes
@@ -413,8 +392,7 @@ class ConvergentCrossMapping(Directed, Signed):
             else:
                 embedding = np.array([self._E] * M)
 
-            # Compute CCM from the fixed or optimal embedding. Each pair uses
-            # the larger of its two dimensions in both directions.
+            # Each pair uses the larger of its two embedding dimensions.
             embedding = np.asarray(embedding, dtype=int).reshape(-1)
             pair_E = np.maximum.outer(embedding, embedding)
             nlibs = 21
@@ -427,10 +405,8 @@ class ConvergentCrossMapping(Directed, Signed):
                                if _j != _i and pair_E[_i, _j] == E]
                     if not targets:
                         continue
-                    # The row of `skill` for target _j is "_i xmap _j": the
-                    # shadow manifold of _i recovering _j, which Sugihara et
-                    # al. (2012) read as evidence that _j drives _i. Row =
-                    # source, column = target, so it is the _j -> _i cell.
+                    # "_i xmap _j" (the shadow manifold of _i recovering _j)
+                    # is evidence that _j drives _i, so it fills cell [_j, _i].
                     skill = _cross_map_skill(
                         z[_i], [z[_j] for _j in targets], int(E), lib_sizes,
                         sample=100, seed=42)

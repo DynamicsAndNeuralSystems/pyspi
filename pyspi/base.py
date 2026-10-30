@@ -94,18 +94,11 @@ def parse_multivariate(function):
 def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     """Evaluate ``compute(i, j)`` into ``A[i, j]`` for each pair, isolating failures.
 
-    A pair whose estimate is undefined (tied observations for a
-    Kozachenko-Leonenko entropy, a Theiler window longer than the series, a
-    singular fit) raises inside ``compute``. Before 3.0.0 that exception left
-    the SPI's whole ``M x M`` table NaN, so one quantised or periodic process
-    voided every other pair's value. Here the failing pair alone is NaN and
-    the failures are reported once, as a warning the Calculator re-emits
-    next to the SPI's name. If every pair fails the first exception is
-    re-raised, so ``_parallel.run_spi`` records the SPI as failed with the
-    estimator's own message, as before.
-
-    ``bivariate`` itself still raises, so a caller asking for one pair sees
-    the reason.
+    A pair whose estimate is undefined (e.g., tied observations for a
+    Kozachenko-Leonenko entropy, or a singular fit) raises inside ``compute``.
+    That pair alone is set to NaN, and the failures are reported in one
+    warning. If every pair fails, the first exception is re-raised so the SPI
+    is recorded as failed with the estimator's own message.
     """
     failures = []
     for i, j in pairs:

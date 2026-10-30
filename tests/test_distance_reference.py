@@ -1,9 +1,7 @@
-"""Independent references for the SPIs in `pyspi/statistics/distance.py`.
+"""`pyspi/statistics/distance.py` against statistics written out from their papers.
 
-Each test writes the statistic out from its published definition, without the
-backend the SPI calls, so a backend that ignores a parameter or computes
-something else under the same name is caught here rather than frozen into a
-baseline.
+The references avoid the backend each SPI calls, so a backend that ignores a
+parameter or computes something else under the same name is caught.
 """
 import numpy as np
 import pytest
@@ -39,8 +37,6 @@ def _soft_dtw_cell_by_cell(x, y, band, gamma=1.0):
 def test_soft_dtw_applies_its_global_constraint(constraint):
     """`softdtw_constraint-*` must sum over the banded alignments only.
 
-    The constraint used to be accepted, written into the identifier, and then
-    never passed to tslearn, so both constrained SPIs equalled `softdtw`.
     The bands are tslearn's own masks at its defaults (Sakoe-Chiba radius 1,
     Itakura slope 2), as for `lcss_constraint-*`.
     """
@@ -131,11 +127,9 @@ def test_cross_distance_statistics_sum_the_lagged_statistic(cls_name, stat, max_
     """Mehta et al. (2020), as hyppo's own docstring states it:
     sum_{l=0}^{L} (n - l)/n * S(target[l:], source[:n - l]).
 
-    hyppo 0.5.2 computes the l >= 1 terms by handing the sliced *distance
-    matrices* to an S that was built to compute Euclidean distances, so each
-    row of a distance matrix is treated as a point in R^(n-l) and S measures
-    the dependence between distance profiles, not between the lagged series.
-    Only the l = 0 term was right.
+    (hyppo 0.5.2 itself computes the l >= 1 terms on the sliced *distance
+    matrices*, treating each row as a point in R^(n-l), so its S measures
+    dependence between distance profiles rather than the lagged series.)
     """
     import pyspi.statistics.distance as distance
 
@@ -204,10 +198,10 @@ def _normalised_hsic(a, b, biased):
 
 @pytest.mark.parametrize("biased", [False, True])
 def test_hsic_uses_each_variables_own_kernel_width(biased):
-    """hyppo 0.5.2 takes the median-heuristic width from `x` alone and uses it
-    for `y` too, so hsic(x, y) != hsic(y, x) and the value pyspi reported for
-    a pair depended on which process came first. Gaussian, exponential and
-    uniform marginals keep different median distances after z-scoring."""
+    """Each variable gets its own median-heuristic kernel width (hyppo 0.5.2
+    uses `x`'s for both, which makes hsic(x, y) != hsic(y, x)). Gaussian,
+    exponential and uniform marginals keep different median distances after
+    z-scoring."""
     from pyspi.statistics.distance import HilbertSchmidtIndependenceCriterion
 
     rng = np.random.default_rng(4)
@@ -247,9 +241,8 @@ def test_barycenter_value_does_not_depend_on_call_order(statistic):
 
     tslearn's subgradient DBA visits the series in a random order drawn from
     a fixed seed, so the barycenter of [x, y] differs from that of [y, x].
-    The cache stored whichever was computed first under both orientations,
-    so `bivariate(i=0, j=1)` on fresh data disagreed with
-    `multivariate()[0, 1]`, which reaches the pair as (1, 0).
+    `bivariate(i, j)` on fresh data must equal `multivariate()[i, j]` in
+    either orientation.
     """
     from pyspi.statistics.distance import Barycenter
 
@@ -300,10 +293,10 @@ def test_hhg_statistic_is_bit_identical_to_hyppo(monkeypatch, chunk_rows):
 def test_gwtau_distance_vector_starts_at_zero_and_matches_the_paper():
     """Kravtsova, McGee & Dawes (2023) define d_X(r_X, x_k) for k = 1..n.
 
-    The k = 1 entry is the empty sum, 0. pyspi (like the authors' MATLAB)
-    returned only the n - 1 cumulative sums, which at equal lengths rescales
-    GW_tau by sqrt((n - 1) / n). The value is now Proposition 1(e) of the
-    paper on the sorted n-vectors, computed here from scratch.
+    The k = 1 entry is the empty sum, 0 (the authors' MATLAB returns only the
+    n - 1 cumulative sums, which at equal lengths rescales GW_tau by
+    sqrt((n - 1) / n)). The reference is Proposition 1(e) of the paper on the
+    sorted n-vectors, computed here from scratch.
     """
     from pyspi.statistics.distance import GromovWasserstainTau
 
@@ -322,10 +315,10 @@ def test_gwtau_distance_vector_starts_at_zero_and_matches_the_paper():
     assert GromovWasserstainTau.gwtau(x, y) == pytest.approx(want, rel=1e-12)
     assert GromovWasserstainTau.gwtau(x, x) == 0
 
-    # The old n-1 vector is larger by exactly sqrt(n / (n-1)): the same sum of
-    # squares (the two zeros pair up) divided by n-1 instead of n.
-    old = np.sqrt(np.mean((np.sort(vx[1:]) - np.sort(vy[1:])) ** 2))
-    assert old == pytest.approx(want * np.sqrt(60 / 59), rel=1e-12)
+    # Without the k = 1 zero the value is larger by exactly sqrt(n / (n-1)):
+    # the same sum of squares (the two zeros pair up) divided by n-1, not n.
+    without_zero = np.sqrt(np.mean((np.sort(vx[1:]) - np.sort(vy[1:])) ** 2))
+    assert without_zero == pytest.approx(want * np.sqrt(60 / 59), rel=1e-12)
 
 
 def test_barycenter_corr_is_pearson_for_the_euclidean_mode():

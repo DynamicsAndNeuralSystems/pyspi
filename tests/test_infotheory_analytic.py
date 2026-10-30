@@ -220,8 +220,8 @@ def test_te_matches_the_closed_form_of_a_bivariate_var1_with_feedback(estimator,
     symmetrically for Y->X. Unlike the iid-driver test above, the source here
     has its own dynamics and is itself driven by the target, so a swapped
     index or a source embedding taken from the wrong series shows up in both
-    entries. Tolerances are ~6 sampling SDs (gaussian; 20 seeds: SD 0.0017 and
-    0.0006) and the KSG bias at N=20000, as in MI_ATOL.
+    entries. Tolerances are ~6 sampling SDs (gaussian: SD 0.0017 and 0.0006)
+    and the KSG bias at N=20000, as in MI_ATOL.
     """
     from scipy.linalg import solve_discrete_lyapunov
 
@@ -982,12 +982,9 @@ def test_ksg_theiler_window_does_not_manufacture_information(cls, w):
 
     The window removes ``|i - j| <= w`` from point i's neighbour pool, leaving
     ``N - 1 - 2w`` candidates in the interior. KSG's ``psi(N)`` is the
-    expected-log-mass term for a pool of ``N - 1``; keeping it with the reduced
-    pool added ``psi(N) - psi(N - 2w) ~ ln(N / (N - 2w))`` to every estimate
-    (JIDT 1.6.1 does the same and marks it as an open TODO). Before the fix,
-    at N=500, k=4, mean of these 8 seeds: MI +0.102 at w=20 and +0.274 at w=60
-    (TLMI +0.087 and +0.263), against a truth of 0. On the shipped ``DCE-AUTO`` SPIs at T=100 the windows reach w=33 and the
-    offset 0.83 nats, varying from pair to pair with the autocorrelation time.
+    expected-log-mass term for a pool of ``N - 1``; kept with the reduced pool
+    it would add ``psi(N) - psi(N - 2w) ~ ln(N / (N - 2w))`` to every estimate
+    (as JIDT 1.6.1 does, marking it an open TODO).
 
     i.i.d. data, so the window has no autocorrelation to remove and the right
     answer does not depend on it. The sampling SD of the 8-seed mean is ~0.009.

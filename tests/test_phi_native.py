@@ -262,13 +262,9 @@ _PHI_CASES = [
 def test_phi_g_is_the_constrained_minimum_of_its_definition(make_pair):
     """phi_G must be evaluated at a disconnected model, and at its minimum.
 
-    The augmented-Lagrangian solver stopped as soon as log|Sigma_E'| changed by
-    less than 1e-10 between iterations, whether or not the cross-unit
-    coefficients had been driven to zero. On weakly coupled, strongly
-    autocorrelated pairs that test fires at the third iteration, with ~80% of
-    the coupling still in the "disconnected" model: kuramoto pair (1, 5)
-    returned 1.39e-6 against 6.09e-5, and the seeds 45/47/49 pairs were low by
-    99%.
+    The cases include weakly coupled, strongly autocorrelated pairs (kuramoto
+    (1, 5), AR(1) seeds 45/47/49), where a solver that stops on a small change
+    in log|Sigma_E'| before the cross-unit coefficients reach zero is far off.
     """
     X = make_pair()
     expected = _phi_g_by_direct_minimisation(X)

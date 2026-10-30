@@ -1,11 +1,6 @@
-"""One undefined pair must not void an SPI's whole table.
+"""One undefined pair must not void an SPI's whole table: it is NaN, with a warning.
 
-Before 3.0.0 an exception from any pair propagated out of ``multivariate``,
-and ``_parallel.run_spi`` then recorded the SPI as failed with an all-NaN
-table. On a battery of 60 synthetic datasets this hit the five
-Kozachenko-based SPIs (a process on a period-6 orbit has tied values) and the
-five ``DCE-AUTO`` SPIs (a near-periodic process has an autocorrelation time
-longer than the series), wiping out the values of every other pair.
+Also: the ``AUTO`` Theiler window is capped, so near-periodic pairs stay defined.
 """
 import warnings
 

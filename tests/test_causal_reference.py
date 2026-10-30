@@ -1,13 +1,7 @@
-"""Audit checks for `pyspi.statistics.causal`, against published definitions.
+"""`pyspi.statistics.causal` against published definitions and reference code.
 
-Each test has an independent oracle: a closed-form relation, a direct
-re-implementation from the paper, a synthetic system whose causal direction
-is known by construction, or (for the two speedups, which must not move a
-value) the third-party implementation they replace. Convergent cross-mapping is checked on the coupled
-logistic maps of Sugihara et al. (2012), Science 338:496, where the result to
-reproduce is the paper's own: if X drives Y and not the reverse, the shadow
-manifold of Y cross-maps X with converging skill, and the shadow manifold of X
-cannot cross-map Y.
+Oracles: closed forms, re-implementations from the papers, systems with a known
+causal direction (Sugihara et al. 2012's coupled logistic maps), pyEDM and sklearn.
 """
 import numpy as np
 import pytest
@@ -199,12 +193,12 @@ def test_ccm_cross_map_skill_is_bit_identical_to_pyedm(E):
 def test_anm_shared_factorisation_is_bit_identical_to_sklearn(T):
     """ANM factorises each cause's GP kernel once and reuses it per effect.
 
-    The reference is the per-pair scikit-learn fit pyspi used before:
+    The reference is a per-pair scikit-learn fit:
     ``GaussianProcessRegressor(kernel=C(1)*RBF(1) fixed, optimizer=None)``,
     residual ``predict(x) - y``, then the normalised HSIC against x. The
-    kernel matrix is ill-conditioned (CHANGELOG: condition number ~6e11), so
-    anything short of the same operations in the same order would show up
-    here as drift. T=260 also engages the HSIC's 200-point subsampling.
+    kernel matrix is ill-conditioned (condition number ~6e11), so anything
+    short of the same operations in the same order would show up here as
+    drift. T=260 also engages the HSIC's 200-point subsampling.
     """
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import ConstantKernel, RBF
@@ -259,12 +253,9 @@ def test_cds_is_undefined_not_zero_when_conditionals_cannot_be_compared():
     """CDS is the spread of P(y | x = a) across the x-bins a (Fonollosa 2016).
 
     It needs at least two bins with more than `minc` = 12 points. With fewer,
-    cdt returns 0 -- with one bin the spread is trivially 0, with none it is a
-    hard-coded 0 -- and 0 is the *strongest* evidence the statistic can give
-    for x -> y (lower favours x -> y). At T=64 that is most series: on
-    independent Gaussian noise the SPI reported A[0, j] = A[1, j] = 0 (perfect
-    evidence that 0 and 1 drive everything) against ~0.02 for process 2.
-    Undefined must be NaN.
+    cdt returns 0 (trivially with one bin, hard-coded with none), which is the
+    *strongest* evidence the statistic can give for x -> y (lower favours
+    x -> y). Undefined must be NaN; at T=64 on Gaussian noise both cases occur.
     """
     from pyspi.lib.pairwise_causal import cds_score
     from pyspi.statistics.causal import ConditionalDistributionSimilarity

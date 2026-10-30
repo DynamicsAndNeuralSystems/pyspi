@@ -1,11 +1,7 @@
-"""Independent references for the directed / parametric spectral SPIs.
+"""Directed spectral SPIs (DTF, DC, PDC, gPDC, dDTF, spectral GC) against references.
 
-Each test here pins one audited property of ``pyspi.statistics.spectral``'s
-directed half -- ``NonparametricSpectralBivariate`` and its five subclasses
-(DTF, DC, PDC, gPDC, dDTF) and ``SpectralGrangerCausality`` -- against a
-reference computed without going through the code under test: the backend's
-own per-frequency spectrum with an explicitly stated band, a textbook formula on
-an exact VAR spectrum, or a direct Yule-Walker solve.
+References: the backend's per-frequency spectrum over a stated band, textbook
+formulas on an exact VAR spectrum, and a direct Yule-Walker solve.
 """
 
 import numpy as np
@@ -49,12 +45,10 @@ def test_bivariate_band_statistic_covers_the_closed_band(cls_name, measure,
 
     The reference is the backend's own spectrum for the ordered pair
     ``[source, target]`` (read at ``[target, source]``, its convention), reduced
-    over ``fmin <= f <= fmax``. The multivariate spectral classes, spectral GC
-    and the wavelet SPIs all select the band that way; the bivariate class used
-    strict inequalities, so ``fmin-0_fmax-0-25`` silently dropped the DC bin and
-    the 0.25 bin, and ``fmin-0-25_fmax-0-5`` dropped 0.25 and Nyquist. On a
-    low-pass process the DC bin is where these measures peak, so the ``max``
-    over ``[0, 0.25]`` missed the maximum.
+    over ``fmin <= f <= fmax``, as the multivariate spectral classes, spectral
+    GC and the wavelet SPIs select it. On a low-pass process these measures
+    peak at the DC bin, so the ``max`` over ``[0, 0.25]`` depends on including
+    it.
     """
     from pyspi.statistics import spectral
 
@@ -149,7 +143,7 @@ def test_direct_dtf_is_full_frequency_dtf_times_partial_coherence(
     *directed* quantity -- although its own docstring describes "the directed
     transfer function and partial coherence". For a pair, partial coherence is
     the ordinary coherence, while bivariate PDC equals DTF, so the backend's
-    pairwise dDTF was ``eta * sqrt(DTF)``.
+    pairwise dDTF is ``eta * sqrt(DTF)``.
     """
     from pyspi.statistics.spectral import DirectDirectedTransferFunction
 
@@ -272,12 +266,9 @@ def test_parametric_sgc_is_yule_walker_plus_geweke(order, pair):
     ``autocov_vector``, which averages each lag over ``T - k`` products (the
     "unbiased" estimator) and does not remove the mean. That block-Toeplitz
     matrix need not be positive semidefinite, and on the bundled Kuramoto
-    fixture it is not: the LWR recursion returned an *indefinite* innovation
-    covariance on 7 of 21 pairs at order 1 and all 21 at orders 2 and 20, and
-    an unstable model on 18 of 21 at order 20. Geweke's ratio is then
-    meaningless (negative or NaN causality), and the NaN in BIC's
-    ``log det`` is what stopped the automatic order search from ever
-    "turning over" -- the reason ``order=None`` was listed as unestimable.
+    fixture it is not: the innovation covariance comes out indefinite, Geweke's
+    ratio is meaningless (negative or NaN causality) and BIC's ``log det`` is
+    NaN.
     """
     from pyspi.statistics.spectral import SpectralGrangerCausality
 
@@ -296,8 +287,7 @@ def test_parametric_sgc_is_yule_walker_plus_geweke(order, pair):
     # Toeplitz system whose conditioning worsens with the order; at order 20
     # they agree to 1e-10 on macOS Accelerate but only to 4e-8 on the Linux
     # OpenBLAS runners. 1e-6 is the cross-platform tolerance the drift suite
-    # already applies to `sgc_parametric` (CHANGELOG, "Cross-platform drift
-    # tolerances"), and the code under audit missed this reference by 5.9.
+    # applies to `sgc_parametric`.
     tol = 1e-6 * max(1.0, np.abs(want).max())
     for src, tgt in ((0, 1), (1, 0)):
         got = F[0, :, tgt, src]
@@ -329,9 +319,9 @@ def test_parametric_sgc_frequency_axis_is_where_the_spectrum_was_evaluated(fs):
 
     nitime's ``GrangerAnalyzer.frequencies`` is ``linspace(0, fs/2, 513)``, but
     ``granger_causality_xy`` evaluates the model through ``scipy.signal.freqz``
-    with ``worN=513``: at ``k/1026`` cycles per sample on ``[0, 1/2)``. Every
-    label but DC was off, by up to one grid step (the bin labelled Nyquist is
-    0.499), so the band was applied on a slightly stretched axis.
+    with ``worN=513``: at ``k/1026`` cycles per sample on ``[0, 1/2)``. Those
+    labels are off by up to one grid step everywhere but DC (the bin labelled
+    Nyquist is at 0.499); pyspi's must match where the spectrum was evaluated.
     """
     from pyspi.statistics.spectral import SpectralGrangerCausality
 

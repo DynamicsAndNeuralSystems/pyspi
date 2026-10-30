@@ -384,9 +384,8 @@ def test_group_delay_recovers_a_known_lag(lag):
 
 # At T=100 the three independent frequencies the fit requires are one
 # multitaper bandwidth (six bins) apart, so a significant run must span 13 of
-# the 51 bins. No pair of these two fixtures has one: their former values were
-# fits to 3-12 *adjacent*, correlated bins, when the thinning step was
-# (fmax - fmin) / 50 = one bin. See test_spectral_phase_audit.py.
+# the 51 bins. No pair of these two fixtures has one. See
+# test_spectral_phase_reference.py.
 _GD_SHORT_RUNS = pytest.mark.xfail(strict=True, reason=(
     "no significant coherence run spans three independent frequencies at T=100"))
 
@@ -498,13 +497,9 @@ def test_spectral_gc_names_the_cause_when_order_selection_does_not_converge():
     into an all-NaN return plus a warning, so `Calculator.errors` recorded only
     the generic "returned no finite off-diagonal values".
 
-    This used the kuramoto_M7_T100 fixture, the KNOWN_UNESTIMABLE case. That
-    search failed only because nitime's unbiased autocovariance gave an
-    indefinite innovation covariance, so BIC's ``log det`` was NaN and never
-    compared greater; with the Yule-Walker autocovariance it turns over at
-    orders 1-5 (see test_spectral_directed_audit.py). Here the criterion
-    genuinely improves to the cap: an MA(1) process has an infinite-order AR
-    representation, and max_order=3 stops the search inside it.
+    The criterion genuinely improves to the cap: an MA(1) process has an
+    infinite-order AR representation, and max_order=3 stops the search inside
+    it.
     """
     from pyspi.statistics.spectral import SpectralGrangerCausality
 

@@ -3,7 +3,7 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 266 / 296 SPIs (after the 3.0.0 removals; including two manual te_kraskov DCE variants).
+# Current set: 266 / 296 SPIs (including two manual te_kraskov DCE variants).
 # The original 2026-05-27 cut was 297 / 328 before later removals.
 # Cutoff        : fastest kept <= 5.520s ; slowest dropped >= 6.790s.
 #
@@ -421,10 +421,8 @@
     - global_constraint: sakoe_chiba
 
   Barycenter:
-    # Only the `corr` statistic (2 mean(b^2) / mean_energy - 1, an alignment-adjusted
-    # correlation) is bundled for the DTW-type barycenters: the unsquared mean of
-    # a barycenter of z-scored series is zero up to warping residue, and the
-    # squared mean is a monotone function of `corr` (3.0.0 make-up audit).
+    # The DTW-type barycenters bundle `corr` rather than `mean`: the barycenter of
+    # z-scored series has mean ~0, and its squared mean is a monotone function of `corr`.
     labels:
       - undirected
       - nonlinear
@@ -932,10 +930,7 @@
       - M01
 
   DebiasedSquaredPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled. The `max` variants were
-    # removed: the debiased estimates rest on a few tapers of one recording,
-    # and the maximum over frequencies returned exactly 1 for essentially any
-    # input (white noise included), so carried no information.
+    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -1291,11 +1286,8 @@
 
 .statistics.wavelet:
   PhaseSlopeIndex:
-    # The `max` variants are not bundled: they take the maximum over time of the
-    # instantaneous phase slope, which tends to its bound of 7 whatever the data.
-    # On independent white noise it exceeded the value for a pair at lag 2 in
-    # 85-100% of 200 runs at T=500 and 2000, in every band, and it is positive
-    # both ways round (test_wavelet_audit.py). Three SPIs removed in 3.0.0.
+    # The `max` variants are not bundled: the maximum over time of the
+    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent
