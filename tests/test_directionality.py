@@ -382,7 +382,20 @@ def test_group_delay_recovers_a_known_lag(lag):
     assert r[0, 1] > 0.99 and r[0, 1] == pytest.approx(r[1, 0])
 
 
-def test_group_delay_is_estimable_on_the_bundled_fixtures():
+# At T=100 the three independent frequencies the fit requires are one
+# multitaper bandwidth (six bins) apart, so a significant run must span 13 of
+# the 51 bins. No pair of these two fixtures has one. See
+# test_spectral_phase_reference.py.
+_GD_SHORT_RUNS = pytest.mark.xfail(strict=True, reason=(
+    "no significant coherence run spans three independent frequencies at T=100"))
+
+
+@pytest.mark.parametrize("name", [
+    pytest.param("var1_M3_T100.npy", marks=_GD_SHORT_RUNS),
+    pytest.param("cml_M5_T100.npy", marks=_GD_SHORT_RUNS),
+    "kuramoto_M7_T100.npy",
+])
+def test_group_delay_is_estimable_on_the_bundled_fixtures(name):
     """Not a repeat of the lag test: it pins that real data now produces values.
 
     Partial NaN is correct here and is not the defect being guarded against --
@@ -396,11 +409,10 @@ def test_group_delay_is_estimable_on_the_bundled_fixtures():
 
     fixtures = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "data", "fixtures")
-    for name in ("var1_M3_T100.npy", "cml_M5_T100.npy", "kuramoto_M7_T100.npy"):
-        data = Data(data=os.path.join(fixtures, name), dim_order="sp")
-        table = GroupDelay(statistic="delay", fmin=0, fmax=0.5).multivariate(data)
-        off = ~np.eye(table.shape[0], dtype=bool)
-        assert np.isfinite(table[off]).any(), f"{name}: gd is entirely NaN"
+    data = Data(data=os.path.join(fixtures, name), dim_order="sp")
+    table = GroupDelay(statistic="delay", fmin=0, fmax=0.5).multivariate(data)
+    off = ~np.eye(table.shape[0], dtype=bool)
+    assert np.isfinite(table[off]).any(), f"{name}: gd is entirely NaN"
 
 
 def test_group_delay_of_independent_processes_is_undefined():
@@ -478,22 +490,25 @@ def test_spectral_gc_parametric_honours_the_sampling_frequency():
 
 
 def test_spectral_gc_names_the_cause_when_order_selection_does_not_converge():
-    """The documented exception in KNOWN_UNESTIMABLE, tested rather than assumed.
+    """A search that never turns over is a recorded failure, with its cause.
 
     nitime's own message -- "Model estimation order did not converge at
     max_order = 50" -- says nothing about the data, and pyspi used to swallow it
     into an all-NaN return plus a warning, so `Calculator.errors` recorded only
     the generic "returned no finite off-diagonal values".
-    """
-    import os
 
+    The criterion genuinely improves to the cap: an MA(1) process has an
+    infinite-order AR representation, and max_order=3 stops the search inside
+    it.
+    """
     from pyspi.statistics.spectral import SpectralGrangerCausality
 
-    fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           "data", "fixtures", "kuramoto_M7_T100.npy")
-    spi = SpectralGrangerCausality(method="parametric", order=None, max_order=50)
+    rng = np.random.default_rng(SEED)
+    e = rng.standard_normal((2, 2001))
+    X = e[:, 1:] + 0.9 * e[:, :-1]
+    spi = SpectralGrangerCausality(method="parametric", order=None, max_order=3)
     with pytest.raises(ValueError, match="order selection did not converge"):
-        spi.multivariate(Data(data=fixture, dim_order="sp"))
+        spi.multivariate(Data(data=X, dim_order="ps"))
 
 
 @pytest.mark.parametrize("fs", [1, 2, 4])

@@ -315,11 +315,12 @@ def test_parallel_run_leaves_the_parent_environment_alone(monkeypatch):
 def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):
     """One table, bit for bit, however the work is divided.
 
-    ``benchmarked_p90`` on a fixture where six SPIs fail, so values, missing
-    entries, recorded errors and their order are all compared. The serial runs
-    differ in the global NumPy seed; the parallel ones in worker count. The
-    last run resumes from every other checkpoint with a different worker
-    count, so cache groups are entered part-way through.
+    ``benchmarked_p90`` on ``kuramoto_M7_T100``: values, missing entries and
+    the (empty) error record are all compared. The serial runs differ in the
+    global NumPy seed; the parallel ones in worker count. The last run resumes
+    from every other checkpoint with a different worker count, so cache groups
+    are entered part-way through. Parity of *failure* semantics between serial
+    and parallel runs is covered by ``test_execution_parity.py``.
     """
     import warnings
 
@@ -344,7 +345,7 @@ def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):
         assert list(calc.errors.items()) == list(ref.errors.items()), label
 
     ref = run(1, seed=0)
-    assert len(ref.errors) == 6
+    assert not ref.errors, ref.errors
 
     assert_same(run(1, seed=1), "serial, another global seed")
     assert_same(run(2, seed=2), "two workers")

@@ -20,16 +20,26 @@ def test_whether_calculator_computes():
     and expected (several spectral SPIs are defined only where an estimate
     converges); a column with no finite value anywhere is not a measurement.
     """
-    # A coupled VAR(1), not i.i.d. noise. Some SPIs are *defined* only where
-    # there is structure to measure -- `gd_*` needs a significant coherence
-    # band and yielded nothing on the tested independent-noise fixture (not a
-    # universal guarantee) -- so white noise is a poor input on which to assert
-    # that every configured SPI is nonempty.
+    # Coupled processes, not i.i.d. noise. Some SPIs are *defined* only where
+    # there is structure to measure, so white noise is a poor input on which to
+    # assert that every configured SPI is nonempty. Process 1 is driven by
+    # process 0 through a VAR(1); process 2 is process 0 delayed by two
+    # samples plus small noise. The delayed copy is there for `gd_*`: group
+    # delay needs a significant coherence run spanning three independent
+    # frequencies (13 bins, a band 0.065 wide at T=200) in each of its bands.
+    # The VAR(1) pairs are coherent only at low frequencies (|C| ~ 0.4 near
+    # Nyquist, not significant at five tapers whatever T), so on the VAR(1)
+    # alone `gd_*_fmin-0-25_fmax-0-5` would be empty. The copy is coherent
+    # across the band (|C| >= 0.9) and gives a delay of about 2 samples in
+    # every band.
     rng = np.random.default_rng(0)
-    A = np.array([[0.5, 0.0, 0.0], [0.7, 0.4, 0.0], [0.0, 0.6, 0.3]])
-    data = np.zeros((3, 200))
-    for t in range(1, data.shape[1]):
-        data[:, t] = A @ data[:, t - 1] + rng.standard_normal(3)
+    T, lag = 200, 2
+    A = np.array([[0.5, 0.0], [0.7, 0.4]])
+    data = np.zeros((3, T))
+    for t in range(1, T):
+        data[:2, t] = A @ data[:2, t - 1] + rng.standard_normal(2)
+    data[2] = 0.3 * rng.standard_normal(T)
+    data[2, lag:] += data[0, :-lag]
     calc = Calculator(dataset=data)
     calc.compute()
 

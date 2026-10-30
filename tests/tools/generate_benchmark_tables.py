@@ -1,9 +1,10 @@
 """Regenerate the baseline SPI tables used by ``tests/test_baseline_drift.py``.
 
 For each frozen test fixture in ``tests/data/fixtures/`` this runs the full
-Calculator (all 317 SPIs)
-once and stores the resulting MxM matrix per SPI in a single compressed
-``.npz`` file under ``tests/data/baselines/``.
+Calculator once and stores the resulting MxM matrix per SPI in a compressed
+``.npz`` file under ``tests/data/baselines/``. With ``--spis`` and ``--name``
+it writes only the matching SPIs to ``<dataset>.<name>.npz``, the separate
+archive for an added family that the drift test merges with the main one.
 
 Why a single pass rather than repeated trials
 ---------------------------------------------
@@ -23,8 +24,10 @@ Usage
     python tests/tools/generate_benchmark_tables.py                # all three
     python tests/tools/generate_benchmark_tables.py -d cml_M5_T100
     python tests/tools/generate_benchmark_tables.py --out /tmp/baselines
+    python tests/tools/generate_benchmark_tables.py --spis 'xi_*' --name xi
 """
 import argparse
+import fnmatch
 import json
 import os
 import platform
@@ -60,26 +63,20 @@ META_PREFIX = "__"
 # with any other failure is not frozen. Imported by tests/test_baseline_drift.py
 # so the test suite and the generator cannot drift apart on what is expected.
 #
-# `sgc_parametric_*_order-None`: nitime's automatic AR order search walks the
-# lag up to `max_order` and raises if the information criterion never turns
-# over. On kuramoto_M7_T100 -- 100 observations, a smooth oscillatory process
-# -- BIC improves all the way to lag 49, which at that length is over-fitting
-# rather than a genuinely high order. The fixed-order variants (order-1,
-# order-20) are estimated normally on the same fixture, and the automatic
-# variant is estimated normally on var1_M3_T100 and cml_M5_T100, so this is a
-# property of the record, not of the estimator.
+# Group delay regresses coherence phase on at least three *independent*
+# frequencies, one multitaper bandwidth (six bins) apart, so a pair needs a
+# significant coherence run of at least 13 of the 51 bins at T=100. The longest
+# run on any pair is 12 bins on var1_M3_T100 and 10 on cml_M5_T100, in every
+# band.
+_GD_SHORT_RUNS = ("no significant coherence run spans three independent "
+                  "frequencies (13 bins) at T=100")
 KNOWN_UNESTIMABLE = {
-    "kuramoto_M7_T100": {
-        key: "automatic AR order selection does not converge at T=100"
-        for key in (
-            "sgc_parametric_mean_fs-1_fmin-1e-05_fmax-0-5_order-None",
-            "sgc_parametric_mean_fs-1_fmin-1e-05_fmax-0-25_order-None",
-            "sgc_parametric_mean_fs-1_fmin-0-25_fmax-0-5_order-None",
-            "sgc_parametric_max_fs-1_fmin-1e-05_fmax-0-5_order-None",
-            "sgc_parametric_max_fs-1_fmin-1e-05_fmax-0-25_order-None",
-            "sgc_parametric_max_fs-1_fmin-0-25_fmax-0-5_order-None",
-        )
-    },
+    dataset: {
+        f"gd_multitaper_delay_fs-1_{band}": _GD_SHORT_RUNS
+        for band in ("fmin-0_fmax-0-5", "fmin-0_fmax-0-25",
+                     "fmin-0-25_fmax-0-5")
+    }
+    for dataset in ("var1_M3_T100", "cml_M5_T100")
 }
 
 
@@ -169,13 +166,30 @@ def main():
         "-s", "--seed", type=int, default=42,
         help="Global numpy seed set once before compute (default: 42).",
     )
+    parser.add_argument(
+        "--spis", default=None,
+        help="Comma-separated glob patterns; keep only matching SPIs.",
+    )
+    parser.add_argument(
+        "--name", default=None,
+        help="Write <dataset>.<name>.npz instead of <dataset>.npz (needs --spis).",
+    )
     args = parser.parse_args()
+    if bool(args.spis) != bool(args.name):
+        parser.error("--spis and --name go together")
+    patterns = args.spis.split(",") if args.spis else None
 
     names = DATASETS if args.dataset == "all" else (args.dataset,)
     for name in names:
         t0 = time.time()
         tables = build_tables(name, config=args.config, seed=args.seed)
-        path = os.path.join(args.out, f"{name}.npz")
+        if patterns:
+            tables = {k: v for k, v in tables.items()
+                      if any(fnmatch.fnmatchcase(k, p) for p in patterns)}
+            if not tables:
+                raise SystemExit(f"[{name}] no SPI matches {args.spis}")
+        stem = f"{name}.{args.name}" if args.name else name
+        path = os.path.join(args.out, f"{stem}.npz")
         write_npz(tables, path, name, args.config, args.seed)
         size_kb = os.path.getsize(path) / 1024
         print(f"[{name}] {len(tables)} SPIs -> {path} "

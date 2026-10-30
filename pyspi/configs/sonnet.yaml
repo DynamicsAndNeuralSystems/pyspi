@@ -27,6 +27,8 @@
       - global_constraint: itakura
 
   Barycenter:
+    # The DTW-type barycenters bundle `corr` rather than `mean`: the barycenter of
+    # z-scored series has mean ~0, and its squared mean is a monotone function of `corr`.
     labels:
       - undirected
       - nonlinear
@@ -37,7 +39,7 @@
     dependencies:
     configs:
       - mode: dtw
-        statistic: mean
+        statistic: corr
         labels:
           - M09
 
@@ -165,7 +167,9 @@
     dependencies:
     configs:
       - fs: 1
-        statistic: max
+        statistic: mean
+        labels:
+          - M14
 
   SpectralGrangerCausality:
       # Non-parametric Granger causality (no VAR model)

@@ -169,8 +169,6 @@
     dependencies:
     configs:
       - mode: euclidean
-        statistic: mean
-      - mode: euclidean
         statistic: max
 
       - mode: euclidean
@@ -291,8 +289,6 @@
       - estimator: kozachenko
         history_length: 10
 
-      - estimator: kernel
-        history_length: 10
 
   StochasticInteraction: # No theiler window
     labels:
@@ -548,16 +544,6 @@
         labels:
           - M01
 
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
 
   WeightedPhaseLagIndex:
     labels:
@@ -582,22 +568,9 @@
         labels:
           - M01
 
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
 
   DebiasedSquaredPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled. The `max` variants were
-    # removed: the debiased estimates rest on a few tapers of one recording,
-    # and the maximum over frequencies returned exactly 1 for essentially any
-    # input (white noise included), so carried no information.
+    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -1211,6 +1184,8 @@
   #     statistic: max
 
   PhaseSlopeIndex:
+    # The `max` variants are not bundled: the maximum over time of the
+    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent
@@ -1226,18 +1201,6 @@
       - fmin: 0.25
         fmax: 0.5
 
-      - fmin: 0
-        fmax: 0.5
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
-
 .statistics.misc:
   LinearModel:
     labels:
@@ -1250,9 +1213,7 @@
     dependencies:
     configs:
       - model: Ridge
-      - model: Lasso
       - model: SGDRegressor
-      - model: ElasticNet
       - model: BayesianRidge
 
   # Cointegration

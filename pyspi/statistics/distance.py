@@ -2,7 +2,8 @@ import functools
 import os
 import warnings
 import numpy as np
-from sklearn.metrics import pairwise_distances
+from scipy.stats import rankdata
+from sklearn.metrics import pairwise_distances, pairwise_kernels
 import tslearn.metrics
 from tslearn.barycenters import (
     euclidean_barycenter,
@@ -13,10 +14,7 @@ from tslearn.barycenters import (
 from hyppo.independence import (
     MGC,
     Dcorr,
-    HHG,
-    Hsic,
 )
-from hyppo.time_series import MGCX, DcorrX
 
 from pyspi.base import (
     Directed,
@@ -45,6 +43,24 @@ def _auto_sakoe_radius(length):
     radius = min(linear, sqrt_scaled)
     radius = max(1, _DTW_SAKOE_MIN_RADIUS, radius)
     return min(radius, length - 1)
+
+
+class _RetainedHalf:
+    """Evaluate only the half of the pairs that `Undirected` keeps.
+
+    `Undirected.multivariate` evaluates both orders of every pair and keeps
+    bivariate(i, j) with i < j. For a stateless statistic this gives the same
+    matrix at half the cost. List it before `Undirected` in the bases.
+    """
+
+    @parse_multivariate
+    def multivariate(self, data):
+        M = data.n_processes
+        A = np.full((M, M), np.nan)
+        for j in range(M):
+            for i in range(j):
+                A[i, j] = A[j, i] = self.bivariate(data, i=i, j=j)
+        return A
 
 
 class PairwiseDistance(Undirected, Unsigned):
@@ -87,8 +103,30 @@ class PairwiseDistance(Undirected, Unsigned):
 """
 
 
-class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
-    """Hilbert-Schmidt Independence Criterion (HSIC)"""
+def _median_gaussian_distance(v):
+    """``1 - K / max(K)`` for a Gaussian kernel ``K`` of median-heuristic width.
+
+    hyppo's ``Hsic`` statistic is dcorr of these induced distances. Here each
+    variable's width is the median distance between its own samples (Gretton
+    et al. 2005, 2008); hyppo applies ``x``'s width to ``y`` as well, which
+    makes its statistic depend on argument order.
+    """
+    l2 = pairwise_distances(v, metric="l2")
+    n = l2.shape[0]
+    med = np.median(l2[~np.eye(n, dtype=bool)])
+    # As hyppo: a zero median (mostly tied samples) falls back to width 1.
+    med = med if med else 1
+    K = pairwise_kernels(v, metric="rbf", gamma=1.0 / (2 * (med**2)))
+    return 1 - K / np.max(K)
+
+
+class HilbertSchmidtIndependenceCriterion(_RetainedHalf, Undirected, Unsigned):
+    """Normalised Hilbert-Schmidt Independence Criterion (HSIC).
+
+    hyppo's statistic: dcorr of the distances ``1 - K / max(K)`` induced by a
+    Gaussian kernel, each variable with its own median-heuristic width (see
+    `_median_gaussian_distance`).
+    """
 
     name = "Hilbert-Schmidt Independence Criterion"
     identifier = "hsic"
@@ -102,12 +140,92 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        stat = Hsic(bias=self._biased).statistic(x, y)
-        return stat
+        dx = _median_gaussian_distance(x)
+        dy = _median_gaussian_distance(y)
+        return Dcorr(bias=self._biased, compute_distance=None).statistic(dx, dy)
 
 
-class HellerHellerGorfine(Undirected, Unsigned):
-    """Heller-Heller-Gorfine independence criterion"""
+def _row_dominance_counts(rx, ry):
+    """``c[i, j] = #{k : rx[i, k] <= rx[i, j] and ry[i, k] <= ry[i, j]}``.
+
+    ``rx`` and ``ry`` are row-wise max-ranks (1..n). Offline 2-D dominance
+    counting with one Fenwick tree per row, all rows at once: because ranks
+    are max-ranks, the ``k`` with ``rx[i, k] <= rx[i, j]`` are exactly the first
+    ``rx[i, j]`` entries of row ``i`` in ``rx`` order, so ``j``'s query is
+    answered once that many entries have been inserted. O(n log n) per row.
+    """
+    n_rows, n = rx.shape
+    n_bits = n.bit_length()
+    rows = np.arange(n_rows)
+    ry_in_rx_order = np.take_along_axis(
+        ry, np.argsort(rx, axis=1, kind="stable"), axis=1)
+    # Queries grouped by the prefix length p = rx at which they are answered.
+    q_order = np.argsort(rx, axis=None, kind="stable")
+    bounds = np.searchsorted(rx.ravel()[q_order], np.arange(1, n + 2))
+    q_rows = q_order // n
+    q_vals = ry.ravel()[q_order]
+    # Column n + 1 absorbs updates that run past the end of the tree.
+    tree = np.zeros((n_rows, n + 2), dtype=np.int64)
+    out = np.zeros(n_rows * n, dtype=np.int64)
+    for p in range(1, n + 1):
+        idx = ry_in_rx_order[:, p - 1].copy()
+        for _ in range(n_bits):
+            tree[rows, idx] += 1
+            idx += idx & -idx
+            np.minimum(idx, n + 1, out=idx)
+        lo, hi = bounds[p - 1], bounds[p]
+        if hi > lo:
+            q_r = q_rows[lo:hi]
+            idx = q_vals[lo:hi].copy()
+            acc = np.zeros(hi - lo, dtype=np.int64)
+            for _ in range(n_bits):
+                acc += tree[q_r, idx]  # tree[:, 0] stays 0
+                idx -= idx & -idx
+            out[q_order[lo:hi]] = acc
+    return out.reshape(n_rows, n)
+
+
+_HHG_CHUNK_ENTRIES = 2**22
+
+
+def _hhg_statistic(x, y):
+    """hyppo's ``HHG().statistic(x, y)`` in O(n^2 log n) rather than O(n^3).
+
+    The sum over ``i != j`` of Pearson's chi-square for the 2x2 table that
+    splits the other samples by ``d_x(i, .) <= d_x(i, j)`` and
+    ``d_y(i, .) <= d_y(i, j)`` (Heller, Heller & Gorfine 2013). The table
+    counts are row-wise ranks and 2-D dominance counts.
+    """
+    distx = pairwise_distances(x, metric="euclidean")
+    disty = pairwise_distances(y, metric="euclidean")
+    n = distx.shape[0]
+    S = np.zeros((n, n))
+    # Rows are independent; bound the int64 work arrays' size.
+    step = max(1, _HHG_CHUNK_ENTRIES // n)
+    for start in range(0, n, step):
+        stop = min(n, start + step)
+        # #{k : d[i, k] <= d[i, j]}, which counts k = i and k = j themselves.
+        na = rankdata(distx[start:stop], method="max", axis=1).astype(np.int64)
+        nb = rankdata(disty[start:stop], method="max", axis=1).astype(np.int64)
+        nab = _row_dominance_counts(na, nb)
+        t11 = nab - 2
+        t12 = na - nab
+        t21 = nb - nab
+        t22 = n - na - nb + nab
+        denom = (t11 + t12) * (t21 + t22) * (t11 + t21) * (t12 + t22)
+        num = (n - 2) * (t12 * t21 - t11 * t22) ** 2
+        block = np.zeros((stop - start, n))
+        ok = denom > 0
+        block[ok] = num[ok] / denom[ok]
+        S[start:stop] = block
+    np.fill_diagonal(S, 0)
+    mask = np.ones(S.shape, dtype=bool)
+    np.fill_diagonal(mask, 0)
+    return np.sum(S[mask])
+
+
+class HellerHellerGorfine(_RetainedHalf, Undirected, Unsigned):
+    """Heller-Heller-Gorfine independence criterion (see `_hhg_statistic`)."""
 
     name = "Heller-Heller-Gorfine Independence Criterion"
     identifier = "hhg"
@@ -117,11 +235,10 @@ class HellerHellerGorfine(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        stat = HHG().statistic(x, y)
-        return stat
+        return _hhg_statistic(x, y)
 
 
-class DistanceCorrelation(Undirected, Unsigned):
+class DistanceCorrelation(_RetainedHalf, Undirected, Unsigned):
     """Distance correlation"""
 
     name = "Distance correlation"
@@ -140,21 +257,8 @@ class DistanceCorrelation(Undirected, Unsigned):
         stat = Dcorr(bias=self._biased).statistic(x, y)
         return stat
 
-    @parse_multivariate
-    def multivariate(self, data):
-        # The inherited loop evaluates both orders of every pair and keeps
-        # bivariate(i, j) with i < j for both entries. This statistic holds no
-        # state between calls, so only the kept half is evaluated, in the order
-        # the inherited loop reaches it.
-        M = data.n_processes
-        A = np.full((M, M), np.nan)
-        for j in range(M):
-            for i in range(j):
-                A[i, j] = A[j, i] = self.bivariate(data, i=i, j=j)
-        return A
 
-
-class MultiscaleGraphCorrelation(Undirected, Unsigned):
+class MultiscaleGraphCorrelation(_RetainedHalf, Undirected, Unsigned):
     """Multiscale graph correlation"""
 
     name = "Multiscale graph correlation"
@@ -168,8 +272,33 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
         return stat
 
 
+def _lagged_sum(test, x, y, max_lag):
+    """``sum_{l=0}^{L} (n - l)/n * S(x[l:], y[:n - l])`` (Mehta et al. 2020).
+
+    The cross-distance statistic of hyppo's ``DcorrX`` and ``MGCX`` as their
+    docstrings define it: the present of ``x`` against the past of ``y``, i.e.
+    the dependence of ``x`` on the history of ``y``. The distance matrix of
+    ``x[l:]`` is the block ``distx[l:, l:]``. (hyppo 0.5.2's own ``l >= 1``
+    terms treat rows of the distance matrices as points, so it is not used.)
+    """
+    distx = pairwise_distances(x, metric="euclidean")
+    disty = pairwise_distances(y, metric="euclidean")
+    n = distx.shape[0]
+    dep_lag = [test.statistic(distx, disty)]
+    for lag in range(1, max_lag + 1):
+        sx = np.ascontiguousarray(distx[lag:, lag:])
+        sy = np.ascontiguousarray(disty[: n - lag, : n - lag])
+        dep_lag.append((n - lag) * test.statistic(sx, sy) / n)
+    return np.sum(dep_lag)
+
+
 class CrossDistanceCorrelation(Directed, Unsigned):
-    """Cross-distance correlation"""
+    """Cross-distance correlation (DcorrX; Mehta et al. 2020).
+
+    ``A[i, j] = sum_{l=0}^{max_lag} (T - l)/T * dcorr(z_j[l:], z_i[:T - l])``,
+    the unbiased distance correlation of target ``j`` with the lagged source
+    ``i``, summed over lags (see `_lagged_sum`).
+    """
 
     name = "Cross-distance correlation"
     identifier = "dcorrx"
@@ -181,15 +310,18 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        # `_lagged_sum(x, y)` measures y -> x, so the source i goes second.
         z = data.to_numpy()
-        x = z[i]
-        y = z[j]
-        stat, _ = DcorrX(max_lag=self._max_lag).statistic(x, y)
-        return stat
+        x = z[j]
+        y = z[i]
+        return _lagged_sum(Dcorr(compute_distance=None), x, y, self._max_lag)
 
 
 class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
-    """Cross-multiscale graph correlation"""
+    """Cross-multiscale graph correlation (MGCX; Mehta et al. 2020).
+
+    As `CrossDistanceCorrelation`, with MGC in place of dcorr.
+    """
 
     name = "Cross-multiscale graph correlation"
     identifier = "mgcx"
@@ -201,14 +333,14 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        # As in CrossDistanceCorrelation: source i goes second.
         z = data.to_numpy()
-        x = z[i]
-        y = z[j]
-        stat, _, _ = MGCX(max_lag=self._max_lag).statistic(x, y)
-        return stat
+        x = z[j]
+        y = z[i]
+        return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)
 
 
-class TimeWarping(Undirected, Unsigned):
+class TimeWarping(_RetainedHalf, Undirected, Unsigned):
 
     labels = ["unsigned", "distance", "temporal", "undirected", "nonlinear"]
 
@@ -456,17 +588,41 @@ class LongestCommonSubsequence(TimeWarping):
 
 
 class SoftDynamicTimeWarping(TimeWarping):
+    """Soft-DTW (Cuturi & Blondel 2017) at tslearn's default ``gamma = 1``.
 
-    name = "Dynamic time warping"
+    This is the raw soft-minimum alignment cost, which is **not a distance**:
+    it can be negative, and ``softdtw(x, x)`` is not 0. The non-negative
+    soft-DTW *divergence* of Blondel, Mensch & Vert (2021),
+    ``D(x, y) - (D(x, x) + D(y, y)) / 2``, is a different quantity and is not
+    what pyspi ships under this identifier.
+    """
+
+    name = "Soft dynamic time warping"
     identifier = "softdtw"
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        # tslearn's defaults apply: Sakoe-Chiba radius 1, Itakura slope 2.
         z = data.to_numpy(squeeze=True)
-        return tslearn.metrics.soft_dtw(z[i], z[j])
+        return tslearn.metrics.soft_dtw(
+            z[i], z[j], global_constraint=self._global_constraint)
 
 
-class Barycenter(Directed, Signed):
+class Barycenter(Undirected, Signed):
+    """A statistic of the barycenter of the pair under the Euclidean, DTW
+    (DBA), subgradient-DBA or soft-DTW geometry. The barycenter of {x, y} is a
+    function of the unordered pair, so the measure is undirected.
+
+    ``statistic="corr"`` is the alignment-adjusted correlation
+    ``2 * mean(b**2) / mean_energy - 1`` of the barycenter ``b``, where
+    ``mean_energy`` is the average of ``mean(x**2)`` and ``mean(y**2)``. For
+    the Euclidean barycenter ``(x + y) / 2`` of two zero-mean series this is
+    exactly Pearson's r; for the DTW geometries it is the share of the pair's
+    amplitude that survives averaging after optimal alignment, in [-1, 1]
+    (soft-DTW smooths the barycenter, so identical series give less than 1).
+    The barycenter of two zero-mean series has mean ~0, so ``corr`` is
+    preferred to ``mean``.
+    """
 
     name = "Barycenter"
     identifier = "bary"
@@ -505,7 +661,16 @@ class Barycenter(Directed, Signed):
             self._preproc = lambda x: x**2
             self.identifier += f"-sq"
 
-        if statistic == "mean":
+        self._statistic = statistic
+        if statistic == "corr":
+            if squared:
+                raise ValueError("statistic='corr' already squares the barycenter; "
+                                 "squared=True is not meaningful with it.")
+            # 2 E[b^2] / E[energy] - 1, with the pair's energy supplied by
+            # `bivariate`: Pearson's r for the Euclidean barycenter, an
+            # alignment-adjusted correlation otherwise.
+            self._statfn = lambda x, e: 2.0 * np.nanmean(x ** 2) / e - 1.0
+        elif statistic == "mean":
             self._statfn = lambda x: np.nanmean(self._preproc(x))
         elif statistic == "max":
             self._statfn = lambda x: np.nanmax(self._preproc(x))
@@ -518,27 +683,45 @@ class Barycenter(Directed, Signed):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-
+        # One barycenter per unordered pair, always fitted in the same order
+        # because the subgradient (sgddtw) fit depends on input order.
+        key = (max(i, j), min(i, j))
         try:
-            bc = data.barycenter[self._mode][(i, j)]
+            bc = data.barycenter[self._mode][key]
         except (AttributeError, KeyError):
             z = data.to_numpy(squeeze=True)
-            bc = self._fn(z[[i, j]])
+            bc = self._fn(z[list(key)])
             try:
-                data.barycenter[self._mode][(i, j)] = bc
+                data.barycenter[self._mode][key] = bc
             except AttributeError:
-                data.barycenter = {self._mode: {(i, j): bc}}
+                data.barycenter = {self._mode: {key: bc}}
             except KeyError:
-                data.barycenter[self._mode] = {(i, j): bc}
-            data.barycenter[self._mode][(j, i)] = data.barycenter[self._mode][(i, j)]
+                data.barycenter[self._mode] = {key: bc}
 
+        if self._statistic == "corr":
+            z = data.to_numpy(squeeze=True)
+            energy = 0.5 * (np.mean(z[i] ** 2) + np.mean(z[j] ** 2))
+            return self._statfn(bc, energy)
         return self._statfn(bc)
 
 
-class GromovWasserstainTau(Undirected, Unsigned):
-    """Gromov-Wasserstain distance (GWTau)"""
+class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
+    """GW_tau (Kravtsova, McGee & Dawes 2023, Bull. Math. Biol. 85, 71).
 
-    name = "Gromov-Wasserstain Distance"
+    Each series becomes the planar trajectory ``(t, x_t)``; ``vec_geo_dist``
+    is the vector of intrinsic (arc-length) distances of every point from the
+    trajectory's start, and ``wass_sorted`` the closed-form 2-Wasserstein
+    distance between the two sorted vectors (Proposition 1(e) of the paper:
+    ``sqrt(mean((sorted v_i - sorted v_j)^2))`` at equal lengths).
+
+    The distance vector has one entry per point, the first being 0 for the
+    start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``; the authors'
+    MATLAB omits it, which only rescales the value by a constant).
+
+    The class name keeps its misspelling because configs refer to it.
+    """
+
+    name = "Gromov-Wasserstein distance (GW_tau)"
     identifier = "gwtau"
     labels = ["unsigned", "distance", "unordered", "nonlinear", "undirected"]
 
@@ -546,7 +729,8 @@ class GromovWasserstainTau(Undirected, Unsigned):
     def vec_geo_dist(x):
         diffs = np.diff(x, axis=0)
         distances = np.linalg.norm(diffs, axis=1)
-        return np.cumsum(distances)
+        # The start is at distance 0 from itself: one entry per point.
+        return np.concatenate([[0.0], np.cumsum(distances)])
 
     @staticmethod
     def wass_sorted(x1, x2):

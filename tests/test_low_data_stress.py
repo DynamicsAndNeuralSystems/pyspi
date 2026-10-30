@@ -171,6 +171,20 @@ OBSERVED_EMPTY_CASES = {
     for name in ("independent_gaussian", "binary", "four_level", "heavy_tailed")
     for seed in SEEDS
     for T in (T_SHORT, T_LONG)
+} | {
+    # CDS compares P(y | x = a) across x-bins with more than 12 points and is
+    # undefined (NaN) with fewer than two such bins. All three processes here
+    # are one series up to scale, and at T=64 it fills at most one bin (see
+    # tests/test_causal_reference.py).
+    ("cds", "duplicate_and_collinear", seed, T_SHORT)
+    for seed in SEEDS
+} | {
+    # At T=64 the three independent frequencies GroupDelay fits are six bins
+    # apart, so its significant run must cover 13 of the 33 bins; none of these
+    # three has one.
+    ("gd_delay", "correlated_gaussian", 0, T_SHORT),
+    ("gd_delay", "delayed_oscillation", 0, T_SHORT),
+    ("gd_delay", "delayed_oscillation", 7, T_SHORT),
 }
 
 # (SPI label, fixture, seed, T) -> (exception class, message regex).

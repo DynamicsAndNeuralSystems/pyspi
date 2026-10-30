@@ -12,8 +12,8 @@ from pyspi.base import (
     parse_bivariate,
     parse_multivariate,
 )
-import nitime.analysis as nta
-import nitime.timeseries as ts
+import nitime.algorithms as nt_alg
+import nitime.utils as nt_utils
 import warnings
 from scipy import signal
 from pyspi.utils import fmt_param, require_int
@@ -107,16 +107,73 @@ def _circular_nanmean(angles, axis):
     return np.where(undefined, np.nan, np.angle(mean))
 
 
+def _real_valued_bins(freq, fs):
+    """Mask of the bins where the cross-spectrum of real signals is real.
+
+    0 Hz always, and ``fs / 2`` when it is on the grid (an even FFT length),
+    compared with a relative tolerance because the backend's grid is
+    ``k * fs / nfft`` in floating point.
+    """
+    return (freq == 0) | np.isclose(freq, fs / 2, rtol=1e-9, atol=0)
+
+
+def _closed_band(freq, fmin, fmax):
+    """Mask of ``fmin <= f <= fmax`` with a relative 1e-9 tolerance at both edges.
+
+    The tolerance keeps edge bins such as Nyquist, which the backend's
+    floating-point grid ``k * fs / nfft`` can place just past ``fs / 2``.
+    """
+    freq = np.asarray(freq)
+    above = (freq >= fmin) | np.isclose(freq, fmin, rtol=1e-9, atol=0)
+    below = (freq <= fmax) | np.isclose(freq, fmax, rtol=1e-9, atol=0)
+    return above & below
+
+
 class NonparametricSpectral(Unsigned):
-    """Base class for the nonparametric spectral methods from the Eden-Kramer repo"""
+    """Base class for the nonparametric spectral methods from the Eden-Kramer repo.
+
+    Frequency band
+    --------------
+    Every class reduces its spectrum over the band ``fmin <= f <= fmax`` of
+    the backend's grid, with two exceptions, so the identifiers' ``fmin-0`` and
+    ``fmax-0-5`` mean what they say wherever a value exists there:
+
+    - Amplitude measures (``cohmag`` and the bivariate directed measures) use
+      the closed band.
+    - Phase measures (``_phase_based``: ``phase``, ``icoh``, ``plv``, ``pli``,
+      ``wpli``, ``dspli``, ``dswpli``, ``ppc``) use the closed band minus the
+      real-valued bins, 0 Hz and ``fs / 2``. There every taper's Fourier
+      coefficient of a real signal is real, so the cross-spectrum's phase is
+      exactly 0 or pi and none of these is an estimate: PLV and PPC are 1
+      whenever the tapers agree in sign, PLI and dsPLI 0, wPLI 0/0. A band
+      left with no frequency is refused with a ``ValueError``.
+    - PhaseSlopeIndex follows the phase rule too, then keeps one bin per
+      multitaper bandwidth.
+    - GroupDelay searches for its significant coherence run over the closed
+      band less the real-valued bins, where the phase is forced to 0 or pi.
+
+    The closed band compares with a relative tolerance of 1e-9 at both edges
+    (``_closed_band``).
+
+    SpectralGrangerCausality raises a zero ``fmin`` to 1e-5 (its identifier
+    says so) and then uses the closed band.
+    """
+
+    # The `statistic` values a class can apply. A band statistic reduces a
+    # spectrum over frequency; GroupDelay's three are outputs of a regression.
+    _statistics = ("mean", "max")
+
+    # A function of the phase of the cross-spectrum: its band leaves out the
+    # real-valued bins (see the class docstring).
+    _phase_based = False
 
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean"):
         if fmax is None:
             fmax = fs / 2
 
+        # `fs` reaches the multitaper estimate, the frequency grid, every cache
+        # key, and GroupDelay's conversion to samples.
         self._fs = fs
-        if fs != 1:
-            warnings.warn("Multiple sampling frequencies not yet handled.")
         self._fmin = fmin
         self._fmax = fmax
         if statistic == "mean":
@@ -127,6 +184,10 @@ class NonparametricSpectral(Unsigned):
             raise NameError(f"Unknown statistic: {statistic}")
         else:
             self._statfn = None
+        if statistic not in self._statistics:
+            raise ValueError(
+                f"{type(self).__name__} does not support statistic="
+                f"{statistic!r}; it supports {', '.join(self._statistics)}.")
         self._statistic = statistic
 
         # Structural trait, derived from the implementation rather than assumed.
@@ -268,10 +329,30 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
         cache[self._freq_key] = freq
         return res, freq
 
+    def _band(self, freq):
+        """Indices of the frequencies the band statistic reduces over.
+
+        The closed band, less the real-valued bins for a phase measure (see
+        ``NonparametricSpectral``).
+        """
+        in_band = _closed_band(freq, self._fmin, self._fmax)
+        if not self._phase_based:
+            return np.flatnonzero(in_band)
+        real = _real_valued_bins(freq, self._fs)
+        if not (in_band & ~real).any():
+            what = ("only the real-valued bins (0 Hz and fs/2), where the "
+                    "cross-spectrum of real signals has no phase"
+                    if in_band.any() else "no frequency of the series' grid")
+            step = f" (grid step {freq[1] - freq[0]:.4g})" if freq.size > 1 else ""
+            raise ValueError(
+                f"{type(self).__name__}: the band [{self._fmin}, {self._fmax}] "
+                f"holds {what}{step}; widen it.")
+        return np.flatnonzero(in_band & ~real)
+
     @parse_multivariate
     def multivariate(self, data):
         adj_freq, freq = self._get_cache(data)
-        freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
+        freq_id = self._band(freq)
 
         try:
             adj = self._statfn(adj_freq[0, freq_id, :, :], axis=0)
@@ -333,6 +414,19 @@ class _FactoredConnectivity(sc.Connectivity):
         return super()._MVAR_Fourier_coefficients
 
 
+@functools.lru_cache(maxsize=8)
+def _whole_record_tapers(n_time_samples, fs):
+    """The DPSS tapers ``sc.Multitaper`` uses for one whole-record window.
+
+    They depend on the record length and sampling rate only, so they are
+    computed once rather than for every pair's Multitaper.
+    """
+    tapers = sc.Multitaper(np.zeros((n_time_samples, 1, 1)),
+                           sampling_frequency=fs).tapers
+    tapers.setflags(write=False)
+    return tapers
+
+
 class NonparametricSpectralBivariate(NonparametricSpectral):
     _cache_namespace = "spectral_bv"
 
@@ -369,7 +463,8 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
         if conn is None:
             z = np.transpose(data.to_numpy(squeeze=True)[[i, j]])
             z = _ensure_time_series_3d(z)
-            m = sc.Multitaper(z, sampling_frequency=self._fs)
+            m = sc.Multitaper(z, sampling_frequency=self._fs,
+                              tapers=_whole_record_tapers(z.shape[0], self._fs))
             conn = _FactoredConnectivity.from_multitaper(m)
             conns[conn_key] = conn
 
@@ -397,12 +492,19 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         bv_freq, freq = self._get_cache(data, i, j)
-        freq_id = np.where((freq > self._fmin) * (freq < self._fmax))[0]
+        # Closed band, as in NonparametricSpectralMultivariate.
+        freq_id = np.flatnonzero(_closed_band(freq, self._fmin, self._fmax))
         return self._statfn(bv_freq[freq_id])
 
 
 class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
-    name = "Coherence magnitude"
+    """Magnitude-squared coherence, ``|S_xy|^2 / (S_xx S_yy)``, in [0, 1].
+
+    The squared modulus of the multitaper coherency (the backend's
+    ``coherence_magnitude``, whose name ``cohmag`` keeps).
+    """
+
+    name = "Magnitude-squared coherence"
     labels = ["unsigned", "spectral", "undirected"]
 
     def __init__(self, **kwargs):
@@ -414,6 +516,7 @@ class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
 class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
     # Antisymmetric in (i, j): phase difference: phi(i,j) = -phi(j,i).
     _antisymmetric_spectrum = True
+    _phase_based = True
     name = "Coherence phase"
     labels = ["signed", "spectral", "antisymmetric"]
 
@@ -432,8 +535,7 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
     @parse_multivariate
     def multivariate(self, data):
         adj_freq, freq = self._get_cache(data)
-        freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
-        adj = _circular_nanmean(adj_freq[0, freq_id, :, :], axis=0)
+        adj = _circular_nanmean(adj_freq[0, self._band(freq), :, :], axis=0)
 
         # Coherency phase is antisymmetric. Select one computed orientation and
         # construct its opposite explicitly so branch-cut representations at
@@ -445,6 +547,7 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
 
 
 class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
+    _phase_based = True
     name = "Imaginary coherence"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -455,6 +558,7 @@ class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
 
 
 class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
+    _phase_based = True
     name = "Phase locking value"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -470,6 +574,7 @@ class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
 class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     # Antisymmetric in (i, j): sign of the imaginary coherency.
     _antisymmetric_spectrum = True
+    _phase_based = True
     name = "Phase lag index"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -482,6 +587,7 @@ class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
 class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     # Antisymmetric in (i, j): imaginary-coherency weighted sign.
     _antisymmetric_spectrum = True
+    _phase_based = True
     name = "Weighted phase lag index"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -492,6 +598,18 @@ class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
 
 
 class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
+    """Debiased squared phase lag index (Vinck et al. 2011, NeuroImage 55, 1548).
+
+    The mean of ``sign(Im S_k) sign(Im S_l)`` over pairs ``k != l`` of the
+    ``n`` tapers (and trials), ``S_k`` being taper ``k``'s cross-spectrum:
+    ``((sum s)^2 - sum s^2) / (n (n - 1))``.
+
+    Computed here rather than by the backend, whose shortcut
+    ``(n PLI^2 - 1) / (n - 1)`` equals this only when every sign is nonzero
+    (it gives ``-1/(n - 1)`` where the cross-spectrum is real).
+    """
+
+    _phase_based = True
     name = "Debiased squared phase lag index"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -499,11 +617,22 @@ class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected
         self.identifier = "dspli"
         super().__init__(**kwargs)
         self._measure = "debiased_squared_phase_lag_index"
+        self._recompute = True
+
+    def _get_statistic(self, C):
+        X = np.asarray(C.fourier_coefficients)  # (window, trial, taper, fft, signal)
+        X = X[..., : X.shape[-2] // 2 + 1, :]   # the backend's non-negative bins
+        sign = np.sign(np.imag(X[..., :, np.newaxis] * np.conj(X[..., np.newaxis, :])))
+        n = sign.shape[1] * sign.shape[2]
+        total = sign.sum(axis=(1, 2))
+        squares = np.abs(sign).sum(axis=(1, 2))
+        return (total ** 2 - squares) / (n * (n - 1))
 
 
 class DebiasedSquaredWeightedPhaseLagIndex(
     NonparametricSpectralMultivariate, Undirected
 ):
+    _phase_based = True
     name = "Debiased squared weighted phase-lag index"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -514,6 +643,7 @@ class DebiasedSquaredWeightedPhaseLagIndex(
 
 
 class PairwisePhaseConsistency(NonparametricSpectralMultivariate, Undirected):
+    _phase_based = True
     name = "Pairwise phase consistency"
     labels = ["unsigned", "spectral", "undirected"]
 
@@ -632,6 +762,22 @@ class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
 
 
 class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
+    """Direct directed transfer function (Korzeniewska et al. 2003).
+
+    ``dDTF_ij(f) = eta_ij(f) |P_ij(f)|``: the full-frequency DTF
+    ``eta_ij(f) = |H_ij(f)| / sqrt(sum_f sum_k |H_ik(f)|^2)`` times the
+    magnitude of the partial coherence ``P_ij = -Q_ij / sqrt(Q_ii Q_jj)``,
+    ``Q = S(f)^-1``, with ``H`` in the backend's ``[target, source]``
+    convention. This is the square root of the published
+    ``delta_ij^2 = eta_ij^2 P_ij^2``, i.e. the magnitude scale the backend
+    reports.
+
+    ``S`` is the spectrum of the fitted model, ``H Sigma H^H``. (The
+    backend's ``direct_directed_transfer_function()`` uses ``sqrt(PDC)`` in
+    place of the partial coherence, so it is not used.) On a pair, ``P`` is
+    the ordinary coherency.
+    """
+
     name = "Direct directed transfer function"
     labels = ["unsigned", "spectral", "directed", "lagged"]
 
@@ -639,6 +785,21 @@ class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
         self.identifier = "ddtf"
         super().__init__(**kwargs)
         self._measure = "direct_directed_transfer_function"
+        self._recompute = True
+
+    def _get_statistic(self, C):
+        # Only the two private properties DirectedCoherence already depends on
+        # (see test_directed_coherence_uses_only_the_documented_backend_privates).
+        H = C._transfer_function                       # (..., f, target, source)
+        Sigma = C._noise_covariance[..., np.newaxis, :, :]
+        S = H @ Sigma @ np.conj(np.swapaxes(H, -1, -2))
+        Q = np.linalg.inv(S)
+        q = np.abs(np.diagonal(Q, axis1=-1, axis2=-2))
+        partial_coherence = np.abs(Q) / np.sqrt(
+            q[..., :, np.newaxis] * q[..., np.newaxis, :])
+        mag = np.abs(H)
+        ffdtf = mag / np.sqrt(np.sum(mag ** 2, axis=(-1, -3), keepdims=True))
+        return ffdtf * partial_coherence
 
 
 class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
@@ -656,7 +817,9 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
 
     This is the unnormalised index. Nolte et al. divide it by a jackknife
     standard deviation over epochs, which a single recording does not provide,
-    so the value scales with the number of frequencies in the band.
+    so the value scales with the number of frequencies in the band. The
+    ``mean`` in its identifiers (``psi_multitaper_mean_*``) is the only
+    statistic it accepts and names this *sum* over the band, not an average.
 
     Computed here rather than by ``Connectivity.phase_slope_index``. In
     spectral-connectivity 2.0 that method sums over *all* pairs of frequencies,
@@ -669,6 +832,10 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     _antisymmetric_spectrum = True
     name = "Phase slope index"
     labels = ["unsigned", "spectral", "undirected"]
+    # A sum over the band, not a band statistic; `mean` is the name the
+    # identifiers carry.
+    _statistics = ("mean",)
+    _phase_based = True
 
     # Frequency resolution of the multitaper estimate in FFT bins: twice the
     # backend's default time-halfbandwidth product of 3.
@@ -688,15 +855,16 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
         return (type(self).__name__, self._fs, self._fmin, self._fmax)
 
     def _get_statistic(self, C):
-        freq = C.frequencies
-        # Strictly inside the band, as the backend's own band selection is.
-        inside = np.flatnonzero((self._fmin < freq) & (freq < self._fmax))
+        freq = np.asarray(C.frequencies)
+        # The closed band less the real-valued bins, thinned to one bin per
+        # multitaper bandwidth.
+        inside = self._band(freq)
         coherency = C.coherency()[..., inside[::self._FREQUENCY_STEP], :, :]
         if coherency.shape[-3] < 2:
             raise ValueError(
                 f"Phase slope index needs at least two independent frequencies "
-                f"inside ({self._fmin}, {self._fmax}); the series is too short "
-                f"for this band.")
+                f"in [{self._fmin}, {self._fmax}] besides 0 Hz and fs/2; the "
+                f"series is too short for this band.")
         return np.imag(np.sum(
             np.conj(coherency[..., :-1, :, :]) * coherency[..., 1:, :, :], axis=-3))
 
@@ -734,6 +902,7 @@ def _independent_significant_frequencies(p_values, step, alpha=0.05,
 class GroupDelay(NonparametricSpectralMultivariate, Directed):
     name = "Group delay"
     labels = ["unsigned", "spectral", "directed", "lagged"]
+    _statistics = ("delay", "slope", "rvalue")
 
     def __init__(self, **kwargs):
         self.identifier = "gd"
@@ -781,17 +950,21 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         masked array, and the result is NaN. Confirmed at 5, 11, 19 and 39
         tapers, T up to 4000, on a pair with median coherence 0.998.
 
-        The one-sample test is the standard Enochson-Goodman/Bokil form: for
-        coherence estimated from ``n`` independent spectral estimates,
-        ``arctanh|C|`` is approximately normal with mean ``arctanh|Gamma|`` plus
-        a bias ``b = 1/(2n - 2)`` and *variance* ``b``, so the null z-score is
-        ``(arctanh|C| - b) / sqrt(b)``. That is what the second ``coherence_bias``
-        term was meant to be and is what is used here.
+        The per-bin screen is the Enochson-Goodman/Bokil Fisher-z
+        approximation: for coherence estimated from ``n`` independent spectral
+        estimates, ``arctanh|C|`` is taken as normal with mean
+        ``arctanh|Gamma|`` plus a bias ``b = 1/(2n - 2)`` and *variance* ``b``,
+        so the null z-score is ``(arctanh|C| - b) / sqrt(b)``. That is what the
+        second ``coherence_bias`` term was meant to be and is what is used
+        here. It is an approximation: with five tapers a bin passes at nominal
+        5% about 16% of the time under the null, so false estimates are
+        controlled by the cluster and three-point requirements below.
 
         The rest follows the backend's own recipe: Benjamini-Hochberg over the
         in-band frequencies, keep the largest contiguous significant run,
-        subsample it to statistically independent points, require at least
-        three, and regress the unwrapped coherence phase on frequency.
+        thin it to independent points one multitaper bandwidth
+        (``PhaseSlopeIndex._FREQUENCY_STEP`` = six FFT bins) apart, require at
+        least three, and regress the unwrapped coherence phase on frequency.
         ``fs * slope / (2*pi)`` is the delay in samples; the unscaled
         ``slope/(2*pi)`` would be in seconds, because the regression runs
         against physical frequency. ``rvalue`` is |r|, which is orientation-
@@ -801,17 +974,17 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
 
         coherency = np.asarray(C.coherency())
         freqs = np.asarray(C.frequencies)
-        in_band = (freqs >= self._fmin) & (freqs <= self._fmax)
+        # The closed band less the real-valued bins, where the phase is forced
+        # to 0 or pi whatever the delay.
+        in_band = (_closed_band(freqs, self._fmin, self._fmax)
+                   & ~_real_valued_bins(freqs, self._fs))
         f = freqs[in_band]
         coh = coherency[:, in_band]
         n_trials, _, M, _ = coh.shape
 
-        # Independent frequency spacing, as the backend defines it: the band is
-        # resolved into 50 pieces and points closer than that are not
-        # independent estimates.
-        df = float(freqs[1] - freqs[0])
-        resolution = (self._fmax - self._fmin) / 50
-        step = max(1, int(np.ceil(resolution / df)))
+        # Independent frequency spacing: one multitaper bandwidth, as for
+        # PhaseSlopeIndex (closer estimates share the tapers' main lobes).
+        step = PhaseSlopeIndex._FREQUENCY_STEP
 
         bias = 1.0 / (2 * C.n_observations - 2)
         magnitude = np.minimum(np.abs(coh), 1 - np.finfo(float).eps)
@@ -855,6 +1028,46 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         return self._fs * slope / (2 * np.pi), slope, r_value
 
 
+# nitime.GrangerAnalyzer's grid size: granger_causality_xy evaluates the model at
+# n_freqs // 2 + 1 points on [0, fs/2) (scipy.signal.freqz, endpoint excluded).
+_GC_N_FREQS = 1024
+
+
+def _fit_bivariate_var(x, order=None, max_order=50):
+    """Yule-Walker fit of the two-process VAR behind parametric spectral GC.
+
+    As ``nitime.analysis.granger.fit_model`` (Whittle's LWR recursion; with
+    ``order=None``, the lowest order at which BIC stops improving), but on the
+    Yule-Walker autocovariance: about the mean and normalised by ``T``
+    (Brockwell & Davis 1991, sec. 11.5; Luetkepohl 2005, sec. 3.3.4). Its
+    Toeplitz matrix is positive semidefinite, so the fitted model is stable;
+    nitime's ``autocov_vector`` (normalised by ``T - k``, not demeaned) need
+    not be.
+
+    ``max_order`` is the largest order tried. Returns ``(coef, ecov)`` in
+    nitime's convention, ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
+    """
+    x = x - x.mean(axis=-1, keepdims=True)
+    n_obs = x.shape[-1]
+    n_lags = (max_order if order is None else order) + 1
+    # R[k] = (1/T) sum_t x(t+k) x(t)^T: nitime's lag orientation.
+    R = np.stack([x[:, k:] @ x[:, :n_obs - k].T for k in range(n_lags)]) / n_obs
+    if order is not None:
+        return nt_alg.lwr_recursion(R)
+
+    best = None
+    for p in range(max_order + 1):
+        coef, ecov = nt_alg.lwr_recursion(R[: p + 1])
+        # nitime's criterion and arguments: (ecov, n_process, order, n_process * T).
+        crit = nt_utils.bayesian_information_criterion(ecov, 2, p, 2 * n_obs)
+        if best is not None and crit > best[0]:
+            return best[1:]
+        best = (crit, coef, ecov)
+    raise ValueError(
+        f"Model estimation order did not converge at max_order = {max_order}"
+    )
+
+
 class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsigned):
     name = "Spectral Granger causality"
     identifier = "sgc"
@@ -872,7 +1085,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         ignore_nan=True,
         nan_threshold=0.5,
     ):
-        self._fs = fs  # Not yet implemented
+        self._fs = fs  # Reaches the multitaper estimate and the frequency labels.
         self._fmin = fmin
         self._fmax = fmax
         self.ignore_nan = ignore_nan
@@ -941,29 +1154,26 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                 F, freq = super()._get_cache(data)
             else:
                 z = data.to_numpy(squeeze=True)
-                # 1/fs, not 1. `fs` is in this SPI's identifier and in its
-                # cache key, but the parametric branch hard-coded a unit
-                # sampling interval, so `GA.frequencies` came back in units of
-                # 1/1 whatever `fs` said and the [fmin, fmax] band was applied
-                # on the wrong axis. Two SPIs differing only in `fs` therefore
-                # advertised different sampling rates and computed the same
-                # numbers. No effect at the shipped fs=1.
-                time_series = ts.TimeSeries(z, sampling_interval=1.0 / self._fs)
-                GA = nta.GrangerAnalyzer(
-                    time_series, order=self._order, max_order=self._max_order
-                )
-
-                triu_id = np.triu_indices(data.n_processes)
-
+                n_proc = data.n_processes
+                # F[source, target, f]. nitime's `granger_causality_xy(...)`
+                # returns (w, f_x_on_y, f_y_on_x, ...) for the pair (x, y) =
+                # (z[i], z[j]), i.e. i -> j and then j -> i.
+                F = np.full((n_proc, n_proc, _GC_N_FREQS // 2 + 1), np.nan)
+                # freqz's grid, which granger_causality_xy returns as `w`.
+                w = np.linspace(0, np.pi, _GC_N_FREQS // 2 + 1, endpoint=False)
                 try:
-                    causality_xy = GA.causality_xy
-                    causality_yx = GA.causality_yx
+                    for i in range(n_proc):
+                        for j in range(i + 1, n_proc):
+                            coef, ecov = _fit_bivariate_var(
+                                z[[i, j]], self._order, self._max_order)
+                            w, F[i, j], F[j, i], _, _ = nt_alg.granger_causality_xy(
+                                coef, ecov, n_freqs=_GC_N_FREQS)
                 except ValueError as err:
-                    # nitime's order search walks the lag up to `max_order` and
+                    # The order search walks the lag up to `max_order` and
                     # raises if the information criterion never turns over.
                     # That is the signature of over-fitting at this record
-                    # length, not of a transient numerical problem, and its own
-                    # message ("Model estimation order did not converge at
+                    # length, not of a transient numerical problem, and the
+                    # bare message ("Model estimation order did not converge at
                     # max_order = 50") says nothing about the data. Relaying it
                     # as an all-NaN return buried the cause under pyspi's
                     # generic "returned no finite off-diagonal values".
@@ -981,16 +1191,10 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                         f"or use a longer series."
                     ) from err
 
-                F = np.full(causality_xy.shape, np.nan)
-                F[triu_id[0], triu_id[1], :] = causality_xy[
-                    triu_id[0], triu_id[1], :
-                ]
-                F[triu_id[1], triu_id[0], :] = causality_yx[
-                    triu_id[0], triu_id[1], :
-                ]
-
                 F = np.transpose(np.expand_dims(F, axis=3), axes=[3, 2, 1, 0])
-                freq = GA.frequencies
+                # The frequencies the model was evaluated at, in Hz (`w` is
+                # scipy.signal.freqz's grid, k*pi/513 rad on [0, pi)).
+                freq = w * self._fs / (2 * np.pi)
             try:
                 data.spectral_gc[key] = {"freq": freq, "F": F}
             except AttributeError:
@@ -1002,7 +1206,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     def multivariate(self, data):
         try:
             cache, freq = self._get_cache(data)
-            freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
+            freq_id = np.flatnonzero(_closed_band(freq, self._fmin, self._fmax))
 
             result = _to_source_target(self, self._statfn(cache[0, freq_id, :, :], axis=0))
 
