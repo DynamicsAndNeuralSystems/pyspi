@@ -23,9 +23,11 @@ license-files = ["LICENSE.txt", "pyspi/lib/LICENSE-cdt.txt",
 requires-python = ">=3.11"
 authors = [
     { name = "Oliver M. Cliff", email = "oliver.m.cliff@gmail.com" },
+    { name = "Will R. Edibam", email = "will.edibam@sydney.edu.au" },
 ]
 maintainers = [
     { name = "Joshua B. Moore", email = "joshua.moore@sydney.edu.au" },
+    { name = "Will R. Edibam", email = "will.edibam@sydney.edu.au" },
 ]
 classifiers = [
     "Programming Language :: Python",
