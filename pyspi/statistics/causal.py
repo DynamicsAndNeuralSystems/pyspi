@@ -558,6 +558,12 @@ class ConvergentCrossMapping(Directed, Signed):
     both directions (Sugihara et al. use the library variable's own), so the
     two directions are computed on manifolds of the same dimension.
 
+    The "i drives j" reading holds for deterministic dynamics. Under
+    stochastic lagged coupling it can reverse: if x drives y with a delay,
+    x's delay vector predicts y, so the skill appears in the y -> x cell. On
+    such data compare ``LaggedConvergentCrossMapping``'s ``tp`` in the two
+    cells instead.
+
     ``bivariate`` reads the cached table when the Data has one and otherwise
     computes the pair alone. See ``LaggedConvergentCrossMapping`` for the
     time-delayed variant of Ye et al. (2015).
@@ -704,6 +710,10 @@ class LaggedConvergentCrossMapping(Directed, Signed):
       estimates ``d`` only roughly (the peak flattens for larger E). For an
       unlinked pair the argmax is noise, so read ``tp`` together with
       ``skill`` or ``ccm_*_convergence``. Ties go to the most negative Tp.
+      Under noisy lagged coupling the reverse cell's ``tp`` is unreliable,
+      and a hidden common driver makes both cells negative, so compare
+      ``A[i, j]`` with ``A[j, i]`` (the more negative marks the driving
+      direction) rather than reading the sign of one cell.
     * ``skill``: ``max over Tp of rho_ij(Tp)``, signed like ``ccm``.
 
     Unlike ``ccm``, which evaluates every library size at ``Tp = 0``, ``lccm``
