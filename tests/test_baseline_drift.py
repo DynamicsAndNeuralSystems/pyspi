@@ -17,7 +17,8 @@ What is also ENFORCED:
     hard-fail this test.
 
 Baselines live in ``tests/data/baselines/<dataset>.npz`` (one MxM array per
-SPI identifier) and are regenerated from the *current* fork by
+SPI identifier), plus optional ``<dataset>.<name>.npz`` files that hold the
+SPIs of one added family and are merged on load. They are regenerated from the *current* fork by
 ``tests/tools/generate_benchmark_tables.py``. They are a forward-looking
 change detector, not an independent oracle: the fork deliberately rewrote the
 information-theoretic estimators, so upstream pyspi 2.0.1 values are the wrong
@@ -31,6 +32,7 @@ are test inputs, not shipped demo data) and are built by
 — VAR(1) at M=3, coupled map lattice at M=5, Kuramoto at M=7, all T=100 — so the
 SPI set is exercised across a range of M.
 """
+import glob
 import os
 
 import sys
@@ -151,6 +153,30 @@ def _baseline_path(dataset_name):
     return os.path.join(BASELINE_DIR, f"{dataset_name}.npz")
 
 
+def _baseline_paths(dataset_name):
+    """The dataset's main archive followed by its ``<dataset>.<name>.npz`` files."""
+    extra = sorted(glob.glob(os.path.join(BASELINE_DIR, f"{dataset_name}.*.npz")))
+    return [_baseline_path(dataset_name)] + extra
+
+
+def _read_baselines(dataset_name, load):
+    """Merge ``load(archive, key)`` over every archive of a dataset.
+
+    A key stored in two archives raises, so an SPI's baseline has one source.
+    """
+    merged, origin = {}, {}
+    for path in _baseline_paths(dataset_name):
+        with np.load(path) as archive:
+            for k in archive.files:
+                if k.startswith("__"):
+                    continue
+                if k in merged:
+                    raise ValueError(
+                        f"{k} is stored in both {origin[k]} and {path}")
+                merged[k], origin[k] = load(archive, k), path
+    return merged
+
+
 def _load_fixture(dataset_name):
     """Load a frozen fixture; stored (observations, processes) -> 'sp'.
 
@@ -169,8 +195,7 @@ def _baseline_keys(dataset_name):
     or corrupt baseline must never break collection of unrelated tests.
     """
     try:
-        with np.load(_baseline_path(dataset_name)) as archive:
-            return sorted(k for k in archive.files if not k.startswith("__"))
+        return sorted(_read_baselines(dataset_name, lambda archive, k: None))
     except Exception:
         return None
 
@@ -208,10 +233,8 @@ def baseline_tables():
 
     def get(dataset_name):
         if dataset_name not in cache:
-            with np.load(_baseline_path(dataset_name)) as archive:
-                cache[dataset_name] = {
-                    k: archive[k] for k in archive.files if not k.startswith("__")
-                }
+            cache[dataset_name] = _read_baselines(
+                dataset_name, lambda archive, k: archive[k])
         return cache[dataset_name]
 
     return get

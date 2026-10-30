@@ -1,9 +1,10 @@
 """Regenerate the baseline SPI tables used by ``tests/test_baseline_drift.py``.
 
 For each frozen test fixture in ``tests/data/fixtures/`` this runs the full
-Calculator (all 317 SPIs)
-once and stores the resulting MxM matrix per SPI in a single compressed
-``.npz`` file under ``tests/data/baselines/``.
+Calculator once and stores the resulting MxM matrix per SPI in a compressed
+``.npz`` file under ``tests/data/baselines/``. With ``--spis`` and ``--name``
+it writes only the matching SPIs to ``<dataset>.<name>.npz``, the separate
+archive for an added family that the drift test merges with the main one.
 
 Why a single pass rather than repeated trials
 ---------------------------------------------
@@ -23,8 +24,10 @@ Usage
     python tests/tools/generate_benchmark_tables.py                # all three
     python tests/tools/generate_benchmark_tables.py -d cml_M5_T100
     python tests/tools/generate_benchmark_tables.py --out /tmp/baselines
+    python tests/tools/generate_benchmark_tables.py --spis 'xi_*' --name xi
 """
 import argparse
+import fnmatch
 import json
 import os
 import platform
@@ -163,13 +166,30 @@ def main():
         "-s", "--seed", type=int, default=42,
         help="Global numpy seed set once before compute (default: 42).",
     )
+    parser.add_argument(
+        "--spis", default=None,
+        help="Comma-separated glob patterns; keep only matching SPIs.",
+    )
+    parser.add_argument(
+        "--name", default=None,
+        help="Write <dataset>.<name>.npz instead of <dataset>.npz (needs --spis).",
+    )
     args = parser.parse_args()
+    if bool(args.spis) != bool(args.name):
+        parser.error("--spis and --name go together")
+    patterns = args.spis.split(",") if args.spis else None
 
     names = DATASETS if args.dataset == "all" else (args.dataset,)
     for name in names:
         t0 = time.time()
         tables = build_tables(name, config=args.config, seed=args.seed)
-        path = os.path.join(args.out, f"{name}.npz")
+        if patterns:
+            tables = {k: v for k, v in tables.items()
+                      if any(fnmatch.fnmatchcase(k, p) for p in patterns)}
+            if not tables:
+                raise SystemExit(f"[{name}] no SPI matches {args.spis}")
+        stem = f"{name}.{args.name}" if args.name else name
+        path = os.path.join(args.out, f"{stem}.npz")
         write_npz(tables, path, name, args.config, args.seed)
         size_kb = os.path.getsize(path) / 1024
         print(f"[{name}] {len(tables)} SPIs -> {path} "
