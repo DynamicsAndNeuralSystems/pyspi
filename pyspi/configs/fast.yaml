@@ -1345,3 +1345,29 @@
     dependencies:
     configs:
       - order: bic
+
+  # Conditional partial directed coherence and squared partial coherence from the
+  # same VAR as cgc_* (Baccala & Sameshima 2001; Dahlhaus 2000)
+  ConditionalPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+  PartialCoherence:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M12
+    dependencies:
+    configs:
+      - order: bic

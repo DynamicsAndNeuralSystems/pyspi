@@ -15,14 +15,21 @@ Conventions:
 * The residual covariance divides by the number of fitted samples
   ``N = T - p`` (the maximum-likelihood estimate, ``statsmodels``'
   ``sigma_u_mle``), not by the residual degrees of freedom.
+
+Two families read the fit: :class:`ConditionalGrangerCausality` (``cgc_*``)
+and the conditional spectral measures (:class:`ConditionalSpectral`:
+``cpdc_*``, ``cgpdc_*``, ``cddtf_*``, ``pcohmag_*``), evaluated on a grid of
+frequencies in cycles per sample.
 """
 
 import warnings
 
 import numpy as np
 
-from pyspi.base import Directed, Unsigned, parse_bivariate, parse_multivariate
-from pyspi.utils import require_int
+from pyspi.base import (Directed, Undirected, Unsigned, parse_bivariate,
+                        parse_multivariate)
+from pyspi.statistics.spectral import _closed_band
+from pyspi.utils import fmt_param, require_int
 
 DEFAULT_MAX_ORDER = 10
 
@@ -362,3 +369,352 @@ class ConditionalGrangerCausality(Directed, Unsigned):
                 f'and set to NaN.'
             )
         return A
+
+
+# ---------------------------------------------------------------------------
+# Conditional spectral measures: PDC, gPDC, dDTF and partial coherence of the
+# same VAR of all processes.
+# ---------------------------------------------------------------------------
+
+DEFAULT_NFREQ = 256
+
+
+def frequency_grid(nfreq=DEFAULT_NFREQ):
+    """``nfreq`` evenly spaced frequencies over [0, 0.5] cycles per sample, both ends included."""
+    return np.linspace(0.0, 0.5, require_int("nfreq", nfreq, minimum=2))
+
+
+def var_frequency_response(coef, freq):
+    """``A(f) = I - sum_k A_k exp(-2 pi i f k)`` at each frequency in ``freq``.
+
+    ``coef`` is a fit's ``(p, M, M)`` lag tensor (``coef[k - 1, j, i]``:
+    target ``j``, source ``i``). Returns an ``(F, M, M)`` complex array indexed
+    ``[f, target, source]``: the Fourier transform of the VAR's lag
+    polynomial. Its inverse is the transfer function ``H(f)``, and the model's
+    spectral matrix is ``S(f) = H Sigma H^H``.
+    """
+    coef = np.asarray(coef, dtype=float)
+    p, M, _ = coef.shape
+    phase = np.exp(-2j * np.pi * np.outer(freq, np.arange(1, p + 1)))  # (F, p)
+    return np.eye(M) - np.einsum("fk,kji->fji", phase, coef)
+
+
+def full_frequency_dtf(H):
+    """Full-frequency DTF of a transfer function ``H[f, target, source]`` (Korzeniewska et al. 2003).
+
+    ``eta_ij(f) = |H_ij(f)| / sqrt(sum_f sum_k |H_ik(f)|^2)``, target ``i``,
+    source ``j``: each target's inflow normalised over every source and every
+    frequency of the grid, so ``sum_f sum_j eta_ij(f)^2 = 1``. Same layout as
+    ``H``.
+    """
+    power = np.abs(H) ** 2
+    return np.sqrt(power / power.sum(axis=(0, 2), keepdims=True))
+
+
+def _innovation_precision(fit):
+    """``Sigma^{-1}``, refusing a residual covariance that has none."""
+    sigma = fit["sigma"]
+    eig = np.linalg.eigvalsh(sigma)
+    if not (eig[-1] > 0 and eig[0] > eig[-1] * _SINGULAR_RCOND):
+        raise ValueError(
+            f"The VAR({fit['order']}) residual covariance is singular "
+            f"(eigenvalues {eig[0]:.3g} to {eig[-1]:.3g}): the processes are "
+            f"linearly dependent, so the inverse spectral matrix, the partial "
+            f"coherence and dDTF are undefined."
+        )
+    return np.linalg.inv(sigma)
+
+
+def conditional_spectrum(fit, measure, nfreq=DEFAULT_NFREQ):
+    """One conditional spectral measure of a VAR fit at every frequency of the grid.
+
+    ``measure`` is ``"pdc"`` (``|pi|^2``), ``"gpdc"`` (generalised,
+    ``|pi^g|^2``), ``"pcoh"`` (squared partial coherence ``|P|^2``) or
+    ``"ddtf"`` (``eta |P|``); see :class:`ConditionalSpectral` for the
+    definitions. Returns an ``(nfreq, M, M)`` read-only array indexed
+    ``[f, source, target]`` (pyspi's row = source), diagonal included, on
+    ``frequency_grid(nfreq)``. It is computed once and kept on the fit.
+    """
+    store = fit.setdefault("spectra", {})
+    key = (measure, int(nfreq))
+    if key in store:
+        return store[key]
+    freq = frequency_grid(nfreq)
+    # Every array below is [f, target, source], the literature's layout, until
+    # the last step.
+    if measure in ("pdc", "gpdc"):
+        power = np.abs(var_frequency_response(fit["coef"], freq)) ** 2
+        if measure == "gpdc":
+            variance = np.diag(fit["sigma"]).copy()
+            if not np.all(variance > 0):
+                raise ValueError(
+                    "gPDC is undefined: a process has zero innovation variance "
+                    "(it is predicted exactly by the VAR).")
+            power = power / variance[:, None]       # 1 / sigma_k^2 on target k
+        with np.errstate(divide="ignore", invalid="ignore"):
+            spec = power / power.sum(axis=-2, keepdims=True)    # over targets
+    elif measure == "pcoh":
+        # S^{-1} = A^H Sigma^{-1} A, since S = H Sigma H^H and H = A^{-1}.
+        # Made exactly Hermitian so that |P_ij| == |P_ji| exactly.
+        A = var_frequency_response(fit["coef"], freq)
+        Q = np.conj(np.swapaxes(A, -1, -2)) @ _innovation_precision(fit) @ A
+        Q = 0.5 * (Q + np.conj(np.swapaxes(Q, -1, -2)))
+        q = np.real(np.diagonal(Q, axis1=-2, axis2=-1))
+        spec = np.abs(Q) ** 2 / (q[..., :, None] * q[..., None, :])
+    elif measure == "ddtf":
+        H = np.linalg.inv(var_frequency_response(fit["coef"], freq))
+        pcoh = np.swapaxes(conditional_spectrum(fit, "pcoh", nfreq), -1, -2)
+        spec = full_frequency_dtf(H) * np.sqrt(pcoh)
+    else:
+        raise ValueError(f"Unknown conditional spectral measure {measure!r}.")
+    spec = np.ascontiguousarray(np.swapaxes(spec, -1, -2))   # [f, source, target]
+    spec.setflags(write=False)
+    store[key] = spec
+    return spec
+
+
+def _parse_order(order, max_order):
+    """``(order, max_order)`` validated as :class:`ConditionalGrangerCausality` does."""
+    if isinstance(order, str):
+        if order != "bic":
+            raise ValueError(f"order must be a positive int or 'bic', got {order!r}.")
+        return order, require_int(
+            "max_order", DEFAULT_MAX_ORDER if max_order is None else max_order,
+            minimum=1)
+    order = require_int("order", order, minimum=1)
+    if max_order is not None:
+        raise ValueError(
+            f"max_order={max_order!r} is only used by order='bic'; with "
+            f"a fixed order={order} there is nothing to select.")
+    return order, None
+
+
+def _band_edge(name, value):
+    if isinstance(value, bool) or not isinstance(value, (int, float, np.integer,
+                                                          np.floating)):
+        raise TypeError(f"{name} must be a number in [0, 0.5], got {value!r}.")
+    # An int stays an int, so the identifier reads fmin-0 rather than fmin-0-0.
+    value = int(value) if isinstance(value, (int, np.integer)) else float(value)
+    if not 0 <= value <= 0.5:
+        raise ValueError(
+            f"{name}={value!r} is outside [0, 0.5] cycles per sample.")
+    return value
+
+
+class ConditionalSpectral(Unsigned):
+    """Conditional (M-variate, parametric) spectral measures from one VAR of all processes.
+
+    Base class of ``cpdc_*``, ``cgpdc_*``, ``cddtf_*`` and ``pcohmag_*``. Each
+    is read off the same OLS VAR(p) with intercept that ``cgc_*`` fits to all
+    ``M`` processes. With ``A_k`` the lag-``k`` coefficient matrix (row = target,
+    column = source) and ``Sigma`` the residual covariance, on a grid of
+    ``nfreq`` frequencies ``f`` evenly spaced over [0, 0.5] cycles per sample,
+
+        A(f) = I - sum_k A_k exp(-2 pi i f k),   H(f) = A(f)^{-1},
+        S(f) = H(f) Sigma H(f)^H,                S(f)^{-1} = A(f)^H Sigma^{-1} A(f).
+
+    In the literature's ``[target i, source j]`` notation:
+
+    * PDC (``cpdc``; Baccalá & Sameshima 2001):
+      ``|pi_ij(f)|^2 = |A_ij(f)|^2 / sum_k |A_kj(f)|^2``, source ``j``'s outflow
+      normalised over every target ``k`` (itself included), so
+      ``sum_i |pi_ij(f)|^2 = 1`` at every frequency.
+    * gPDC (``cgpdc``; Baccalá, Sameshima & Takahashi 2007): the same with each
+      target weighted by its innovation variance ``sigma_k^2 = Sigma_kk``,
+      ``|A_ij|^2 / sigma_i^2 / sum_k (|A_kj|^2 / sigma_k^2)``: unlike PDC,
+      unchanged by rescaling any one process.
+    * Partial coherence (``pcohmag``; Dahlhaus 2000):
+      ``|P_ij(f)|^2 = |Q_ij|^2 / (Q_ii Q_jj)`` with ``Q = S(f)^{-1}``, the
+      coherence of ``i`` and ``j`` once the linear influence of every other
+      process, at all lags, is removed from both. Symmetric.
+    * dDTF (``cddtf``; Korzeniewska et al. 2003):
+      ``eta_ij(f) |P_ij(f)|``, the full-frequency DTF
+      ``eta_ij(f) = |H_ij(f)| / sqrt(sum_f sum_k |H_ik(f)|^2)`` (target ``i``'s
+      inflow normalised over every source and every grid frequency) gated by
+      the partial coherence, so that only direct paths survive.
+
+    Scale: ``cpdc``, ``cgpdc`` and ``pcohmag`` report squared magnitudes
+    (``|pi|^2``, ``|P|^2``), as ``pdcoh_*``, ``gpdcoh_*`` and ``cohmag_*`` do;
+    ``cddtf`` reports the magnitude ``eta |P|``, as ``ddtf_*`` does. All lie in
+    [0, 1]. ``eta`` is normalised by a sum over the grid, so dDTF scales like
+    ``1 / sqrt(nfreq)`` and is comparable only at a fixed ``nfreq``.
+
+    Band statistic: ``statistic="mean"`` or ``"max"`` of the spectrum over the
+    grid frequencies in the closed band ``fmin <= f <= fmax``.
+
+    Direction: row = source, column = target, so ``A[i, j]`` is ``i -> j``
+    (the transpose of the literature's ``[target, source]``). The diagonal is
+    NaN.
+
+    Unlike the bivariate ``pdcoh_*``, ``dtf_*`` and ``ddtf_*``, these condition
+    on every other process: PDC is zero at all frequencies exactly when there
+    is no direct link ``i -> j`` (the same null as ``cgc_*``), and dDTF and
+    the partial coherence are near zero for a link only through other
+    processes.
+
+    Model order: as ``cgc_*`` (``order`` a positive int or ``"bic"``,
+    ``max_order`` only with ``"bic"``), whose cached fit these share.
+
+    Parameters:
+        order (int or "bic"): VAR model order, default "bic".
+        max_order (int, optional): largest order ``"bic"`` considers,
+            default 10 (identifier ``_pmax-<n>`` when not the default).
+        statistic ("mean" or "max"): band statistic, default "mean".
+        fmin, fmax (float): band edges in cycles per sample,
+            ``0 <= fmin <= fmax <= 0.5``; default the full band [0, 0.5]. The
+            band must hold at least one grid frequency.
+        nfreq (int): number of grid frequencies over [0, 0.5], default 256
+            (identifier ``_nf-<n>`` when not the default).
+
+    Identifiers: ``<stem>_p-<order>_<statistic>_fmin-<fmin>_fmax-<fmax>``
+    with ``.`` written ``-`` (``cpdc_p-bic_mean_fmin-0_fmax-0-5``).
+
+    References:
+        Baccalá, L. A. & Sameshima, K. (2001). Partial directed coherence: a
+        new concept in neural structure determination. *Biol. Cybern.* 84,
+        463-474.
+
+        Baccalá, L. A., Sameshima, K. & Takahashi, D. Y. (2007). Generalized
+        partial directed coherence. *15th Int. Conf. Digital Signal
+        Processing*, 163-166.
+
+        Korzeniewska, A., Mańczak, M., Kamiński, M., Blinowska, K. J. &
+        Kasicki, S. (2003). Determination of information flow direction among
+        brain structures by a modified directed transfer function (dDTF)
+        method. *J. Neurosci. Methods* 125, 195-207.
+
+        Dahlhaus, R. (2000). Graphical interaction models for multivariate
+        time series. *Metrika* 51, 157-172.
+    """
+
+    # One fit per (order, max_order), shared with cgc_* in data.var.
+    _cache_namespace = "var"
+    # Set by each subclass: the `conditional_spectrum` measure it reports.
+    _measure = None
+    _from_cache = ConditionalGrangerCausality._from_cache
+
+    @property
+    def _cache_subkey(self):
+        return (self._order, self._max_order)
+
+    def __init__(self, order="bic", max_order=None, statistic="mean", fmin=0,
+                 fmax=0.5, nfreq=DEFAULT_NFREQ):
+        self._order, self._max_order = _parse_order(order, max_order)
+        if statistic not in ("mean", "max"):
+            raise ValueError(f"statistic must be 'mean' or 'max', got {statistic!r}.")
+        self._statistic = statistic
+        self._statfn = np.mean if statistic == "mean" else np.max
+        self._nfreq = require_int("nfreq", nfreq, minimum=2)
+        fmin, fmax = _band_edge("fmin", fmin), _band_edge("fmax", fmax)
+        if fmin > fmax:
+            raise ValueError(f"fmin={fmin!r} is above fmax={fmax!r}.")
+        self._fmin, self._fmax = fmin, fmax
+        grid = frequency_grid(self._nfreq)
+        self._band = np.flatnonzero(_closed_band(grid, fmin, fmax))
+        if self._band.size == 0:
+            raise ValueError(
+                f"The band [{fmin}, {fmax}] holds no frequency of the "
+                f"{self._nfreq}-point grid (step {grid[1]:.4g}); widen it or "
+                f"raise nfreq.")
+
+        identifier = f"{self.identifier}_p-{self._order}"
+        if self._order == "bic" and self._max_order != DEFAULT_MAX_ORDER:
+            identifier += f"_pmax-{self._max_order}"
+        identifier += (f"_{statistic}_fmin-{fmt_param(fmin)}"
+                       f"_fmax-{fmt_param(fmax)}").replace(".", "-")
+        if self._nfreq != DEFAULT_NFREQ:
+            identifier += f"_nf-{self._nfreq}"
+        self.identifier = identifier
+
+    @parse_multivariate
+    def spectrum(self, data):
+        """``(freq, S)``: the measure at every grid frequency, before the band statistic.
+
+        ``S`` is ``(nfreq, M, M)``, indexed ``[f, source, target]`` with the
+        diagonal included; it is the cached array, read-only.
+        """
+        fit = self._from_cache(data)
+        return (frequency_grid(self._nfreq),
+                conditional_spectrum(fit, self._measure, self._nfreq))
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        if i == j:
+            return np.nan
+        _, spec = self.spectrum(data)
+        return float(self._statfn(spec[self._band, i, j]))
+
+    @parse_multivariate
+    def multivariate(self, data):
+        _, spec = self.spectrum(data)
+        A = np.array(self._statfn(spec[self._band], axis=0), dtype=float)
+        np.fill_diagonal(A, np.nan)
+        return A
+
+
+class ConditionalPartialDirectedCoherence(ConditionalSpectral, Directed):
+    """Partial directed coherence of a VAR of all processes, ``cpdc_*`` (Baccalá & Sameshima 2001).
+
+    ``cpdc[i, j]`` (source ``i``, target ``j``) is the band statistic of
+    ``|A_ji(f)|^2 / sum_k |A_ki(f)|^2``, the share of source ``i``'s outflow
+    ``A(f)[:, i]`` that goes directly to ``j``. Zero at every frequency
+    exactly when ``j``'s equation has no lag of ``i``. See
+    :class:`ConditionalSpectral` for the common definitions and parameters.
+    """
+
+    name = "Conditional partial directed coherence"
+    identifier = "cpdc"
+    labels = ["spectral", "directed", "linear", "unsigned", "multivariate"]
+    _measure = "pdc"
+
+
+class ConditionalGeneralizedPartialDirectedCoherence(ConditionalSpectral, Directed):
+    """Generalised PDC of a VAR of all processes, ``cgpdc_*`` (Baccalá, Sameshima & Takahashi 2007).
+
+    ``cgpdc[i, j]`` is the band statistic of
+    ``(|A_ji(f)|^2 / sigma_j^2) / sum_k (|A_ki(f)|^2 / sigma_k^2)``, PDC with
+    each target weighted by its innovation variance ``sigma_k^2 = Sigma_kk``,
+    which makes it invariant to rescaling any one process. See
+    :class:`ConditionalSpectral`.
+    """
+
+    name = "Conditional generalized partial directed coherence"
+    identifier = "cgpdc"
+    labels = ["spectral", "directed", "linear", "unsigned", "multivariate"]
+    _measure = "gpdc"
+
+
+class ConditionalDirectDirectedTransferFunction(ConditionalSpectral, Directed):
+    """Direct directed transfer function of a VAR of all processes, ``cddtf_*`` (Korzeniewska et al. 2003).
+
+    ``cddtf[i, j]`` is the band statistic of ``eta_ji(f) |P_ji(f)|``: the
+    full-frequency DTF from ``i`` into ``j``, ``|H_ji(f)|`` normalised by
+    ``sqrt(sum_f sum_k |H_jk(f)|^2)`` over the whole grid, times the partial
+    coherence of ``i`` and ``j`` given every other process. See
+    :class:`ConditionalSpectral` (and its note on the ``1 / sqrt(nfreq)``
+    scale).
+    """
+
+    name = "Conditional direct directed transfer function"
+    identifier = "cddtf"
+    labels = ["spectral", "directed", "linear", "unsigned", "multivariate"]
+    _measure = "ddtf"
+
+
+class PartialCoherence(ConditionalSpectral, Undirected):
+    """Squared partial coherence of a VAR of all processes, ``pcohmag_*`` (Dahlhaus 2000).
+
+    ``pcohmag[i, j]`` is the band statistic of
+    ``|Q_ij(f)|^2 / (Q_ii(f) Q_jj(f))``, ``Q = S(f)^{-1}`` the inverse of the
+    VAR's spectral matrix: the squared coherence of ``i`` and ``j`` after the
+    linear influence of all other processes (past, present and future) is
+    removed from both. Symmetric and in [0, 1]. Zero at every frequency
+    exactly when ``i`` and ``j`` are conditionally independent given the
+    rest, an absent edge of Dahlhaus' partial correlation graph. See
+    :class:`ConditionalSpectral`.
+    """
+
+    name = "Partial coherence"
+    identifier = "pcohmag"
+    labels = ["spectral", "undirected", "linear", "unsigned", "multivariate"]
+    _measure = "pcoh"

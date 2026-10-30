@@ -1581,3 +1581,91 @@
         statistic: coef
         labels:
           - signed
+
+  # Conditional partial directed coherence from the same VAR as cgc_*
+  # (Baccala & Sameshima 2001)
+  ConditionalPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
+
+  # Conditional generalised PDC, each target weighted by its innovation variance
+  # (Baccala, Sameshima & Takahashi 2007)
+  ConditionalGeneralizedPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
+
+  # Conditional direct DTF: full-frequency DTF times the partial coherence
+  # (Korzeniewska et al. 2003)
+  ConditionalDirectDirectedTransferFunction:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
+
+  # Squared partial coherence given all other processes, from the same VAR
+  # (Dahlhaus 2000)
+  PartialCoherence:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M12
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
