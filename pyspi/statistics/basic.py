@@ -246,16 +246,35 @@ class CrossCorrelation(Undirected, Signed):
             raise TypeError(f"Unknown statistic: {self._statistic}")
 
 
-def _first_nonpositive_acf_lag(x, L):
-    """First lag ``k`` in ``1 .. L`` at which the sample ACF of ``x`` is <= 0.
+def _acf_1e_length(data, p):
+    """First lag ``k >= 1`` at which the sample ACF of process ``p`` is below 1/e.
 
     ``pyspi.utils.acf`` is the biased (divide-by-T) sample autocorrelation of
-    the demeaned series, ``acf[0] = 1``. If it stays positive out to ``L`` the
-    result is ``L``: the lag is capped at the window and is at least 1.
+    the demeaned series. The search runs out to ``T // 4``; if the ACF stays at
+    or above 1/e that far the length is ``inf``. Cached per process in
+    ``data.acf_1e``, so each series' ACF is computed once.
     """
-    rho = acf(np.asarray(x, dtype=float))[1:L + 1]
-    hits = np.flatnonzero(rho <= 0)
-    return int(hits[0]) + 1 if hits.size else int(L)
+    try:
+        return data.acf_1e[p]
+    except (KeyError, AttributeError):
+        pass
+    T = data.n_observations
+    x = np.asarray(data.to_numpy(squeeze=True)[p], dtype=float)
+    rho = acf(x)[1:T // _XCORR_MAX_LAG_FRACTION + 1]
+    hits = np.flatnonzero(rho < np.exp(-1))
+    length = float(hits[0] + 1) if hits.size else np.inf
+    try:
+        data.acf_1e[p] = length
+    except AttributeError:
+        data.acf_1e = {p: length}
+    return length
+
+
+def _round_to_lag(v, cap):
+    """``v`` rounded half up to an integer lag in ``1 .. cap`` (``inf`` -> ``cap``)."""
+    if not np.isfinite(v):
+        return cap
+    return int(min(max(np.floor(v + 0.5), 1), cap))
 
 
 class LagResolvedCorrelation(Directed, Signed):
@@ -277,9 +296,22 @@ class LagResolvedCorrelation(Directed, Signed):
     estimator, as in ``CrossCorrelation``), so ``|r| <= 1`` and a pure delay of
     ``d`` samples gives ``1 - d/T`` at its lag.
 
-    All statistics use the window ``L = min(max_lag, T // 4)`` (``max_lag=None``
-    is the full cached window ``T // 4``). ``A[i, j]`` is row ``i`` (source) to
-    column ``j`` (target):
+    **Window.** All statistics use the lags ``-L .. L`` with
+    ``L = min(max_lag, T // 4)`` (``max_lag=None`` is the full cached window
+    ``T // 4``).
+
+    **Correlation length.** ``l_i`` is the first lag ``k >= 1`` at which the
+    sample autocorrelation of ``x_i`` (``pyspi.utils.acf``, biased) falls below
+    ``1/e`` -- hctsa's ``CO_f1ecac`` on the integer lags -- searched out to
+    ``T // 4``. A process whose autocorrelation stays at or above ``1/e`` that
+    far has an unbounded length. The adaptive statistics below set one lag or
+    window per pair from ``l_i`` and ``l_j`` and clip it to ``1 .. C`` with
+    ``C = max(1, min(T // 10, L))``, so an unbounded length gives ``C``. The
+    lag follows the pair's correlation times, so it adapts to the sampling
+    rate: sampling the same system more finely lengthens it in samples and
+    leaves it about the same in time.
+
+    ``A[i, j]`` is row ``i`` (source) to column ``j`` (target):
 
     ``lag``
         ``l* = argmax_{l in -L..L} |r_{i->j}(l)|``, the signed lag of the
@@ -293,10 +325,19 @@ class LagResolvedCorrelation(Directed, Signed):
         ``r_{i->j}(l*)``: the signed correlation at that lag. Undirected (the
         same extremum is found from either orientation), signed.
     ``onesided``
-        ``r_{i->j}(tau)`` at one lag: directed and signed. ``tau`` is an integer
-        in ``1 .. L`` (default 1), or ``"acf"`` for a per-source lag, the first
-        lag at which the row's sample autocorrelation (``pyspi.utils.acf``,
-        biased) falls to or below zero, capped at ``L`` and at least 1.
+        ``A[i, j] = r_{i->j}(tau)`` and ``A[j, i] = r_{j->i}(tau)`` at one lag
+        ``tau`` shared by both cells of the pair: directed and signed. ``tau``
+        is an integer in ``1 .. L`` (default 1), or ``"1e"`` for the pair lag
+        ``tau_ij = round(sqrt(l_i l_j))``, the geometric mean of the two
+        correlation lengths, clipped to ``1 .. C``. The lag is one per pair
+        because lags that differ by direction report a direction on correlated
+        pairs with no directed coupling: ``|r|`` decays with the lag, so the
+        direction read at the shorter lag wins.
+    ``onesidedpeak``
+        ``max_{1 <= k <= w} |r_{i->j}(k)|``: the largest lead correlation from
+        row to column within ``w`` lags, directed and unsigned. The window
+        ``w = l_i + l_j`` (twice the pair's mean correlation length) is shared
+        by both cells and clipped to ``1 .. C``. Lag 0 is excluded.
     ``asym``
         ``(S_{i->j} - S_{j->i}) / (S_{i->j} + S_{j->i})`` with
         ``S_{i->j} = sum_{l=1..L} r_{i->j}(l)^2``: a lead/lag asymmetry index in
@@ -308,19 +349,24 @@ class LagResolvedCorrelation(Directed, Signed):
 
     Parameters
     ----------
-    statistic : {"lag", "peak", "onesided", "asym"}
+    statistic : {"lag", "peak", "onesided", "onesidedpeak", "asym"}
     max_lag : int >= 1 or None
         Upper limit on the window; ``None`` uses ``T // 4``.
-    tau : int >= 1 or "acf", only for ``statistic="onesided"`` (default 1).
+    tau : int >= 1 or "1e", only for ``statistic="onesided"`` (default 1).
 
     The identifier is ``lagcorr_<statistic>[_tau-<tau>]_L-<max_lag>``, e.g.
-    ``lagcorr_lag_L-None``, ``lagcorr_onesided_tau-acf_L-None``.
+    ``lagcorr_lag_L-None``, ``lagcorr_onesided_tau-1e_L-None``,
+    ``lagcorr_onesidedpeak_L-None``.
 
     References
     ----------
     Box, G. E. P., Jenkins, G. M., Reinsel, G. C. & Ljung, G. M. (2015). *Time
     Series Analysis: Forecasting and Control*, 5th ed. Wiley. -- the sample
     cross-correlation function.
+    Fulcher, B. D., Little, M. A. & Jones, N. S. (2013). Highly comparative
+    time-series analysis: the empirical structure of time series and their
+    methods. *J. R. Soc. Interface* 10, 20130048. -- hctsa's ``CO_f1ecac``,
+    the first 1/e crossing of the autocorrelation function.
     Mitra, A., Snyder, A. Z., Hacker, C. D. & Raichle, M. E. (2014). Lag
     structure in resting-state fMRI. *J. Neurophysiol.* 111, 2374-2391. -- the
     lag of the cross-covariance extremum, interpolated between samples.
@@ -338,8 +384,10 @@ class LagResolvedCorrelation(Directed, Signed):
         "lag": "antisymmetric",
         "peak": "undirected",
         "onesided": "directed",
+        "onesidedpeak": "directed",
         "asym": "antisymmetric",
     }
+    _UNSIGNED = ("onesidedpeak",)
 
     def __init__(self, statistic="lag", max_lag=None, tau=None):
         if statistic not in self._TRAITS:
@@ -349,7 +397,7 @@ class LagResolvedCorrelation(Directed, Signed):
         if statistic == "onesided":
             if tau is None:
                 tau = 1
-            if not (isinstance(tau, str) and tau == "acf"):
+            if not (isinstance(tau, str) and tau == "1e"):
                 tau = require_int("tau", tau, minimum=1)
         elif tau is not None:
             raise ValueError(
@@ -360,8 +408,13 @@ class LagResolvedCorrelation(Directed, Signed):
         self._max_lag = (None if max_lag is None
                          else require_int("max_lag", max_lag, minimum=1))
 
+        if statistic in self._UNSIGNED:
+            self.issigned = lambda: False
+            sign = "unsigned"
+        else:
+            sign = "signed"
         self.labels = LagResolvedCorrelation.labels + [
-            self._TRAITS[statistic], "signed"]
+            self._TRAITS[statistic], sign]
         self.identifier = f"lagcorr_{statistic}"
         if statistic == "onesided":
             self.identifier += f"_tau-{tau}"
@@ -377,22 +430,28 @@ class LagResolvedCorrelation(Directed, Signed):
                 f"at least one lag is needed.")
         return L
 
-    def _tau_of(self, data, L):
-        """The ``onesided`` lag of each source process, as a function."""
-        if self._tau == "acf":
-            Z = data.to_numpy(squeeze=True)
-            taus = {}
+    def _pair_lag(self, data, L):
+        """The pair's ``onesided`` lag or ``onesidedpeak`` window, ``f(i, j)``.
 
-            def tau_of(p):
-                if p not in taus:
-                    taus[p] = _first_nonpositive_acf_lag(Z[p], L)
-                return taus[p]
-            return tau_of
-        if self._tau is not None and self._tau > L:
-            raise ValueError(
-                f"tau = {self._tau} is outside the lag window "
-                f"L = min(max_lag, T // 4) = {L}.")
-        return lambda p: self._tau
+        ``None`` for the statistics that read the whole window.
+        """
+        stat = self._statistic
+        if stat == "onesided" and self._tau != "1e":
+            if self._tau > L:
+                raise ValueError(
+                    f"tau = {self._tau} is outside the lag window "
+                    f"L = min(max_lag, T // 4) = {L}.")
+            return lambda i, j: self._tau
+        if stat not in ("onesided", "onesidedpeak"):
+            return None
+        cap = max(1, min(data.n_observations // 10, L))
+        if stat == "onesided":
+            # Geometric mean of the two 1/e lengths.
+            return lambda i, j: _round_to_lag(
+                np.sqrt(_acf_1e_length(data, i) * _acf_1e_length(data, j)), cap)
+        # Twice the mean of the two 1/e lengths.
+        return lambda i, j: _round_to_lag(
+            _acf_1e_length(data, i) + _acf_1e_length(data, j), cap)
 
     @staticmethod
     def _lead_profile(data, i, j, L):
@@ -411,7 +470,7 @@ class LagResolvedCorrelation(Directed, Signed):
                 f"(a constant or non-finite series).")
         return d
 
-    def _pair(self, data, i, j, L, tau_of):
+    def _pair(self, data, i, j, L, pair_lag):
         """``(A[i, j], A[j, i])``, both from the one profile of the pair."""
         d = self._lead_profile(data, i, j, L)
         stat = self._statistic
@@ -435,7 +494,12 @@ class LagResolvedCorrelation(Directed, Signed):
             return (forward - backward) / total, (backward - forward) / total
         if stat == "onesided":
             # r_{j->i}(tau) = r_{i->j}(-tau)
-            return float(d[L + tau_of(i)]), float(d[L - tau_of(j)])
+            tau = pair_lag(i, j)
+            return float(d[L + tau]), float(d[L - tau])
+        if stat == "onesidedpeak":
+            w = pair_lag(i, j)
+            return (float(np.max(np.abs(d[L + 1:L + w + 1]))),   # r_{i->j}(1..w)
+                    float(np.max(np.abs(d[L - w:L]))))          # r_{j->i}(1..w)
         raise TypeError(f"Unknown statistic: {stat}")
 
     @parse_bivariate
@@ -445,7 +509,7 @@ class LagResolvedCorrelation(Directed, Signed):
         # `multivariate`, so the two agree exactly and `lag`/`asym` are
         # exactly antisymmetric and `peak` exactly symmetric.
         a, b = (i, j) if i <= j else (j, i)
-        v_ab, v_ba = self._pair(data, a, b, L, self._tau_of(data, L))
+        v_ab, v_ba = self._pair(data, a, b, L, self._pair_lag(data, L))
         return v_ab if i <= j else v_ba
 
     @parse_multivariate
@@ -454,13 +518,13 @@ class LagResolvedCorrelation(Directed, Signed):
         M = data.n_processes
         # A window or tau that cannot be met fails every pair alike: raise.
         L = self._window(data.n_observations)
-        tau_of = self._tau_of(data, L)
+        pair_lag = self._pair_lag(data, L)
         pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
         both = np.full((M, M, 2), np.nan)
         # A failing pair is NaN in both of its cells (the scalar NaN that
         # fill_pairwise stores broadcasts over the last axis).
         fill_pairwise(self.identifier, both, pairs,
-                      lambda i, j: self._pair(data, i, j, L, tau_of))
+                      lambda i, j: self._pair(data, i, j, L, pair_lag))
         A = np.full((M, M), np.nan)
         iu = np.triu_indices(M, 1)
         A[iu] = both[..., 0][iu]

@@ -2,8 +2,9 @@
 
 The statistics are recomputed here from their definitions with explicit lag
 sums -- ``r_{i->j}(tau) = sum_t x_i[t] x_j[t + tau] / (T s_i s_j)`` on the
-demeaned series, a biased sample ACF for ``tau="acf"`` -- and compared with
-``multivariate`` (the Calculator's path) and ``bivariate``. The orientation of
+demeaned series, and the first lag at which a biased sample ACF falls below 1/e
+for the adaptive lags -- and compared with ``multivariate`` (the Calculator's
+path) and ``bivariate``. The orientation of
 the lag axis is checked on a pure delay and the sign on a negatively coupled
 pair.
 """
@@ -57,7 +58,8 @@ EXPECTED_IDS = [
     "lagcorr_peak_L-None",
     "lagcorr_asym_L-None",
     "lagcorr_onesided_tau-1_L-None",
-    "lagcorr_onesided_tau-acf_L-None",
+    "lagcorr_onesided_tau-1e_L-None",
+    "lagcorr_onesidedpeak_L-None",
     "lagcorr_lag_L-10",
     "lagcorr_peak_L-10",
     "lagcorr_asym_L-10",
@@ -65,7 +67,8 @@ EXPECTED_IDS = [
 # The bundled set plus variants that exercise a short window and a longer tau.
 PARAMS = FULL_CONFIGS + [
     {"statistic": "onesided", "tau": 3},
-    {"statistic": "onesided", "tau": "acf", "max_lag": 4},
+    {"statistic": "onesided", "tau": "1e", "max_lag": 4},
+    {"statistic": "onesidedpeak", "max_lag": 3},
     {"statistic": "lag", "max_lag": 3},
     {"statistic": "asym", "max_lag": 1},
 ]
@@ -86,14 +89,24 @@ def _r_lead(a, b, tau):
     return np.sum(a[-tau:] * b[:T + tau]) / scale
 
 
-def _acf_tau(x, L):
-    """First lag in 1..L where the biased sample ACF is <= 0, else L."""
+def _length_1e(x):
+    """First lag in 1..T//4 where the biased sample ACF is below 1/e, else inf."""
+    T = len(x)
     x = x - x.mean()
     c0 = np.sum(x * x)
-    for k in range(1, L + 1):
-        if np.sum(x[:-k] * x[k:]) / c0 <= 0:
+    for k in range(1, T // 4 + 1):
+        if np.sum(x[:-k] * x[k:]) / c0 < np.exp(-1):
             return k
-    return L
+    return np.inf
+
+
+def _adaptive_lag(l_i, l_j, T, L, statistic):
+    """The pair's ``onesided`` 1e lag or ``onesidedpeak`` window, in 1..cap."""
+    cap = max(1, min(T // 10, L))
+    v = np.sqrt(l_i * l_j) if statistic == "onesided" else l_i + l_j
+    if not np.isfinite(v):
+        return cap
+    return int(min(max(np.floor(v + 0.5), 1), cap))
 
 
 def _reference(Z, statistic, max_lag=None, tau=None):
@@ -107,8 +120,12 @@ def _reference(Z, statistic, max_lag=None, tau=None):
             best = max(lags, key=lambda l: abs(r[l]))
             A[i, j] = best if statistic == "lag" else r[best]
         elif statistic == "onesided":
-            t = _acf_tau(Z[i], L) if tau == "acf" else (1 if tau is None else tau)
+            t = (_adaptive_lag(_length_1e(Z[i]), _length_1e(Z[j]), T, L, statistic)
+                 if tau == "1e" else (1 if tau is None else tau))
             A[i, j] = r[t]
+        elif statistic == "onesidedpeak":
+            w = _adaptive_lag(_length_1e(Z[i]), _length_1e(Z[j]), T, L, statistic)
+            A[i, j] = max(abs(r[k]) for k in range(1, w + 1))
         elif statistic == "asym":
             fwd = sum(r[l] ** 2 for l in range(1, L + 1))
             bwd = sum(r[-l] ** 2 for l in range(1, L + 1))
@@ -148,10 +165,12 @@ def test_reference_is_not_vacuous():
     lag = _reference(Z, "lag", max_lag=10)
     assert lag[0, 1] == 2 and lag[1, 2] == 1
     assert _reference(Z, "peak")[1, 2] < -0.3
-    acf = _reference(Z, "onesided", tau="acf")
     one = _reference(Z, "onesided", tau=1)
-    # Process 3 is AR(1) with phi = 0.7: its ACF crosses zero well after lag 1.
-    assert _acf_tau(Z[3], 40) > 1 and acf[3, 0] != one[3, 0]
+    # Process 3 is AR(1) with phi = 0.7: its ACF falls below 1/e after lag 1,
+    # so its pairs get a lag and a window longer than 1.
+    assert _length_1e(Z[3]) > 1 and _length_1e(Z[0]) == 1
+    assert _reference(Z, "onesided", tau="1e")[3, 1] != one[3, 1]
+    assert _reference(Z, "onesidedpeak")[3, 1] != abs(one[3, 1])
 
 
 # ---------------------------------------------------------------------------
@@ -256,12 +275,17 @@ def test_lag_and_asym_are_antisymmetric_and_peak_symmetric(max_lag):
 
 def test_labels_match_the_matrix_structure():
     traits = {"lag": "antisymmetric", "peak": "undirected",
-              "onesided": "directed", "asym": "antisymmetric"}
+              "onesided": "directed", "onesidedpeak": "directed",
+              "asym": "antisymmetric"}
     for stat, trait in traits.items():
-        labels = LagResolvedCorrelation(stat).labels
-        assert trait in labels and "signed" in labels and "linear" in labels
-        assert len({"antisymmetric", "undirected", "directed"} & set(labels)) == 1
-        assert LagResolvedCorrelation(stat).issigned()
+        spi = LagResolvedCorrelation(stat)
+        sign = "unsigned" if stat == "onesidedpeak" else "signed"
+        assert trait in spi.labels and sign in spi.labels and "linear" in spi.labels
+        assert len({"antisymmetric", "undirected", "directed"} & set(spi.labels)) == 1
+        assert len({"signed", "unsigned"} & set(spi.labels)) == 1
+        assert spi.issigned() == (sign == "signed")
+    # The class attribute is untouched by an unsigned instance.
+    assert LagResolvedCorrelation("onesided").issigned()
 
 
 def test_max_lag_limits_the_search():
@@ -280,55 +304,148 @@ def test_max_lag_limits_the_search():
 
 
 # ---------------------------------------------------------------------------
-# tau = "acf"
+# Adaptive lags: tau = "1e" and onesidedpeak
 # ---------------------------------------------------------------------------
 
-def test_acf_tau_is_the_first_zero_crossing_of_an_ar1():
-    """AR(1) with phi = 0.8: the lag is the sample ACF's first crossing.
-
-    The crossing is computed here from the biased ACF by explicit sums, and the
-    SPI must read the profile at exactly that lag for the row's source.
-    """
-    rng = np.random.default_rng(11)
-    T = 1200
-    src = _ar1(rng, T, 0.8)
+def _ar_pair(T=1200, seed=11):
+    """A slow AR(1) source driving a faster target at lag 1."""
+    rng = np.random.default_rng(seed)
+    src = _ar1(rng, T, 0.9)
     dst = np.zeros(T)
     dst[1:] = 0.5 * src[:-1]
-    dst += rng.standard_normal(T)
-    X = np.vstack([src, dst])
+    dst += _ar1(rng, T, 0.3)
+    return np.vstack([src, dst])
+
+
+def _seeded(X, lengths):
+    """Data whose cached 1/e lengths are ``lengths`` (exercises the pair rule)."""
+    data = _data(X)
+    data.acf_1e = dict(enumerate(lengths))
+    return data
+
+
+def test_1e_length_and_pair_lag_match_a_direct_reference():
+    """First ACF < 1/e by explicit sums, then the rounded geometric mean."""
+    X = _ar_pair()
+    T = X.shape[1]
     Z = _data(X).to_numpy(squeeze=True)
-    L = T // 4
+    data = _data(X)
+    l_src, l_dst = _length_1e(Z[0]), _length_1e(Z[1])
+    assert basic._acf_1e_length(data, 0) == l_src
+    assert basic._acf_1e_length(data, 1) == l_dst
+    # phi = 0.9 crosses near lag 10; the target is faster.
+    assert 5 < l_src < 20 and 1 <= l_dst < l_src
 
-    k = _acf_tau(Z[0], L)
-    assert 3 < k < L, k                 # non-trivial and not capped
-    assert basic._first_nonpositive_acf_lag(Z[0], L) == k
-    got = LagResolvedCorrelation("onesided", tau="acf").bivariate(
-        _data(X), i=0, j=1)
-    assert got == pytest.approx(_r_lead(Z[0], Z[1], k), abs=1e-12)
-    assert got == pytest.approx(
-        LagResolvedCorrelation("onesided", tau=k).bivariate(_data(X), i=0, j=1),
-        abs=1e-15)
-    # The column's own (white-noise-dominated) ACF sets the reverse lag.
-    k_dst = _acf_tau(Z[1], L)
-    assert k_dst != k
-    assert LagResolvedCorrelation("onesided", tau="acf").bivariate(
-        _data(X), i=1, j=0) == pytest.approx(_r_lead(Z[1], Z[0], k_dst), abs=1e-12)
+    tau = int(np.floor(np.sqrt(l_src * l_dst) + 0.5))
+    assert 1 < tau < T // 10
+    A = LagResolvedCorrelation("onesided", tau="1e").multivariate(data)
+    assert A[0, 1] == pytest.approx(_r_lead(Z[0], Z[1], tau), abs=1e-12)
+    assert A[1, 0] == pytest.approx(_r_lead(Z[1], Z[0], tau), abs=1e-12)
+    np.testing.assert_array_equal(
+        A, LagResolvedCorrelation("onesided", tau=tau).multivariate(_data(X)))
 
 
-def test_acf_tau_floor_and_cap():
-    rng = np.random.default_rng(12)
+@pytest.mark.parametrize("lengths, max_lag, want", [
+    ((1.0, 10.0), None, 3),     # sqrt(10) = 3.16 (the arithmetic mean is 5.5)
+    ((3.0, 4.0), None, 3),      # sqrt(12) = 3.46 rounds down
+    ((3.0, 5.0), None, 4),      # sqrt(15) = 3.87 rounds up
+    ((2.0, 8.0), None, 4),      # exact
+    ((40.0, 45.0), None, 20),   # clipped to T // 10
+    ((3.0, 5.0), 3, 3),         # clipped to max_lag
+    ((np.inf, 1.0), None, 20),  # no 1/e crossing: the cap, not sqrt(20 * 1)
+    ((np.inf, np.inf), 7, 7),
+])
+def test_1e_pair_lag_rounding_and_clipping(lengths, max_lag, want):
+    X = np.random.default_rng(0).standard_normal((2, 200))   # T // 10 = 20
+    Z = _data(X).to_numpy(squeeze=True)
+    spi = LagResolvedCorrelation("onesided", tau="1e", max_lag=max_lag)
+    A = spi.multivariate(_seeded(X, lengths))
+    assert A[0, 1] == pytest.approx(_r_lead(Z[0], Z[1], want), abs=1e-12)
+    assert A[1, 0] == pytest.approx(_r_lead(Z[1], Z[0], want), abs=1e-12)
+    assert spi.bivariate(_seeded(X, lengths), i=1, j=0) == A[1, 0]
+
+
+def test_1e_length_without_a_crossing_is_unbounded():
+    # A step: the ACF at lag 1 (= T // 4 for T = 7) is 0.56, above 1/e.
+    step = np.array([0, 0, 0, 1, 1, 1, 1], dtype=float)
+    assert _length_1e(step) == np.inf
+    data = _data(np.vstack([step, step[::-1] + 0.1 * np.arange(7)]))
+    assert basic._acf_1e_length(data, 0) == np.inf
+    # A white series crosses at once.
+    white = np.random.default_rng(5).standard_normal((1, 400))
+    assert basic._acf_1e_length(_data(np.vstack([white, white])), 0) == 1
+
+
+def test_1e_lag_is_shared_by_both_directions():
+    """x = u + v/4, y = v + u/4 of an independent fast u and slow v.
+
+    The pair is correlated at lag 0 with no directed coupling, and the two
+    series have different 1/e lengths. One shared lag reads |r| about equally
+    in both directions; each source's own lag would report x -> y.
+    """
+    rng = np.random.default_rng(0)
     T = 2000
-    # Negative phi: the ACF is already negative at lag 1.
-    alternating = _ar1(rng, T, -0.6)
-    assert basic._first_nonpositive_acf_lag(alternating, T // 4) == 1
-    # phi = 0.97 stays positive far beyond 5 lags: capped at L.
-    persistent = _ar1(rng, T, 0.97)
-    assert basic._first_nonpositive_acf_lag(persistent, 5) == 5
-    X = np.vstack([persistent, rng.standard_normal(T)])
+    u, v = _ar1(rng, T, 0.2), _ar1(rng, T, 0.95)
+    X = np.vstack([u + 0.25 * v, v + 0.25 * u])
     Z = _data(X).to_numpy(squeeze=True)
-    got = LagResolvedCorrelation("onesided", tau="acf", max_lag=5).bivariate(
-        _data(X), i=0, j=1)
-    assert got == pytest.approx(_r_lead(Z[0], Z[1], 5), abs=1e-12)
+    l_x, l_y = _length_1e(Z[0]), _length_1e(Z[1])
+    assert l_y > 3 * l_x
+    tau = int(np.floor(np.sqrt(l_x * l_y) + 0.5))
+
+    A = LagResolvedCorrelation("onesided", tau="1e").multivariate(_data(X))
+    assert A[0, 1] == pytest.approx(_r_lead(Z[0], Z[1], tau), abs=1e-12)
+    assert A[1, 0] == pytest.approx(_r_lead(Z[1], Z[0], tau), abs=1e-12)
+    assert abs(abs(A[0, 1]) - abs(A[1, 0])) < 0.05
+    per_source = abs(_r_lead(Z[0], Z[1], l_x)) - abs(_r_lead(Z[1], Z[0], l_y))
+    assert per_source > 0.3
+
+
+def test_1e_lengths_are_computed_once_per_series(monkeypatch):
+    calls = []
+    real_acf = basic.acf
+    monkeypatch.setattr(basic, "acf", lambda x: calls.append(1) or real_acf(x))
+    X = _series()
+    data = _data(X)
+    for spi in (LagResolvedCorrelation("onesided", tau="1e"),
+                LagResolvedCorrelation("onesidedpeak"),
+                LagResolvedCorrelation("onesidedpeak", max_lag=3)):
+        spi.multivariate(data)
+        spi.bivariate(data, i=2, j=0)
+    assert len(calls) == len(X)
+    assert set(data.acf_1e) == set(range(len(X)))
+
+
+def test_onesidedpeak_matches_a_brute_force_window():
+    X = _ar_pair()
+    Z = _data(X).to_numpy(squeeze=True)
+    w = int(_length_1e(Z[0]) + _length_1e(Z[1]))
+    assert 1 < w < X.shape[1] // 10
+    A = LagResolvedCorrelation("onesidedpeak").multivariate(_data(X))
+    for i, j in ((0, 1), (1, 0)):
+        want = max(abs(_r_lead(Z[i], Z[j], k)) for k in range(1, w + 1))
+        assert A[i, j] == pytest.approx(want, abs=1e-12)
+    assert A[0, 1] > A[1, 0] > 0
+
+
+@pytest.mark.parametrize("delay, lengths, max_lag, found", [
+    (2, None, None, True),          # white noise: w = 1 + 1 = 2
+    (3, None, None, False),
+    (3, (5.0, 5.0), None, True),    # w = 10
+    (3, (5.0, 5.0), 2, False),      # w clipped to max_lag
+    (3, (np.inf, 1.0), None, True), # w = T // 10 = 40
+    (45, (np.inf, 1.0), None, False),
+])
+def test_onesidedpeak_window(delay, lengths, max_lag, found):
+    """A pure delay is seen only when it lies inside the pair's window."""
+    rng = np.random.default_rng(1)
+    T = 400
+    a = rng.standard_normal(T + delay)
+    X = np.vstack([a[delay:], a[:-delay]])           # 0 leads 1 by `delay`
+    data = _data(X) if lengths is None else _seeded(X, lengths)
+    A = LagResolvedCorrelation("onesidedpeak", max_lag=max_lag).multivariate(data)
+    assert (A[0, 1] > 0.85) == found
+    assert A[1, 0] < 0.2
+    assert (A[~np.eye(2, dtype=bool)] >= 0).all()
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +457,11 @@ def test_identifiers():
     assert LagResolvedCorrelation("onesided").identifier == "lagcorr_onesided_tau-1_L-None"
     assert LagResolvedCorrelation("onesided", tau=3, max_lag=5).identifier == (
         "lagcorr_onesided_tau-3_L-5")
+    assert LagResolvedCorrelation("onesided", tau="1e", max_lag=5).identifier == (
+        "lagcorr_onesided_tau-1e_L-5")
+    assert LagResolvedCorrelation("onesidedpeak").identifier == "lagcorr_onesidedpeak_L-None"
+    assert LagResolvedCorrelation("onesidedpeak", max_lag=8).identifier == (
+        "lagcorr_onesidedpeak_L-8")
 
 
 @pytest.mark.parametrize("kwargs, err", [
@@ -347,6 +469,8 @@ def test_identifiers():
     ({"statistic": "lag", "tau": 1}, ValueError),
     ({"statistic": "onesided", "tau": 0}, ValueError),
     ({"statistic": "onesided", "tau": "pacf"}, TypeError),
+    ({"statistic": "onesided", "tau": "acf"}, TypeError),
+    ({"statistic": "onesidedpeak", "tau": 1}, ValueError),
     ({"statistic": "onesided", "tau": 1.5}, TypeError),
     ({"statistic": "lag", "max_lag": 0}, ValueError),
     ({"statistic": "lag", "max_lag": True}, TypeError),
@@ -378,8 +502,10 @@ def test_a_constant_process_voids_only_its_own_pairs():
     rng = np.random.default_rng(1)
     X = rng.standard_normal((4, 200))
     X[2] = 5.0
-    for stat in ("lag", "peak", "asym", "onesided"):
-        spi = LagResolvedCorrelation(stat)
+    for params in ({"statistic": "lag"}, {"statistic": "peak"}, {"statistic": "asym"},
+                   {"statistic": "onesided"}, {"statistic": "onesided", "tau": "1e"},
+                   {"statistic": "onesidedpeak"}):
+        spi = LagResolvedCorrelation(**params)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             A = spi.multivariate(_data(X, zscore=False))
@@ -399,7 +525,7 @@ def test_shares_the_xcorr_cache_and_scheduling_bucket():
     from pyspi._parallel import cache_bucket
 
     assert cache_bucket(LagResolvedCorrelation("lag")) == cache_bucket(
-        LagResolvedCorrelation("onesided", tau="acf", max_lag=10)) == cache_bucket(
+        LagResolvedCorrelation("onesided", tau="1e", max_lag=10)) == cache_bucket(
         CrossCorrelation()) == ("xcorr",)
 
     X = _series()
@@ -545,7 +671,10 @@ def test_calculator_round_trip(tmp_path):
         assert np.isfinite(got[off]).all()
     assert "antisymmetric" in calc.spis["lagcorr_lag_L-None"].labels
     assert "undirected" in calc.spis["lagcorr_peak_L-10"].labels
-    assert "directed" in calc.spis["lagcorr_onesided_tau-acf_L-None"].labels
+    assert "directed" in calc.spis["lagcorr_onesided_tau-1e_L-None"].labels
+    peak1s = calc.spis["lagcorr_onesidedpeak_L-None"]
+    assert "unsigned" in peak1s.labels and "signed" not in peak1s.labels
+    assert not peak1s.issigned()
 
 
 def test_full_config_lists_every_identifier():
