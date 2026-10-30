@@ -1422,7 +1422,7 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
+      - signed/unsigned
       - bivariate
       - frequency-dependent
       - M11
@@ -1443,6 +1443,15 @@
       - phase_band: [0.05, 0.1]
         amp_band: [0.2, 0.45]
         statistic: mvl
+
+      # The modulation index minus its mean over 100 time-shift surrogates (signed)
+      - phase_band: [0.01, 0.05]
+        amp_band: [0.15, 0.4]
+        statistic: mi_excess
+
+      - phase_band: [0.05, 0.1]
+        amp_band: [0.2, 0.45]
+        statistic: mi_excess
 
 .statistics.misc:
   LinearModel:

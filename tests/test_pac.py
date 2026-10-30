@@ -5,7 +5,9 @@ A[i, j]: phase of process i (row, source) in the phase band against the
 amplitude envelope of process j (column, target) in the amplitude band.
 "mi" is Tort et al. (2010)'s modulation index, (log N - H(P)) / log N over N
 phase bins; "mvl" is Ozkurt & Schnitzler (2011)'s normalised mean vector
-length, |sum A exp(i phi)| / (sqrt(n) sqrt(sum A^2)).
+length, |sum A exp(i phi)| / (sqrt(n) sqrt(sum A^2)). "<stat>_excess" and
+"<stat>_z" compare either index with its values on circular time shifts of the
+target's envelope.
 """
 
 import warnings
@@ -318,3 +320,125 @@ def test_full_config_constructs_pac_entries():
         assert {"directed", "nonlinear", "unsigned", "bivariate",
                 "frequency-dependent"} <= set(spis[ident].labels)
     assert not any(k.startswith("pac_") for k in Calculator(config="fast").spis)
+
+
+# --------------------------------------------------------------------------
+# Surrogate-normalised statistics ("<stat>_excess", "<stat>_z")
+# --------------------------------------------------------------------------
+
+def _reference_surrogates(phase, amp, statistic, n_surr=100):
+    """The index on circular delays of the target envelope by s samples, s
+    drawn as documented: default_rng(0).integers(n // 10, n - n // 10,
+    endpoint=True), one np.roll per surrogate."""
+    n = amp.size
+    shifts = np.random.default_rng(0).integers(n // 10, n - n // 10, size=n_surr,
+                                               endpoint=True)
+    reference = _reference_mi if statistic == "mi" else _reference_mvl
+    return np.array([reference(phase, np.roll(amp, s)) for s in shifts]), shifts
+
+
+@pytest.mark.parametrize("statistic", ["mi", "mvl"])
+@pytest.mark.parametrize("phase_band, amp_band", BANDS)
+def test_surrogate_statistics_match_reference(phase_band, amp_band, statistic):
+    data = _reference_fixture()
+    T = data.n_observations
+    M = data.n_processes
+    reference = _reference_mi if statistic == "mi" else _reference_mvl
+    for norm in ("excess", "z"):
+        spi = PhaseAmplitudeCoupling(phase_band, amp_band, f"{statistic}_{norm}",
+                                     n_surr=40)
+        A = spi.multivariate(data)
+        edge = spi.edge_samples(T)
+        phase = data.crossfreq[(phase_band, "phase")][:, edge:T - edge]
+        amp = data.crossfreq[(amp_band, "amp")][:, edge:T - edge]
+        n = amp.shape[1]
+        for i in range(M):
+            assert np.isnan(A[i, i])
+            for j in range(M):
+                if i == j:
+                    continue
+                sur, shifts = _reference_surrogates(phase[i], amp[j], statistic, 40)
+                assert shifts.min() >= n // 10 and shifts.max() <= n - n // 10
+                excess = reference(phase[i], amp[j]) - sur.mean()
+                want = excess if norm == "excess" else excess / sur.std()
+                assert A[i, j] == pytest.approx(want, rel=1e-9, abs=1e-12), (norm, i, j)
+                assert spi.bivariate(data, i=i, j=j) == A[i, j]
+
+
+@pytest.mark.parametrize("statistic", ["mi_excess", "mi_z", "mvl_z"])
+def test_surrogate_value_does_not_depend_on_the_other_processes(statistic):
+    """A pair's value is the same alone, among other processes in either
+    order, and on repeated calls."""
+    src, tgt, rng = _pac_pair(seed=6, T=1500, phase_diffusion=0.1)
+    noise = rng.standard_normal((2, 1500))
+    spi = PhaseAmplitudeCoupling(*BANDS[0], statistic=statistic)
+    alone = spi.multivariate(_data(np.vstack([src, tgt])))[0, 1]
+    mixed = spi.multivariate(_data(np.vstack([noise[0], tgt, noise[1], src])))[3, 1]
+    assert mixed == pytest.approx(alone, rel=1e-12)
+    assert spi.multivariate(_data(np.vstack([src, tgt])))[0, 1] == alone
+
+
+def test_surrogates_remove_the_chance_level_of_a_modulated_target():
+    """An independent source on a target whose amplitude is modulated by a
+    third process inflates the raw MI (chance alignment of two slow rhythms)
+    but not its excess over the surrogates; a coupled pair keeps a large
+    z-score and most of its raw MI as excess."""
+    raw, raw_noise, excess, z = [], [], [], []
+    mi = PhaseAmplitudeCoupling(*BANDS[0], statistic="mi")
+    mi_excess = PhaseAmplitudeCoupling(*BANDS[0], statistic="mi_excess")
+    mi_z = PhaseAmplitudeCoupling(*BANDS[0], statistic="mi_z")
+    for seed in range(30):
+        _, tgt, rng = _pac_pair(seed, T=1000, phase_diffusion=0.14, depth=1.0)
+        other, _, _ = _pac_pair(seed + 1000, T=1000, phase_diffusion=0.14)
+        data = _data(np.vstack([other, tgt, rng.standard_normal(1000)]))
+        raw.append(mi.bivariate(data, i=0, j=1))
+        raw_noise.append(mi.bivariate(data, i=0, j=2))
+        excess.append(mi_excess.bivariate(data, i=0, j=1))
+        z.append(mi_z.bivariate(data, i=0, j=1))
+    assert np.mean(raw) > 3 * np.mean(raw_noise)
+    assert abs(np.mean(excess)) < 0.15 * np.mean(raw)
+    assert abs(np.mean(z)) < 1.0 and np.max(np.abs(z)) < 6
+
+    src, tgt, _ = _pac_pair(seed=0, T=1000, phase_diffusion=0.14)
+    data = _data(np.vstack([src, tgt]))
+    assert mi_z.bivariate(data, i=0, j=1) > 3
+    assert mi_excess.bivariate(data, i=0, j=1) > 0.3 * mi.bivariate(data, i=0, j=1)
+
+
+def test_surrogates_cannot_see_coupling_to_a_strictly_periodic_source():
+    """With a periodic source a shift only rotates the preferred phase, so the
+    surrogates keep the coupling and the z-score stays small."""
+    src, tgt, _ = _pac_pair(seed=2, T=1000, phase_diffusion=0.0)
+    data = _data(np.vstack([src, tgt]))
+    assert PhaseAmplitudeCoupling(*BANDS[0], statistic="mi").bivariate(data, i=0, j=1) > 0.02
+    assert abs(PhaseAmplitudeCoupling(*BANDS[0], statistic="mi_z").bivariate(data, i=0, j=1)) < 3
+
+
+def test_surrogate_identifiers_labels_and_parameters():
+    spi = PhaseAmplitudeCoupling(*BANDS[0], statistic="mi_excess")
+    assert spi.identifier == "pac_mi_excess_p-0-01-0-05_a-0-15-0-4"
+    assert spi.issigned() and "signed" in spi.labels and "unsigned" not in spi.labels
+    assert PhaseAmplitudeCoupling(*BANDS[1], statistic="mvl_z").identifier == \
+        "pac_mvl_z_p-0-05-0-1_a-0-2-0-45"
+    assert PhaseAmplitudeCoupling(statistic="mi_z", n_surr=50).identifier.endswith("_nsurr-50")
+    assert PhaseAmplitudeCoupling(statistic="mi_z", n_bins=12, n_surr=50).identifier \
+        .endswith("_nbins-12_nsurr-50")
+    # The raw statistics ignore n_surr and keep it out of the identifier.
+    assert PhaseAmplitudeCoupling(statistic="mi", n_surr=50).identifier == IDENTIFIERS[0]
+    assert cache_bucket(spi) == cache_bucket(PhaseAmplitudeCoupling(*BANDS[0]))
+    for bad in (dict(statistic="mi_excess", n_surr=1), dict(statistic="z"),
+                dict(statistic="mi_zz")):
+        with pytest.raises(ValueError):
+            PhaseAmplitudeCoupling(**bad)
+    with pytest.raises(TypeError):
+        PhaseAmplitudeCoupling(statistic="mi_z", n_surr=2.5)
+
+
+def test_full_config_bundles_the_excess_modulation_index():
+    spis = Calculator(config="full").spis
+    for p, a in BANDS:
+        ident = PhaseAmplitudeCoupling(p, a, "mi_excess").identifier
+        assert ident in spis
+        assert {"directed", "nonlinear", "signed", "bivariate",
+                "frequency-dependent"} <= set(spis[ident].labels)
+        assert "unsigned" not in spis[ident].labels

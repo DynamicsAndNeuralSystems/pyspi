@@ -80,10 +80,11 @@ KNOWN_UNESTIMABLE = {
 }
 
 # The PAC modulation index needs all 18 phase bins occupied; the 50 samples kept
-# at T=100 leave a bin empty for every source of cml_M5_T100.
-KNOWN_UNESTIMABLE["cml_M5_T100"]["pac_mi_p-0-01-0-05_a-0-15-0-4"] = (
-    "the 50 samples kept at T=100 leave a phase bin of the 0.01-0.05 band "
-    "empty for every source")
+# at T=100 leave a bin empty for every source of cml_M5_T100 (raw and excess).
+for _stat in ("mi", "mi_excess"):
+    KNOWN_UNESTIMABLE["cml_M5_T100"][f"pac_{_stat}_p-0-01-0-05_a-0-15-0-4"] = (
+        "the 50 samples kept at T=100 leave a phase bin of the 0.01-0.05 band "
+        "empty for every source")
 
 
 def build_tables(dataset_name, config="full", seed=42):
