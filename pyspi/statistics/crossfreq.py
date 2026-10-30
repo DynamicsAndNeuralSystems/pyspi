@@ -12,7 +12,7 @@ import functools
 import warnings
 
 import numpy as np
-from scipy import signal
+from scipy import signal, special
 
 from pyspi.base import (
     Directed,
@@ -37,6 +37,22 @@ _EDGE_FILTER_LENGTHS = 2
 # Relative slack on the bandwidth rule, so an amplitude band exactly twice the
 # upper phase frequency wide is not refused over a rounding error in f4 - f3.
 _RULE_RTOL = 1e-9
+
+# Seed of the surrogates' circular shifts: fixed, so the shifts depend only on
+# the window length and n_surr, and a pair's value not on the other processes.
+_SURROGATE_SEED = 0
+
+
+@functools.lru_cache(maxsize=None)
+def _shift_index(n, n_surr):
+    """``(n_surr, n)`` gather index: row ``k`` circularly delays a length-``n``
+    series by ``s_k`` samples, ``s_k`` uniform on the integers in
+    ``[n // 10, n - n // 10]``. Read-only and cached per ``(n, n_surr)``."""
+    rng = np.random.default_rng(_SURROGATE_SEED)
+    shifts = rng.integers(n // 10, n - n // 10, size=n_surr, endpoint=True)
+    index = (np.arange(n)[None, :] - shifts[:, None]) % n
+    index.setflags(write=False)
+    return index
 
 
 def _validate_band(name, band):
@@ -118,7 +134,8 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     phase of process ``i`` (row, source) in a low band ``phase_band = (f1,
     f2)``. Bands are in cycles per sample. The two orientations are different
     quantities (``A[j, i]`` takes the *phase* of ``j``), so the SPI is
-    directed; both statistics are in [0, 1] and unsigned.
+    directed. The two raw statistics are in [0, 1] and unsigned; their
+    surrogate-normalised versions (``_excess``, ``_z``) are signed.
 
     Signals
     -------
@@ -165,6 +182,40 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     through its phase, and ``P`` and the MVL are ratios in ``A``), so they do
     not depend on z-scoring.
 
+    Surrogate normalisation
+    -----------------------
+    Neither raw statistic is zero for independent processes, and their chance
+    level grows with the target's own amplitude modulation, which a slow
+    rhythm of the source can align with by chance over a finite record. The
+    normalised statistics compare the index with its values on ``n_surr``
+    surrogates, each a circular shift of the target's envelope within the
+    ``n`` retained samples by ``s`` samples, ``s`` uniform on the integers in
+    ``[n // 10, n - n // 10]`` (Canolty et al. 2006; Tort et al. 2010). A
+    shift keeps the envelope and its spectrum and destroys its timing relative
+    to the source's phase:
+
+    - ``"<stat>_excess"``: the index minus the mean of its surrogates, in the
+      index's units. About 0 for independent processes whatever their own
+      modulation, and it grows with the coupling as the raw index does.
+    - ``"<stat>_z"``: ``(index - mean) / sd`` over the surrogates (``sd`` with
+      ``ddof = 0``), a significance score for comparing pairs whose targets
+      differ in their own modulation. It is not an effect size: the
+      surrogates' spread grows with the target's modulation about as fast as
+      the index, so it saturates as the coupling grows, and it grows with the
+      record length. Under independence it is centred near 0 but is not
+      standard normal. Undefined (NaN) if every surrogate gives the same value.
+
+    The shifts come from a fixed seed and depend only on ``n`` and
+    ``n_surr``, so the values are deterministic and a pair's value does not
+    depend on the other processes. Time-shift surrogates fail for a strictly
+    periodic source: a shift only rotates the preferred phase, so the
+    surrogates keep the coupling and both normalised values are near 0.
+
+    Neither normalisation removes spurious PAC from sharp, non-sinusoidal
+    waveforms, whose harmonics in the amplitude band are locked to their own
+    fundamental in the phase band (Kramer, Tort & Kopell 2008); read PAC on
+    such data together with the waveform shape.
+
     Validity of the bands
     ---------------------
     The envelope of the target can follow a modulation at frequency ``f``
@@ -182,17 +233,24 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     amp_band : (float, float)
         ``(f3, f4)``, the band of the target's amplitude, cycles per sample.
         Requires ``f3 >= f2`` and ``f4 - f3 >= 2 f2``.
-    statistic : {"mi", "mvl"}
-        Tort modulation index or Özkurt-Schnitzler normalised MVL.
+    statistic : {"mi", "mvl", "mi_excess", "mvl_excess", "mi_z", "mvl_z"}
+        Tort modulation index or Özkurt-Schnitzler normalised MVL: raw, as the
+        excess over their time-shift surrogates' mean, or as a z-score against
+        them.
     n_bins : int
         Phase bins of the modulation index (Tort et al. use 18 of 20 degrees).
-        Ignored by ``"mvl"``. A value other than 18 is appended to the
+        Ignored by the MVL statistics. A value other than 18 is appended to the
         identifier as ``_nbins-<n>``.
+    n_surr : int
+        Number of time-shift surrogates (at least 2) of the ``_excess`` and
+        ``_z`` statistics; ignored by the raw ones. A value other than 100 is
+        appended to the identifier as ``_nsurr-<n>``.
 
     The identifier is ``pac_<statistic>_p-<f1>-<f2>_a-<f3>-<f4>`` with decimal
     points written as dashes, as in ``spectral.py``: ``pac_mi_p-0-01-0-05_a-
     0-15-0-4`` is the modulation index with phase band (0.01, 0.05) and
-    amplitude band (0.15, 0.4).
+    amplitude band (0.15, 0.4), and ``pac_mi_excess_p-0-01-0-05_a-0-15-0-4``
+    its excess over the surrogates.
 
     Its direction is a role, which process supplies the phase and which the
     amplitude, not temporal precedence as in the Granger-type SPIs: ``A[i, j]
@@ -212,28 +270,39 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
 
     Aru et al. (2015). Untangling cross-frequency coupling in neuroscience.
     Curr Opin Neurobiol 31:51-61.
+
+    Kramer, Tort & Kopell (2008). Sharp edge artifacts and spurious coupling
+    in EEG frequency comodulation measures. J Neurosci Methods 170:352-357.
     """
 
     name = "Phase-amplitude coupling"
     identifier = "pac"
     labels = ["unsigned", "directed", "nonlinear", "spectral"]
 
-    # Both statistics of one band pair share data.crossfreq[(band, kind)].
+    # All statistics of one band pair share data.crossfreq[(band, kind)].
     _cache_namespace = "crossfreq"
 
-    _statistics = ("mi", "mvl")
+    _statistics = ("mi", "mvl", "mi_excess", "mvl_excess", "mi_z", "mvl_z")
     _DEFAULT_N_BINS = 18
+    _DEFAULT_N_SURR = 100
 
     def __init__(self, phase_band=(0.01, 0.05), amp_band=(0.15, 0.4),
-                 statistic="mi", n_bins=18):
+                 statistic="mi", n_bins=18, n_surr=100):
         self._phase_band = _validate_band("phase_band", phase_band)
         self._amp_band = _validate_band("amp_band", amp_band)
         if statistic not in self._statistics:
             raise ValueError(
                 f"Unknown statistic {statistic!r}; PhaseAmplitudeCoupling "
                 f"supports {', '.join(self._statistics)}.")
-        self._statistic = statistic
+        # "mi_z" -> ("mi", "z"): the raw index and its normalisation ("" if raw).
+        self._statistic, _, self._normalise = statistic.partition("_")
+        self._surrogate = bool(self._normalise)
         self._n_bins = require_int("n_bins", n_bins, minimum=2)
+        self._n_surr = require_int("n_surr", n_surr, minimum=2)
+        if self._surrogate:
+            # Negative when the index is below its surrogates' mean.
+            self.labels = ["signed" if label == "unsigned" else label
+                           for label in PhaseAmplitudeCoupling.labels]
 
         f1, f2 = self._phase_band
         f3, f4 = self._amp_band
@@ -252,8 +321,10 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
 
         suffix = (f"_{statistic}_p-{fmt_param(f1)}-{fmt_param(f2)}"
                   f"_a-{fmt_param(f3)}-{fmt_param(f4)}")
-        if statistic == "mi" and self._n_bins != self._DEFAULT_N_BINS:
+        if self._statistic == "mi" and self._n_bins != self._DEFAULT_N_BINS:
             suffix += f"_nbins-{self._n_bins}"
+        if self._surrogate and self._n_surr != self._DEFAULT_N_SURR:
+            suffix += f"_nsurr-{self._n_surr}"
         self.identifier += suffix.replace(".", "-")
 
     @property
@@ -318,28 +389,76 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
             raise ValueError("the target has no amplitude in amp_band.")
         return float(np.abs(np.dot(phasor, amp)) / np.sqrt(amp.size * power))
 
+    def issigned(self):
+        return self._surrogate
+
+    def _surrogate_mi(self, onehot, counts, shifted):
+        """Modulation index of each row of ``shifted`` (``(n_surr, n)``)."""
+        mean_amp = (shifted @ onehot) / counts
+        p = mean_amp / mean_amp.sum(axis=1, keepdims=True)
+        log_n = np.log(self._n_bins)
+        return (log_n + np.sum(special.xlogy(p, p), axis=1)) / log_n
+
+    def _normalised(self, observed, surrogates):
+        """``observed`` against its surrogates: excess over their mean, or z-score."""
+        excess = observed - surrogates.mean()
+        if self._normalise == "excess":
+            return float(excess)
+        sd = surrogates.std()
+        if not sd > 0:
+            raise ValueError(
+                "the statistic is identical on every time-shifted surrogate, "
+                "so its z-score is undefined.")
+        return float(excess / sd)
+
+    def _pair_function(self, phase, amp):
+        """``compute(i, j)``: the statistic of source ``i`` and target ``j``.
+
+        Each source's bins (or phasors) are formed once, then the raw index is
+        O(n) per pair. For the surrogate statistics, each target's ``n_surr``
+        shifted envelopes and each source's one-hot bin matrix are formed once,
+        on first use, and a pair's surrogates are one matrix product.
+        """
+        if self._statistic == "mi":
+            bins = self._phase_bins(phase)
+            counts = [np.bincount(b, minlength=self._n_bins) for b in bins]
+            index = lambda i, j: self._modulation_index(bins[i], counts[i], amp[j])
+        else:
+            phasors = np.exp(1j * phase)
+            index = lambda i, j: self._mean_vector_length(phasors[i], amp[j])
+        if not self._surrogate:
+            return index
+
+        n = amp.shape[1]
+        shift = _shift_index(n, self._n_surr)
+        shifted, onehot = {}, {}
+
+        def compute(i, j):
+            observed = index(i, j)  # raises first for an undefined pair
+            if j not in shifted:
+                shifted[j] = amp[j][shift]
+            if self._statistic == "mi":
+                if i not in onehot:
+                    onehot[i] = np.eye(self._n_bins)[bins[i]]
+                surrogates = self._surrogate_mi(onehot[i], counts[i], shifted[j])
+            else:
+                surrogates = (np.abs(shifted[j] @ phasors[i])
+                              / np.sqrt(n * np.dot(amp[j], amp[j])))
+            return self._normalised(observed, surrogates)
+
+        return compute
+
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         phase, amp = self._window(data)
-        if self._statistic == "mi":
-            bins = self._phase_bins(phase[i])
-            counts = np.bincount(bins, minlength=self._n_bins)
-            return self._modulation_index(bins, counts, amp[j])
-        return self._mean_vector_length(np.exp(1j * phase[i]), amp[j])
+        return self._pair_function(phase[[i]], amp[[j]])(0, 0)
 
     @parse_multivariate
     def multivariate(self, data):
-        # Each source's bins (or phasors) once, then O(n) per pair; a pair with
-        # an empty phase bin is NaN.
+        # A pair with an empty phase bin is NaN.
         phase, amp = self._window(data)
         M = phase.shape[0]
         A = np.full((M, M), np.nan)
         pairs = [(i, j) for i in range(M) for j in range(M) if i != j]
-        if self._statistic == "mi":
-            bins = self._phase_bins(phase)
-            counts = [np.bincount(b, minlength=self._n_bins) for b in bins]
-            compute = lambda i, j: self._modulation_index(bins[i], counts[i], amp[j])
-        else:
-            phasors = np.exp(1j * phase)
-            compute = lambda i, j: self._mean_vector_length(phasors[i], amp[j])
-        return fill_pairwise(self.identifier, A, pairs, compute)
+        return fill_pairwise(self.identifier, A, pairs,
+                             self._pair_function(phase, amp))
