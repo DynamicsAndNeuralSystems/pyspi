@@ -1330,3 +1330,18 @@
       - terms: 6
         pnorm: 'max'
         bandwidth: 0.5
+
+# Statistics read off one vector autoregressive (VAR) model of all processes
+.statistics.var:
+  # Conditional Granger causality from one VAR of all processes (Geweke 1984)
+  ConditionalGrangerCausality:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - time-dependent
+      - M05
+    dependencies:
+    configs:
+      - order: bic
