@@ -491,6 +491,38 @@
       - statistic: diff
         embedding_dimension: 10
 
+  # Liang-Kleeman rate of information flow, pairwise (Liang 2014) or conditioned
+  # on all series (Liang 2021), raw or normalised (Liang 2015)
+  LiangInformationFlow:
+    labels:
+      - directed
+      - linear
+      - signed
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - k: 1
+        conditional: False
+        statistic: rate
+        labels:
+          - bivariate
+      - k: 1
+        conditional: False
+        statistic: normalised
+        labels:
+          - bivariate
+      - k: 1
+        conditional: True
+        statistic: rate
+        labels:
+          - multivariate
+      - k: 1
+        conditional: True
+        statistic: normalised
+        labels:
+          - multivariate
+
 # Information-theoretic statistics
 .statistics.infotheory:
   JointEntropy: # No theiler window yet

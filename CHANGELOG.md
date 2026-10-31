@@ -261,6 +261,12 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (30 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
 - **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 
+### Added
+
+- **`LiangInformationFlow`: the Liang-Kleeman rate of information flow** (`liang_rate_k-1`, `liang_norm_k-1`, `liang-cond_rate_k-1`, `liang-cond_norm_k-1`; `liang_norm_k-1` also in `fast`).
+  It is the closed-form maximum-likelihood estimator of the flow from source to target under a linear stochastic model, in nats per sample and signed: positive means the source makes the target more uncertain, negative that it stabilises it.
+  `liang_*` is the pairwise estimator of Liang (2014, *Phys. Rev. E* 90, 052150), `liang-cond_*` the multivariate one of Liang (2021, *Entropy* 23, 679), which conditions on every other series, and `*_norm_*` divides by the target's entropy budget (Liang 2015, *Phys. Rev. E* 92, 022126) to give a share in [-1, 1].
+
 ### Dependencies
 
 - **Floors, relative to 2.0.2** (`pyproject.toml` is the source of truth):

@@ -432,3 +432,266 @@ class ConvergentCrossMapping(Directed, Signed):
             return np.nanmean(ccmf - np.transpose(ccmf, axes=[1, 0, 2]), axis=2)
         else:
             raise TypeError(f"Unknown statistic: {self._statistic}")
+
+
+def _liang_moments(z, k):
+    """The sample covariances every Liang-Kleeman estimator is built from.
+
+    With the Euler forward difference at a step of one sample,
+    ``dx_b[n] = (x_b[n + k] - x_b[n]) / k`` (Liang 2014; Liang 2021 eq. 7),
+    defined for the first ``n = T - k`` samples, and every series cut to those
+    same samples (as in Liang's reference code), returns read-only
+
+    * ``C[a, b]  = cov(x_a, x_b)``   -- Liang's ``C_ab`` (2021 eq. 12),
+    * ``Cd[a, b] = cov(x_a, dx_b)``  -- Liang's ``C_{a,db}`` (2021 eq. 13),
+    * ``Vd[b]    = var(dx_b)``       -- Liang's ``C_{db,db}`` (2015 eq. 28).
+
+    All three use the same ``1/(n - 1)`` normalisation, which cancels in every
+    Liang quantity.
+    """
+    z = np.atleast_2d(np.asarray(z, dtype=np.float64))
+    n = z.shape[1] - k
+    if n < 3:
+        raise ValueError(
+            f"Liang-Kleeman information flow with k={k} needs at least k + 3 = "
+            f"{k + 3} observations; got {z.shape[1]}.")
+    x = z[:, :n]
+    dx = (z[:, k:] - z[:, :n]) / k
+    xc = x - x.mean(axis=1, keepdims=True)
+    dxc = dx - dx.mean(axis=1, keepdims=True)
+    C = xc @ xc.T / (n - 1)
+    Cd = xc @ dxc.T / (n - 1)
+    Vd = np.einsum("bt,bt->b", dxc, dxc) / (n - 1)
+    for arr in (C, Cd, Vd):
+        arr.setflags(write=False)
+    return C, Cd, Vd
+
+
+class LiangInformationFlow(Directed, Signed):
+    r"""Liang-Kleeman rate of information flow, row (source) -> column (target).
+
+    ``A[j, i]`` is ``T_{j->i}``, the rate at which the source ``x_j`` transfers
+    information (entropy) to the target ``x_i``, in nats per sample, estimated
+    under a linear stochastic model ``dx = (f + A x) dt + B dW`` with diagonal
+    ``B`` (Liang 2014, 2021). Positive means ``x_j`` makes ``x_i`` *more*
+    uncertain, negative means it *reduces* ``x_i``'s uncertainty (stabilises
+    it), and zero means no causal influence (Liang's principle of nil
+    causality, a theorem of the formalism: ``T_{j->i} = 0`` whenever ``x_i``'s
+    dynamics do not depend on ``x_j``).
+
+    **Estimators.** With the Euler forward difference
+    ``dx_i[n] = (x_i[n + k] - x_i[n]) / k`` (one sample is the time unit),
+    ``C_ab = cov(x_a, x_b)``, ``C_{a,di} = cov(x_a, dx_i)`` and
+    ``C_{di,di} = var(dx_i)``, all over the ``T - k`` samples that have a
+    difference (``_liang_moments``):
+
+    * ``conditional=False``: Liang's (2014) bivariate maximum-likelihood
+      estimator for each pair on its own (Liang 2015 eq. 3; Liang 2021 eq. 5),
+      with 1 the target and 2 the source::
+
+          T_{2->1} = (C11 C12 C_{2,d1} - C12^2 C_{1,d1})
+                     / (C11^2 C22 - C11 C12^2)
+
+    * ``conditional=True``: the multivariate estimator with all ``M`` series
+      as the system (Liang 2021 eq. 14)::
+
+          T_{j->i} = (1 / det C) sum_k Delta_jk C_{k,di} * C_ij / C_ii
+                   = a_ij C_ij / C_ii,
+
+      where ``Delta_jk`` are the cofactors of ``C`` and
+      ``a_ij = sum_k (C^-1)_jk C_{k,di}`` (eq. 9; ``Delta_jk / det C =
+      (C^-1)_kj``) is the coefficient of ``x_j`` in the least-squares
+      regression of ``dx_i`` on all ``M`` series, computed with one
+      ``np.linalg.solve``. For ``M = 2`` it is the bivariate estimator
+      exactly. Conditioning on the other series removes indirect flows: in a
+      chain ``x0 -> x1 -> x2`` the conditional ``T_{0->2}`` vanishes, the
+      bivariate one does not.
+
+    ``statistic="normalised"`` reports Liang's (2015) relative flow
+    ``tau_{j->i} = T_{j->i} / Z_i`` in ``[-1, 1]``, with the target's entropy
+    balance as the normaliser (Liang 2015 eqs. 10-11 and 29-32; Liang 2021
+    eqs. 17-20)::
+
+        Z_i = |dH_i*/dt| + sum_{j != i} |T_{j->i}| + |dH_i^noise/dt|,
+        dH_i*/dt     = a_ii                          (2015 eq. 22/29; 2021 eq. 15)
+        dH_i^noise/dt = g_ii / (2 C_ii),  g_ii = k * Q_i / N   (2015 eqs. 24, 30)
+        Q_i / N      = C_{di,di} - sum_j a_ij C_{j,di}         (2015 eq. 28)
+
+    ``Q_i / N`` is the residual variance of the regression of ``dx_i`` on the
+    series in the fit (the pair, or all ``M``). The sum over sources runs over
+    the pair's one source in the bivariate version (Liang 2015) and over all
+    ``M - 1`` others in the conditional one (Liang 2021). ``|tau_{j->i}|`` is
+    the share of the target's entropy budget due to ``x_j``, so ``tau`` is
+    normalised within each target and ``|tau_{j->i}|`` and ``|tau_{i->j}|`` are
+    not on one scale (Liang 2015, sec. VI). Liang's reference code mixes
+    ``1/N`` (noise) and ``1/(N - 1)`` (covariance) normalisations, so the
+    normalised ``tau`` differs from it by a relative O(1/N).
+
+    **Units and sampling.** The rate is per sample: for a continuous-time
+    process sampled every ``h`` time units it is about ``h`` times the
+    per-unit-time flow. ``k`` sets the difference's stride; ``k = 1`` is the
+    usual choice and Liang recommends ``k = 2`` for densely sampled chaotic
+    series. ``g_ii`` uses ``k Delta t`` (the interval the difference spans) so
+    that it estimates the diffusion coefficient whatever ``k``. The statistic
+    is invariant under rescaling and shifting of each series.
+
+    No significance test is applied (the confidence intervals of Liang 2014
+    are not implemented).
+
+    Parameters
+    ----------
+    k : int, default 1
+        Stride of the Euler forward difference, in samples.
+    conditional : bool, default False
+        ``False``: Liang (2014)'s bivariate estimator for each pair.
+        ``True``: Liang (2021)'s multivariate estimator, all series at once;
+        requires a nonsingular ``M x M`` covariance (``M < T - k``, no series
+        an exact linear combination of the others).
+    statistic : {"rate", "normalised"}, default "rate"
+        The flow ``T`` (nats per sample) or the normalised flow ``tau``.
+
+    References
+    ----------
+    Liang, X. S. (2014). Unraveling the cause-effect relation between time
+    series. *Phys. Rev. E* 90, 052150.
+    Liang, X. S. (2015). Normalizing the causality between time series.
+    *Phys. Rev. E* 92, 022126 (arXiv:1501.03548; equation numbers above).
+    Liang, X. S. (2021). Normalized multivariate time series causality
+    analysis and causal graph reconstruction. *Entropy* 23, 679
+    (arXiv:2104.11360; equation numbers above).
+    """
+
+    name = "Liang-Kleeman information flow"
+    identifier = "liang"
+    labels = ["causal", "directed", "linear", "temporal", "signed"]
+    # All four variants read the same covariances, cached per stride k.
+    _cache_namespace = "liang"
+
+    _STATISTICS = {"rate": "rate", "normalised": "norm"}
+
+    @property
+    def _cache_subkey(self):
+        return (self._k,)
+
+    def __init__(self, k=1, conditional=False, statistic="rate"):
+        self._k = require_int("k", k, minimum=1)
+        if not isinstance(conditional, (bool, np.bool_)):
+            raise TypeError(
+                f"conditional must be a bool, got {conditional!r} "
+                f"({type(conditional).__name__}).")
+        if statistic not in self._STATISTICS:
+            raise ValueError(
+                f"Unknown statistic {statistic!r}; expected one of "
+                f"{sorted(self._STATISTICS)}.")
+        self._conditional = bool(conditional)
+        self._statistic = statistic
+        stem = "liang-cond" if self._conditional else "liang"
+        self.identifier = f"{stem}_{self._STATISTICS[statistic]}_k-{self._k}"
+
+    def _from_cache(self, data):
+        try:
+            moments = data.liang[self._k]
+        except (AttributeError, KeyError):
+            moments = _liang_moments(data.to_numpy(squeeze=True), self._k)
+            try:
+                data.liang[self._k] = moments
+            except AttributeError:
+                data.liang = {self._k: moments}
+        return moments
+
+    def _bivariate_flows(self, C, Cd, Vd):
+        """Liang (2014, 2015) for every ordered pair at once; ``[j, i]`` is j -> i.
+
+        For the pair (target i = "1", source j = "2"): ``a_self`` is
+        ``a_11`` (2015 eq. 22), ``a_src`` is ``a_12`` (eq. 23), and
+        ``a_src * C_ij / C_ii`` is eq. 3 rewritten.
+        """
+        var = np.diag(C)
+        Cii = var[np.newaxis, :]          # target variance, by column
+        Cjj = var[:, np.newaxis]          # source variance, by row
+        Ci_di = np.diag(Cd)[np.newaxis, :]  # cov(x_i, dx_i), by column
+        with np.errstate(divide="ignore", invalid="ignore"):
+            det = Cii * Cjj - C ** 2
+            # 1 - r^2 at rounding level: the pair is collinear, so undefined.
+            det = np.where(det > 1e3 * np.finfo(float).eps * Cii * Cjj,
+                           det, np.nan)
+            a_self = (Cjj * Ci_di - C * Cd) / det
+            a_src = (Cii * Cd - C * Ci_di) / det
+            rate = a_src * C / Cii
+            if self._statistic == "rate":
+                return rate
+            resvar = Vd[np.newaxis, :] - (a_self * Ci_di + a_src * Cd)
+            noise = self._k * resvar / (2.0 * Cii)
+            return rate / (np.abs(rate) + np.abs(a_self) + np.abs(noise))
+
+    def _conditional_flows(self, C, Cd, Vd):
+        """Liang (2021) with all M series as the system; ``[j, i]`` is j -> i."""
+        M = C.shape[0]
+        rank = np.linalg.matrix_rank(C)
+        if rank < M:
+            raise ValueError(
+                f"Conditional Liang-Kleeman flow needs a nonsingular covariance "
+                f"of all {M} series, but its rank is {rank}: too few "
+                f"observations, or a series that is a linear combination of "
+                f"the others. Use conditional=False.")
+        # coef[j, i] = a_ij, the coefficient of x_j in dx_i's regression
+        # (2021 eq. 9). The diagonal of `rate` is then a_ii = dH_i*/dt (eq. 15).
+        coef = np.linalg.solve(C, Cd)
+        var = np.diag(C)
+        rate = coef * C / var[np.newaxis, :]
+        if self._statistic == "rate":
+            return rate
+        resvar = Vd - np.einsum("ji,ji->i", coef, Cd)
+        noise = self._k * resvar / (2.0 * var)
+        # |a_ii| + sum_{j != i} |T_{j->i}| is the column sum of |rate|.
+        Z = np.abs(rate).sum(axis=0) + np.abs(noise)
+        return rate / Z[np.newaxis, :]
+
+    def _matrix(self, data):
+        """The full ``M x M`` table, diagonal and undefined pairs NaN."""
+        C, Cd, Vd = self._from_cache(data)
+        if self._conditional:
+            A = self._conditional_flows(C, Cd, Vd)
+        else:
+            A = self._bivariate_flows(C, Cd, Vd)
+        A = np.array(A, dtype=np.float64)
+        A[~np.isfinite(A)] = np.nan
+        np.fill_diagonal(A, np.nan)
+        return A
+
+    @parse_multivariate
+    def multivariate(self, data):
+        A = self._matrix(data)
+        # Collinear or constant series give NaN pairs; report them as
+        # `fill_pairwise` reports a failed pair.
+        off = ~np.eye(A.shape[0], dtype=bool)
+        bad = off & np.isnan(A)
+        if bad.any():
+            if bad.sum() == off.sum():
+                raise ValueError(
+                    f'SPI "{self.identifier}": every pair is undefined '
+                    f"(singular pairwise covariances).")
+            i, j = np.argwhere(bad)[0]
+            warnings.warn(
+                f'SPI "{self.identifier}": {int(bad.sum())} of '
+                f"{int(off.sum())} pairs are undefined and set to NaN; first "
+                f"({i}, {j}): singular pairwise covariance (collinear or "
+                f"constant series).")
+        return A
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        """``T_{i->j}`` (or ``tau_{i->j}``): i is the source, j the target.
+
+        Read from the full table, which costs ``O(M^2)`` (``O(M^3)`` when
+        conditional) once the cached covariances exist. Raises, rather than
+        returning NaN, when the requested pair is undefined.
+        """
+        if i == j:
+            return np.nan
+        value = self._matrix(data)[i, j]
+        if np.isnan(value):
+            raise ValueError(
+                f'SPI "{self.identifier}": pair ({i}, {j}) is undefined '
+                f"(singular covariance: collinear or constant series).")
+        return float(value)
