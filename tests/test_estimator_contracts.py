@@ -1,16 +1,9 @@
 """An SPI must compute the estimator it advertises, or refuse.
 
-Six classes accept ``estimator="kraskov"``, embed ``kraskov_NN-4`` in their
-identifier, and then run the Gaussian estimator. Nothing in the result records
-that substitution, so a table can report a k-NN estimate that was never
-computed.
-
-Scope note: none of these six appear in any bundled config, so no shipped
-result or stored baseline is affected. This is a latent API defect — it bites
-anyone hand-writing a config — not a corruption of the current numbers. The
-tests are still blockers, because the failure is silent and scientific.
-
-The rejecting constructors are asserted directly; no xfail remains here.
+Each class below accepting ``estimator="kraskov"`` must either compute a
+genuine k-NN estimate or reject the argument, never embed ``kraskov_NN-4`` in
+its identifier and run the Gaussian estimator. The contract matters mostly for
+hand-written configs.
 """
 import numpy as np
 import pytest
@@ -18,7 +11,7 @@ import pytest
 from pyspi.data import Data
 from pyspi.statistics import infotheory as it
 
-# Classes that advertise kraskov but dispatch to the Gaussian estimator.
+# Classes whose kraskov variant must be genuine or rejected.
 FALSE_KRASKOV = [
     "JointEntropy",
     "ConditionalEntropy",
@@ -125,11 +118,9 @@ def _reference_symbolic_te(src, targ, k):
 def test_symbolic_encoding_is_collision_free(k):
     """Joint symbol counting must be injective at every k.
 
-    The old encoding multiplied by a multiplier that squared at each step, so
-    the packed value reached (k!)^3 and exceeded int64 at k=10, wrapping
-    silently. Wrapping is not the same as colliding -- no collisions occur on
-    the shipped fixtures -- but the encoding gave no guarantee, so this checks
-    the implementation against a reference that cannot overflow.
+    Packing symbols into one integer can overflow int64 for large alphabets
+    (e.g. ordinal patterns at k=10), so this checks the implementation against
+    a reference that cannot overflow.
     """
     from pyspi.statistics.infotheory import SymbolicTECalculator
 
@@ -193,10 +184,8 @@ def _di_system(phi, c, T=4000, seed=0):
 def test_directed_info_is_zero_for_an_independent_source(phi):
     """DI(X->Y) must not grow with the target's own autocorrelation.
 
-    The previous implementation summed H(Y^i)/i and subtracted causal entropy,
-    which is not Massey's definition: with an independent source it returned
-    0.007 at phi=0 and 1.53 at phi=0.95, i.e. it measured how predictable the
-    target was from its own past.
+    Massey's definition is zero for an independent source; it does not measure
+    how predictable the target is from its own past.
     """
     di = it.DirectedInfo(estimator="gaussian").bivariate(_di_system(phi, 0.0), i=0, j=1)
     assert abs(di) < 0.02, (
@@ -243,11 +232,8 @@ def test_ksg_rejects_negative_theiler_window():
 
 
 def test_ksg_rejects_tied_inputs():
-    """Quantised/constant inputs give a zero k-th radius and a bogus negative CMI.
-
-    Binary series previously returned TE = -2.36, for a quantity bounded below
-    by zero.
-    """
+    """Quantised/constant inputs give a zero k-th radius and a negative CMI,
+    so they are rejected."""
     const = np.zeros((2, 200))
     const[1] = np.arange(200)
     data = Data(data=const, dim_order="ps", zscore=False)
@@ -288,11 +274,9 @@ def test_directed_info_kraskov_is_zero_for_independent_source(T):
 def test_ksg_cmi_reduces_to_mi_when_conditioning_set_is_empty(w):
     """I(A;B|nothing) is I(A;B), at every Theiler window.
 
-    The empty-C branch used to fake the conditioning count as a constant
-    N-(2w+1). That matched the MI estimator only at w=0 and drifted with the
-    window (0.005 at w=1, 0.051 at w=10). DirectedInfo's first term has an
-    empty history, so this is on the shipped path whenever a Theiler window is
-    configured.
+    A constant conditioning count of N-(2w+1) would match the MI estimator only
+    at w=0. DirectedInfo's first term has an empty history, so this path runs
+    whenever a Theiler window is configured.
     """
     from pyspi.statistics.infotheory import _ksg_cmi, _ksg_mi_general
 
@@ -365,15 +349,12 @@ def test_wilson_non_convergence_is_reported_not_swallowed():
 def test_ccm_auto_embedding_maximises_skill_rather_than_returning_max_e():
     """``E=None`` must select an embedding, not return the largest candidate.
 
-    The call site read the winner as ``pyEDM.EmbedDimension(...).max()["E"]``.
-    ``DataFrame.max()`` reduces column-wise, so that is the largest *candidate*
-    E -- pyEDM's ``maxE`` default of 10 -- for every process on every dataset.
-    The three shipped ``ccm_E-None_*`` SPIs were consequently bit-identical to
-    ``ccm_E-10_*`` on all three frozen fixtures while advertising an inferred
-    embedding: the identifier said one thing and the number was another.
+    ``pyEDM.EmbedDimension(...).max()["E"]`` would be the largest *candidate*
+    E, because ``DataFrame.max()`` reduces column-wise; the skill-maximising E
+    is ``rho.idxmax()``.
 
-    This pins the replacement against pyEDM's own per-E skill, and pins that
-    the answer is data-dependent rather than the constant it used to be.
+    This pins the selection against pyEDM's own per-E skill, and pins that the
+    answer is data-dependent rather than a constant.
     """
     import os
 
@@ -447,11 +428,9 @@ def test_ksg_mi_is_invariant_to_per_coordinate_rescaling(scale):
 def test_ksg_mi_of_independent_quantised_marginals_is_near_zero(levels, w):
     """Ties are broken by hctsa-style jitter, so independent data give MI ~ 0.
 
-    Before the tie-break these returned -3.35 (binary), -1.96 (four-level) and
-    +0.90 (rounded Gaussians) at N=400, k=4. Sampling SD of the estimator at
-    N=400, k=4 is ~0.02-0.035 (measured over 20 seeds); the tolerance of 0.15
-    is more than four SD, i.e. loose enough not to flake, tight enough to be
-    ~20x below the old failures.
+    Without a tie-break, quantised inputs give values far from zero, of either
+    sign. The tolerance of 0.15 is more than four sampling SDs of the estimator
+    at N=400, k=4, so it does not flake.
     """
     from pyspi.statistics.infotheory import _ksg_mi_pair
 
@@ -586,13 +565,10 @@ def test_transfer_entropy_refuses_embedding_parameters_it_does_not_implement(
 
     `SymbolicTECalculator` reads only `k_HISTORY` and uses that one ordinal
     pattern length for source *and* destination, at unit delay -- which is how
-    Staniek & Lehnertz (2008) define it. It nonetheless accepted `k_tau`,
-    `l_history` and `l_tau`, stored them, ignored them, and wrote them into the
-    identifier: `te_symbolic_k-3_kt-1_l-1_lt-1` claimed a destination history of
-    3 against a source history of 1 while computing 3 for both. The kernel
-    calculator has the same single-history contract and accepted them too,
-    silently. Symbolic identifiers are now `te_symbolic_k-<k>`, as the kernel
-    ones already were.
+    Staniek & Lehnertz (2008) define it. The kernel calculator has the same
+    single-history contract. Both therefore reject `k_tau`, `l_history` and
+    `l_tau`, and symbolic identifiers are `te_symbolic_k-<k>`, as the kernel
+    ones are.
     """
     import pyspi.statistics.infotheory as it
 
@@ -707,9 +683,7 @@ def test_cross_correlation_cache_stores_the_reversed_lag_profile():
 def test_cross_correlation_significance_band_scales_with_the_sample_size():
     """1.96/sqrt(T), not 1.96/sqrt(T//4).
 
-    The old threshold was computed from the half-width of the lag *window*, so
-    it was twice too wide and moved if the lag cut changed rather than if the
-    record length did.
+    The band depends on the record length, not on the width of the lag window.
     """
     from pyspi.data import Data
     from pyspi.statistics.basic import CrossCorrelation
@@ -720,9 +694,8 @@ def test_cross_correlation_significance_band_scales_with_the_sample_size():
     spi = CrossCorrelation(statistic="max", sigonly=True)
     spi.bivariate(data, i=0, j=1)
     lags = data.xcorr[(0, 1)]
-    # Under independence essentially nothing should clear 1.96/sqrt(T); the old
-    # band (1.96/sqrt(T//4) = 2x wider) let through even fewer, masking that the
-    # nominal 5% level was never being applied.
+    # Under independence about 5% of lags clear 1.96/sqrt(T); a 2x wider band
+    # would let through far fewer.
     assert (np.abs(lags) > 1.96 / np.sqrt(T)).mean() < 0.15
 
 
@@ -774,7 +747,7 @@ def test_crossmap_entropy_embedding_dimension(k, dims):
     consistent, cross-map entropy has no canonical published definition to
     arbitrate between them, and re-picking one would change every `xme_*` value
     on a guess about intent. See the class docstring. The exception is the
-    shipped k=1, which keeps the one source lag X_{t-1} (as k=2 does).
+    bundled k=1, which keeps the one source lag X_{t-1} (as k=2 does).
     """
     import pyspi.statistics.infotheory as it
     from pyspi.data import Data
@@ -903,8 +876,8 @@ def test_infotheory_parameters_are_validated_at_construction(kwargs):
     """A non-positive box-kernel half-width counts only the point itself.
 
     Every log ratio is then log(N) and the "estimate" is a constant; k < 1 has
-    no kth neighbour at all. Both used to be discovered downstream, as a
-    degenerate number rather than a rejected argument.
+    no kth neighbour at all. Both are rejected at construction rather than
+    surfacing downstream as a degenerate number.
     """
     import pyspi.statistics.infotheory as it
 
@@ -1172,12 +1145,12 @@ def test_search_bounds_are_refused_without_an_auto_method(bound):
 
 
 def test_auto_embedding_identifiers_name_the_method_and_resolved_bounds():
-    """`MAX_CORR_AIS` changed meaning, so the identifier has to say which it is.
+    """The identifier names the auto-embedding method and its search bounds.
 
-    It previously searched the destination only while carrying a name that
-    denotes selection for both, and the identifier recorded neither. Defaults
-    are resolved before the identifier is built, so an omitted bound still
-    appears with the value actually used.
+    ``MAX_CORR_AIS`` selects for both destination and source, and
+    ``MAX_CORR_AIS_DEST_ONLY`` for the destination only. Defaults are resolved
+    before the identifier is built, so an omitted bound still appears with the
+    value actually used.
     """
     import pyspi.statistics.infotheory as it
 
@@ -1274,11 +1247,11 @@ def test_cross_correlation_reports_the_sign_of_the_association(sign):
     association: on an anticorrelated pair whose true r(0) is -1, `xcorr_max`
     returns a small positive number, because the maximum of a signed profile is
     a maximum. `mean` carries the sign. The squared variants carry the strength
-    without it. That is the shipped semantics and this pass does not redesign
-    it; the test records it so it cannot be mistaken for a defect later.
+    without it. The test records these semantics so they are not mistaken for
+    a defect.
 
     Asserted on the returned SPI values rather than on the cached lag profile,
-    since the reduction and the thresholding are where the bugs were.
+    since the reduction and the thresholding are what is under test.
     """
     from pyspi.data import Data
     from pyspi.statistics.basic import CrossCorrelation
@@ -1799,10 +1772,10 @@ def test_multitaper_phase_slope_index_refuses_a_band_with_one_frequency():
 def test_no_p90_spi_depends_on_the_global_rng():
     """A statistic is a function of the data, not of what ran before it.
 
-    The sgddtw barycenters and the MinCovDet / EllipticEnvelope fits drew from
-    the global NumPy stream, so their values changed with the caller's seed,
-    with SPI order, and between serial and parallel runs. Each now owns a
-    fixed-seed generator. (The graphical-lasso solver still *advances* the
+    The sgddtw barycenters and the MinCovDet / EllipticEnvelope fits each own a
+    fixed-seed generator rather than drawing from the global NumPy stream, so
+    their values do not depend on the caller's seed, on SPI order, or on serial
+    versus parallel execution. (The graphical-lasso solver still *advances* the
     global stream -- scikit-learn draws a seed it never uses under cyclic
     coordinate descent -- which is harmless only while nothing reads it.)
     """

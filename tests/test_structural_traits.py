@@ -5,21 +5,18 @@ no word for measures satisfying ``A[i,j] == -A[j,i]`` -- PLI, wPLI, PSI, and
 CCM's "diff" statistic -- and labelling them ``undirected`` (which implies
 symmetry) misdescribes them for any downstream filtering or grouping.
 
-Resolved here:
+Checked here:
 
-* ``Cointegration`` declared ``Undirected`` while ``aeg`` computes
-  ``stattools.coint`` on the pair, which is not symmetric in its arguments
-  (measured: ~0.8 mean absolute difference between orientations, up to ~1.6).
-  The cache then wrote the one computed value to both ``(i, j)`` and
-  ``(j, i)``, so which orientation you got depended on visit order. ``aeg`` is
-  now ``directed`` and reports what it computes; ``johansen``, which is
-  symmetric to ~3e-14, keeps the alias.
-* Wavelet ``PhaseSlopeIndex`` filled its upper triangle from the lower one
-  *without negating*, inverting the lead/lag sign for half of every matrix.
-* ``hhg`` was declared directed but is exactly symmetric; ``ce``, ``dcorrx``
-  and ``mgcx`` were labelled undirected in configs but are directed.
+* ``Cointegration`` is ``Directed``: ``aeg`` computes ``stattools.coint`` on
+  the pair, which is not symmetric in its arguments, so each orientation is
+  reported as computed; ``johansen`` is symmetric and serves both from one
+  computation.
+* Wavelet ``PhaseSlopeIndex`` negates when filling its upper triangle from the
+  lower one, preserving the lead/lag sign.
+* ``hhg`` is symmetric; ``ce``, ``dcorrx`` and ``mgcx`` are directed.
 
-The audit reads the committed baseline matrices, so it costs no computation.
+The symmetry check reads the committed baseline matrices, so it costs no
+computation.
 """
 import os
 
@@ -113,7 +110,7 @@ def _classify(mat):
     return "asymmetric"
 
 
-def _label_symmetry_audit():
+def _label_symmetry_violations():
     """Return {identifier: (declared, observed)} disagreements from baselines."""
     z = np.load(BASELINE, allow_pickle=False)
     spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
@@ -133,9 +130,7 @@ def _label_symmetry_audit():
         # Only undirected -> asymmetric is a contradiction. A *directed*
         # measure may legitimately produce a symmetric matrix on a particular
         # dataset: lmfit_* and gpfit_DotProduct are symmetric on z-scored data
-        # because a linear model's R^2 is, yet with zscore=False their measured
-        # asymmetry is ~22.7-23.3. Flagging that direction produced false
-        # positives, not findings.
+        # because a linear model's R^2 is, yet asymmetric with zscore=False.
         labels = set(getattr(spi, "labels", []) or [])
         if "undirected" in labels and observed == "asymmetric":
             disagreements[ident] = ("undirected", observed)
@@ -143,7 +138,7 @@ def _label_symmetry_audit():
 
 
 def test_declared_symmetry_matches_observed_matrices():
-    bad = _label_symmetry_audit()
+    bad = _label_symmetry_violations()
     assert not bad, "Declared/observed symmetry disagreements:\n" + "\n".join(
         f"  {k}: declared {v[0]}, observed {v[1]}" for k, v in sorted(bad.items())
     )
@@ -188,7 +183,7 @@ def test_no_bundled_spi_returns_a_constant_matrix():
 def test_conditional_entropy_label_matches_implementation():
     """Under the default z-scoring the Gaussian form is symmetric, so the
     bundled variants are labelled undirected; the kernel and kozachenko forms
-    remain asymmetric and that is checked by the symmetry audit above."""
+    remain asymmetric and that is checked by the symmetry test above."""
     spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
     ce = {k: v for k, v in spis.items() if k.startswith("ce_")}
     assert ce, "Precondition: full config must contain ConditionalEntropy variants."
@@ -407,9 +402,9 @@ def test_antisymmetric_spis_report_themselves_as_signed():
     unsigned. On an antisymmetric matrix that shifts A[i,j] and A[j,i] by the
     same amount, destroying the antisymmetry that carries the lead/lag;
     `set_group` separately correlates unsigned SPIs through `abs()`, folding
-    lead onto lag. The shipped configs declared `unsigned` for `phase`, `pli`,
-    `wpli`, `psi` (both the multitaper and wavelet families), `gd` and
-    `ccm_*_diff`.
+    lead onto lag. This covers `phase`, `pli`, `wpli`, `psi` (both the
+    multitaper and wavelet families), `gd` and `ccm_*_diff`, which configs may
+    label `unsigned`.
     """
     spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
     bad = [

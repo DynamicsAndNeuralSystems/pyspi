@@ -6,8 +6,8 @@ The contract this file enforces:
     documented reason. It must not silently produce a misleading value.
 
 Every fixture is M=3 at T=64 and T=256, from two fixed seeds -- short enough
-that the estimators are working near their limits, which is where the failures
-this branch fixed all lived, and small enough that the whole file runs in
+that the estimators are working near their limits, where silent failures
+occur, and small enough that the whole file runs in
 seconds. Each fixture is routed to the SPIs it can actually say something
 about; nothing here runs the full config.
 
@@ -120,7 +120,7 @@ def _off(matrix):
 # ---------------------------------------------------------------------------
 
 def _representative_spis():
-    """(label, factory) -- one per family the audit touched, not 316 SPIs."""
+    """(label, factory) -- one per estimator family, not the full SPI set."""
     import pyspi.statistics.basic as basic
     import pyspi.statistics.causal as causal
     import pyspi.statistics.distance as distance

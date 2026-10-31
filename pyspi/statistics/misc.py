@@ -23,29 +23,18 @@ from pyspi.base import (
 class Cointegration(Directed, Unsigned):
     """Cointegration test statistics.
 
-    The two methods differ in a way the class previously hid.
-
     ``johansen`` is symmetric by construction: it tests the rank of a VECM
     fitted to the pair, and swapping the columns leaves the trace and maximum
-    eigenvalue statistics unchanged (verified to ~3e-14).
+    eigenvalue statistics unchanged.
 
     ``aeg`` (augmented Engle-Granger) is *not* symmetric: it regresses the first
     series on the second and unit-root-tests the residuals, so swapping the
-    arguments changes the residual series and hence the statistic. Measured on
-    random walks the two orientations differ by ~0.8 on average and up to ~1.6,
-    against a statistic that typically ranges from -1 to -3. That is a genuine
-    orientation dependence, not numerical noise.
+    arguments changes the residual series and hence the statistic.
 
-    Previously the class declared itself ``Undirected`` and the cache wrote each
-    computed value to both ``(i, j)`` and ``(j, i)``, so an asymmetric statistic
-    was reported symmetrically and *which* of the two orientations you got
-    depended on the order in which the pairs happened to be visited.
-
-    The base is now ``Directed``: each orientation is reported as computed. No
-    symmetrisation rule is invented here, because choosing one (min, max, or
-    mean over orientations) is a scientific decision with no settled convention,
-    and silently picking one is what caused the original problem. ``johansen``
-    keeps the cache alias, since for it the two orientations are provably equal.
+    The class is ``Directed`` and reports each orientation as computed, with no
+    symmetrisation rule (min, max or mean over orientations have no settled
+    convention). ``johansen`` serves ``(j, i)`` from the ``(i, j)`` computation,
+    since for it the two orientations are equal.
 
     For ``aeg``, ``table[i, j]`` is the Engle-Granger t-statistic of process
     *j* regressed on process *i* (regressor on the row, as for ``lmfit``).
@@ -83,11 +72,8 @@ class Cointegration(Directed, Unsigned):
             if statistic == "tstat":
                 # A *signed* Engle-Granger t-statistic: more negative is
                 # stronger evidence of cointegration, and a positive value
-                # means none at all. Reporting it as unsigned made
-                # `Calculator._rmmin` shift the whole column by its minimum and
-                # `set_group` correlate it through `abs()`, both of which treat
-                # the sign as noise when it is the entire finding. The
-                # identifier already says `tstat`; the class now agrees.
+                # means none at all. Signed, so `Calculator._rmmin` and
+                # `set_group` do not treat the sign as noise.
                 self.issigned = lambda: True
         if method == "johansen":
             self.identifier += (
@@ -147,8 +133,8 @@ class Cointegration(Directed, Unsigned):
                 data.coint[self.key] = {idx: ci}
             if self._method == "johansen":
                 # Provably orientation-independent, so serving (j, i) from the
-                # same computation is an optimisation, not an assumption. For
-                # aeg it would be exactly the aliasing bug this class had.
+                # same computation is an optimisation, not an assumption. aeg is
+                # orientation-dependent and must not be aliased.
                 data.coint[self.key][(j, i)] = ci
 
         return ci

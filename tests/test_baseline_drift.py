@@ -8,8 +8,8 @@ What is ENFORCED (hard assertion failure):
     so a newly-broken or renamed SPI cannot disappear by having no baseline;
   * the shape of each matrix;
   * the NaN *pattern*. A SPI going from finite to all-NaN (or back) is a
-    categorical regression, not drift — this fork changed NaN-on-failure
-    semantics, so that is precisely the signal worth failing on.
+    categorical change, not drift: a failed SPI reports NaN, so that is
+    precisely the signal worth failing on.
 
 What is also ENFORCED:
   * numerical drift in the finite entries. Exceedances are routed to a
@@ -18,13 +18,13 @@ What is also ENFORCED:
 
 Baselines live in ``tests/data/baselines/<dataset>.npz`` (one MxM array per
 SPI identifier), plus optional ``<dataset>.<name>.npz`` files that hold the
-SPIs of one added family and are merged on load. They are regenerated from the *current* fork by
-``tests/tools/generate_benchmark_tables.py``. They are a forward-looking
-change detector, not an independent oracle: the fork deliberately rewrote the
-information-theoretic estimators, so upstream pyspi 2.0.1 values are the wrong
-reference for exactly the code that most needs one. Independent correctness
-lives in analytic and structural contract tests, including
-``test_infotheory_analytic.py`` and ``test_structural_traits.py``.
+SPIs of one added family and are merged on load. They are regenerated from the
+current code by ``tests/tools/generate_benchmark_tables.py``. They are a
+forward-looking change detector, not an independent oracle: pyspi 3
+reimplements the information-theoretic estimators, so upstream pyspi 2.0.1
+values are the wrong reference for exactly the code that most needs one.
+Independent correctness lives in analytic and structural contract tests,
+including ``test_infotheory_analytic.py`` and ``test_structural_traits.py``.
 
 Frozen fixtures live in ``tests/data/fixtures/`` (not in ``pyspi/data/``: they
 are test inputs, not shipped demo data) and are built by
@@ -312,9 +312,8 @@ def test_baseline_drift(dataset_name, spi_key, baseline_tables, current_tables,
         )
 
     # --- Enforced: a baseline with nothing in it is not an oracle ---------
-    # `if not finite.any(): return` used to pass here, so an SPI that produced
-    # an all-NaN column at freeze time was recorded as such and then agreed
-    # with itself forever. All three `gd_*` SPIs sat in that state.
+    # Otherwise an SPI that produced an all-NaN column at freeze time would
+    # agree with itself forever.
     off_diagonal = ~np.eye(ref.shape[0], dtype=bool)
     if spi_key in KNOWN_UNESTIMABLE.get(dataset_name, {}):
         pytest.skip(KNOWN_UNESTIMABLE[dataset_name][spi_key])

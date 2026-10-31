@@ -63,9 +63,8 @@ class AdditiveNoiseModel(Directed, Unsigned):
     def bivariate(self, data, i=None, j=None):
         """HSIC between x and the residual of a GP fit of y on x.
 
-        This was already pyspi's own scoring function, monkey-patched over
-        cdt's (which regressed the wrong way round -- cdt PR #155); only the
-        HSIC came from cdt, and it is now `pyspi.lib.pairwise_causal`.
+        cdt's ANM regresses the other way round (cdt PR #155). The HSIC is
+        in `pyspi.lib.pairwise_causal`.
         """
         z = data.to_numpy()
         return _anm_scores(z[i], [z[j]])[0]
@@ -125,14 +124,13 @@ class InformationGeometricCausalInference(Directed, Signed):
     of a deterministic invertible map.
 
     The score is a *difference* of two entropies, hence exactly antisymmetric:
-    `A[i, j] == -A[j, i]`, verified on the fixtures. Reporting it as unsigned
-    was not cosmetic -- `Calculator._rmmin` shifts every column it believes
-    unsigned by that column's minimum, which on an antisymmetric matrix moves
-    `A[i,j]` and `A[j,i]` by the same amount and destroys the lead/lag the sign
-    carries, and `set_group` folds the two directions together through `abs()`.
+    `A[i, j] == -A[j, i]`. It is therefore signed: `Calculator._rmmin` shifts
+    every unsigned column by its minimum and `set_group` correlates unsigned
+    SPIs through `abs()`, both of which would destroy the lead/lag the sign
+    carries.
 
-    It stays commented out of the bundled configs; this is a metadata and API
-    correction, not a claim that the heuristic is reliable.
+    It is commented out of the bundled configs; the heuristic is not claimed
+    to be reliable.
     """
 
     name = "Information-geometric causal inference"
@@ -167,24 +165,12 @@ class InformationGeometricConditionalIndependence(InformationGeometricCausalInfe
 def _optimal_embedding_dimension(df, column, lib_pred, max_e=10):
     """E in [1, max_e] maximising simplex-projection skill, computed serially.
 
-    Replaces ``pyEDM.EmbedDimension``, for two independent reasons.
-
-    **It was not selecting anything.** The call site read the winner as
-    ``embed_df.max()["E"]``. ``DataFrame.max()`` reduces column-wise, so that is
-    the largest *candidate* E, not the E at the largest rho -- ``max_e``, every
-    time, for every process, whatever the data says. The three shipped
-    ``ccm_E-None_*`` SPIs were therefore bit-identical to ``ccm_E-10_*`` on all
-    three frozen fixtures (verified: max|difference| exactly 0), while their
-    identifiers advertised an inferred embedding. ``rho.idxmax()`` is the
-    selection that was intended.
-
-    **It cannot be called safely.** ``EmbedDimension`` always builds a
-    ``multiprocessing.Pool``; there is no serial path, and ``numProcess=1``
-    still starts a child. pyEDM 2.5 starts pools with forkserver/spawn, never
-    fork, so each child re-imports the caller's ``__main__`` -- see the note in
-    ``ConvergentCrossMapping._from_cache``. Looping over ``pyEDM.Simplex``
-    (public API, and exactly what ``PoolFunc.EmbedDimSimplexFunc`` calls in each
-    child) gives the same rho per E with no pool at all.
+    The serial equivalent of ``pyEDM.EmbedDimension``: it runs
+    ``pyEDM.Simplex`` for each E (as ``PoolFunc.EmbedDimSimplexFunc`` does in
+    each child) and selects ``rho.idxmax()``. ``EmbedDimension`` always builds a
+    ``multiprocessing.Pool`` (even with ``numProcess=1``), which pyEDM starts
+    with forkserver/spawn, so each child re-imports the caller's ``__main__``
+    (see the note in ``ConvergentCrossMapping._from_cache``).
 
     Ties go to the smallest E: a lower-dimensional embedding that predicts as
     well is the better model, and ``argmax`` returns the first maximum. Ties are

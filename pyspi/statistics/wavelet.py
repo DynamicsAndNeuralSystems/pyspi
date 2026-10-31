@@ -289,9 +289,8 @@ class PhaseSlopeIndex(mne, Undirected):
         # samples for T=100), which MNE warns about and which makes those bands
         # meaningless. Shorten the wavelet at low frequencies so it always fits:
         # the usual time-frequency trade, resolution given up to stay estimable.
-        # MNE's Morlet length is ~1.59 * n_cycles / f samples (measured: 159
-        # samples at f=0.05, n_cycles=5). Cap n_cycles so the wavelet never
-        # exceeds the signal, with a small margin.
+        # MNE's Morlet length is ~1.59 * n_cycles / f samples. Cap n_cycles so
+        # the wavelet never exceeds the signal, with a small margin.
         n_obs = data.n_observations
         max_cycles = 0.95 * n_obs * cwt_freqs / (1.59 * self._fs)
         cwt_n_cycles = np.clip(max_cycles, 1.0, 7.0)
