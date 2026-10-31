@@ -192,6 +192,34 @@
         squared: True
         sigonly: False
 
+  # Lag-resolved cross-correlation r_{i->j}(tau) = corr(x_i[t], x_j[t + tau]), row leads
+  # column for tau > 0 (Box et al. 2015; Mitra et al. 2014): lag, peak, onesided,
+  # onesidedpeak, asym
+  LagResolvedCorrelation:
+    labels:
+      - directed
+      - linear
+      - signed
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: lag
+      - statistic: peak
+      - statistic: asym
+      - statistic: onesided
+        tau: 1
+      - statistic: onesided
+        tau: "1e"
+      - statistic: onesidedpeak
+      - statistic: lag
+        max_lag: 10
+      - statistic: peak
+        max_lag: 10
+      - statistic: asym
+        max_lag: 10
+
 .statistics.distance:
   PairwiseDistance:
     labels:

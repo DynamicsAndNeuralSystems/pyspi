@@ -261,6 +261,15 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (30 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
 - **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 
+### Added
+
+- **`LagResolvedCorrelation` (`lagcorr_*`): directed, lag-resolved cross-correlation** (Box et al. 2015; Mitra et al. 2014).
+  It reads the profile `CrossCorrelation` caches, `r_{i->j}(tau) = corr(x_i[t], x_j[t + tau])` (biased, divide by T; positive `tau` is the row leading the column), over `L = min(max_lag, T // 4)` lags each way.
+  It reports the signed lag of the largest `|r|` (`lag`, antisymmetric), the signed `r` at that lag (`peak`, undirected), and the lead/lag asymmetry `(S_{i->j} - S_{j->i}) / (S_{i->j} + S_{j->i})` with `S_{i->j} = sum_{l=1..L} r_{i->j}(l)^2` (`asym`, antisymmetric, in [-1, 1]).
+  `onesided` (directed, signed) is `r_{i->j}(tau)` at one lag shared by both directions of a pair: a fixed `tau` (default 1), or `tau="1e"` for `round(sqrt(l_i l_j))`, where `l_i` is the first lag at which process i's autocorrelation falls below 1/e (hctsa's `CO_f1ecac`), clipped to `1 .. min(T // 10, L)`.
+  `onesidedpeak` (directed, unsigned) is the largest `|r_{i->j}(k)|` over `1 <= k <= l_i + l_j`, with the same clipping.
+  `full` bundles `lagcorr_{lag,peak,asym}_L-None`, `lagcorr_onesided_tau-1_L-None`, `lagcorr_onesided_tau-1e_L-None`, `lagcorr_onesidedpeak_L-None` and `lagcorr_{lag,peak,asym}_L-10`; `fast` bundles the first four.
+
 ### Dependencies
 
 - **Floors, relative to 2.0.2** (`pyproject.toml` is the source of truth):
