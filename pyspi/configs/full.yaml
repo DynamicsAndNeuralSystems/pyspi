@@ -1559,3 +1559,41 @@
       - terms: 6
         pnorm: 'max'
         bandwidth: 0.5
+
+# Coupling of extremes and events
+.statistics.events:
+  # Event synchronisation of extreme events (Quian Quiroga et al. 2002): Q is the
+  # fraction of coincident events, q their delay asymmetry (q[i, j] > 0 when i leads)
+  EventSynchronisation:
+    labels:
+      - undirected
+      - nonlinear
+      - signed/unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: Q
+        quantile: 0.95
+      - statistic: q
+        quantile: 0.95
+      - statistic: Q
+        quantile: 0.9
+      - statistic: q
+        quantile: 0.9
+
+  # Upper minus lower empirical tail-dependence coefficient on ranks
+  # (Joe 1997; Schmidt & Stadtmueller 2006)
+  TailDependenceAsymmetry:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - quantile: 0.95
+      - quantile: 0.9

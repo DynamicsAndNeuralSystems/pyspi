@@ -109,6 +109,7 @@ class Data:
         "coint",
         "covariance",
         "entropy",
+        "events",
         "joint_entropy",
         "mne",
         "mne_psi",
