@@ -490,6 +490,31 @@
         embedding_dimension: 10
       - statistic: diff
         embedding_dimension: 10
+      # CCM convergence, skill(L_max) - skill(L_min), and the OLS slope of
+      # skill on ln(L) (Sugihara et al. 2012)
+      - statistic: convergence
+      - statistic: convergence
+        embedding_dimension: 1
+      - statistic: convergence
+        embedding_dimension: 10
+      - statistic: slope
+
+  # Lagged CCM (Ye et al. 2015): the horizon Tp in [-k, k] of peak cross-map skill
+  # (tp; negative for a causal row -> column link) and the peak skill (skill)
+  LaggedConvergentCrossMapping:
+    labels:
+      - directed
+      - nonlinear
+      - signed
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: tp
+        max_lag: 5
+      - statistic: skill
+        max_lag: 5
 
 # Information-theoretic statistics
 .statistics.infotheory:
