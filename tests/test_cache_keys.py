@@ -1,22 +1,17 @@
 """Parameterised statistic caches must key on every parameter.
 
-These began as red tests and are now green. The spectral cache had two
-defects that compounded:
+Two spectral-cache properties are checked:
 
-1. ``NonparametricSpectral.key`` omitted ``fs``, so two SPIs differing only in
-   sampling frequency collided in the cache.
-2. ``_get_cache`` *wrote* the first result under ``self.measure`` (a plain
-   string) but *read* under ``self.key`` (a tuple). The first write was
-   therefore unreachable, and staleness only surfaced from the third call
-   onward, once a tuple-keyed entry finally existed.
+1. ``NonparametricSpectral.key`` includes ``fs``, so two SPIs differing only in
+   sampling frequency do not collide in the cache.
+2. ``_get_cache`` writes and reads under the same key (``self.key``). A
+   mismatch would leave the first write unreachable, so staleness would only
+   surface from the third call onward.
 
-Defect 2 is why a naive two-call probe reports no problem. The sequence below
-(fs=1 -> 4 -> 1 -> 4) is the minimum that exposes it, and every value is
-compared against a freshly-constructed Data rather than against its
+Property 2 is why a naive two-call probe is not enough. The sequence below
+(fs=1 -> 4 -> 1 -> 4) is the minimum that exposes a mismatch, and every value
+is compared against a freshly-constructed Data rather than against its
 predecessor.
-
-Keep these as regression tests: both defects were invisible to the obvious
-probe, and the second would return silently wrong numbers if reintroduced.
 """
 import numpy as np
 import pytest

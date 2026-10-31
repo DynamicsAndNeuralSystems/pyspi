@@ -3,9 +3,8 @@
 ``tests/test_baseline_drift.py`` compares a fresh computation against a frozen
 baseline. How tight that comparison may be is a property of each SPI, not of
 the module it lives in: a deterministic estimator must reproduce its baseline
-to float round-off, while one consuming unpinned randomness cannot. Guessing
-which is which is how a blanket 1e-2 band ended up covering ~50 deterministic
-SPIs, wide enough to hide a real regression in any of them.
+to float round-off, while one consuming unpinned randomness cannot. This
+measures which is which rather than guessing.
 
 This computes the full config twice per fixture under exactly the suite's
 protocol -- ``np.random.seed(SEED)``, then a fresh ``Calculator`` -- and reports

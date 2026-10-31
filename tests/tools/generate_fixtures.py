@@ -77,7 +77,7 @@ def generate_kuramoto(M=7, T=100, dt=0.2, K=0.8, omega_spread=2.0, seed=0):
     ``K`` and the natural-frequency spread are set for *partial* synchronisation.
     Strong coupling drives the lattice to a single locked phase, at which point
     every process is a copy of every other and most pairwise statistics become
-    degenerate (that was the failure mode of the fixture this replaces).
+    degenerate.
     """
     rng = np.random.default_rng(seed)
     omega = rng.uniform(-omega_spread, omega_spread, size=M)

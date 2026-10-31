@@ -15,7 +15,7 @@ def config_file(tmp_path, mock_yaml_content):
 def mock_yaml_content():
     """Real modules, classes and config params.
 
-    filter_spis now instantiates each config and matches on the labels the SPI
+    filter_spis instantiates each config and matches on the labels the SPI
     actually carries, because several traits are only set in __init__ and are
     invisible in the raw YAML. That means the fixture has to be loadable: fake
     module names and integer configs cannot be instantiated.

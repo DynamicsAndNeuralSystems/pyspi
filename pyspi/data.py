@@ -165,11 +165,6 @@ class Data:
         series. Copying would defeat the point of sharing, so ownership is
         waived here and the array is exposed read-only instead — workers only
         ever read it.
-
-        This replaces the previous ``Data.__new__`` + manual attribute
-        assignment in ``pyspi._parallel._attach_data``, which had to be kept in
-        sync with ``__init__`` by hand and silently skipped anything added
-        there.
         """
         if arr.ndim != 3:
             raise ValueError(
@@ -218,11 +213,8 @@ class Data:
     def _apply_preprocessing(self, data, log=False):
         """Detrend and/or z-score along the time axis of a (p, s, r) array.
 
-        The single preprocessing path. ``add_process`` previously appended its
-        argument raw while ``set_data`` transformed it, so building a dataset
-        with ``Data().add_process(x).add_process(y)`` z-scored the first process
-        and left the second on its original scale -- every pairwise statistic
-        then compared a standardised series against an unstandardised one.
+        The single preprocessing path, shared by ``set_data`` and
+        ``add_process`` so every process is on the same scale.
 
         Both are per-process along time, so applying them to one appended
         process gives exactly the same result as applying them to the whole
@@ -352,8 +344,8 @@ class Data:
                 "Data array dimension ({0}) and length of "
                 "dim_order ({1}) are not equal.".format(data.ndim, len(dim_order))
             )
-        # Unknown or repeated symbols previously slipped through and produced
-        # 4-D/5-D internal states (e.g. 'xx', 'pp') that fail far from here.
+        # Unknown or repeated symbols (e.g. 'xx', 'pp') would produce 4-D/5-D
+        # internal states that fail far from here.
         unknown = set(dim_order) - set("psr")
         if unknown:
             raise ValueError(
@@ -411,7 +403,7 @@ class Data:
         if not isinstance(proc, np.ndarray) or proc.ndim != 1:
             raise TypeError("Process must be a 1D numpy array")
 
-        # Guard on the value, not on hasattr: _data is now always present (set
+        # Guard on the value, not on hasattr: _data is always present (set
         # to None in __init__), so hasattr is True even for an empty Data and
         # the builder path would reshape into a zero-width array.
         if self._data is None:
@@ -464,9 +456,8 @@ class Data:
     def _sync_procnames(self):
         """Drop stale process names after a change in width.
 
-        Names are positional; once the number of processes changes under them
-        they no longer identify anything, so falling back to the generated
-        ``proc-i`` names is the only honest option.
+        Names are positional, so after a change in width they identify nothing
+        and the generated ``proc-i`` names are used instead.
         """
         names = self.__dict__.get("_procnames")
         if names is not None and len(names) != self.n_processes:

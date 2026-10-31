@@ -15,8 +15,7 @@ def test_whether_calculator_computes():
     """The default config must run clean, not merely run.
 
     `compute()` catches per-SPI exceptions into `calc.errors` and carries on, so
-    this test used to pass over a table with failed and entirely-NaN columns in
-    it -- which is how three all-NaN `gd_*` SPIs shipped. Partial NaN is fine
+    this test checks for failed and entirely-NaN columns. Partial NaN is fine
     and expected (several spectral SPIs are defined only where an estimate
     converges); a column with no finite value anywhere is not a measurement.
     """
@@ -381,7 +380,7 @@ def test_correlation_frame_with_labels():
 
 
 def test_correlation_frame_constructs():
-    """CorrelationFrame itself, which no test previously instantiated."""
+    """CorrelationFrame constructs from a computed CalculatorFrame."""
     datasets = [Data(data=np.random.randn(3, 100)) for _ in range(3)]
     frame = CalculatorFrame(datasets=datasets, names=['d1', 'd2', 'd3'],
                             labels=['a', 'b', 'c'], config='fabfour')
@@ -519,10 +518,9 @@ def test_process_names_must_be_unique_and_round_trip_exactly(tmp_path):
 
 
 def test_a_successful_recomputation_clears_a_stale_error():
-    """`compute(retry_failed=True)` left the old entry beside the good column.
+    """A recomputation that succeeds removes the SPI's entry from `calc.errors`.
 
-    `save()` then froze the contradiction into the file: an SPI recorded as
-    failed whose column is populated.
+    Otherwise `save()` would record an SPI as failed whose column is populated.
     """
     calc = Calculator(dataset=np.zeros((2, 40)) + np.arange(40), config="fabfour")
     calc.compute()

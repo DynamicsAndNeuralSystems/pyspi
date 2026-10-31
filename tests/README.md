@@ -30,33 +30,26 @@ corrupt baseline can never break collection of unrelated tests.
 | `test_estimator_contracts.py` | An SPI must compute the estimator it advertises, or refuse. Symbolic/KSG preconditions. |
 | `test_structural_traits.py` | Declared symmetry labels vs observed baseline matrices; AEG process-order dependence. |
 
-### Contract tests (originally red)
+### Contract tests
 
-These files began as *red* tests: assertions for behaviour the package did not
-yet have. All are now green; no `xfail` markers remain. The last one,
-`test_structural_traits.py::test_no_bundled_spi_returns_a_constant_matrix`,
-was resolved by dropping the six constant `dspli_*_max` and `dswpli_*_max`
-SPIs from the bundled configs.
+These files assert behaviour the package must have.
+None carries an `xfail` marker.
 
 Two rules when working on these:
 
 1. **Do not relax an assertion to make one pass.** Fix the code, or mark the
    test `xfail(strict=True)` with the reason.
-2. **Check the failure reason, not just the xfail count.** Several of these
-   initially "failed" for reasons unrelated to the bug under test -- a vacuous
-   comparison, a wrong keyword, a config name passed where a path was wanted. An
-   xfail proves nothing until you have seen the message. Run with `--runxfail`
-   to see it.
+2. **Check the failure reason, not just the xfail count.**
+   A test can fail for reasons unrelated to the defect under test -- a vacuous comparison, a wrong keyword, a config name passed where a path was wanted.
+   An xfail proves nothing until you have seen the message.
+   Run with `--runxfail` to see it.
 
-One trap worth naming: `parse_bivariate`'s signature is
-`(self, data, data2=None, i=None, j=None)`, so `spi.bivariate(data, 0, 1)` binds
-`data2=0, i=1`. That is now rejected with a message naming the signature (it
-used to reach `z[None]`, which numpy reads as `np.newaxis`, and compute
-something unrelated). Always pass `i=`/`j=` by keyword.
+One trap worth naming: `parse_bivariate`'s signature is `(self, data, data2=None, i=None, j=None)`, so `spi.bivariate(data, 0, 1)` binds `data2=0, i=1`.
+It is rejected with a message naming the signature.
+Always pass `i=`/`j=` by keyword.
 
-Log base: every information-theoretic estimator reports **nats**. `kernel` and
-`symbolic` used to report bits, inherited from JIDT's base-2 box-kernel and
-discrete estimators; divide by ln 2 for the JIDT-comparable value.
+Log base: every information-theoretic estimator reports **nats**.
+JIDT reports bits for its box-kernel and discrete estimators, so divide `kernel` and `symbolic` values by ln 2 to compare with JIDT.
 
 ## Baselines
 
@@ -72,18 +65,16 @@ python tests/tools/generate_benchmark_tables.py -d cml_M5_T100
 The frozen `.npy` fixtures themselves live in `tests/data/fixtures/` and come
 from `tests/tools/generate_fixtures.py`. They are **test inputs, not shipped
 data**: they are deliberately outside `pyspi/data/`, so they are not in the
-wheel and not reachable via `pyspi.data.load_dataset` (which now exposes only
+wheel and not reachable via `pyspi.data.load_dataset` (which exposes only
 the three demo datasets `forex`, `cml`, `standard_normal`). Three generating
 processes at three widths — VAR(1) at `M=3`, coupled map lattice at `M=5`,
 Kuramoto at `M=7`, all `T=100` — so the SPI set is exercised across a range of
 `M` rather than at a single width.
 
-These baselines are generated from **this fork's current code**, not from
-upstream pyspi 2.0.1. The fork deliberately rewrote every information-theoretic
-estimator, so upstream values are the wrong oracle for exactly the code that
-most needs one. The baselines are therefore a *forward-looking change detector*:
-they tell you that something moved, not that it was right before. Independent
-correctness lives in `test_infotheory_analytic.py`.
+These baselines are generated from **the current code**, not from upstream pyspi 2.0.1.
+pyspi 3 reimplements every information-theoretic estimator, so upstream values are the wrong oracle for exactly the code that most needs one.
+The baselines are therefore a *forward-looking change detector*: they tell you that something moved, not that it was right before.
+Independent correctness lives in `test_infotheory_analytic.py`.
 
 A single seeded pass is stored per dataset — not a mean over trials. The
 datasets are frozen fixtures and nearly every SPI is a deterministic function of
@@ -101,11 +92,8 @@ reproduces.
    back) is a categorical regression, not drift;
 4. a baseline with no finite off-diagonal value at all, which cannot detect a
    regression however closely the current run reproduces it;
-5. any numerical difference outside the SPI's tolerance. This used to be
-   *reported* to a session-end summary table and not fail the run, which made
-   every tolerance in the file decorative. The summary table is still printed;
-   it is now a description of the failures rather than the whole response to
-   them.
+5. any numerical difference outside the SPI's tolerance.
+   A session-end summary table lists these failures.
 
 Two further gates run per fixture: no SPI may raise (`calc.errors` must be
 empty) and none may produce an entirely non-finite column. The single
@@ -113,12 +101,9 @@ documented exception lives in `KNOWN_UNESTIMABLE`, shared with the baseline
 generator so the two cannot disagree, and the suite fails if a listed exception
 starts succeeding.
 
-Tolerances are `1e-9` relative / `1e-12` absolute for every SPI. The previous
-split — `1e-2` for `causal` and `misc`, on the assumption that their optimisers
-and permutation tests were not bit-reproducible — was measured and found false;
-see `LOOSE_SPIS` in the module and `tools/measure_reproducibility.py`.
+Tolerances are `1e-9` relative / `1e-12` absolute for every SPI, including `causal` and `misc`, whose optimisers and permutation tests reproduce bit-exactly.
+Per-SPI exceptions go in `LOOSE_SPIS`; `tools/measure_reproducibility.py` checks reproducibility.
 
 ## Open findings
 
-None. Positional `bivariate(data, 0, 1)` is no longer xfailed: it is rejected
-with a message explaining the signature.
+None.

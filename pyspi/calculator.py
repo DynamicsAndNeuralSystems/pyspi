@@ -185,12 +185,8 @@ def warn_partial_cache_buckets(spis):
     generated configs up to whole buckets; this gives a hand-written config
     the same nudge.
     """
-    # Only caches expensive enough for the advice to matter. Amortized cost per
-    # SPI at the M=16, T=800 anchor cell (bench/results/analysis/report.md):
-    #   ccm 292.7s | barycenter 11.1s | spectral_bv 1.6s | spectral_mv, coint,
-    #   covariance all <0.3s.
-    # Warning on the cheap ones is noise: fabfour deliberately keeps 1 of 32
-    # covariance SPIs, and the whole covariance cache is 0.6s.
+    # Only caches expensive enough for the advice to matter. Warning on the
+    # cheap ones is noise: fabfour deliberately keeps 1 of 32 covariance SPIs.
     EXPENSIVE = {"ccm", "barycenter"}
 
     from collections import defaultdict
@@ -351,9 +347,8 @@ def _insert_spi(spis, spi, module_name, fcn, params):
     """Insert an SPI, rejecting identifier collisions.
 
     The identifier is the primary key: it names the table column and the
-    checkpoint file. Detecting duplicates *after* building the dict could never
-    work, because dict insertion has already discarded the loser -- the old
-    ``Counter(self._spis.keys())`` check could not return a count above 1.
+    checkpoint file. Duplicates are caught on insertion, because once in the
+    dict the loser has already been discarded.
     """
     existing = spis.get(spi.identifier)
     if existing is not None:
@@ -501,23 +496,17 @@ class Calculator:
     def run_digest(self):
         """Content hash of the resolved run: spec plus the input data itself.
 
-        This is what a checkpoint is bound to. Resume previously validated only
-        the SPI identifier and an ``(M, M)`` shape, so any other run of the same
-        width silently inherited the earlier run's numbers -- a different
-        dataset, different preprocessing, a different config, or a permuted
-        process order all resumed clean.
+        This is what a checkpoint is bound to: a checkpoint resumes only into a
+        run with the same dataset, preprocessing, config, process order and
+        computation version, not merely the same SPI identifiers and width.
 
         The dataset bytes are hashed, not just its shape and name: two datasets
         of the same width with the same name are exactly the case that needs
         separating.
         """
-        # Location-only fields are excluded. `config` and `configfile` are the
-        # name and the *absolute resolved path*, so hashing the spec verbatim
-        # made an identical config and dataset digest differently in a source
-        # checkout and in an installed wheel -- and differently again in a
-        # temporary directory. That is a false negative rather than an unsafe
-        # reuse (a checkpoint is refused when it should have been accepted), but
-        # it defeats the point of a content hash. The path stays in `run_spec`
+        # Location-only fields are excluded: `configfile` is an absolute path,
+        # which differs between a source checkout, an installed wheel and a
+        # temporary directory for the same config. The path stays in `run_spec`
         # as provenance; the *contents* are hashed below.
         spec = {k: v for k, v in self.run_spec.items()
                 if k not in _DIGEST_EXCLUDED_SPEC_FIELDS}
@@ -530,14 +519,13 @@ class Calculator:
         # bumped whenever a change alters computed values.
         h.update(_parallel.COMPUTATION_VERSION.encode())
         # Hash the config *contents*, not just its path and the identifiers it
-        # produces. A config edited in place otherwise produced an identical
-        # digest and silently resumed the previous parameterisation's results.
+        # produces, so a config edited in place gives a different digest.
         h.update(self._config_bytes)
         dataset = getattr(self, "_dataset", None)
         if dataset is not None:
             arr = np.ascontiguousarray(dataset.to_numpy())
-            # Native dtype: coercing to float64 first made distinct large-integer
-            # datasets collide.
+            # Native dtype: coercing to float64 first would make distinct
+            # large-integer datasets collide.
             h.update(f"{arr.dtype.str}{arr.shape}".encode())
             h.update(arr.tobytes())
         return h.hexdigest()
@@ -739,12 +727,10 @@ class Calculator:
                 detrend=self._detrend,
             )
         else:
-            # Snapshot rather than alias. A caller-owned Data could be mutated
-            # after construction -- changing its width left the table at the old
-            # shape and computation failed; a same-width change silently kept
-            # stale process labels. The snapshot also records the preprocessing
-            # the data *actually* carries, not the Calculator flags that were
-            # bypassed when a prepared Data was supplied.
+            # Snapshot rather than alias, so mutating the caller's Data after
+            # construction cannot change this run. The snapshot also records
+            # the preprocessing the data *actually* carries, not the Calculator
+            # flags that were bypassed when a prepared Data was supplied.
             self._dataset = Data._from_prepared_array(
                 np.array(dataset.to_numpy(), copy=True),
                 procnames=dataset.procnames,
@@ -864,9 +850,8 @@ class Calculator:
             digest = self.run_digest
             owned, reason = _parallel.checkpoint_owner_matches(cp_dir, digest)
             if not owned:
-                # Refuse to inherit another run's results. Resuming here is how
-                # a different dataset of the same width silently returned the
-                # previous run's numbers.
+                # Refuse to inherit another run's results, e.g. those of a
+                # different dataset of the same width.
                 self._resume_rejected = True
                 # Refuse rather than delete. Deleting another run's results to
                 # make room is destructive and, if interrupted midway, relabels
@@ -941,10 +926,8 @@ class Calculator:
             self._errors[key] = err
             warnings.warn(f'Caught error for SPI "{key}": {err}')
         else:
-            # A recomputation that succeeds clears the previous failure. Without
-            # this, `compute(retry_failed=True)` on a resumed run left the old
-            # entry in `calc.errors` next to the good column it had just
-            # written, and `save()` froze that contradiction into the file.
+            # A recomputation that succeeds clears the previous failure, so
+            # `retry_failed=True` leaves no stale entry in `calc.errors`.
             self._errors.pop(key, None)
 
     def _rmmin(self):
@@ -1018,10 +1001,8 @@ class Calculator:
         if rmmin:
             self._rmmin()
 
-        # Flatten (get Edge-by-SPI matrix). future_stack=True is the pandas 3
-        # behaviour; unlike the legacy default it keeps all-NaN rows, so the
-        # explicit dropna reproduces the old semantics (self-pairs are all-NaN
-        # because the SPI diagonals are NaN). Verified equivalent on pandas 2.3.
+        # Flatten (get Edge-by-SPI matrix). future_stack=True keeps all-NaN
+        # rows, so dropna removes the self-pairs (the SPI diagonals are NaN).
         edges = self.table.stack(future_stack=True).dropna(how="all")
 
         # Correlate the edge matrix (using pearson and/or spearman correlation)

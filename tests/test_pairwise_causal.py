@@ -1,9 +1,8 @@
-"""The four pairwise causal scores, after cdt and torch were removed.
+"""The four pairwise causal scores in `pyspi/lib/pairwise_causal.py`.
 
-pyspi used exactly four functions from `cdt.causality.pairwise`: the ANM
-independence score, the conditional distribution similarity statistic, the RECI
-regression-error score and IGCI. They are now transcribed in
-`pyspi/lib/pairwise_causal.py`.
+These are transcribed from `cdt.causality.pairwise`: the ANM independence
+score, the conditional distribution similarity statistic, the RECI
+regression-error score and IGCI.
 
 Three kinds of evidence here, deliberately separated:
 
@@ -16,9 +15,8 @@ Three kinds of evidence here, deliberately separated:
   antisymmetry, determinism, and synthetic pairs whose causal direction is known
   by construction.
 * **A frozen cdt 0.6 fixture**, `tests/data/fixtures/cdt_pairwise_reference.npz`,
-  recorded from cdt before the dependency was dropped. Regression evidence, not
-  ground truth: it pins that removing cdt changed nothing, and it is the reason
-  no baseline moved.
+  recorded from cdt. Differential evidence, not ground truth: it pins that the
+  transcription reproduces cdt.
 """
 import os
 
@@ -46,7 +44,7 @@ def cdt_reference():
 
 
 # ---------------------------------------------------------------------------
-# Differential regression against the dependency that was removed
+# Differential test against cdt 0.6
 # ---------------------------------------------------------------------------
 
 def test_local_scores_reproduce_cdt_0_6_exactly(cdt_reference):

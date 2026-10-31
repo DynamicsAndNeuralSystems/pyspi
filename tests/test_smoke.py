@@ -1,4 +1,4 @@
-"""Smoke test for pyspi fork — shape / finiteness / sign checks.
+"""Smoke test for pyspi — shape / finiteness / sign checks.
 
 Runs a small set of SPIs on known synthetic data (coupled AR(1)) and checks
 that every estimator instantiates without a JVM, that bivariate and
@@ -51,12 +51,11 @@ def test_imports():
     #
     # kozachenko is entropy-only: MutualInfo, TimeLaggedMutualInfo and
     # TransferEntropy are computed directly rather than from marginal
-    # entropies, so those combinations raise NotImplementedError (they used
-    # to return NaN silently). See test_kozachenko_rejected_for_non_entropy.
+    # entropies, so those combinations raise NotImplementedError.
+    # See test_kozachenko_rejected_for_non_entropy.
     #
     # kraskov is the converse: only those same three have a genuine KSG
-    # implementation. The composed measures used to accept it and run the
-    # Gaussian estimator while advertising kraskov_NN-<k>.
+    # implementation, and the composed measures reject it.
     # See tests/test_estimator_contracts.py.
     # DirectedInfo estimates each I(X^i; Y_i | Y^{i-1}) term with a direct
     # KSG/Frenzel-Pompe CMI, so it supports kraskov; the others are composed
@@ -97,8 +96,7 @@ def test_kraskov_rejected_for_composed_measures(cls_name):
 def test_kozachenko_rejected_for_non_entropy(cls_name):
     """kozachenko must fail loudly for measures with no Kozachenko-Leonenko path.
 
-    These three previously fell through to a logging.warning and returned NaN,
-    so an invalid config produced a silently all-NaN SPI rather than an error.
+    An invalid config raises rather than producing a silently all-NaN SPI.
     """
     import pyspi.statistics.infotheory as it
     with pytest.raises(NotImplementedError, match="kozachenko"):

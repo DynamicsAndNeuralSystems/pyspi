@@ -162,11 +162,9 @@ def guard_oversubscription(n_jobs: int) -> None:
     cores = available_cores()
     requested = n_jobs * threads
 
-    # pyEDM (ConvergentCrossMapping) self-parallelises over *processes*, so no
-    # BLAS thread count would cover it. It no longer needs covering here: its
-    # pools are unconditionally off at the call site, because pyEDM 2.5 starts
-    # them with forkserver/spawn and so re-imports the caller's __main__ (see
-    # statistics/causal.py).
+    # pyEDM (ConvergentCrossMapping) self-parallelises over *processes*, which
+    # no BLAS thread count covers. Its pools are switched off at the call site
+    # (see statistics/causal.py), so it needs no handling here.
 
     if requested <= cores:
         return
@@ -204,13 +202,8 @@ def _pin_worker_thread_pools():
     """Pin every nested thread/process pool to 1 so process workers don't oversubscribe.
 
     n_jobs workers each running a library that itself spawns cpu_count() threads
-    = quadratic blow-up. Pinning BLAS alone is not enough. The pools:
-      - BLAS + OpenMP (numpy/scipy/sklearn): threadpool_limits, all user APIs.
-    That is now the whole list. cdt used to be here (it autoset SETTINGS.NJOBS
-    to cpu_count() at import) and torch with it, but both are gone: the four
-    pairwise causal scores are in pyspi/lib/pairwise_causal.py, and torch never
-    drove any pyspi computation -- InterDependenceScore is NumPy, and torch
-    entered only because cdt eagerly imports its Torch-backed models.
+    = quadratic blow-up. The pools pinned: BLAS + OpenMP (numpy/scipy/sklearn),
+    through threadpool_limits on all user APIs.
 
     pyEDM (drives ConvergentCrossMapping) is process-based, not thread-based, so
     it can't be pinned here — it is instead switched off unconditionally at the
@@ -287,11 +280,8 @@ def _run_task(spi_keys, checkpoint_dir):
 def run_spi(spi, data, key, M):
     """Compute one SPI, validate it, and capture failures and warnings.
 
-    The single execution primitive shared by the serial and parallel paths.
-    Previously each path had its own copy: only the parallel one validated the
-    returned shape, and only the parallel one suppressed warnings, so the two
-    modes disagreed about what counted as a failure and about what the caller
-    got to see.
+    The single execution primitive shared by the serial and parallel paths, so
+    both agree on what counts as a failure and on which warnings are captured.
 
     Returns ``(S, err, warns, elapsed)`` where ``err`` is ``None`` on success
     and ``warns`` is a list of formatted warning strings raised during the
@@ -299,9 +289,7 @@ def run_spi(spi, data, key, M):
     re-emit them in the parent process).
 
     A result is a failure if it raises, has the wrong shape, contains an
-    infinity, or is entirely NaN off the diagonal. The last case previously
-    passed silently, which is how three group-delay SPIs shipped as all-NaN
-    columns with no warning attached.
+    infinity, or is entirely NaN off the diagonal.
     """
     t0 = time.perf_counter()
     err = None

@@ -41,18 +41,12 @@ def _surface_backend_log_warnings():
     gPDC, nonparametric spectral GC) is computed from that factor.
 
     pyspi records per-SPI diagnostics from the ``warnings`` channel only
-    (``_parallel.run_spi``), and logging is a different channel, so an
-    unconverged factorisation reached the results table with nothing recorded
-    against it. On the bundled ``kuramoto_M7_T100`` fixture that is 2 of 21
-    pairs; the relative factorisation residual ``max|S - GG^H| / max|S|`` there
-    runs 0.14-6.0 across pairs, so these are not marginal numbers.
-
-    This bridges the two channels for the duration of one backend call. It does
-    not change any value: the point is that a caller inspecting
-    ``calc.errors``/warnings can now see which pairs the factorisation failed
-    on. Improving the estimate itself (longer series, a parametric VAR fit, or
-    a tighter multitaper configuration) is the user's call, not something pyspi
-    can do behind their back.
+    (``_parallel.run_spi``), and logging is a different channel. This bridges
+    the two for the duration of one backend call, so a caller inspecting
+    ``calc.errors``/warnings can see which pairs the factorisation failed on.
+    It does not change any value. Improving the estimate itself (longer series,
+    a parametric VAR fit, or a tighter multitaper configuration) is the user's
+    call, not something pyspi can do behind their back.
     """
     records = []
 
@@ -231,7 +225,6 @@ class NonparametricSpectral(Unsigned):
 
         ``fs`` is part of the key because it is passed to ``sc.Multitaper`` and
         therefore changes both the connectivity estimate and the frequency grid.
-        Omitting it let two SPIs differing only in sampling frequency collide.
 
         GroupDelay and PhaseSlopeIndex additionally cache a band-dependent
         statistic, so their key carries fmin/fmax as well.
@@ -293,11 +286,7 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
         return (type(self).__name__, self._fs)
 
     def _get_cache(self, data):
-        # One key type throughout. The previous version created the dict with a
-        # *string* key (self.measure) but read with a *tuple* key (self.key), so
-        # the first write was unreachable, the second call recomputed and stored
-        # under the tuple, and only from the third call did the cache hit --
-        # which is why a two-call probe showed no problem.
+        # One key type throughout: written and read under the tuple self.key.
         cache = getattr(data, "spectral_mv", None)
         if cache is None:
             cache = data.spectral_mv = {}
@@ -667,26 +656,19 @@ class DirectedCoherence(NonparametricSpectralBivariate, Directed):
     convention and ``sigma_kk`` is the innovation variance of process ``k``.
     Bounded in [0, 1], with ``sum_j DC_ij^2 == 1`` by construction.
 
-    Two things are wrong with the backend's ``directed_coherence()``:
+    This differs from the backend's ``directed_coherence()`` in two ways:
 
-    1. It puts the *squared* magnitude in the numerator while the denominator
-       stays on the magnitude scale, so the ratio is dimensionally |H|^2 / |H|
-       and unbounded -- the shipped baselines reached 3.27 (VAR), 1.84 (CML)
-       and 1139.47 (Kuramoto).
-    2. ``_get_noise_variance`` reshapes ``diag(Sigma)`` to ``(..., 1, n, 1)``,
-       which broadcasts the variance along the *row* (target) axis of ``H``.
-       Baccala's weight is indexed by the *source*. With the weight on the row
-       it factors out of numerator and denominator alike and cancels exactly,
-       so the innovation variances have no effect at all: the measure silently
-       degenerates to ``sqrt(directed_transfer_function())`` for *every* noise
-       covariance, not just the equal-variance case. Verified: with innovation
-       standard deviations (1, 3, 0.2) the row-indexed form still reproduces
-       sqrt(DTF) to 4e-16.
+    1. The backend puts the *squared* magnitude in the numerator while the
+       denominator stays on the magnitude scale, so its ratio is dimensionally
+       |H|^2 / |H| and unbounded.
+    2. The backend's ``_get_noise_variance`` broadcasts ``diag(Sigma)`` along
+       the *row* (target) axis of ``H``, where it cancels, so its value reduces
+       to ``sqrt(directed_transfer_function())`` for every noise covariance.
+       Baccala's weight is indexed by the *source*.
 
-    Both are corrected here by recomputing from the same transfer function with
-    ``|H|`` in the numerator and the variance broadcast along the source axis.
-    The equal-variance identity ``DC == sqrt(DTF)`` now *discriminates*: it
-    holds only when the innovation variances are in fact equal.
+    pyspi recomputes from the same transfer function with ``|H|`` in the
+    numerator and the variance broadcast along the source axis, so
+    ``DC == sqrt(DTF)`` holds only when the innovation variances are equal.
 
     Correlated innovations
     ----------------------
@@ -696,17 +678,14 @@ class DirectedCoherence(NonparametricSpectralBivariate, Directed):
     holds identically. What does *not* survive is the reading of ``DC_ij^2`` as
     the fraction of process ``i``'s spectral power arriving from ``j``: that
     requires ``S_ii = sum_j sigma_jj |H_ij|^2``, which holds only for diagonal
-    ``Sigma``. This is not academic -- the Wilson-estimated innovation
-    correlation on the bundled fixtures reaches 0.14 (VAR), 0.64 (CML) and
-    1.00 (Kuramoto).
+    ``Sigma``.
 
     Whitening is *not* applied. The minimum-phase factor ``G = H L`` with
     ``L = g_0`` triangular would give an exactly power-decomposing variant, but
     a triangular factor is order-dependent: recomputing the same pair as
-    ``[j, i]`` yields a different ``L`` (measured, not permutation-related), so
-    a pairwise SPI built on it would depend on process order -- the defect that
-    made ``coint_aeg`` wrong. Baccala's published diagonal form is order-free,
-    so it is what is computed, with the assumption stated rather than hidden.
+    ``[j, i]`` yields a different ``L`` (not permutation-related), so a
+    pairwise SPI built on it would depend on process order. Baccala's published
+    diagonal form is order-free, so it is what is computed.
     """
 
     name = "Directed coherence"
@@ -720,7 +699,7 @@ class DirectedCoherence(NonparametricSpectralBivariate, Directed):
 
     def _get_statistic(self, C):
         # Deliberately does not use the backend's _get_noise_variance /
-        # _total_inflow helpers: the first carries the source/target axis bug
+        # _total_inflow helpers: the first broadcasts along the wrong axis, as
         # described above, and doing the algebra here keeps the private-API
         # surface down to the two properties (see test_backend_private_api).
         H = C._transfer_function                       # (..., f, target, source)
@@ -939,16 +918,14 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         """Gotman (1983) group delay, computed here rather than in the backend.
 
         ``spectral_connectivity.Connectivity.group_delay`` returns all-NaN for
-        every input, on every dataset, at every length. Not a power problem --
-        the defect is one line in its significance test.
+        every input, because of its significance test:
         ``coherence_fisher_z_transform`` divides by
         ``sqrt(coherence_bias(n_obs1) + coherence_bias(n_obs2))`` and, in the
         one-sample case, is called with ``n_obs2 = 0``. ``coherence_bias(0)`` is
         ``1 / (2*0 - 2) = -0.5``, so the argument of the square root is
         ``1/(2n-2) - 0.5``, negative for every ``n``: every p-value is NaN,
         nothing is ever significant, the phase regression runs on a fully
-        masked array, and the result is NaN. Confirmed at 5, 11, 19 and 39
-        tapers, T up to 4000, on a pair with median coherence 0.998.
+        masked array, and the result is NaN.
 
         The per-bin screen is the Enochson-Goodman/Bokil Fisher-z
         approximation: for coherence estimated from ``n`` independent spectral
@@ -1003,28 +980,21 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
                     if keep is None:
                         continue
                     fit = stats.linregress(f[keep], phase[t, keep, i, j])
-                    # Sign fixed by measurement, not by assumption: with
-                    # y(t) = x(t - L), this orientation makes the delay
+                    # With y(t) = x(t - L), this orientation makes the delay
                     # +L at [source, target] after `_to_source_target`, i.e.
-                    # positive means the row leads the column. Verified for
-                    # L in {1, 3, 5, 8} to within 0.005 samples.
+                    # positive means the row leads the column.
                     slope[t, i, j] = -fit.slope
                     slope[t, j, i] = fit.slope
                     # |r|, not r. The fit is of the phase of C_ij, and
                     # phase(C_ji) = -phase(C_ij), so the signed correlation
                     # flips with the orientation -- while this matrix is
-                    # written symmetrically. Reversing the process order
-                    # therefore turned +0.99997 into -0.99997 at the mirrored
-                    # position, for a statistic declared symmetric. The
-                    # magnitude is what "fit quality" means here, and it is
-                    # orientation-free.
+                    # written symmetrically. The magnitude is what "fit
+                    # quality" means here, and it is orientation-free.
                     r_value[t, i, j] = r_value[t, j, i] = abs(fit.rvalue)
 
         # Samples, not seconds. `C.frequencies` is in Hz, so the fitted slope
-        # is radians per Hz and slope/(2*pi) is a delay in *seconds*: at fs=4 a
-        # true 4-sample lag came back as 0.9999. The API and every other lagged
-        # SPI in pyspi count samples, so the delay is scaled by fs. No change at
-        # the shipped fs=1.
+        # is radians per Hz and slope/(2*pi) is a delay in *seconds*; scaling
+        # by fs gives samples, as every other lagged SPI in pyspi reports.
         return self._fs * slope / (2 * np.pi), slope, r_value
 
 
@@ -1109,12 +1079,9 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             raise NameError(f"Unknown statistic {statistic}")
 
         self._method = method
-        # `self._fmin`, not the `fmin` argument. Spectral GC is undefined at
-        # zero frequency, so `fmin=0` is overridden to 1e-5 above -- but the
-        # identifier was built from the argument, so twelve shipped SPIs said
-        # `fmin-0` while integrating from 1e-5, i.e. excluding the DC bin. Two
-        # configs differing only in `fmin: 0` versus `fmin: 1e-5` would have
-        # produced two identifiers for one computation.
+        # `self._fmin`, not the `fmin` argument: spectral GC is undefined at
+        # zero frequency, so `fmin=0` is overridden to 1e-5 above, and the
+        # identifier names the band actually integrated.
         if self._method == "nonparametric":
             self._measure = "pairwise_spectral_granger_prediction"
             paramstr = (f"_nonparametric_{statistic}_fs-{fmt_param(fs)}"
@@ -1135,8 +1102,6 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
 
     def _getkey(self):
         # fs is passed to the spectral transform, so it must key the cache.
-        # Without it, reusing one Data at another sampling frequency returned
-        # the first computation (0.2037 for fs=1 vs 0.2497 fresh at fs=4).
         if self._method == "nonparametric":
             return (self._method, self._fs, -1, -1)
         else:
@@ -1284,8 +1249,7 @@ class PhaseAlignedCorrelation(Undirected, Unsigned):
     Estimation. On a raw periodogram every bin is perfectly coherent and ``P`` is
     about ``pi / 4`` for independent noise. Averaging ``K`` segments restricts
     the realignment to phases smooth on the scale ``1 / nperseg`` and leaves a
-    null floor of about ``sqrt(pi / (4 K))`` (measured 0.074 against 0.071 at
-    ``T = 20000``, ``nperseg = 256``, ``K = 155``). The cost of a short segment
+    null floor of about ``sqrt(pi / (4 K))``. The cost of a short segment
     is resolution: a delay of ``d`` samples is only partly inside one segment,
     and ``P`` of a pure delay is the Hann window's normalised autocorrelation at
     ``d`` -- 0.98 at ``d = nperseg / 20``, 0.94 at ``nperseg / 10`` and 0.47 at
@@ -1295,8 +1259,8 @@ class PhaseAlignedCorrelation(Undirected, Unsigned):
     [8, 256]. From ``T = 64`` to 2047 that keeps ``K`` between 15 and 31 (floor
     0.16-0.23; ``T = 1000``: 64 samples, ``K = 30``); from ``T = 2048`` the
     segment is 256 samples and ``K`` grows with ``T``. Below ``T = 64`` the
-    segment stays at 8 samples and the floor rises (``T = 30``: ``K = 6``,
-    measured 0.37), and the automatic choice refuses a record with fewer than
+    segment stays at 8 samples and the floor rises (``T = 30``: ``K = 6``),
+    and the automatic choice refuses a record with fewer than
     four segments (``T < 20``). Pass an integer to fix the resolution across
     lengths; the identifier records ``auto`` or the integer.
     """

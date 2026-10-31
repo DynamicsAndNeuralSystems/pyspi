@@ -214,29 +214,17 @@ class CrossCorrelation(Undirected, Signed):
         # in the window. Read it as "drop the small lags", not as "these lags
         # are significant".
         if getattr(self, "_sigonly", False):
-            # The previous threshold was `1.96/sqrt(len(r_ij)//2)` -- the
-            # half-width of the lag *window*, T//4 -- so it was twice too wide
-            # and moved with the lag cut rather than with the sample size.
+            # Scaled by the sample size T, not by the width of the lag window.
             threshold = 1.96 / np.sqrt(T)
             above = np.abs(r_ij) > threshold
             if not above.any():
                 # Nothing clears the cut, so the thresholded association is
-                # zero. Falling back to the unfiltered window instead reported
-                # the largest of ~T/2 sample correlations under the null: on
-                # two independent length-400 series that is about 0.135 for the
-                # `max` statistic, which is the opposite of what a threshold is
-                # supposed to do at the null.
+                # zero, not the largest of ~T/2 null sample correlations.
                 return 0.0
             # Selecting *the lags above the cut*, rather than the contiguous
-            # run of them around lag zero. The previous code walked outwards
-            # from the centre, which is only right when the peak is at lag 0:
-            # for a pair where i leads j by one sample, r(0) is already below
-            # the cut, so the lobe extended one way and not the other and the
-            # two orientations of an SPI declared *undirected* disagreed --
-            # measured 0.9957 against -0.0202 on a lag-1 pair. A set of lags is
-            # invariant under the l -> -l reversal; a one-sided run is not.
-            # (Its slice was independently wrong: `r_ij[N - fzr : N + fzf]`
-            # mirrored `fzr`, which was already an absolute index.)
+            # run of them around lag zero: a set of lags is invariant under the
+            # l -> -l reversal, so the two orientations of this undirected SPI
+            # agree even when the peak is off lag 0.
             r_ij = r_ij[above]
 
         if self._squared:

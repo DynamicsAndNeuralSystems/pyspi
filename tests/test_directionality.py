@@ -5,11 +5,11 @@ pyspi's convention is set by ``base.Directed.multivariate``, which fills
 
 This matters because the spectral backends (spectral_connectivity, nitime)
 follow the opposite DTF/PDC convention -- element ``[i, j]`` is the flow *into*
-i *from* j. Their output used to be passed through unchanged, which left every
-directed spectral SPI transposed relative to every directed information-theory
-SPI in the same results table. See ``spectral._to_source_target``.
+i *from* j. pyspi transposes their output to source-target order (see
+``spectral._to_source_target``), so directed spectral and information-theory
+SPIs agree in the same results table.
 
-The baseline-drift suite cannot be relied on to catch a regression here: on the
+The baseline-drift suite cannot be relied on to catch a transpose: on the
 bundled fixtures the directed spectral matrices are close to symmetric, so a
 transpose barely moves the numbers. These tests use a deliberately asymmetric
 process instead.
@@ -200,8 +200,7 @@ def test_directed_coherence_is_bounded():
 
     ``spectral_connectivity.directed_coherence`` puts |H|^2 in the numerator
     while ``_total_inflow`` is on the magnitude scale, so the ratio is
-    dimensionally |H|^2/|H| and unbounded -- the shipped baselines reached 3.27
-    (VAR), 1.84 (CML) and 1139.47 (Kuramoto). pyspi recomputes it with |H|.
+    dimensionally |H|^2/|H| and unbounded. pyspi recomputes it with |H|.
     """
     import os
     from pyspi.data import Data
@@ -245,14 +244,13 @@ def _baccala_dc(H, sigma):
 def test_directed_coherence_weights_by_the_source_innovation_variance():
     """The sigma_jj weight is indexed by the *source*, and must not cancel.
 
-    Regression test for a second backend defect, distinct from the |H|^2
-    numerator. ``_get_noise_variance`` reshapes ``diag(Sigma)`` to
+    The backend's ``_get_noise_variance`` reshapes ``diag(Sigma)`` to
     ``(..., 1, n, 1)``, which broadcasts along the *row* (target) axis of H.
     A row-indexed weight is constant across the summation index, so it factors
     out of numerator and denominator and cancels exactly -- the measure
-    degenerates to ``sqrt(DTF)`` for *every* noise covariance. The previous
-    equal-variance test could not see this, because it asserted precisely the
-    identity the bug makes unconditionally true.
+    degenerates to ``sqrt(DTF)`` for *every* noise covariance. An
+    equal-variance test cannot see this, because ``DC == sqrt(DTF)`` holds
+    there either way.
     """
     from pyspi.statistics.spectral import DirectedCoherence
 
@@ -350,11 +348,7 @@ def test_directed_coherence_uses_only_the_documented_backend_privates():
 def test_group_delay_recovers_a_known_lag(lag):
     """An independent oracle: a pure delay has a known group delay.
 
-    All three shipped ``gd_*`` SPIs returned no finite off-diagonal value on
-    any input -- Gaussian noise, one-way coupled AR, every frozen fixture, at
-    5/11/19/39 tapers and T up to 4000, on a pair with median coherence 0.998.
-    The cause is one line in the backend, not the data:
-    ``coherence_fisher_z_transform`` divides by
+    The backend's ``coherence_fisher_z_transform`` divides by
     ``sqrt(coherence_bias(n_obs1) + coherence_bias(n_obs2))`` and the
     one-sample call passes ``n_obs2 = 0``, for which ``coherence_bias`` returns
     ``1/(2*0 - 2) = -0.5``. The radicand is negative for every ``n_obs1``, so
@@ -396,7 +390,7 @@ _GD_SHORT_RUNS = pytest.mark.xfail(strict=True, reason=(
     "kuramoto_M7_T100.npy",
 ])
 def test_group_delay_is_estimable_on_the_bundled_fixtures(name):
-    """Not a repeat of the lag test: it pins that real data now produces values.
+    """Not a repeat of the lag test: it pins that real data produces values.
 
     Partial NaN is correct here and is not the defect being guarded against --
     group delay is defined only where the coherence is significant, so pairs
@@ -493,9 +487,8 @@ def test_spectral_gc_names_the_cause_when_order_selection_does_not_converge():
     """A search that never turns over is a recorded failure, with its cause.
 
     nitime's own message -- "Model estimation order did not converge at
-    max_order = 50" -- says nothing about the data, and pyspi used to swallow it
-    into an all-NaN return plus a warning, so `Calculator.errors` recorded only
-    the generic "returned no finite off-diagonal values".
+    max_order = 50" -- says nothing about the data, so pyspi records a failure
+    that names the cause in `Calculator.errors`.
 
     The criterion genuinely improves to the cap: an MA(1) process has an
     infinite-order AR representation, and max_order=3 stops the search inside
@@ -542,10 +535,9 @@ def test_group_delay_is_reported_in_samples_at_every_sampling_frequency(fs):
 def test_group_delay_is_covariant_under_process_permutation(statistic):
     """Reversing the process order must move a value, not change it.
 
-    `rvalue` stored the *signed* regression r symmetrically. The fit is of the
-    phase of C_ij and phase(C_ji) = -phase(C_ij), so reversing the order turned
-    +0.99997 into -0.99997 at the mirrored position -- for a statistic declared
-    symmetric. It is now |r|, which is orientation-free.
+    The fit is of the phase of C_ij and phase(C_ji) = -phase(C_ij), so the
+    signed regression r flips with the orientation. `rvalue` is |r|, which is
+    orientation-free.
     """
     from pyspi.statistics.spectral import GroupDelay
 
