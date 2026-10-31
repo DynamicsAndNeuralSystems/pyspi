@@ -172,7 +172,11 @@ class Directed:
         return None
 
 class Undirected(Directed):
-    """ Base class for directed statistics
+    """Base class for undirected statistics.
+
+    Runs :class:`Directed`'s pairwise loop and then mirrors the upper
+    triangle into the lower, so ``A[i, j] == A[j, i]`` and a subclass need
+    only define ``bivariate``.
     """
 
     name = 'Base class'

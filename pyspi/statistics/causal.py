@@ -330,6 +330,10 @@ class ConvergentCrossMapping(Directed, Signed):
     With ``embedding_dimension=None`` each process gets its own
     simplex-optimal dimension, and each pair uses the larger of its two in
     both directions.
+
+    The "i drives j" reading holds for deterministic dynamics. Under
+    stochastic lagged coupling it can reverse: if x drives y with a delay,
+    x's delay vector predicts y, so the skill appears in the y -> x cell.
     """
 
     name = "Convergent cross-mapping"

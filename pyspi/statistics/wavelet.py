@@ -12,6 +12,17 @@ from pyspi.statistics.spectral import _circular_nanmean
 
 
 class mne(Unsigned):
+    """Base for the Morlet-wavelet measures from mne-connectivity.
+
+    ``spectral_connectivity_epochs(mode="cwt_morlet")`` on the record as one
+    epoch, with the coefficients on a fixed grid of 125 frequencies from 0.2
+    to 0.5 and ``cwt_n_cycles = cwt_freqs / 7``; the time-averaged
+    connectivity is cached per ``(measure, fs)``. ``statistic`` (``mean`` or
+    ``max``) reduces it over ``fmin <= f <= fmax``. Apart from
+    :class:`PhaseSlopeIndex`, which overrides this, the subclasses are not in
+    the shipped configs; the multitaper versions are in ``statistics.spectral``.
+    """
+
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean"):
         if fmax is None:
             fmax = fs / 2
@@ -90,6 +101,8 @@ class mne(Unsigned):
 
 
 class CoherenceMagnitude(mne, Undirected):
+    """Coherence magnitude ``|S_xy| / sqrt(S_xx S_yy)`` from Morlet wavelets (MNE ``coh``)."""
+
     name = "Coherence magnitude (wavelet)"
     labels = ["unsigned", "wavelet", "undirected"]
 
@@ -100,6 +113,8 @@ class CoherenceMagnitude(mne, Undirected):
 
 
 class CoherencePhase(mne, Directed):
+    """Circular-mean phase of the wavelet coherency (MNE ``cohy``); antisymmetric and signed."""
+
     name = "Coherence phase (wavelet)"
     labels = ["signed", "wavelet", "antisymmetric"]
 
@@ -145,6 +160,8 @@ class CoherencePhase(mne, Directed):
 
 
 class ImaginaryCoherence(mne, Undirected):
+    """Imaginary part of the wavelet coherency (MNE ``imcoh``)."""
+
     name = "Imaginary coherency (wavelet)"
     labels = ["unsigned", "wavelet", "undirected"]
 
@@ -155,6 +172,8 @@ class ImaginaryCoherence(mne, Undirected):
 
 
 class PhaseLockingValue(mne, Undirected):
+    """Phase locking value from Morlet wavelets (MNE ``plv``), in [0, 1]."""
+
     name = "Phase locking value (wavelet)"
     labels = ["unsigned", "wavelet", "undirected"]
 
@@ -165,6 +184,8 @@ class PhaseLockingValue(mne, Undirected):
 
 
 class PairwisePhaseConsistency(mne, Undirected):
+    """Pairwise phase consistency from Morlet wavelets (MNE ``ppc``)."""
+
     name = "Pairwise phase consistency (wavelet)"
     labels = ["unsigned", "wavelet", "undirected"]
 
@@ -175,6 +196,8 @@ class PairwisePhaseConsistency(mne, Undirected):
 
 
 class PhaseLagIndex(mne, Undirected):
+    """Phase lag index from Morlet wavelets (MNE ``pli``), unsigned, in [0, 1]."""
+
     name = "Phase lag index (wavelet)"
     labels = ["unsigned", "wavelet", "undirected"]
 
@@ -185,6 +208,13 @@ class PhaseLagIndex(mne, Undirected):
 
 
 class DebiasedSquaredWeightedPhaseLagIndex(mne, Undirected):
+    """Debiased squared (unweighted) phase lag index from Morlet wavelets (MNE ``pli2_unbiased``).
+
+    The *unweighted* estimator, as ``name`` and the identifier ``dspli`` say,
+    despite the class name; the weighted one is
+    :class:`debiased_weighted_squared_PhaseLagIndex`.
+    """
+
     name = "Debiased squared phase lag index (wavelet)"
     labels = ["unsigned", "wavelet", "undirected"]
 
@@ -195,6 +225,12 @@ class DebiasedSquaredWeightedPhaseLagIndex(mne, Undirected):
 
 
 class weighted_PhaseLagIndex(mne, Undirected):
+    """Weighted phase lag index from Morlet wavelets (MNE ``wpli``).
+
+    The unsquared wPLI, although ``name`` and the identifier ``wspli`` say
+    squared.
+    """
+
     name = "Weighted squared phase lag index (wavelet)"
     labels = ["unsigned", "wavelet", "undirected"]
 
@@ -205,6 +241,8 @@ class weighted_PhaseLagIndex(mne, Undirected):
 
 
 class debiased_weighted_squared_PhaseLagIndex(mne, Undirected):
+    """Debiased squared weighted phase lag index from Morlet wavelets (MNE ``wpli2_debiased``)."""
+
     name = "Debiased weighted squared phase lag index (wavelet)"
     labels = ["unsigned", "wavelet", "undirected"]
 

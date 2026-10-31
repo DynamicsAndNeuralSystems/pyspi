@@ -282,6 +282,16 @@ def _to_source_target(spi, adj):
 
 
 class NonparametricSpectralMultivariate(NonparametricSpectral):
+    """Measures read from one multitaper ``Connectivity`` of all processes.
+
+    The cross-spectral matrix is estimated once per ``(measure, fs)`` and
+    cached on the dataset; a subclass names the backend measure in
+    ``_measure`` or, with ``_recompute``, computes its own in
+    ``_get_statistic``. The band statistic is applied in ``multivariate``,
+    then directed results are put into pyspi's (source, target) orientation
+    by ``_to_source_target``.
+    """
+
     _cache_namespace = "spectral_mv"
 
     @property
@@ -428,6 +438,15 @@ def _whole_record_tapers(n_time_samples, fs):
 
 
 class NonparametricSpectralBivariate(NonparametricSpectral):
+    """Measures read from a pair's multitaper ``Connectivity`` and its spectral factorisation.
+
+    The directed spectral measures (DC, PDC, GPDC, DTF, dDTF) need the pair's
+    transfer function ``H(f)``, obtained by Wilson's factorisation of the
+    pair's cross-spectrum. It is computed once per ``(fs, i, j)`` and shared by
+    every subclass. Evaluated pair by pair, so the measures are bivariate,
+    not conditioned on the other processes.
+    """
+
     _cache_namespace = "spectral_bv"
 
     @property
@@ -514,6 +533,13 @@ class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
 
 
 class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
+    """Phase of the coherency, ``arg S_xy(f)``, circular-averaged over the band.
+
+    In radians in ``(-pi, pi]`` and antisymmetric, ``A[i, j] = -A[j, i]``, so
+    the sign says which process leads. Only ``statistic="mean"`` (a circular
+    mean) is supported, since wrapped angles have no ordinary maximum.
+    """
+
     # Antisymmetric in (i, j): phase difference: phi(i,j) = -phi(j,i).
     _antisymmetric_spectrum = True
     _phase_based = True
@@ -547,6 +573,13 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
 
 
 class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
+    """Magnitude of the imaginary coherency, ``|Im S_xy| / sqrt(S_xx S_yy)``, over the band.
+
+    In [0, 1] and symmetric (the backend takes the absolute value). Zero for
+    coupling at zero lag, whose coherency is real (Nolte et al. 2004, Clin.
+    Neurophysiol. 115, 2292).
+    """
+
     _phase_based = True
     name = "Imaginary coherence"
     labels = ["unsigned", "spectral", "undirected"]
@@ -558,6 +591,13 @@ class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
 
 
 class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
+    """Phase locking value, ``|mean_k exp(i arg S_k)|`` over the tapers, averaged over the band.
+
+    ``S_k`` is taper ``k``'s cross-spectrum. In [0, 1] (Lachaux, Rodriguez,
+    Martinerie & Varela 1999, Hum. Brain Mapp. 8, 194); the modulus is taken
+    at each frequency before the band statistic.
+    """
+
     _phase_based = True
     name = "Phase locking value"
     labels = ["unsigned", "spectral", "undirected"]
@@ -572,6 +612,22 @@ class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
 
 
 class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
+    """Phase lag index (Stam et al. 2007, Hum. Brain Mapp. 28, 1178), signed.
+
+    At each frequency the mean over tapers of ``sign(Im S_ij)``, then the band
+    statistic. This is the backend's signed index, not Stam's ``|PLI|``: it is
+    in [-1, 1], antisymmetric (``A[j, i] = -A[i, j]``) and has mean 0 under
+    independence, whereas ``|PLI|`` is biased upwards at a finite number of
+    tapers.
+
+    Each frequency's sign is that of ``sin`` of the cross-spectral phase,
+    which a delay of d samples winds by ``2 pi f d``. Where the phase passes
+    pi inside the band the per-frequency signs cancel, so the band mean can
+    fall, flip sign or vanish as coupling grows. The debiased squared forms
+    (``dspli``, ``dswpli``) discard the sign and so avoid this, at the cost of
+    the lead/lag direction.
+    """
+
     # Antisymmetric in (i, j): sign of the imaginary coherency.
     _antisymmetric_spectrum = True
     _phase_based = True
@@ -585,6 +641,15 @@ class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
 
 
 class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
+    """Weighted phase lag index (Vinck et al. 2011, NeuroImage 55, 1548), signed.
+
+    At each frequency ``E[Im S_ij] / E[|Im S_ij|]`` over tapers, then the band
+    statistic. Signed, in [-1, 1], antisymmetric and mean 0 under
+    independence, like :class:`PhaseLagIndex`, and with the same caveat:
+    where the cross-spectral phase passes pi inside the band, the band mean
+    can fall or cancel as coupling grows.
+    """
+
     # Antisymmetric in (i, j): imaginary-coherency weighted sign.
     _antisymmetric_spectrum = True
     _phase_based = True
@@ -632,6 +697,14 @@ class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected
 class DebiasedSquaredWeightedPhaseLagIndex(
     NonparametricSpectralMultivariate, Undirected
 ):
+    """Debiased squared weighted phase lag index (Vinck et al. 2011, NeuroImage 55, 1548).
+
+    ``((sum_k Im S_k)^2 - sum_k (Im S_k)^2) / ((sum_k |Im S_k|)^2 - sum_k (Im S_k)^2)``
+    over the tapers: an estimator of ``wPLI^2`` without the positive bias of
+    squaring the finite-taper estimate, so it can be slightly negative.
+    Symmetric.
+    """
+
     _phase_based = True
     name = "Debiased squared weighted phase-lag index"
     labels = ["unsigned", "spectral", "undirected"]
@@ -643,6 +716,14 @@ class DebiasedSquaredWeightedPhaseLagIndex(
 
 
 class PairwisePhaseConsistency(NonparametricSpectralMultivariate, Undirected):
+    """Pairwise phase consistency (Vinck, van Wingerden, Womelsdorf, Fries & Pennartz 2010).
+
+    The mean of ``cos(phi_k - phi_l)`` over pairs ``k != l`` of the tapers,
+    ``phi_k`` being taper ``k``'s cross-spectral phase, equivalently
+    ``(n^2 PLV^2 - n) / (n (n - 1))``: an unbiased estimator of ``PLV^2``
+    (NeuroImage 51, 112), so it can be negative. Symmetric.
+    """
+
     _phase_based = True
     name = "Pairwise phase consistency"
     labels = ["unsigned", "spectral", "undirected"]
@@ -732,6 +813,15 @@ class DirectedCoherence(NonparametricSpectralBivariate, Directed):
 
 
 class PartialDirectedCoherence(NonparametricSpectralBivariate, Directed):
+    """Partial directed coherence (Baccalá & Sameshima 2001, Biol. Cybern. 84, 463).
+
+    ``|A_ji(f)|^2 / sum_k |A_ki(f)|^2`` for source ``i`` and target ``j``,
+    where ``A(f) = H(f)^-1`` is the pair's inverse transfer function: the
+    share of the source's outflow that goes to the target, in [0, 1]. The
+    squared magnitude, as the backend reports it. On a pair there is nothing
+    to partial out.
+    """
+
     name = "Partial directed coherence"
     labels = ["unsigned", "spectral", "directed"]
 
@@ -742,6 +832,14 @@ class PartialDirectedCoherence(NonparametricSpectralBivariate, Directed):
 
 
 class GeneralizedPartialDirectedCoherence(NonparametricSpectralBivariate, Directed):
+    """Generalised partial directed coherence (Baccalá, Sameshima & Takahashi 2007).
+
+    :class:`PartialDirectedCoherence` with each target weighted by its
+    innovation variance, ``(|A_ji|^2 / sigma_j^2) / sum_k (|A_ki|^2 /
+    sigma_k^2)``, which makes it invariant to rescaling either process. In
+    [0, 1], squared.
+    """
+
     name = "Generalized partial directed coherence"
     labels = ["unsigned", "spectral", "directed"]
 
@@ -752,6 +850,15 @@ class GeneralizedPartialDirectedCoherence(NonparametricSpectralBivariate, Direct
 
 
 class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
+    """Directed transfer function (Kamiński & Blinowska 1991, Biol. Cybern. 65, 203).
+
+    ``|H_ji(f)|^2 / sum_k |H_jk(f)|^2`` for source ``i`` and target ``j``,
+    with ``H`` the pair's transfer function: the source's share of the inflow
+    to the target, in [0, 1] and summing to 1 over sources. The squared
+    magnitude, as the backend reports it; :class:`DirectedCoherence` is its
+    square root when the innovation variances are equal.
+    """
+
     name = "Directed transfer function"
     labels = ["unsigned", "spectral", "directed", "lagged"]
 
@@ -900,6 +1007,18 @@ def _independent_significant_frequencies(p_values, step, alpha=0.05,
 
 
 class GroupDelay(NonparametricSpectralMultivariate, Directed):
+    """Group delay of the row relative to the column from the slope of the coherency phase.
+
+    Gotman's (1983) estimate: over the longest run of significantly coherent
+    bins in the band, thinned to one bin per multitaper bandwidth, the
+    unwrapped cross-spectral phase is regressed on frequency. ``statistic``
+    selects ``"delay"`` (the slope converted to samples, positive when the
+    row leads the column), ``"slope"`` (radians per unit frequency) or
+    ``"rvalue"`` (``|r|`` of the fit). ``delay`` and ``slope`` are
+    antisymmetric and signed, ``rvalue`` symmetric and unsigned. NaN when no run of at least three independent bins is
+    significant; see ``_get_statistic``.
+    """
+
     name = "Group delay"
     labels = ["unsigned", "spectral", "directed", "lagged"]
     _statistics = ("delay", "slope", "rvalue")
@@ -1069,6 +1188,19 @@ def _fit_bivariate_var(x, order=None, max_order=50):
 
 
 class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsigned):
+    """Spectral Granger causality from the row to the column, reduced over the band.
+
+    Geweke's (1982) frequency-domain measure, ``ln(S_jj(f) / S_jj^{(i)}(f))``
+    with ``S_jj^{(i)}`` the target's spectrum net of the source's innovation,
+    in nats. ``method="nonparametric"`` reads it from the multitaper spectrum
+    by Wilson's factorisation (Dhamala, Rangarajan & Ding 2008, NeuroImage
+    41, 354); ``"parametric"`` fits a VAR of ``order`` (or by BIC up to
+    ``max_order``) to each pair. ``statistic`` is the band ``mean`` or
+    ``max``, ignoring NaN bins when ``ignore_nan``. ``fmin=0`` is raised to
+    1e-5, since the measure is undefined at 0 Hz, and the identifier reports
+    the value used.
+    """
+
     name = "Spectral Granger causality"
     identifier = "sgc"
     labels = ["unsigned", "embedding", "spectral", "directed", "lagged"]
