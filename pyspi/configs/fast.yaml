@@ -55,6 +55,21 @@
       - estimator: ShrunkCovariance
         squared: True
 
+  # Partial correlation -P_ij / sqrt(P_ii P_jj) from the precision matrix P
+  # (Marrelec et al. 2006; Smith et al. 2011)
+  PartialCorrelation:
+    labels:
+      - undirected
+      - linear
+      - signed
+      - multivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
+      - estimator: LedoitWolf
+
   # Spearman's correlation coefficient
   SpearmanR:
     labels:

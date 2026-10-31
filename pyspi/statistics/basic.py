@@ -78,11 +78,13 @@ class Estimators(Undirected, Signed):
                 data.covariance = {self._estimator: mycov}
         return mycov
 
+    def _matrix(self, mycov):
+        """Copy of the cached fit's ``M x M`` matrix, so the cache is not modified."""
+        return getattr(mycov, self._kind + "_").copy()
+
     @parse_multivariate
     def multivariate(self, data):
-        mycov = self._from_cache(data)
-        # Copy, so the cached fit is not modified.
-        matrix = getattr(mycov, self._kind + "_").copy()
+        matrix = self._matrix(self._from_cache(data))
         np.fill_diagonal(matrix, np.nan)
         if self._squared:
             return np.square(matrix)
@@ -106,6 +108,66 @@ class Precision(Estimators):
 
     def __init__(self, estimator="EmpiricalCovariance", squared=False):
         super().__init__(kind="precision", squared=squared, estimator=estimator)
+
+
+class PartialCorrelation(Estimators):
+    """Partial correlation from the precision matrix of a covariance estimator.
+
+    With ``P`` the precision (inverse covariance) matrix of the ``M``
+    processes as estimated by the scikit-learn covariance ``estimator``,
+
+        pcorr_ij = -P_ij / sqrt(P_ii P_jj),
+
+    the correlation between ``x_i`` and ``x_j`` conditional on (after linearly
+    regressing out) all other ``M - 2`` processes, at lag 0 (Marrelec et al.
+    2006; Smith et al. 2011). For ``EmpiricalCovariance`` this is the Pearson
+    correlation of the OLS residuals of ``x_i`` and ``x_j`` on the remaining
+    processes; the other estimators shrink or sparsify ``P`` first.
+
+    Undirected and signed, in ``[-1, 1]``, with the opposite sign and the
+    same zero pattern as the off-diagonal of ``prec_<estimator>``.
+
+    Parameters
+    ----------
+    estimator : str
+        Any ``sklearn.covariance`` estimator that ``Precision`` accepts
+        (``EmpiricalCovariance``, ``GraphicalLasso``, ``GraphicalLassoCV``,
+        ``LedoitWolf``, ``MinCovDet``, ``OAS``, ``ShrunkCovariance``).
+    squared : bool
+        Square the result (unsigned).
+
+    The covariance fit is shared with ``Covariance`` and ``Precision``
+    (``data.covariance[estimator]``).
+
+    References
+    ----------
+    Marrelec G, Krainik A, Duffau H, et al. (2006). Partial correlation for
+    functional brain interactivity investigation in functional MRI.
+    NeuroImage 32:228-237.
+
+    Smith SM, Miller KL, Salimi-Khorshidi G, et al. (2011). Network modelling
+    methods for FMRI. NeuroImage 54:875-891.
+    """
+
+    name = "Partial correlation"
+    identifier = "pcorr"
+
+    def __init__(self, estimator="EmpiricalCovariance", squared=False):
+        super().__init__(
+            kind="partial_correlation", squared=squared, estimator=estimator
+        )
+
+    def _matrix(self, mycov):
+        prec = mycov.precision_
+        with np.errstate(invalid="ignore", divide="ignore"):
+            # A non-positive diagonal (a singular fit) gives NaN, not a value.
+            d = np.sqrt(np.where(np.diag(prec) > 0, np.diag(prec), np.nan))
+            return -prec / np.outer(d, d)
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        # Conditions on every other process, so needs the whole (cached) fit.
+        return self.multivariate(data)[i, j]
 
 
 class CrossCorrelation(Undirected, Signed):
