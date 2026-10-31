@@ -261,6 +261,13 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (30 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
 - **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 
+### Added
+
+- **`EdgeTimeSeries`** (`edge_excessvar`, `edge_topshare_f-0-05`, `edge_acf1`; `pyspi/statistics/misc.py`): whether a correlation is steady or bursty.
+  The edge time series `e_t = z_x(t) z_y(t)` resolves Pearson's r into per-frame contributions (Faskowitz et al., 2020; Esfahlani et al., 2020).
+  `excessvar` is its excess variance, `topshare` the excess share of `sum |e|` carried by the 5% highest-amplitude frames, and `acf1` its excess lag-1 autocorrelation.
+  Each is referenced to a Gaussian pair with the sample r, so it is ~0 in expectation for Gaussian data; `edge_excessvar` is also in `fast`.
+
 ### Dependencies
 
 - **Floors, relative to 2.0.2** (`pyproject.toml` is the source of truth):

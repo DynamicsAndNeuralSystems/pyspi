@@ -1548,6 +1548,23 @@
         log: True
         absolute: True
 
+  # Coupling nonstationarity from the edge time series e_t = z_x(t) z_y(t)
+  # (Faskowitz et al. 2020; Esfahlani et al. 2020)
+  EdgeTimeSeries:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - time-dependent
+      - M11
+    dependencies:
+    configs:
+      - statistic: excessvar
+      - statistic: topshare
+        frac: 0.05
+      - statistic: acf1
+
   # Interdependence score
   InterDependenceScore:
     labels:
