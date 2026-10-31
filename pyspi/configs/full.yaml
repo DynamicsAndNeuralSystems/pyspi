@@ -717,6 +717,13 @@
         l_history: 1
         labels:
           - M05
+      # Symbolic (ordinal-pattern) transfer entropy with 3-sample patterns
+      # (Staniek & Lehnertz 2008); biased upwards for T below about 1000
+      - estimator: symbolic
+        k_history: 3
+        labels:
+          - M05
+
       # Disabled: k_history=1 gives a single ordinal symbol, so the transfer
       # entropy is identically zero. Rejected at construction; kept here as a
       # record of what was dropped.
