@@ -1390,7 +1390,13 @@ class InfoTheoryBase(Unsigned):
             data.joint_entropy[key] = np.full((data.n_processes, data.n_processes), -np.inf)
 
         if data.joint_entropy[key][i, j] == -np.inf:
-            x, y = data.to_numpy()[[i, j]]
+            # The pair in one orientation, (larger, smaller), whichever is
+            # asked for first: the value is cached for both, and the
+            # Kozachenko-Leonenko estimate of [x, y] and of [y, x] can differ
+            # in the last bit, so the order the pairs are visited in would
+            # otherwise decide it. Both multivariate loops used to reach
+            # (larger, smaller) first, so their values are unchanged.
+            x, y = data.to_numpy()[[max(i, j), min(i, j)]]
             joint = np.concatenate([x, y], axis=1)
             est = self._estimator
 
