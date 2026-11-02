@@ -77,14 +77,19 @@ def classify(value) -> tuple[float, Quality]:
             return np.nan, Quality.EMPTY
         if value.size != 1:
             return np.nan, Quality.NON_SCALAR
-        value = value.reshape(-1)[0]
+        return classify(value.reshape(-1)[0])
     if isinstance(value, (complex, np.complexfloating)):
+        if np.isnan(value.imag):  # an undefined complex value (e.g. from 0/0) is NaN, not a bug
+            return np.nan, Quality.NAN
         if value.imag != 0:
             return np.nan, Quality.COMPLEX
         value = value.real
     if not isinstance(value, (bool, int, float, np.bool_, np.integer, np.floating)):
         return np.nan, Quality.NON_SCALAR
-    x = float(value)
+    try:
+        x = float(value)
+    except OverflowError:  # a Python int beyond the float range
+        return np.nan, Quality.INF if value > 0 else Quality.NEG_INF
     if np.isnan(x):
         return np.nan, Quality.NAN
     if np.isinf(x):
@@ -107,9 +112,9 @@ def quality_from_values(values) -> tuple[np.ndarray, np.ndarray]:
         return x, q
     q = np.zeros(a.shape, dtype=np.uint8)
     if np.iscomplexobj(a):
-        cplx = a.imag != 0
-        q[cplx] = Quality.COMPLEX
-        a = a.real
+        undefined = np.isnan(a.imag)  # stored as NaN below, and coded NAN
+        q[(a.imag != 0) & ~undefined] = Quality.COMPLEX
+        a = np.where(undefined, np.nan, a.real)
     x = np.array(a, dtype=np.float64, copy=True)
     ok = q == Quality.GOOD
     q[ok & np.isnan(x)] = Quality.NAN
