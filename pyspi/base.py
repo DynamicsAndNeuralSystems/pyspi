@@ -93,7 +93,7 @@ def parse_multivariate(function):
 
     return parsed_function
 
-# Pair-level failures of the SPI being computed. `_parallel.run_spi` opens a
+# Pair-level failures of the SPI being computed. `_parallel.execute_spi` opens a
 # collector around `SPI.multivariate` (`collect_pair_failures`), and
 # `fill_pairwise` appends `(i, j, message)` to it for each cell whose `compute`
 # raised, so the Calculator can label those cells `Quality.ERROR` instead of
@@ -126,7 +126,7 @@ def _report_pair_failure(i, j, err):
         failures.append((int(i), int(j), f"{type(err).__name__}: {err}"))
 
 
-def fill_pairwise(identifier, A, pairs, compute, mirror=False):
+def fill_pairwise(identifier, A, pairs, compute, mirror=False, keep=None):
     """Evaluate ``compute(i, j)`` into ``A[i, j]`` for each pair, isolating failures.
 
     A pair whose estimate is undefined (e.g., tied observations for a
@@ -138,6 +138,11 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     Each failed cell is also reported to the collector opened by
     :func:`collect_pair_failures`, if one is open, so the Calculator labels it
     ``Quality.ERROR`` and keeps its message in ``Calculator.pair_errors``.
+
+    ``keep(i, j)``, if given, says which pairs' values the caller keeps.
+    ``Undirected.multivariate`` overwrites the lower triangle with the upper
+    one, so a failure there is discarded with its value: it is not reported,
+    not counted in the warning, and does not count towards "every pair".
     """
     failures = []
     for i, j in pairs:
@@ -149,6 +154,9 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
         A[i, j] = value
         if mirror:
             A[j, i] = value
+    if keep is not None:
+        pairs = [(i, j) for i, j in pairs if keep(i, j)]
+        failures = [f for f in failures if keep(*f[0])]
     if failures and len(failures) == len(pairs):
         raise failures[0][1]
     for (i, j), err in failures:
@@ -187,7 +195,12 @@ class Directed:
         A = np.full((M, M), np.nan)
         pairs = [(i, j) for j in range(M) for i in range(M) if i != j]
         return fill_pairwise(self.identifier, A, pairs,
-                             lambda i, j: self.bivariate(data, i=i, j=j))
+                             lambda i, j: self.bivariate(data, i=i, j=j),
+                             keep=self._keeps_pair)
+
+    def _keeps_pair(self, i, j):
+        """Whether ``multivariate`` keeps the value computed for ``(i, j)``."""
+        return True
 
     def get_group(self,classes):
         for i, i_cls in enumerate(classes):
@@ -225,6 +238,10 @@ class Undirected(Directed):
     def ispositive(self):
         return False
 
+    def _keeps_pair(self, i, j):
+        # The lower triangle is overwritten by the upper one below.
+        return i < j
+
     @parse_multivariate
     def multivariate(self,data):
         failures = _PAIR_FAILURES.get()
@@ -234,12 +251,12 @@ class Undirected(Directed):
         li = np.tril_indices(data.n_processes,-1)
         A[li] = A.T[li]
         if failures is not None:
-            # The lower triangle is now a copy of the upper one, so it inherits
-            # each upper cell's failure. A lower-triangle failure overwritten by
-            # a good upper value is dropped later: `run_spi` labels a reported
-            # cell ERROR only if it is NaN.
-            failures.extend((j, i, msg) for i, j, msg in failures[n_before:]
-                            if i < j)
+            # The lower triangle is now a copy of the upper one, so each lower
+            # cell inherits its upper cell's failure (lower-triangle failures
+            # were never reported: see `_keeps_pair`). Values and codes are
+            # then symmetric alike.
+            failures.extend([(j, i, msg) for i, j, msg in failures[n_before:]
+                             if i < j])
         return A
 
 class Signed:
