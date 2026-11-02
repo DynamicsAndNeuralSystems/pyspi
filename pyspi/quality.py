@@ -99,6 +99,12 @@ def quality_from_values(values) -> tuple[np.ndarray, np.ndarray]:
     or complex; the returned values are float64 with every non-``GOOD`` entry NaN.
     """
     a = np.asarray(values)
+    if a.dtype == object:  # mixed Python objects: classify each element
+        x = np.full(a.shape, np.nan)
+        q = np.zeros(a.shape, dtype=np.uint8)
+        for idx, v in np.ndenumerate(a):
+            x[idx], q[idx] = classify(v)
+        return x, q
     q = np.zeros(a.shape, dtype=np.uint8)
     if np.iscomplexobj(a):
         cplx = a.imag != 0
