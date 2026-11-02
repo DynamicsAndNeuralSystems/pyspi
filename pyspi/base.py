@@ -1,6 +1,8 @@
 import numpy as np
 from pyspi.data import Data
 import warnings, copy
+import contextlib
+from contextvars import ContextVar
 
 """
 Some parsing functions for decorating so that we can either input the time series directly or use the data structure
@@ -91,6 +93,39 @@ def parse_multivariate(function):
 
     return parsed_function
 
+# Pair-level failures of the SPI being computed. `_parallel.run_spi` opens a
+# collector around `SPI.multivariate` (`collect_pair_failures`), and
+# `fill_pairwise` appends `(i, j, message)` to it for each cell whose `compute`
+# raised, so the Calculator can label those cells `Quality.ERROR` instead of
+# leaving them indistinguishable from a NaN the estimator returned. A ContextVar
+# rather than a return value, because `multivariate` returns only the matrix
+# and its signature is public. It is set per call in whichever process runs the
+# SPI, so the serial path and the parallel workers behave the same. Outside a
+# collector (an SPI called directly) nothing is recorded.
+_PAIR_FAILURES: ContextVar = ContextVar("pyspi_pair_failures", default=None)
+
+
+@contextlib.contextmanager
+def collect_pair_failures():
+    """Collect the pair failures that `fill_pairwise` reports inside the block.
+
+    Yields a list that fills with ``(i, j, message)`` tuples, one per matrix
+    cell whose value could not be computed (both cells of a mirrored pair).
+    """
+    failures = []
+    token = _PAIR_FAILURES.set(failures)
+    try:
+        yield failures
+    finally:
+        _PAIR_FAILURES.reset(token)
+
+
+def _report_pair_failure(i, j, err):
+    failures = _PAIR_FAILURES.get()
+    if failures is not None:
+        failures.append((int(i), int(j), f"{type(err).__name__}: {err}"))
+
+
 def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     """Evaluate ``compute(i, j)`` into ``A[i, j]`` for each pair, isolating failures.
 
@@ -99,6 +134,10 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     That pair alone is set to NaN, and the failures are reported in one
     warning. If every pair fails, the first exception is re-raised so the SPI
     is recorded as failed with the estimator's own message.
+
+    Each failed cell is also reported to the collector opened by
+    :func:`collect_pair_failures`, if one is open, so the Calculator labels it
+    ``Quality.ERROR`` and keeps its message in ``Calculator.pair_errors``.
     """
     failures = []
     for i, j in pairs:
@@ -112,6 +151,10 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
             A[j, i] = value
     if failures and len(failures) == len(pairs):
         raise failures[0][1]
+    for (i, j), err in failures:
+        _report_pair_failure(i, j, err)
+        if mirror:
+            _report_pair_failure(j, i, err)
     if failures:
         (i, j), err = failures[0]
         warnings.warn(
@@ -184,10 +227,19 @@ class Undirected(Directed):
 
     @parse_multivariate
     def multivariate(self,data):
+        failures = _PAIR_FAILURES.get()
+        n_before = len(failures) if failures is not None else 0
         A = super(Undirected,self).multivariate(data)
 
         li = np.tril_indices(data.n_processes,-1)
         A[li] = A.T[li]
+        if failures is not None:
+            # The lower triangle is now a copy of the upper one, so it inherits
+            # each upper cell's failure. A lower-triangle failure overwritten by
+            # a good upper value is dropped later: `run_spi` labels a reported
+            # cell ERROR only if it is NaN.
+            failures.extend((j, i, msg) for i, j, msg in failures[n_before:]
+                            if i < j)
         return A
 
 class Signed:
