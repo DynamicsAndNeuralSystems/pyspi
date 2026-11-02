@@ -269,6 +269,9 @@ def inspect_calc_results(calc):
         if bad.size:
             breakdown[key] = ", ".join(f"{n} {label}"
                                        for label, n in quality_summary(bad).items())
+        elif not q.size:
+            # One process: there is no pair, so no value to compute.
+            breakdown[key] = "no off-diagonal values"
         if bad.size == q.size:
             spi_results['NaNs'].append(key)
         elif bad.size:

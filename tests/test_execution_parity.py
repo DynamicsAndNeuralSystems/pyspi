@@ -7,7 +7,7 @@ failure survives into a structured, inspectable place rather than only a
 transient ``warnings.warn``.
 
 These began as red tests and are now green: both paths route through
-``_parallel.run_spi``, failures land in ``calc.errors``, worker-side warnings
+``_parallel.execute_spi``, failures land in ``calc.errors``, worker-side warnings
 are returned to the parent and re-emitted there, and ``calc.run_spec`` records
 the resolved run.
 

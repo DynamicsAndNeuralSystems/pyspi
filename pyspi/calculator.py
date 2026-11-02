@@ -265,10 +265,20 @@ class Results(NamedTuple):
     pair_errors: Optional[dict]
 
 
-def _frame_from_matrices(matrices, spis, procs, dtype=None):
-    """``(n_spis, M, M)`` -> the wide ``M x (n_spis * M)`` frame :attr:`Calculator.table` uses."""
-    data = (np.concatenate(list(matrices), axis=1) if len(spis)
-            else np.empty((len(procs), 0), dtype=dtype or float))
+def _frame_from_matrices(matrices, spis, procs):
+    """``(n_spis, M, M)`` -> the wide ``M x (n_spis * M)`` frame :attr:`Calculator.table` uses.
+
+    The one builder for :attr:`Calculator.table`, :attr:`Calculator.quality`
+    and what :func:`load_table` / :func:`load_results` return, so their index
+    and columns cannot drift apart. The dtype of ``matrices`` is kept.
+    """
+    spis, procs = list(spis), list(procs)
+    matrices = np.asarray(matrices)
+    n, M = len(spis), len(procs)
+    if matrices.shape != (n, M, M):
+        raise ValueError(f"matrices have shape {matrices.shape}, expected ({n}, {M}, {M})")
+    # Row r is [matrices[0][r], matrices[1][r], ...]: the matrices side by side.
+    data = matrices.transpose(1, 0, 2).reshape(M, n * M).copy()
     frame = pd.DataFrame(
         data=data,
         columns=pd.MultiIndex.from_product([spis, procs], names=["spi", "process"]),
@@ -391,7 +401,7 @@ def load_results(path):
         for n, (key, values) in enumerate(zip(parts["spis"], parts["values"])):
             quality[n] = _parallel.derive_quality(values, (errors or {}).get(key))
     quality = _frame_from_matrices(quality.astype(np.uint8, copy=False),
-                                   parts["spis"], parts["procs"], dtype=np.uint8)
+                                   parts["spis"], parts["procs"])
     pair_errors = as_dict(parts.get("pair_errors"))
     if pair_errors is not None:
         pair_errors = {k: [tuple(p) for p in v] for k, v in pair_errors.items()}
@@ -887,24 +897,11 @@ class Calculator:
         self._pair_errors = {}
         self._timings = {}
 
-        columns = pd.MultiIndex.from_product(
-            [self.spis.keys(), self._dataset.procnames], names=["spi", "process"]
-        )
-        self._table = pd.DataFrame(
-            data=np.full(
-                (self.dataset.n_processes, self.n_spis * self.dataset.n_processes),
-                np.nan,
-            ),
-            columns=columns,
-            index=self._dataset.procnames,
-        )
-        self._table.columns.name = "process"
-        self._quality = pd.DataFrame(
-            data=np.full(self._table.shape, Quality.NOT_COMPUTED, dtype=np.uint8),
-            columns=columns.copy(),
-            index=self._dataset.procnames,
-        )
-        self._quality.columns.name = "process"
+        shape = (self.n_spis, self.dataset.n_processes, self.dataset.n_processes)
+        procs = self._dataset.procnames
+        self._table = _frame_from_matrices(np.full(shape, np.nan), self.spis, procs)
+        self._quality = _frame_from_matrices(
+            np.full(shape, Quality.NOT_COMPUTED, dtype=np.uint8), self.spis, procs)
 
     def save(self, path):
         """Write the results table to ``path``; the format follows the suffix.
@@ -1073,18 +1070,9 @@ class Calculator:
             _parallel.write_checkpoint(cp_dir, key, res.values, res.err,
                                        res.quality, res.pair_errors)
 
-    def _record(self, key, res, err=None, warns=(), elapsed=0.0):
+    def _record(self, key, res):
         """Commit one SPI result (a ``_parallel.SPIResult``): values, quality
-        codes, errors and warnings.
-
-        The older form ``_record(key, S, err, warns, elapsed)`` is accepted
-        too; its quality codes are derived from ``S`` and ``err``.
-        """
-        if not isinstance(res, _parallel.SPIResult):
-            S = np.array(res, dtype=float, copy=True)
-            q = _parallel.derive_quality(S, err)
-            res = _parallel.SPIResult(np.where(q == Quality.GOOD, S, np.nan), q,
-                                      err, [], list(warns), elapsed)
+        codes, errors and warnings."""
         S, err, warns = res.values, res.err, res.warns
         self._table[key] = S
         self._quality[key] = np.asarray(res.quality, dtype=np.uint8)

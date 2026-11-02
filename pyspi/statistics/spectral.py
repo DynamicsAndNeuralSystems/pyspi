@@ -41,7 +41,7 @@ def _surface_backend_log_warnings():
     gPDC, nonparametric spectral GC) is computed from that factor.
 
     pyspi records per-SPI diagnostics from the ``warnings`` channel only
-    (``_parallel.run_spi``), and logging is a different channel, so an
+    (``_parallel.execute_spi``), and logging is a different channel, so an
     unconverged factorisation reached the results table with nothing recorded
     against it. On the bundled ``kuramoto_M7_T100`` fixture that is 2 of 21
     pairs; the relative factorisation residual ``max|S - GG^H| / max|S|`` there

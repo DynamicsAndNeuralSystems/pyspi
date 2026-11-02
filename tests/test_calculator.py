@@ -528,7 +528,9 @@ def test_a_successful_recomputation_clears_a_stale_error():
     calc.compute()
     key = next(iter(calc.spis))
     calc._errors[key] = "ValueError: stale"
-    calc._record(key, calc.table[key].to_numpy(), None, [], 0.0)
+    from pyspi import _parallel
+    calc._record(key, _parallel.SPIResult(calc.table[key].to_numpy(),
+                                          calc.quality[key].to_numpy(), None, [], [], 0.0))
     assert key not in calc.errors
 
 

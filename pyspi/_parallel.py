@@ -391,8 +391,8 @@ def execute_spi(spi, data, key, M) -> SPIResult:
             raise ValueError(f"SPI returned shape {raw.shape}, expected ({M},{M})")
         S, Q = quality_from_values(raw)
 
-        # Only cells the SPI left NaN: an SPI may overwrite a failed cell
-        # (Undirected mirrors its upper triangle over the lower one).
+        # Only cells the SPI left NaN: an SPI may post-process its matrix and
+        # overwrite a failed cell with a value.
         cells = {}
         for i, j, msg in failures:
             if i != j and 0 <= i < M and 0 <= j < M and Q[i, j] == Quality.NAN:
@@ -427,27 +427,20 @@ def execute_spi(spi, data, key, M) -> SPIResult:
     return SPIResult(S, Q, err, pair_errors, warns, time.perf_counter() - t0)
 
 
-def run_spi(spi, data, key, M):
-    """:func:`execute_spi` as the 4-tuple ``(S, err, warns, elapsed)``.
-
-    Kept for callers written before quality codes existed. ``S`` is the stored
-    value matrix (NaN wherever the quality code is not GOOD).
-    """
-    res = execute_spi(spi, data, key, M)
-    return res.values, res.err, res.warns, res.elapsed
-
-
 def write_checkpoint(checkpoint_dir, key, S, err, quality=None, pair_errors=None):
     """Persist one SPI result plus its sidecars.
 
-    The sidecars (error, quality codes, pair failures) are written first and
-    the values file last: a key counts as done only once ``<key>.npy`` exists,
-    so an interrupted write leaves the key to be recomputed rather than resumed
-    with another run's sidecar. Each file is replaced atomically.
+    ``<key>.npy`` is the commit point: a key counts as done only once it
+    exists. So any previous ``<key>.npy`` is removed first, the sidecars (error,
+    quality codes, pair failures) are then written or removed, and the values
+    file is replaced last. An interruption at any step leaves no values file,
+    and the key is recomputed rather than resumed with one run's values and
+    another run's sidecars. Each file is replaced atomically.
     """
     if checkpoint_dir is None:
         return
     d = Path(checkpoint_dir)
+    (d / f"{key}.npy").unlink(missing_ok=True)
     err_path = d / f"{key}.error"
     if err is not None:
         err_path.write_text(err)
@@ -716,8 +709,10 @@ def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool 
         err = err_path.read_text() if err_path.exists() else None
         # Validate *before* the retry decision, so an invalid matrix is retried
         # rather than being marked failed and then kept.
-        off = arr[~np.eye(M, dtype=bool)] if M > 1 else arr.ravel()
-        if off.size and (np.isinf(off).any() or not np.isfinite(off).any()):
+        # As in `execute_spi`: an Inf is a per-cell code, not a failure, and
+        # only a result with no finite off-diagonal value is flagged.
+        off = arr[~np.eye(M, dtype=bool)]
+        if off.size and not np.isfinite(off).any():
             err = err or "ValueError: checkpoint contains no finite values"
         if err is not None and retry_failed:
             remaining.append(key)
