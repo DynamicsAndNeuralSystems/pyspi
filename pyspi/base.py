@@ -126,7 +126,7 @@ def _report_pair_failure(i, j, err):
         failures.append((int(i), int(j), f"{type(err).__name__}: {err}"))
 
 
-def fill_pairwise(identifier, A, pairs, compute, mirror=False, keep=None):
+def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     """Evaluate ``compute(i, j)`` into ``A[i, j]`` for each pair, isolating failures.
 
     A pair whose estimate is undefined (e.g., tied observations for a
@@ -139,10 +139,8 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False, keep=None):
     :func:`collect_pair_failures`, if one is open, so the Calculator labels it
     ``Quality.ERROR`` and keeps its message in ``Calculator.pair_errors``.
 
-    ``keep(i, j)``, if given, says which pairs' values the caller keeps.
-    ``Undirected.multivariate`` overwrites the lower triangle with the upper
-    one, so a failure there is discarded with its value: it is not reported,
-    not counted in the warning, and does not count towards "every pair".
+    With ``mirror=True`` each value is also written to ``A[j, i]``, and a
+    failure is reported for both cells but counted once, as one pair.
     """
     failures = []
     for i, j in pairs:
@@ -154,9 +152,6 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False, keep=None):
         A[i, j] = value
         if mirror:
             A[j, i] = value
-    if keep is not None:
-        pairs = [(i, j) for i, j in pairs if keep(i, j)]
-        failures = [f for f in failures if keep(*f[0])]
     if failures and len(failures) == len(pairs):
         raise failures[0][1]
     for (i, j), err in failures:
@@ -195,12 +190,7 @@ class Directed:
         A = np.full((M, M), np.nan)
         pairs = [(i, j) for j in range(M) for i in range(M) if i != j]
         return fill_pairwise(self.identifier, A, pairs,
-                             lambda i, j: self.bivariate(data, i=i, j=j),
-                             keep=self._keeps_pair)
-
-    def _keeps_pair(self, i, j):
-        """Whether ``multivariate`` keeps the value computed for ``(i, j)``."""
-        return True
+                             lambda i, j: self.bivariate(data, i=i, j=j))
 
     def get_group(self,classes):
         for i, i_cls in enumerate(classes):
@@ -228,7 +218,7 @@ class Directed:
         return None
 
 class Undirected(Directed):
-    """ Base class for directed statistics
+    """ Base class for undirected statistics
     """
 
     name = 'Base class'
@@ -238,26 +228,29 @@ class Undirected(Directed):
     def ispositive(self):
         return False
 
-    def _keeps_pair(self, i, j):
-        # The lower triangle is overwritten by the upper one below.
-        return i < j
-
     @parse_multivariate
     def multivariate(self,data):
-        failures = _PAIR_FAILURES.get()
-        n_before = len(failures) if failures is not None else 0
-        A = super(Undirected,self).multivariate(data)
+        """``bivariate(i, j)`` for each pair ``i < j``, mirrored onto ``(j, i)``.
 
-        li = np.tril_indices(data.n_processes,-1)
-        A[li] = A.T[li]
-        if failures is not None:
-            # The lower triangle is now a copy of the upper one, so each lower
-            # cell inherits its upper cell's failure (lower-triangle failures
-            # were never reported: see `_keeps_pair`). Values and codes are
-            # then symmetric alike.
-            failures.extend([(j, i, msg) for i, j, msg in failures[n_before:]
-                             if i < j])
-        return A
+        Each unordered pair is evaluated once. A failed pair is NaN in both
+        cells, with an error reported for both and counted once in the warning;
+        the SPI raises if every pair fails.
+
+        The pairs are visited column by column, ``(0, 1), (0, 2), (1, 2),
+        (0, 3), ...``: the order in which ``Directed.multivariate`` reaches the
+        upper triangle, which is the half this method used to keep after
+        evaluating both orders of every pair. An SPI whose ``bivariate`` caches
+        a result for the opposite orientation must compute it in an
+        orientation that does not depend on which of ``(i, j)`` and ``(j, i)``
+        comes first (see ``Barycenter``, ``CrossCorrelation`` and
+        ``InfoTheoryBase._compute_joint_entropy``).
+        """
+        M = data.n_processes
+        A = np.full((M, M), np.nan)
+        pairs = [(i, j) for j in range(M) for i in range(j)]
+        return fill_pairwise(self.identifier, A, pairs,
+                             lambda i, j: self.bivariate(data, i=i, j=j),
+                             mirror=True)
 
 class Signed:
     """ Base class for signed SPIs
