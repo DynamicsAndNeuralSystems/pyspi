@@ -222,6 +222,33 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **`pec`, `pec_log`, `pec_orth` and `pec_orth_log` are now labelled signed** (a correlation in [-1, 1]), and `Cointegration` is labelled linear.
 - **Smaller fixes with no value changes:** `Covariance`/`Precision` return a copy of the cached array; `SpearmanR` and `LaggedCorrelation(spearman)` handle a constant series in any position; `LaggedCorrelation.bivariate` returns NaN when either direction is undefined, as `multivariate` does; `CrossmapEntropy` and `StochasticInteraction` reject non-positive `history_length`/`delay`; the wavelet PSI frequency floor is in Hz; spectral classes reject a `statistic` they cannot apply.
 
+### Added: per-cell quality codes
+
+Every cell of `calc.table` now has a quality code saying what it is, in `calc.quality`: a `uint8` DataFrame with the same index and columns.
+The design is shared with hctsa and pyhctsa, in a module (`pyspi/quality.py`) that the two packages keep identical: the value array holds a real, finite number or NaN, so it can be used directly, and the code says why a cell is NaN.
+Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for code.
+`pyspi.Quality` names them: `GOOD` (0), `ERROR` (1), `NAN` (2, undefined or not appropriate, and every diagonal cell), `INF` (3), `NEG_INF` (4), `COMPLEX` (5), and `NOT_COMPUTED` (255) for an SPI that has not run yet.
+`pyspi.quality.quality_labels` and `quality_summary` turn codes into text and counts.
+
+- **An Inf no longer fails the whole SPI.**
+  An SPI that returned an infinity anywhere used to become an all-NaN column with an entry in `calc.errors`.
+  Now its finite cells are kept, the infinite cells are NaN with code `INF` or `NEG_INF`, and a warning gives the count.
+  The SPI is listed in `calc.errors` only if no off-diagonal value is finite, as for an all-NaN result.
+- **Complex output is labelled, not truncated.**
+  The raw output is classified before it is cast to float.
+  `np.array(S, dtype=float)` had dropped a non-zero imaginary part with only a `ComplexWarning`; such a cell is now NaN with code `COMPLEX`.
+- **A failed pair is `ERROR`, not an anonymous NaN.**
+  A pair that raises inside an SPI that otherwise succeeds (see "One undefined pair no longer voids an SPI" under Changed) is still NaN with one warning, and is now labelled `ERROR`, with its message in the new `calc.pair_errors` (`{spi: [(source, target, message), ...]}`).
+  `calc.errors` keeps its shape and holds SPI-level failures only.
+- An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, as before with its message in `calc.errors`.
+  An SPI that returns only NaN keeps code `NAN` and its `calc.errors` entry.
+- **Files and checkpoints keep the codes.**
+  `.npz` files gain a `quality` array (`(n_spis, M, M)`, `uint8`) and `pair_errors`, and the schema goes to 2.
+  The new `pyspi.load_results(path)` returns `Results(table, quality, errors, run_spec, pair_errors)`; `load_table` is unchanged and keeps only its small metadata in `attrs`, since a DataFrame there breaks `pd.concat` and is deep-copied by every slice.
+  A file written before this change still loads, with codes derived from its values and `errors`; which NaN cells were failed pairs cannot be recovered from such a file.
+  Checkpoints store the codes in a `<spi>.quality` sidecar (and pair failures in `<spi>.pairs.json`), and older checkpoints without them resume with derived codes.
+- The summary printed after `compute()` counts the off-diagonal cells by code and lists each incomplete SPI with its counts, e.g. `one_infinite (1 Inf, 1 -Inf)`.
+
 ### Changed
 
 - **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
