@@ -244,18 +244,36 @@ def inspect_calc_results(calc):
     """
     Display a summary of the computed SPI results, including counts of successful computations,
     outputs with NaNs, and partially computed results.
+
+    The categories are read from ``calc.quality``, off the diagonal (self-pairs
+    are NaN by construction): "NaNs" is an SPI with no good value, "Partial
+    NaNs" one with some. Each listed SPI shows what its other cells are --
+    error, NaN, Inf, -Inf, complex -- with counts.
     """
+    from pyspi.quality import Quality, quality_from_values, quality_summary
+
     total_num_spis = calc.n_spis
     num_procs = calc.dataset.n_processes
+    off_diagonal = ~np.eye(num_procs, dtype=bool)
+    quality = getattr(calc, 'quality', None)
     spi_results = dict({'Successful': list(), 'NaNs': list(), 'Partial NaNs': list()})
+    breakdown = {}
+    all_cells = []
     for key in calc.spis.keys():
-        if calc.table[key].isna().all().all():
+        if quality is not None:
+            q = quality[key].to_numpy()[off_diagonal]
+        else:
+            q = quality_from_values(calc.table[key].to_numpy())[1][off_diagonal]
+        all_cells.append(q)
+        bad = q[q != Quality.GOOD]
+        if bad.size:
+            breakdown[key] = ", ".join(f"{n} {label}"
+                                       for label, n in quality_summary(bad).items())
+        if bad.size == q.size:
             spi_results['NaNs'].append(key)
-        elif calc.table[key].isnull().values.sum() > num_procs:
-            # off-diagonal NaNs
+        elif bad.size:
             spi_results['Partial NaNs'].append(key)
         else:
-            # returned numeric values (i.e., not NaN)
             spi_results['Successful'].append(key)
 
     # print summary
@@ -265,6 +283,9 @@ def inspect_calc_results(calc):
     print(double_line_60)
     print(f"\nTotal number of SPIs attempted: {total_num_spis}")
     print(f"Number of SPIs successfully computed: {len(spi_results['Successful'])} ({len(spi_results['Successful']) / total_num_spis * 100:.2f}%)")
+    if all_cells:
+        cells = quality_summary(np.concatenate(all_cells))
+        print("Off-diagonal values: " + ", ".join(f"{n} {label}" for label, n in cells.items()))
     print(single_line_60)
     _print_timing_summary(calc)
     print("Category       | Count | Percentage")
@@ -279,13 +300,13 @@ def inspect_calc_results(calc):
         print(f"\n[{len(spi_results['NaNs'])}] SPI(s) produced NaN outputs:")
         print(single_line_60)
         for i, spi in enumerate(spi_results['NaNs']):
-            print(f"{i+1}. {spi}")
+            print(f"{i+1}. {spi} ({breakdown[spi]})")
         print(single_line_60 + "\n")
     if spi_results['Partial NaNs']:
         print(f"\n[{len(spi_results['Partial NaNs'])}] SPIs which produced partial NaN outputs:")
         print(single_line_60)
         for i, spi in enumerate(spi_results['Partial NaNs']):
-            print(f"{i+1}. {spi}")
+            print(f"{i+1}. {spi} ({breakdown[spi]})")
         print(single_line_60 + "\n")
 
 
