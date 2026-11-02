@@ -371,8 +371,141 @@ def test_inspect_calc_results_reports_by_label(serial, capsys):
     assert "one_pair_raises (1 error)" in out
 
 
-def test_run_spi_keeps_its_four_tuple():
-    from failing_spis import OneInfinite
-    S, err, warns, elapsed = _parallel.run_spi(
-        OneInfinite(), pyspi.calculator.Data(_dataset()), "one_infinite", M)
-    assert err is None and np.isnan(S[0, 1]) and np.isfinite(S[0, 2])
+# --------------------------------------------------------------------------
+# Review fixes: the shared module's edge cases, Undirected, checkpoints, M=1
+# --------------------------------------------------------------------------
+
+def test_shared_module_edge_cases():
+    from pyspi.quality import classify, quality_from_values
+    nanj = complex(np.nan, np.nan)
+    # An undefined complex value (0/0) is NaN, not a bug.
+    assert classify(nanj)[1] == NAN
+    assert classify(np.complex128(nanj))[1] == NAN
+    assert classify(1 + 2j)[1] == Quality.COMPLEX
+    x, q = quality_from_values(np.array([[nanj, 1 + 0j], [1 + 1j, np.inf + 0j]]))
+    assert q.tolist() == [[NAN, GOOD], [Quality.COMPLEX, Quality.INF]]
+    assert np.isnan(x[0, 0]) and x[0, 1] == 1.0
+    # A Python int beyond the float range is +/-Inf, not an OverflowError.
+    assert classify(10 ** 400)[1] == Quality.INF
+    assert classify(-10 ** 400)[1] == Quality.NEG_INF
+    # A one-element object array holding None is EMPTY.
+    assert classify(np.array([None], dtype=object))[1] == Quality.EMPTY
+
+
+def test_a_complex_nan_cell_from_an_spi_is_nan():
+    from failing_spis import ComplexOutput
+
+    class ComplexNaN(ComplexOutput):
+        def multivariate(self, data):
+            A = super().multivariate(data)
+            A[1, 2] = complex(np.nan, np.nan)
+            return A
+
+    res = _parallel.execute_spi(ComplexNaN(), pyspi.calculator.Data(_dataset()),
+                                "complex_nan", M)
+    assert np.array_equal(res.quality, _expected(
+        GOOD, [((0, 2), Quality.COMPLEX), ((1, 2), NAN)]))
+
+
+def _undirected(values):
+    """An Undirected stub whose bivariate returns ``values[(i, j)]``, raising
+    when that is an exception and returning 1.0 for unlisted pairs."""
+    from pyspi.base import Undirected, Unsigned, parse_bivariate
+
+    class Stub(Undirected, Unsigned):
+        identifier = "stub_undirected"
+        labels = ["test"]
+
+        @parse_bivariate
+        def bivariate(self, data, i=None, j=None):
+            v = values.get((i, j), 1.0)
+            if isinstance(v, Exception):
+                raise v
+            return v
+    return Stub()
+
+
+def _execute(spi):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        res = _parallel.execute_spi(spi, pyspi.calculator.Data(_dataset()), "stub", M)
+    return res, [str(w.message) for w in caught] + res.warns
+
+
+def test_an_undirected_lower_failure_is_discarded_with_its_value():
+    """(0, 1) returns NaN and (1, 0) raises: the lower cell is overwritten by
+    the upper one, so its failure is discarded too, and the codes stay
+    symmetric (both NAN), with no pair error and no warning."""
+    res, msgs = _execute(_undirected({(0, 1): np.nan, (1, 0): ValueError("lower")}))
+    assert np.array_equal(res.quality, _expected(GOOD, [((0, 1), NAN), ((1, 0), NAN)]))
+    assert np.array_equal(res.quality, res.quality.T)
+    assert res.pair_errors == []
+    assert not any("undefined and set to NaN" in m for m in msgs), msgs
+
+
+def test_an_undirected_upper_failure_is_mirrored_and_counted_once():
+    res, msgs = _execute(_undirected({(0, 1): ValueError("upper"),
+                                      (1, 0): ValueError("lower")}))
+    assert np.array_equal(res.quality, _expected(GOOD, [((0, 1), ERROR), ((1, 0), ERROR)]))
+    assert res.pair_errors == [(0, 1, "ValueError: upper"), (1, 0, "ValueError: upper")]
+    warned = [m for m in msgs if "undefined and set to NaN" in m]
+    assert len(warned) == 1 and "1 of 3 pairs" in warned[0], warned
+
+
+def test_an_undirected_spi_whose_kept_pairs_all_fail_raises():
+    """Only the lower triangle succeeds: none of it is kept, so the SPI fails
+    with the estimator's message."""
+    res, _ = _execute(_undirected({(i, j): ValueError("kept pair")
+                                   for i in range(M) for j in range(M) if i < j}))
+    assert res.err == "ValueError: kept pair"
+    assert np.array_equal(res.quality, _expected(ERROR))
+
+
+def test_an_interrupted_checkpoint_write_is_not_resumed(tmp_path, monkeypatch):
+    """The values file is the commit point: an interruption after the sidecars
+    must not leave the previous run's values beside them."""
+    key = "k"
+    old = np.ones((M, M))
+    np.fill_diagonal(old, np.nan)
+    _parallel.write_checkpoint(tmp_path, key, old, None, _expected(GOOD), [])
+    done, _ = _parallel.load_checkpoints(tmp_path, [key], M, retry_failed=False)
+    assert key in done
+
+    real = _parallel._atomic_npy_write
+
+    def interrupted(path, arr):
+        if path.name == f"{key}.npy":
+            raise KeyboardInterrupt
+        real(path, arr)
+
+    monkeypatch.setattr(_parallel, "_atomic_npy_write", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        _parallel.write_checkpoint(tmp_path, key, np.full((M, M), np.nan),
+                                   "RuntimeError: new failure", _expected(ERROR), [])
+    done, remaining = _parallel.load_checkpoints(tmp_path, [key], M, retry_failed=False)
+    assert remaining == [key] and not done
+
+
+def test_a_checkpoint_with_an_inf_cell_resumes_it_as_inf(tmp_path):
+    """Inf is a per-cell code, so a checkpoint holding one is not a failure."""
+    arr = np.ones((M, M))
+    np.fill_diagonal(arr, np.nan)
+    arr[0, 1], arr[1, 0] = np.inf, -np.inf
+    np.save(tmp_path / "k.npy", arr)
+    done, remaining = _parallel.load_checkpoints(tmp_path, ["k"], M)
+    assert remaining == []
+    res = done["k"]
+    assert res.err is None
+    assert np.array_equal(res.quality, _expected(
+        GOOD, [((0, 1), Quality.INF), ((1, 0), Quality.NEG_INF)]))
+    assert np.isnan(res.values[0, 1]) and res.values[0, 2] == 1.0
+
+
+def test_inspect_calc_results_with_one_process(capsys):
+    from pyspi.utils import inspect_calc_results
+    calc = Calculator(dataset=np.random.default_rng(1).standard_normal((1, 80)),
+                      config=CONFIG, zscore=False, verbose=False)
+    _compute(calc)
+    inspect_calc_results(calc)
+    out = capsys.readouterr().out
+    assert "no off-diagonal values" in out

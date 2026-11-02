@@ -240,6 +240,8 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **A failed pair is `ERROR`, not an anonymous NaN.**
   A pair that raises inside an SPI that otherwise succeeds (see "One undefined pair no longer voids an SPI" under Changed) is still NaN with one warning, and is now labelled `ERROR`, with its message in the new `calc.pair_errors` (`{spi: [(source, target, message), ...]}`).
   `calc.errors` keeps its shape and holds SPI-level failures only.
+  An undirected SPI built on `Undirected.multivariate` overwrites its lower triangle with the upper one, so only upper-triangle failures count: each is mirrored onto its lower cell, keeping the codes symmetric like the values, and a lower-triangle failure is discarded with its value (not reported, not counted in the warning).
+  Such an SPI now raises when every upper-triangle pair fails, giving the estimator's message in `calc.errors`; it had been an all-NaN failure with a generic message.
 - An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, as before with its message in `calc.errors`.
   An SPI that returns only NaN keeps code `NAN` and its `calc.errors` entry.
 - **Files and checkpoints keep the codes.**
@@ -247,6 +249,8 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The new `pyspi.load_results(path)` returns `Results(table, quality, errors, run_spec, pair_errors)`; `load_table` is unchanged and keeps only its small metadata in `attrs`, since a DataFrame there breaks `pd.concat` and is deep-copied by every slice.
   A file written before this change still loads, with codes derived from its values and `errors`; which NaN cells were failed pairs cannot be recovered from such a file.
   Checkpoints store the codes in a `<spi>.quality` sidecar (and pair failures in `<spi>.pairs.json`), and older checkpoints without them resume with derived codes.
+  A checkpoint holding an Inf is no longer treated as failed: it resumes with the cell coded `INF` or `NEG_INF`.
+  Writing a checkpoint removes the previous `<spi>.npy` first and replaces it last, so an interrupted write cannot pair one run's values with another run's sidecars.
 - The summary printed after `compute()` counts the off-diagonal cells by code and lists each incomplete SPI with its counts, e.g. `one_infinite (1 Inf, 1 -Inf)`.
 
 ### Changed
