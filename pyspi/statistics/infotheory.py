@@ -1446,19 +1446,6 @@ class InfoTheoryBase(Unsigned):
             data.entropy[key][i] = compute()
         return data.entropy[key][i]
 
-    def _upper_triangle_multivariate(self, data):
-        """Each unordered pair once, mirrored.
-
-        Same result as ``Undirected.multivariate``, which evaluates both
-        orders and keeps ``i < j``, at half the cost.
-        """
-        M = data.n_processes
-        A = np.full((M, M), np.nan)
-        pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
-        return fill_pairwise(self.identifier, A, pairs,
-                             lambda i, j: self.bivariate(data, i=i, j=j),
-                             mirror=True)
-
     def _resolve_theiler(self, data, i, j):
         """Theiler/dynamic-correlation-exclusion window for pair (i, j).
 
@@ -1602,7 +1589,7 @@ class MutualInfo(InfoTheoryBase, Undirected):
                 self.identifier, result, pairs,
                 lambda i, j: _ksg_mi_pair(Z[i], Z[j], k, self._resolve_theiler(data, i, j)),
                 mirror=True)
-        return self._upper_triangle_multivariate(data)
+        return super().multivariate(data)
 
 
 class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
@@ -2144,10 +2131,6 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
             self._compute_conditional_entropy(y[tau:], y[:-tau])))
 
         return H_src + H_targ - H_joint
-
-    @parse_multivariate
-    def multivariate(self, data):
-        return self._upper_triangle_multivariate(data)
 
 
 class IntegratedInformation(Undirected, Unsigned):
