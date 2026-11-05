@@ -111,42 +111,23 @@ class Precision(Estimators):
 
 
 class PartialCorrelation(Estimators):
-    """Partial correlation from the precision matrix of a covariance estimator.
+    """Partial correlation (Marrelec et al. 2006, NeuroImage 32, 228-237).
 
-    With ``P`` the precision (inverse covariance) matrix of the ``M``
-    processes as estimated by the scikit-learn covariance ``estimator``,
-
-        pcorr_ij = -P_ij / sqrt(P_ii P_jj),
-
-    the correlation between ``x_i`` and ``x_j`` conditional on (after linearly
-    regressing out) all other ``M - 2`` processes, at lag 0 (Marrelec et al.
-    2006; Smith et al. 2011). For ``EmpiricalCovariance`` this is the Pearson
-    correlation of the OLS residuals of ``x_i`` and ``x_j`` on the remaining
-    processes; the other estimators shrink or sparsify ``P`` first.
+    With ``P`` the precision (inverse covariance) matrix of the ``M`` processes
+    as estimated by the scikit-learn covariance ``estimator``,
+    ``pcorr_ij = -P_ij / sqrt(P_ii P_jj)``: the correlation between ``x_i``
+    and ``x_j`` conditional on (after linearly regressing out) all other
+    ``M - 2`` processes, at lag 0. For ``EmpiricalCovariance`` this is the
+    Pearson correlation of the OLS residuals of ``x_i`` and ``x_j`` on the
+    remaining processes; the other estimators shrink or sparsify ``P`` first.
 
     Undirected and signed, in ``[-1, 1]``, with the opposite sign and the
     same zero pattern as the off-diagonal of ``prec_<estimator>``.
 
-    Parameters
-    ----------
-    estimator : str
-        Any ``sklearn.covariance`` estimator that ``Precision`` accepts
-        (``EmpiricalCovariance``, ``GraphicalLasso``, ``GraphicalLassoCV``,
-        ``LedoitWolf``, ``MinCovDet``, ``OAS``, ``ShrunkCovariance``).
-    squared : bool
-        Square the result (unsigned).
-
-    The covariance fit is shared with ``Covariance`` and ``Precision``
+    ``estimator`` is any ``sklearn.covariance`` estimator that ``Precision``
+    accepts, and ``squared=True`` squares the result (unsigned). The
+    covariance fit is shared with ``Covariance`` and ``Precision``
     (``data.covariance[estimator]``).
-
-    References
-    ----------
-    Marrelec G, Krainik A, Duffau H, et al. (2006). Partial correlation for
-    functional brain interactivity investigation in functional MRI.
-    NeuroImage 32:228-237.
-
-    Smith SM, Miller KL, Salimi-Khorshidi G, et al. (2011). Network modelling
-    methods for FMRI. NeuroImage 54:875-891.
     """
 
     name = "Partial correlation"
