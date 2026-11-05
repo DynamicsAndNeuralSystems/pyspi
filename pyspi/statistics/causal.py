@@ -468,7 +468,7 @@ def _liang_moments(z, k):
 
 
 class LiangInformationFlow(Directed, Signed):
-    r"""Liang-Kleeman rate of information flow, row (source) -> column (target).
+    r"""Liang-Kleeman rate of information flow (Liang 2014, Phys Rev E 90).
 
     ``A[j, i]`` is ``T_{j->i}``, the rate at which the source ``x_j`` transfers
     information (entropy) to the target ``x_i``, in nats per sample, estimated
@@ -477,7 +477,9 @@ class LiangInformationFlow(Directed, Signed):
     uncertain, negative means it *reduces* ``x_i``'s uncertainty (stabilises
     it), and zero means no causal influence (Liang's principle of nil
     causality, a theorem of the formalism: ``T_{j->i} = 0`` whenever ``x_i``'s
-    dynamics do not depend on ``x_j``).
+    dynamics do not depend on ``x_j``). Equation numbers below refer to Liang
+    2015 (Phys Rev E 92, 022126; arXiv:1501.03548) and Liang 2021 (Entropy 23,
+    679; arXiv:2104.11360).
 
     **Estimators.** With the Euler forward difference
     ``dx_i[n] = (x_i[n + k] - x_i[n]) / k`` (one sample is the time unit),
@@ -487,45 +489,38 @@ class LiangInformationFlow(Directed, Signed):
 
     * ``conditional=False``: Liang's (2014) bivariate maximum-likelihood
       estimator for each pair on its own (Liang 2015 eq. 3; Liang 2021 eq. 5),
-      with 1 the target and 2 the source::
-
-          T_{2->1} = (C11 C12 C_{2,d1} - C12^2 C_{1,d1})
-                     / (C11^2 C22 - C11 C12^2)
+      with 1 the target and 2 the source,
+      ``T_{2->1} = (C11 C12 C_{2,d1} - C12^2 C_{1,d1}) / D`` with
+      ``D = C11^2 C22 - C11 C12^2``.
 
     * ``conditional=True``: the multivariate estimator with all ``M`` series
-      as the system (Liang 2021 eq. 14)::
-
-          T_{j->i} = (1 / det C) sum_k Delta_jk C_{k,di} * C_ij / C_ii
-                   = a_ij C_ij / C_ii,
-
-      where ``Delta_jk`` are the cofactors of ``C`` and
-      ``a_ij = sum_k (C^-1)_jk C_{k,di}`` (eq. 9; ``Delta_jk / det C =
-      (C^-1)_kj``) is the coefficient of ``x_j`` in the least-squares
-      regression of ``dx_i`` on all ``M`` series, computed with one
-      ``np.linalg.solve``. For ``M = 2`` it is the bivariate estimator
+      as the system (Liang 2021 eq. 14),
+      ``T_{j->i} = (1 / det C) sum_k Delta_jk C_{k,di} C_ij / C_ii``, which is
+      ``a_ij C_ij / C_ii``, where ``Delta_jk`` are the cofactors of ``C`` and
+      ``a_ij = sum_k (C^-1)_jk C_{k,di}`` (eq. 9;
+      ``Delta_jk / det C = (C^-1)_kj``) is the coefficient of ``x_j`` in the
+      least-squares regression of ``dx_i`` on all ``M`` series, computed with
+      one ``np.linalg.solve``. For ``M = 2`` it is the bivariate estimator
       exactly. Conditioning on the other series removes indirect flows: in a
       chain ``x0 -> x1 -> x2`` the conditional ``T_{0->2}`` vanishes, the
       bivariate one does not.
 
     ``statistic="normalised"`` reports Liang's (2015) relative flow
     ``tau_{j->i} = T_{j->i} / Z_i`` in ``[-1, 1]``, with the target's entropy
-    balance as the normaliser (Liang 2015 eqs. 10-11 and 29-32; Liang 2021
-    eqs. 17-20)::
-
-        Z_i = |dH_i*/dt| + sum_{j != i} |T_{j->i}| + |dH_i^noise/dt|,
-        dH_i*/dt     = a_ii                          (2015 eq. 22/29; 2021 eq. 15)
-        dH_i^noise/dt = g_ii / (2 C_ii),  g_ii = k * Q_i / N   (2015 eqs. 24, 30)
-        Q_i / N      = C_{di,di} - sum_j a_ij C_{j,di}         (2015 eq. 28)
-
-    ``Q_i / N`` is the residual variance of the regression of ``dx_i`` on the
-    series in the fit (the pair, or all ``M``). The sum over sources runs over
-    the pair's one source in the bivariate version (Liang 2015) and over all
-    ``M - 1`` others in the conditional one (Liang 2021). ``|tau_{j->i}|`` is
-    the share of the target's entropy budget due to ``x_j``, so ``tau`` is
-    normalised within each target and ``|tau_{j->i}|`` and ``|tau_{i->j}|`` are
-    not on one scale (Liang 2015, sec. VI). Liang's reference code mixes
-    ``1/N`` (noise) and ``1/(N - 1)`` (covariance) normalisations, so the
-    normalised ``tau`` differs from it by a relative O(1/N).
+    balance as the normaliser (Liang 2015 eqs. 10-11 and 29-32; Liang 2021 eqs.
+    17-20), ``Z_i = |dH_i*/dt| + sum_{j != i} |T_{j->i}| + |dH_i^noise/dt|``.
+    Here ``dH_i*/dt = a_ii`` (2015 eq. 22/29; 2021 eq. 15),
+    ``dH_i^noise/dt = g_ii / (2 C_ii)`` with ``g_ii = k Q_i / N`` (2015 eqs.
+    24, 30), and ``Q_i / N = C_{di,di} - sum_j a_ij C_{j,di}`` (2015 eq. 28) is
+    the residual variance of the regression of ``dx_i`` on the series in the
+    fit (the pair, or all ``M``). The sum over sources runs over the pair's one
+    source in the bivariate version (Liang 2015) and over all ``M - 1`` others
+    in the conditional one (Liang 2021). ``|tau_{j->i}|`` is the share of the
+    target's entropy budget due to ``x_j``, so ``tau`` is normalised within
+    each target and ``|tau_{j->i}|`` and ``|tau_{i->j}|`` are not on one scale
+    (Liang 2015, sec. VI). Liang's reference code mixes ``1/N`` (noise) and
+    ``1/(N - 1)`` (covariance) normalisations, so the normalised ``tau``
+    differs from it by a relative O(1/N).
 
     **Units and sampling.** The rate is per sample: for a continuous-time
     process sampled every ``h`` time units it is about ``h`` times the
@@ -538,27 +533,11 @@ class LiangInformationFlow(Directed, Signed):
     No significance test is applied (the confidence intervals of Liang 2014
     are not implemented).
 
-    Parameters
-    ----------
-    k : int, default 1
-        Stride of the Euler forward difference, in samples.
-    conditional : bool, default False
-        ``False``: Liang (2014)'s bivariate estimator for each pair.
-        ``True``: Liang (2021)'s multivariate estimator, all series at once;
-        requires a nonsingular ``M x M`` covariance (``M < T - k``, no series
-        an exact linear combination of the others).
-    statistic : {"rate", "normalised"}, default "rate"
-        The flow ``T`` (nats per sample) or the normalised flow ``tau``.
-
-    References
-    ----------
-    Liang, X. S. (2014). Unraveling the cause-effect relation between time
-    series. *Phys. Rev. E* 90, 052150.
-    Liang, X. S. (2015). Normalizing the causality between time series.
-    *Phys. Rev. E* 92, 022126 (arXiv:1501.03548; equation numbers above).
-    Liang, X. S. (2021). Normalized multivariate time series causality
-    analysis and causal graph reconstruction. *Entropy* 23, 679
-    (arXiv:2104.11360; equation numbers above).
+    ``k`` (default 1) is the stride of the forward difference, in samples.
+    ``conditional=True`` requires a nonsingular ``M x M`` covariance
+    (``M < T - k``, no series an exact linear combination of the others).
+    ``statistic`` is ``"rate"`` (default, nats per sample) or
+    ``"normalised"``.
     """
 
     name = "Liang-Kleeman information flow"
