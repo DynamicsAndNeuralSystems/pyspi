@@ -278,17 +278,15 @@ def _round_to_lag(v, cap):
 
 
 class LagResolvedCorrelation(Directed, Signed):
-    """Directed, lag-resolved Pearson cross-correlation.
+    """Directed, lag-resolved cross-correlation (Mitra et al. 2014).
 
     Reads the lag profile that :class:`CrossCorrelation` caches in
     ``data.xcorr`` -- the biased (divide-by-T) sample cross-correlation of the
     demeaned series over lags ``-T//4 .. +T//4`` -- and reports where on the
     lag axis a pair's linear coupling sits and which way it runs.
 
-    **Lead correlation.** For a lag ``tau`` (in samples)::
-
-        r_{i->j}(tau) = sum_t (x_i[t] - m_i)(x_j[t + tau] - m_j) / (T s_i s_j)
-
+    **Lead correlation.** For a lag ``tau`` (in samples),
+    ``r_{i->j}(tau) = sum_t (x_i[t] - m_i)(x_j[t + tau] - m_j) / (T s_i s_j)``,
     summed over the ``T - |tau|`` overlapping samples, with ``m`` the mean and
     ``s`` the divide-by-T standard deviation. ``tau > 0`` is ``i`` leading ``j``
     by ``tau``, ``r_{i->j}(-tau) = r_{j->i}(tau)``, and ``r_{i->j}(0)`` is
@@ -302,14 +300,14 @@ class LagResolvedCorrelation(Directed, Signed):
 
     **Correlation length.** ``l_i`` is the first lag ``k >= 1`` at which the
     sample autocorrelation of ``x_i`` (``pyspi.utils.acf``, biased) falls below
-    ``1/e`` -- hctsa's ``CO_f1ecac`` on the integer lags -- searched out to
-    ``T // 4``. A process whose autocorrelation stays at or above ``1/e`` that
-    far has an unbounded length. The adaptive statistics below set one lag or
-    window per pair from ``l_i`` and ``l_j`` and clip it to ``1 .. C`` with
-    ``C = max(1, min(T // 10, L))``, so an unbounded length gives ``C``. The
-    lag follows the pair's correlation times, so it adapts to the sampling
-    rate: sampling the same system more finely lengthens it in samples and
-    leaves it about the same in time.
+    ``1/e`` -- hctsa's ``CO_f1ecac`` (Fulcher et al. 2013) on the integer lags
+    -- searched out to ``T // 4``. A process whose autocorrelation stays at or
+    above ``1/e`` that far has an unbounded length. The adaptive statistics
+    below set one lag or window per pair from ``l_i`` and ``l_j`` and clip it
+    to ``1 .. C`` with ``C = max(1, min(T // 10, L))``, so an unbounded length
+    gives ``C``. The lag follows the pair's correlation times, so it adapts to
+    the sampling rate: sampling the same system more finely lengthens it in
+    samples and leaves it about the same in time.
 
     ``A[i, j]`` is row ``i`` (source) to column ``j`` (target):
 
@@ -347,29 +345,12 @@ class LagResolvedCorrelation(Directed, Signed):
         a lead/lag index, not a Granger-causality test: a common driver
         reaching ``i`` before ``j`` also makes it positive.
 
-    Parameters
-    ----------
-    statistic : {"lag", "peak", "onesided", "onesidedpeak", "asym"}
-    max_lag : int >= 1 or None
-        Upper limit on the window; ``None`` uses ``T // 4``.
-    tau : int >= 1 or "1e", only for ``statistic="onesided"`` (default 1).
-
-    The identifier is ``lagcorr_<statistic>[_tau-<tau>]_L-<max_lag>``, e.g.
+    ``statistic`` is one of the five above. ``max_lag`` (an integer >= 1, or
+    ``None`` for ``T // 4``) caps the window, and ``tau`` (an integer >= 1 or
+    ``"1e"``, default 1) is used only by ``onesided``. The identifier is
+    ``lagcorr_<statistic>[_tau-<tau>]_L-<max_lag>``, e.g.
     ``lagcorr_lag_L-None``, ``lagcorr_onesided_tau-1e_L-None``,
     ``lagcorr_onesidedpeak_L-None``.
-
-    References
-    ----------
-    Box, G. E. P., Jenkins, G. M., Reinsel, G. C. & Ljung, G. M. (2015). *Time
-    Series Analysis: Forecasting and Control*, 5th ed. Wiley. -- the sample
-    cross-correlation function.
-    Fulcher, B. D., Little, M. A. & Jones, N. S. (2013). Highly comparative
-    time-series analysis: the empirical structure of time series and their
-    methods. *J. R. Soc. Interface* 10, 20130048. -- hctsa's ``CO_f1ecac``,
-    the first 1/e crossing of the autocorrelation function.
-    Mitra, A., Snyder, A. Z., Hacker, C. D. & Raichle, M. E. (2014). Lag
-    structure in resting-state fMRI. *J. Neurophysiol.* 111, 2374-2391. -- the
-    lag of the cross-covariance extremum, interpolated between samples.
     """
 
     name = "Lag-resolved cross-correlation"
