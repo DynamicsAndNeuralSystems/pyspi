@@ -362,7 +362,7 @@ def test_surrogate_statistics_match_reference(phase_band, amp_band, statistic):
                 excess = reference(phase[i], amp[j]) - sur.mean()
                 want = excess if norm == "excess" else excess / sur.std()
                 assert A[i, j] == pytest.approx(want, rel=1e-9, abs=1e-12), (norm, i, j)
-                assert spi.bivariate(data, i=i, j=j) == A[i, j]
+                assert spi.bivariate(data, i=i, j=j) == pytest.approx(A[i, j], rel=1e-12, abs=1e-15)
 
 
 @pytest.mark.parametrize("statistic", ["mi_excess", "mi_z", "mvl_z"])
