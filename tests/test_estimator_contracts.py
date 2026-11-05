@@ -40,7 +40,7 @@ def test_kraskov_is_not_silently_gaussian(cls_name):
     try:
         kraskov = cls(estimator="kraskov")
     except (ValueError, NotImplementedError):
-        return  # Rejecting the unimplemented estimator is an acceptable fix.
+        return  # Rejecting the estimator satisfies the contract.
 
     gaussian = cls(estimator="gaussian")
     kv = kraskov.multivariate(data)
@@ -144,10 +144,9 @@ def test_symbolic_encoding_is_collision_free(k):
 # KSG preconditions
 # --------------------------------------------------------------------------
 
-# NOTE: parse_bivariate's signature is (self, data, data2=None, i=None, j=None),
-# so bivariate(data, 0, 1) binds data2=0, i=1 and fails with an unrelated
-# dimension error. Always pass i/j by keyword here, or these tests pass for the
-# wrong reason. (The positional foot-gun is a usability issue in its own right.)
+# NOTE: parse_bivariate's signature is (self, data, data2=None, i=None,
+# j=None), so bivariate(data, 0, 1) binds data2=0, i=1 and is rejected. Pass
+# i/j by keyword so these tests reach the check they are written for.
 
 @pytest.mark.parametrize("k", [30, 100])
 def test_ksg_rejects_k_at_or_above_sample_size(k):
@@ -231,9 +230,8 @@ def test_ksg_rejects_negative_theiler_window():
         _validate_ksg_sample(200, 4, -5)
 
 
-def test_ksg_rejects_tied_inputs():
-    """Quantised/constant inputs give a zero k-th radius and a negative CMI,
-    so they are rejected."""
+def test_ksg_transfer_entropy_rejects_a_constant_process():
+    """A constant process has no spread to standardise, so it is rejected."""
     const = np.zeros((2, 200))
     const[1] = np.arange(200)
     data = Data(data=const, dim_order="ps", zscore=False)
@@ -244,9 +242,8 @@ def test_ksg_rejects_tied_inputs():
 def test_directed_info_kraskov_matches_the_analytic_value():
     """The direct CMI estimator must hit the same closed form as Gaussian.
 
-    DI composed from separate entropies cannot: kernel sat near +4 on
-    independent data at every T tested (100 to 8000), because a fixed-bandwidth
-    estimator's bias in ~11 dimensions does not shrink with sample size.
+    DI built from separate entropies would not: a fixed-bandwidth estimator's
+    bias in ~11 dimensions does not shrink with sample size.
     """
     c = 1.0
     r = np.random.default_rng(1)
@@ -322,10 +319,8 @@ def test_wilson_non_convergence_is_reported_not_swallowed():
     GC) is built from that factor.
 
     pyspi collects per-SPI diagnostics from the ``warnings`` channel only, so
-    before the bridge in ``statistics/spectral.py`` those numbers reached the
-    results table with nothing recorded against them. This is not hypothetical:
-    it fires on a *bundled* fixture. Same class of defect as the six SPIs above
-    -- a value that is quietly not what it claims to be.
+    ``statistics/spectral.py`` bridges the log message into a warning. The
+    bundled ``kuramoto_M7_T100`` fixture triggers it.
     """
     import os
     import warnings
@@ -346,6 +341,8 @@ def test_wilson_non_convergence_is_reported_not_swallowed():
         "the backend's factorisation-convergence warning was swallowed; "
         f"caught instead: {messages}"
     )
+
+
 def test_ccm_auto_embedding_maximises_skill_rather_than_returning_max_e():
     """``E=None`` must select an embedding, not return the largest candidate.
 
@@ -407,11 +404,10 @@ def _correlated_pair(n=2000, rho=0.8, seed=0):
 def test_ksg_mi_is_invariant_to_per_coordinate_rescaling(scale):
     """MI is invariant under nonzero affine marginal transformations.
 
-    The KSG estimator's L-infinity neighbour radius is not, which is why JIDT
-    normalises each column by default (``normalise = true`` on
-    MutualInfoMultiVariateCommon). Without it, scaling one member of a
-    correlated Gaussian pair by 1e-3 or 1e3 collapsed the estimate from 0.49 to
-    0.05 and 0.06 against a true MI of 0.51.
+    The KSG estimator's L-infinity neighbour radius is not, which is why each
+    column is normalised first, as JIDT does by default (``normalise = true``
+    on MutualInfoMultiVariateCommon). Without it, rescaling one member of a
+    correlated pair by 1e-3 or 1e3 drives the estimate far below the true MI.
     """
     from pyspi.statistics.infotheory import _ksg_mi_pair
 
@@ -520,7 +516,7 @@ def test_kraskov_spis_compute_finite_values_on_the_quantised_bundled_dataset():
         assert np.all(np.isfinite(table[off]))
 
 
-def test_kozachenko_entropy_still_refuses_tied_data_rather_than_dithering():
+def test_kozachenko_entropy_refuses_tied_data_rather_than_dithering():
     """A deliberate divergence from JIDT, and the reason is not stylistic.
 
     JIDT dithers its Kozachenko calculator. For differential entropy,
@@ -610,10 +606,8 @@ def _xcorr_data(zscore=True, seed=0, T=500):
 def test_cross_correlation_of_a_series_with_itself_is_one():
     """A correlation, so the self-pair must be exactly 1 and nothing exceeds it.
 
-    `correlate(x, y) / x.std() / y.std() / (T - 1)` is neither the biased
-    (divide by T) nor the unbiased (divide by T - |l|) normalisation, and it
-    put the zero lag of a series against itself at T/(T-1): exactly 1.1111 for
-    T = 10.
+    Lag sums are divided by T (the biased normalisation), so the zero lag of a
+    series with itself is exactly 1; dividing by T - 1 would put it at T/(T-1).
     """
     from pyspi.data import Data
     from pyspi.statistics.basic import CrossCorrelation
@@ -627,12 +621,10 @@ def test_cross_correlation_of_a_series_with_itself_is_one():
 
 
 def test_cross_correlation_demeans_and_stays_bounded():
-    """The correlate call used the raw series while the divisor demeaned.
+    """The series are demeaned before correlating, as the divisor's std() is.
 
-    On `arange(10)` against itself with zscore=False that mismatch returned
-    3.8384 -- for a quantity whose range is [-1, 1].
+    So values stay within [-1, 1] even with a large offset and zscore=False.
     """
-    from pyspi.data import Data
     from pyspi.statistics.basic import CrossCorrelation
 
     rng = np.random.default_rng(1)
@@ -653,14 +645,12 @@ def test_cross_correlation_demeans_and_stays_bounded():
 def test_cross_correlation_is_symmetric_in_its_arguments(statistic, sigonly):
     """It is declared undirected, so both orientations must agree.
 
-    Two independent reasons they did not. The lag window
-    `r_full[T - T//4 : T + T//4]` was centred on index T, but zero lag sits at
-    T - 1, so the window was asymmetric by one lag; and the cached opposite
-    orientation was `data.xcorr[(j,i)] = data.xcorr[(i,j)]` rather than its
-    reverse, since r_yx(l) = r_xy(-l). The `sigonly` truncation then walked
-    outwards from the centre, which on a pair where i leads j by one sample
-    (r(0) already insignificant) extended one way and not the other: measured
-    0.9957 against -0.0202.
+    This needs three things: the lag window is centred on zero lag (index
+    T - 1 of the full correlation), the opposite orientation is cached as the
+    reversed profile (r_yx(l) = r_xy(-l)), and the `sigonly` lobe is a set of
+    lags invariant under l -> -l. The data include a pair where i leads j by
+    one sample, so r(0) is insignificant and a lobe grown outwards from the
+    centre would differ between orientations.
     """
     from pyspi.statistics.basic import CrossCorrelation
 
@@ -704,10 +694,10 @@ def test_cross_correlation_significance_band_scales_with_the_sample_size():
 # ---------------------------------------------------------------------------
 
 def test_dyn_corr_excl_value_reaches_the_identifier_and_the_cache_key():
-    """`_DCE` alone named three different Theiler windows.
+    """The identifier and cache key carry the Theiler window's value.
 
-    dyn_corr_excl=5, =10 and ="AUTO" all produced `mi_kraskov_NN-4_DCE` and the
-    same `_getkey()`, so a config setting two of them collided silently.
+    `_DCE-5`, `_DCE-10` and `_DCE-AUTO` are distinct, so configs differing only
+    in dyn_corr_excl do not collide.
     """
     import pyspi.statistics.infotheory as it
 
@@ -771,9 +761,9 @@ def test_crossmap_entropy_embedding_dimension(k, dims):
 def test_cointegration_aeg_tstat_is_signed_and_johansen_is_not():
     """The Engle-Granger t-statistic's sign is the finding, not noise.
 
-    Reported as unsigned it went through `Calculator._rmmin`, which shifts the
-    column by its minimum, and through `set_group`'s `abs()`. Johansen's trace
-    and maximum-eigenvalue statistics are non-negative and stay unsigned.
+    It is signed so that `Calculator._rmmin` does not shift the column by its
+    minimum and `set_group` does not take its `abs()`. Johansen's trace and
+    maximum-eigenvalue statistics are non-negative and stay unsigned.
     """
     from pyspi.statistics.misc import Cointegration
 
@@ -783,11 +773,10 @@ def test_cointegration_aeg_tstat_is_signed_and_johansen_is_not():
 
 
 def test_itakura_dtw_normalisation_agrees_between_bivariate_and_multivariate():
-    """The itakura branch of `multivariate` skipped the sqrt(T) division.
+    """Under `normalise=True` every path divides by sqrt(T).
 
-    The bivariate path and the dtaidistance path both apply it under
-    `normalise=True`, so the two disagreed by a factor of sqrt(T) for that one
-    constraint.
+    That covers the bivariate path, the dtaidistance path and the itakura
+    branch of `multivariate`, so the entry points agree for every constraint.
     """
     from pyspi.data import Data
     from pyspi.statistics.distance import DynamicTimeWarping
@@ -813,9 +802,12 @@ def _lcss_cell_by_cell(x, y, band, eps=1.0):
 
 @pytest.mark.parametrize("constraint", ["sakoe_chiba", "itakura"])
 def test_constrained_lcss_applies_its_band_and_only_its_band(constraint):
-    """tslearn < 0.10 ignored the band, so both constrained SPIs equalled
-    `lcss`; tslearn 0.10 holds masked cells at zero, so Itakura LCSS is 0
-    whenever the last samples differ by more than eps."""
+    """Checked against the textbook recursion, not tslearn's band handling.
+
+    tslearn before 0.10 ignores the band; 0.10 holds masked cells at zero,
+    which makes Itakura LCSS 0 whenever the last samples differ by more than
+    eps. Here the band limits matches, not the recursion.
+    """
     import tslearn.metrics
     from pyspi.statistics.distance import LongestCommonSubsequence
 
@@ -840,7 +832,6 @@ def test_constrained_lcss_applies_its_band_and_only_its_band(constraint):
     assert n_below > 0
 
 
-
 @pytest.mark.parametrize("kwargs,exc", [
     ({"i": 0}, ValueError),          # j omitted
     ({"j": 1}, ValueError),          # i omitted
@@ -850,12 +841,10 @@ def test_constrained_lcss_applies_its_band_and_only_its_band(constraint):
 def test_bivariate_rejects_incomplete_or_invalid_indices(kwargs, exc):
     """`z[None]` is `np.newaxis`, not an error.
 
-    A single index reached the SPI with the other left as None, and indexing
-    the process array with None turned the "pair" into the whole (1, M, T)
-    block -- so the SPI computed something with no relation to what was asked
-    for, silently. The signature is `(data, data2, i, j)`, so
-    `bivariate(data, 0, 3)` -- the obvious way to write it -- binds 0 to
-    `data2` and 3 to `i`, and lands in exactly that state.
+    Indexing the process array with None would turn the pair into the whole
+    (1, M, T) block. The signature is `(data, data2, i, j)`, so
+    `bivariate(data, 0, 3)` binds 0 to `data2` and 3 to `i` and leaves `j`
+    unset. Incomplete, out-of-range and non-integer indices are all rejected.
     """
     from pyspi.data import Data
     from pyspi.statistics.basic import CrossCorrelation
@@ -1098,8 +1087,8 @@ def test_auto_embedding_is_refused_by_the_estimators_that_cannot_do_it(
         estimator, kwargs):
     """No AIS criterion exists for the box-kernel or ordinal estimators.
 
-    Both accepted `auto_embed_method` and the search bounds and then ran a fixed
-    embedding, so the argument said an embedding had been selected and none had.
+    They reject `auto_embed_method` and the search bounds, since accepting
+    them would imply an embedding had been selected when a fixed one ran.
     """
     import pyspi.statistics.infotheory as it
 
@@ -1136,8 +1125,8 @@ def test_dest_only_refuses_a_fixed_destination_and_accepts_a_fixed_source(
 
 @pytest.mark.parametrize("bound", ["k_search_max", "tau_search_max"])
 def test_search_bounds_are_refused_without_an_auto_method(bound):
-    """They reached the identifier only under the auto branch, so with a fixed
-    embedding they were accepted and silently discarded."""
+    """Search bounds only apply to an embedding search, so without an auto
+    method they would have no effect; they are rejected instead."""
     import pyspi.statistics.infotheory as it
 
     with pytest.raises(ValueError, match="requires auto_embed_method"):
@@ -1214,14 +1203,13 @@ def test_auto_embedding_selection_is_cached_per_process():
 def test_sigonly_returns_zero_when_no_lag_clears_the_threshold(statistic, squared):
     """An empty thresholded set is an association of zero, not of the window.
 
-    Falling back to the unfiltered window reported the largest of ~T/2 sample
-    correlations under the null -- for this fixture 0.128 (max), -0.105 (mean),
-    0.191 and 0.056 squared -- which is the opposite of what a threshold is for.
+    Falling back to the unfiltered window would report the largest of ~T/2
+    null sample correlations, the opposite of what a threshold is for.
 
-    T is small on purpose. The cut is applied pointwise at every lag in a window
-    of about T/2, so at a nominal 5% per lag the null keeps something almost
-    surely for any moderate T: no seed in 400 produced an empty set at T=600.
-    That is itself why `sigonly` is not an inferential test.
+    T is small on purpose. The cut is applied pointwise at every lag in a
+    window of about T/2, so at a nominal 5% per lag the null keeps some lag
+    almost surely for any moderate T. That is also why `sigonly` is not an
+    inferential test.
     """
     from pyspi.data import Data
     from pyspi.statistics.basic import CrossCorrelation
@@ -1385,7 +1373,8 @@ def test_cross_pairwise_distance_upper_bounds_normalised_dtw(seed):
 
 @pytest.mark.parametrize("bad", [1.7, True, -1, float("nan"), float("inf")])
 def test_cross_pairwise_distance_rejects_non_integral_tau(bad):
-    """`int(tau) < 0` accepted 1.7 (truncated to 1) and True (silently 1)."""
+    """A cast such as `int(tau)` would turn 1.7 into 1 and True into 1, so tau
+    must be a genuine non-negative integer."""
     from pyspi.statistics.distance import CrossPairwiseDistance
 
     with pytest.raises((TypeError, ValueError)):
@@ -1393,12 +1382,11 @@ def test_cross_pairwise_distance_rejects_non_integral_tau(bad):
 
 
 def test_rmse_suffix_is_the_normalisation_label_not_a_metric_claim():
-    """Kept as the house label for `/sqrt(T)`, documented rather than renamed.
+    """`_rmse` is the house label for `/sqrt(T)`, not a claim about the metric.
 
-    An earlier pass renamed it to `_norm-rootT` for non-Euclidean metrics. That
-    introduced a third suffix convention for a quantity no bundled config
-    computes, against `xpdist`'s and `dtw`'s existing use of `_rmse` for the
-    same normalisation.
+    `xpdist` and `dtw` use it for the same normalisation; a metric-specific
+    suffix would add a third convention for a quantity no bundled config
+    computes.
     """
     from pyspi.statistics.distance import PairwiseDistance
 
@@ -1499,7 +1487,7 @@ def test_continuous_parameters_reject_non_finite_and_non_positive(bad):
 
 
 def test_continuous_parameters_accept_a_fractional_value():
-    """The converse: strictness must not have broken the legitimate case."""
+    """The converse: a fractional value is accepted."""
     import pyspi.statistics.infotheory as it
     from pyspi.statistics.distance import DynamicTimeWarping
 
@@ -1644,9 +1632,9 @@ def _psi_bands(series):
 def test_multitaper_phase_slope_index_uses_its_frequency_band():
     """Coupling confined below 0.1 cycles/sample must not show up above 0.25.
 
-    The three band variants were one identical full-band matrix: the band
-    arguments are only passed by ``_get_statistic``, which the dispatcher
-    reached on ``TypeError`` alone, and the backend stopped raising one.
+    The band is applied only in ``_get_statistic``, so this checks that the
+    band variants actually take that path rather than the backend's full-band
+    method.
 
     Process 0 drives process 1 at a lag of thirty samples through a low-pass
     filter, so their coherence -- and with it any phase slope -- lives in the
@@ -1686,8 +1674,8 @@ def test_multitaper_phase_slope_index_sign_follows_the_lag(lag):
     Not asserted below five samples: the index of a one-sample lag is about
     the size of its noise in a single recording.
 
-    Summed over all frequency pairs, as the backend does it, the index changed
-    sign for lags beyond about 50 samples; reversing the roles flips it.
+    The backend's sum over all frequency pairs changes sign for lags beyond
+    about 50 samples, which is why the index sums adjacent frequencies only.
     """
     for seed in range(3):
         series = _lagged_pair(lag, seed)
@@ -1703,8 +1691,7 @@ def test_multitaper_phase_slope_index_grows_in_proportion_to_the_lag():
 
     Neighbouring frequencies then differ in phase by ``2 pi lag df``, and for
     small lags the index is proportional to it: doubling the lag doubles the
-    index. (The all-pairs sum *fell* with lag: 659, 332, 130 at lags 1, 2, 5
-    here.)
+    index. (The backend's all-pairs sum instead falls as the lag grows.)
     """
     def full_band(lag):
         return np.mean([_psi_bands(_lagged_pair(lag, seed))[0][0, 1] for seed in range(6)])
@@ -1835,8 +1822,8 @@ def _dcorr_inputs():
 def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
     """Same matrix, bit for bit, as evaluating both orders and keeping one.
 
-    Constant and three-sample inputs are included for what they return
-    (NaN, or a raised error), which must not change either.
+    Constant and three-sample inputs are included: the outcome (NaN, or a
+    raised error) must match as well.
     """
     import warnings
 
@@ -1858,14 +1845,15 @@ def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
         assert np.array_equal(data.to_numpy(), before, equal_nan=True)
         return out
 
-    new, old = run(DistanceCorrelation.multivariate), run(Undirected.multivariate)
-    assert new[0] == old[0]
-    if new[0] == "raised":
-        assert new == old
+    retained, reference = (run(DistanceCorrelation.multivariate),
+                           run(Undirected.multivariate))
+    assert retained[0] == reference[0]
+    if retained[0] == "raised":
+        assert retained == reference
     else:
-        assert np.array_equal(new[1], old[1], equal_nan=True)
-        assert np.array_equal(new[1], new[1].T, equal_nan=True)
-        assert np.isnan(np.diag(new[1])).all()
+        assert np.array_equal(retained[1], reference[1], equal_nan=True)
+        assert np.array_equal(retained[1], retained[1].T, equal_nan=True)
+        assert np.isnan(np.diag(retained[1])).all()
 
 
 def test_distance_correlation_calls_each_pair_once_in_the_retained_order(monkeypatch):
