@@ -683,16 +683,14 @@ def _lagged_ccm_skill(z, embedding, max_lag, nlibs=_CCM_NLIBS, sample=100,
 
 
 class LaggedConvergentCrossMapping(Directed, Signed):
-    """Lagged (time-delayed) convergent cross-mapping, row (source) -> column (target).
+    """Lagged convergent cross-mapping (Ye et al. 2015, Sci Rep 5, 14750).
 
-    Ye et al. (2015) extend CCM with a cross-map lag: the shadow manifold of
-    the library variable at time t estimates the other variable at time
-    ``t + Tp``. For each ordered pair and each ``Tp in -k..k`` this computes
-
-        rho_ij(Tp) = corr( i(t + Tp), estimate of i(t + Tp) from M_j(t) ),
-
-    "j xmap i" at horizon Tp, at the largest library size only (``L =
-    floor((N-E-1)/10)*10``, 100 random libraries, seed 42, exactly as
+    Ye et al. extend CCM with a cross-map lag: the shadow manifold of the
+    library variable at time t estimates the other variable at time ``t + Tp``.
+    For each ordered pair and each ``Tp in -k..k`` this computes
+    ``rho_ij(Tp) = corr(i(t + Tp), estimate of i(t + Tp) from M_j(t))``, "j
+    xmap i" at horizon Tp, at the largest library size only
+    (``L = floor((N-E-1)/10)*10``, 100 random libraries, seed 42, exactly as
     ``ConvergentCrossMapping``; the ``Tp = 0`` value equals the last point of
     the ``ccm`` curve). The ``(M, M, 2k + 1)`` array is cached on
     ``data.ccm[("lagged", E, k)]``.
@@ -720,22 +718,13 @@ class LaggedConvergentCrossMapping(Directed, Signed):
     reads direction from when skill peaks, so it can separate a delayed
     causal link from synchrony; it does not test convergence.
 
-    Parameters
-    ----------
-    statistic : {"tp", "skill"}
-    embedding_dimension : int or None
-        As in ``ConvergentCrossMapping``: ``None`` selects each process's
-        simplex-optimal E and a pair uses the larger of its two, in both
-        directions.
-    max_lag : int
-        k, the largest horizon examined, in samples (default 5).
+    ``statistic`` is ``"tp"`` or ``"skill"``. ``embedding_dimension`` is as in
+    ``ConvergentCrossMapping``: ``None`` selects each process's simplex-optimal
+    E and a pair uses the larger of its two, in both directions. ``max_lag``
+    is k, the largest horizon examined, in samples (default 5).
 
     Rows whose shifted target falls outside the series are dropped (as
     pyEDM's ``Tp``), so a horizon of ``Tp`` costs ``|Tp|`` points at most.
-
-    Reference: H. Ye, E. R. Deyle, L. J. Gilarranz & G. Sugihara,
-    "Distinguishing time-delayed causal interactions using convergent cross
-    mapping", Scientific Reports 5, 14750 (2015).
     """
 
     name = "Lagged convergent cross-mapping"
