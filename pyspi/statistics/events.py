@@ -125,34 +125,28 @@ class EventSynchronisation(Directed, Signed):
     ``-x``.
 
     **Coincidences.** With event times ``t^x_1 < ... < t^x_{m_x}`` and
-    ``t^y_1 < ... < t^y_{m_y}``, the pair ``(a, b)`` has the local tolerance::
-
-        tau_ab = min(t^x_{a+1} - t^x_a, t^x_a - t^x_{a-1},
-                     t^y_{b+1} - t^y_b, t^y_b - t^y_{b-1}) / 2,
-
+    ``t^y_1 < ... < t^y_{m_y}``, the local tolerance ``tau_ab`` of the pair
+    ``(a, b)`` is half the smallest of the gaps from ``t^x_a`` to ``t^x_{a-1}``
+    and ``t^x_{a+1}`` and from ``t^y_b`` to ``t^y_{b-1}`` and ``t^y_{b+1}``,
     capped at ``max_delay`` if given. A gap that does not exist (before the
-    first event, after the last) is left out of the minimum. Then::
-
-        c(y|x) = sum_ab J_ab,  J_ab = 1    if 0 < t^y_b - t^x_a <= tau_ab,
-                                      1/2  if t^y_b == t^x_a,
-                                      0    otherwise,
-
-    the number of times an event of ``y`` follows an event of ``x`` within the
-    tolerance, and ``c(x|y)`` the same with ``x`` and ``y`` exchanged (this is
-    Quian Quiroga et al.'s notation: ``c(x|y)`` counts ``x`` events that
-    follow ``y`` events). An event can coincide in both directions only when it
-    lies exactly midway between two events of the other series, at distance
-    ``tau`` from both; each such coincidence counts 1/2 rather than 1 (the
-    double-counting correction of Odenweller & Donner 2020, as in pyunicorn),
-    so ``Q`` cannot exceed 1. Such ties are common with integer sample times, so
-    ``Q`` differs slightly from an uncorrected Quian Quiroga et al. (2002)
-    implementation.
+    first event, after the last) is left out of the minimum. Then
+    ``c(y|x) = sum_ab J_ab``, with ``J_ab = 1`` if
+    ``0 < t^y_b - t^x_a <= tau_ab``, ``1/2`` if ``t^y_b == t^x_a`` and 0
+    otherwise: the number of times an event of ``y`` follows an event of ``x``
+    within the tolerance, and ``c(x|y)`` the same with ``x`` and ``y``
+    exchanged (this is Quian Quiroga et al.'s notation: ``c(x|y)`` counts ``x``
+    events that follow ``y`` events). An event can coincide in both directions
+    only when it lies exactly midway between two events of the other series, at
+    distance ``tau`` from both; each such coincidence counts 1/2 rather than 1
+    (the double-counting correction of Odenweller & Donner 2020, as in
+    pyunicorn), so ``Q`` cannot exceed 1. Such ties are common with integer
+    sample times, so ``Q`` differs slightly from an uncorrected Quian Quiroga
+    et al. (2002) implementation.
 
     **Statistics** (``A[i, j]`` with row ``i`` = ``x`` the source and column
-    ``j`` = ``y`` the target, the package's directed convention)::
-
-        Q[i, j] = (c(y|x) + c(x|y)) / sqrt(m_x m_y)        in [0, 1]
-        q[i, j] = (c(y|x) - c(x|y)) / sqrt(m_x m_y)        in [-1, 1]
+    ``j`` = ``y`` the target, the package's directed convention) are
+    ``Q[i, j] = (c(y|x) + c(x|y)) / sqrt(m_x m_y)``, in ``[0, 1]``, and
+    ``q[i, j] = (c(y|x) - c(x|y)) / sqrt(m_x m_y)``, in ``[-1, 1]``.
 
     ``Q`` (``statistic="Q"``) is the strength of synchronisation and is
     symmetric (``undirected``, unsigned); 1 means every event of the sparser
@@ -170,25 +164,12 @@ class EventSynchronisation(Directed, Signed):
     A pair is NaN when either series has fewer than two events (no gap, hence
     no tolerance), which includes a constant series.
 
-    Parameters
-    ----------
-    statistic : {"Q", "q"}
-        Synchronisation strength or delay asymmetry, as above.
-    quantile : float in (0, 1)
-        Exceedance level defining events (default 0.95, the top 5% of
-        samples). Appears in the identifier as ``q-0-95``.
-    max_delay : int >= 1 or None
-        Global cap on the tolerance ``tau``, in samples (default ``None``, no
-        cap: the tolerance is set by the local inter-event gaps alone). When
-        set it is appended to the identifier as ``_maxdelay-<d>``.
-
-    References
-    ----------
-    R. Quian Quiroga, T. Kreuz and P. Grassberger, "Event synchronization: a
-    simple and fast method to measure synchronicity and time delay patterns",
-    Phys. Rev. E 66, 041904 (2002).
-    A. Odenweller and R. V. Donner, "Disentangling synchrony from serial
-    dependency in paired-event time series", Phys. Rev. E 101, 052213 (2020).
+    ``quantile`` (in ``(0, 1)``, default 0.95, the top 5% of samples) is the
+    exceedance level defining events, and appears in the identifier as
+    ``q-0-95``. ``max_delay`` (an integer >= 1, default ``None``) caps the
+    tolerance ``tau`` in samples; without it the tolerance is set by the local
+    inter-event gaps alone. When set it is appended to the identifier as
+    ``_maxdelay-<d>``.
     """
 
     name = "Event synchronisation"
@@ -277,19 +258,16 @@ class TailDependenceAsymmetry(Undirected, Signed):
     for ties), level ``u = quantile`` and ``k = floor((1 - u) T)``, the upper
     and lower tails of ``x`` are the ``k`` samples with ``R_x > T - k`` and the
     ``k`` samples with ``R_x <= k``. The empirical tail-dependence coefficients
-    (Schmidt & Stadtmueller 2006) are::
-
-        lambda_U = #{t : R_x(t) > T - k and R_y(t) > T - k} / k
-        lambda_L = #{t : R_x(t) <= k    and R_y(t) <= k}    / k
-
-    each the fraction of one series' tail samples at which the other is in the
-    same tail, the estimator of ``P(F_y(y) > u | F_x(x) > u)`` at a finite
-    level. Without ties both tails of both series hold exactly ``k`` samples,
-    so the coefficient is the same whichever series is conditioned on
-    (undirected by construction). With ties (average ranks) a tail can hold a
-    few more or fewer samples, and the denominator is the geometric mean of
-    the two tail counts, which is ``k`` without ties and keeps the coefficient
-    in ``[0, 1]``.
+    (Schmidt & Stadtmueller 2006) are
+    ``lambda_U = #{t : R_x(t) > T - k and R_y(t) > T - k} / k`` and
+    ``lambda_L = #{t : R_x(t) <= k and R_y(t) <= k} / k``, each the fraction of
+    one series' tail samples at which the other is in the same tail, the
+    estimator of ``P(F_y(y) > u | F_x(x) > u)`` at a finite level. Without ties
+    both tails of both series hold exactly ``k`` samples, so the coefficient is
+    the same whichever series is conditioned on (undirected by construction).
+    With ties (average ranks) a tail can hold a few more or fewer samples, and
+    the denominator is the geometric mean of the two tail counts, which is
+    ``k`` without ties and keeps the coefficient in ``[0, 1]``.
 
     ``statistic="asymmetry"`` (the bundled one) reports
     ``lambda_U - lambda_L`` in ``[-1, 1]``: positive when the two series are
@@ -310,21 +288,11 @@ class TailDependenceAsymmetry(Undirected, Signed):
     increasing transform of either series. It ignores time order
     (contemporaneous).
 
-    Parameters
-    ----------
-    quantile : float in (0.5, 1)
-        Tail level ``u`` (default 0.95: the top and bottom 5%). Appears in the
-        identifier as ``q-0-95``.
-    statistic : {"asymmetry", "upper", "lower"}
-        ``lambda_U - lambda_L`` (identifier ``tailasym_q-<u>``), or one
-        coefficient (``tailasym_upper_q-<u>``, ``tailasym_lower_q-<u>``).
-
-    References
-    ----------
-    H. Joe, *Multivariate Models and Dependence Concepts*, Chapman & Hall
-    (1997), Sec. 2.1.10 (tail dependence).
-    R. Schmidt and U. Stadtmueller, "Non-parametric estimation of tail
-    dependence", Scand. J. Stat. 33, 307-335 (2006).
+    ``quantile`` (in ``(0.5, 1)``, default 0.95: the top and bottom 5%) is the
+    tail level ``u`` and appears in the identifier as ``q-0-95``. The
+    identifiers are ``tailasym_q-<u>`` for the asymmetry and
+    ``tailasym_upper_q-<u>`` and ``tailasym_lower_q-<u>`` for the
+    coefficients.
     """
 
     name = "Tail-dependence asymmetry"
