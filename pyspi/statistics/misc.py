@@ -380,62 +380,50 @@ class EdgeTimeSeries(Undirected, Signed):
     ``x`` and ``y`` (undirected) and signed; ``excessvar`` and ``topshare``
     are also invariant to permuting time.
 
-    Parameters
-    ----------
-    statistic : {"excessvar", "topshare", "acf1"}
-        ``"excessvar"`` (``edge_excessvar``): the excess variance
-        ``var(e) - c^2 g(r)``, ``g(r) = 1 + r^2 - (2 + 4 r^2) / (T - 1)``.
-        Isserlis' theorem gives ``var(xy) = 1 + rho^2`` for a Gaussian pair;
-        the ``1/(T - 1)`` term reduces the plug-in's finite-sample bias to
-        ``O(T^-2)``. Positive = burstier than Gaussian (heavy-tailed ``e``:
-        the correlation comes and goes, or rides on shared high-amplitude
-        events); negative = steadier (sub-Gaussian ``e``). It is the
-        standardised cokurtosis ``cum(x, x, y, y)``, so a shared variance
-        modulation with unchanged coupling also makes it positive.
+    ``statistic`` selects one of three:
 
-        ``"topshare"`` (``edge_topshare_f-<frac>``): the excess share of the
-        cofluctuation carried by the top ``frac`` of frames. With
-        ``k = max(1, round(frac T))`` and ``top`` the ``k`` frames of largest
-        ``|e_t|``, ``S = sum_{t in top} e_t / sum_t |e_t|`` and
+    ``excessvar`` (``edge_excessvar``)
+        The excess variance ``var(e) - c^2 g(r)``,
+        ``g(r) = 1 + r^2 - (2 + 4 r^2) / (T - 1)``. Isserlis' theorem gives
+        ``var(xy) = 1 + rho^2`` for a Gaussian pair; the ``1/(T - 1)`` term
+        reduces the plug-in's finite-sample bias to ``O(T^-2)``. Positive =
+        burstier than Gaussian (heavy-tailed ``e``: the correlation comes and
+        goes, or rides on shared high-amplitude events); negative = steadier
+        (sub-Gaussian ``e``). It is the standardised cokurtosis
+        ``cum(x, x, y, y)``, so a shared variance modulation with unchanged
+        coupling also makes it positive.
+
+    ``topshare`` (``edge_topshare_f-<frac>``)
+        The excess share of the cofluctuation carried by the top ``frac`` of
+        frames. With ``k = max(1, round(frac T))`` and ``top`` the ``k`` frames
+        of largest ``|e_t|``, ``S = sum_{t in top} e_t / sum_t |e_t|`` and
         ``topshare = S - S0(r, k/T)``. ``S`` lies in [-1, 1]; it is a share of
         ``sum |e|`` because ``sum e`` vanishes as ``r -> 0``.
         ``S0(rho, f) = E[e 1{|e| > q}] / E|e|`` for ``e = x y``, ``(x, y)``
         standard bivariate Gaussian with correlation ``rho`` and ``q`` the
         ``(1 - f)`` quantile of ``|e|``, by one-dimensional quadrature
         (``y | x`` is normal). It responds to coupling carried by
-        high-amplitude frames (Esfahlani et al.'s cofluctuation events), not
-        to coupling that switches on at ordinary amplitude. Odd under
-        ``y -> -y``, like ``r``: for a positively correlated pair, positive =
-        more event-driven than a Gaussian pair of the same ``r``, negative =
+        high-amplitude frames (Esfahlani et al.'s cofluctuation events), not to
+        coupling that switches on at ordinary amplitude. Odd under ``y -> -y``,
+        like ``r``: for a positively correlated pair, positive = more
+        event-driven than a Gaussian pair of the same ``r``, negative =
         coupling spread more evenly over frames; the signs swap for an
         anticorrelated pair.
 
-        ``"acf1"`` (``edge_acf1``): the lag-1 autocorrelation of ``e`` beyond
-        its Gaussian value,
+    ``acf1`` (``edge_acf1``)
+        The lag-1 autocorrelation of ``e`` beyond its Gaussian value,
         ``rho_e(1) - [rho_x(1) rho_y(1) + r_xy(1) r_yx(1)] / (1 + r^2)``, with
         ``rho_e(1) = sum_{t<T} (e_t - m)(e_{t+1} - m) / sum_t (e_t - m)^2``,
         ``rho_x(1) = sum_{t<T} z_x(t) z_x(t+1) / (T - 1)`` and the lagged
         cross-correlations ``r_xy(1) = sum_{t<T} z_x(t) z_y(t+1) / (T - 1)``
         and ``r_yx(1)`` (``x`` and ``y`` swapped). The bracket is
         ``corr(e_t, e_{t+1})`` for a stationary jointly Gaussian pair
-        (Isserlis) at the sample values, so autocorrelated Gaussian series
-        give ~0. Positive = coupling episodes persist longer than that
-        implies; negative = they alternate faster.
-    frac : float, optional
-        Fraction of frames in the top set, ``0 < frac < 1``, for
-        ``"topshare"`` only (default 0.05; identifier suffix ``_f-0-05``).
+        (Isserlis) at the sample values, so autocorrelated Gaussian series give
+        ~0. Positive = coupling episodes persist longer than that implies;
+        negative = they alternate faster.
 
-    References
-    ----------
-    - Faskowitz, Esfahlani, Jo, Sporns & Betzel (2020). Edge-centric functional
-      network representations of human cerebral cortex reveal overlapping
-      system-level architecture. Nat. Neurosci. 23, 1644-1654.
-    - Esfahlani, Jo, Faskowitz, Byrge, Kennedy, Sporns & Betzel (2020).
-      High-amplitude cofluctuations in cortical activity drive functional
-      connectivity. PNAS 117, 28393-28401.
-    - Hindriks, Adhikari, Murayama, Ganzetti, Mantini, Logothetis & Deco
-      (2016). Can sliding-window correlations reveal dynamic functional
-      connectivity in resting-state fMRI? NeuroImage 127, 242-256.
+    ``frac`` (``0 < frac < 1``, default 0.05) is the fraction of frames in the
+    top set, used by ``topshare`` only (identifier suffix ``_f-0-05``).
     """
 
     name = "Edge time series (coupling nonstationarity)"
