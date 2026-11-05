@@ -127,7 +127,7 @@ def _band_series(data, band, kind):
 
 
 class PhaseAmplitudeCoupling(Directed, Unsigned):
-    """Phase-amplitude coupling (PAC) from the source's phase to the target's amplitude.
+    """Phase-amplitude coupling (PAC), source phase to target amplitude.
 
     ``A[i, j]`` measures how strongly the amplitude envelope of process ``j``
     (column, target) in a high band ``amp_band = (f3, f4)`` is modulated by the
@@ -137,11 +137,9 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     directed. The two raw statistics are in [0, 1] and unsigned; their
     surrogate-normalised versions (``_excess``, ``_z``) are signed.
 
-    Signals
-    -------
-    Each process is band-passed with a zero-phase (forward-backward,
-    ``scipy.signal.sosfiltfilt``) order-4 Butterworth filter, and the analytic
-    signal is taken with ``scipy.signal.hilbert``:
+    **Signals.** Each process is band-passed with a zero-phase
+    (forward-backward, ``scipy.signal.sosfiltfilt``) order-4 Butterworth
+    filter, and the analytic signal is taken with ``scipy.signal.hilbert``:
 
     ``phi_t = angle(H[bp_{f1,f2}(x_i)]_t)``, ``A_t = |H[bp_{f3,f4}(x_j)]_t|``.
 
@@ -156,9 +154,7 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     the edge is capped at ``T // 4`` samples, with a warning.
     ``edge_samples(T)`` returns the number of samples discarded at each end.
 
-    Statistics
-    ----------
-    With ``n`` retained samples:
+    **Statistics.** With ``n`` retained samples:
 
     - ``"mi"``: the modulation index of Tort et al. (2010). The source phase is
       divided into ``n_bins`` equal bins on [-pi, pi), ``m_k`` is the mean
@@ -182,17 +178,15 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     through its phase, and ``P`` and the MVL are ratios in ``A``), so they do
     not depend on z-scoring.
 
-    Surrogate normalisation
-    -----------------------
-    Neither raw statistic is zero for independent processes, and their chance
-    level grows with the target's own amplitude modulation, which a slow
-    rhythm of the source can align with by chance over a finite record. The
-    normalised statistics compare the index with its values on ``n_surr``
-    surrogates, each a circular shift of the target's envelope within the
-    ``n`` retained samples by ``s`` samples, ``s`` uniform on the integers in
-    ``[n // 10, n - n // 10]`` (Canolty et al. 2006; Tort et al. 2010). A
-    shift keeps the envelope and its spectrum and destroys its timing relative
-    to the source's phase:
+    **Surrogate normalisation.** Neither raw statistic is zero for independent
+    processes, and their chance level grows with the target's own amplitude
+    modulation, which a slow rhythm of the source can align with by chance over
+    a finite record. The normalised statistics compare the index with its
+    values on ``n_surr`` surrogates, each a circular shift of the target's
+    envelope within the ``n`` retained samples by ``s`` samples, ``s`` uniform
+    on the integers in ``[n // 10, n - n // 10]`` (Canolty et al. 2006; Tort et
+    al. 2010). A shift keeps the envelope and its spectrum and destroys its
+    timing relative to the source's phase:
 
     - ``"<stat>_excess"``: the index minus the mean of its surrogates, in the
       index's units. About 0 for independent processes whatever their own
@@ -216,35 +210,23 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     fundamental in the phase band (Kramer, Tort & Kopell 2008); read PAC on
     such data together with the waveform shape.
 
-    Validity of the bands
-    ---------------------
-    The envelope of the target can follow a modulation at frequency ``f``
-    only if the amplitude band passes the sidebands at ``carrier +/- f``, so
-    its bandwidth ``f4 - f3`` must be at least twice the highest phase
-    frequency ``f2`` (Aru et al. 2015). A narrower amplitude band filters the
-    modulation out and biases the coupling towards zero, so construction
-    raises ``ValueError`` for such a band pair. It also raises if the amplitude
-    band starts below the top of the phase band (``f3 < f2``).
+    **Validity of the bands.** The envelope of the target can follow a
+    modulation at frequency ``f`` only if the amplitude band passes the
+    sidebands at ``carrier +/- f``, so its bandwidth ``f4 - f3`` must be at
+    least twice the highest phase frequency ``f2`` (Aru et al. 2015). A
+    narrower amplitude band filters the modulation out and biases the coupling
+    towards zero, so construction raises ``ValueError`` for such a band pair.
+    It also raises if the amplitude band starts below the top of the phase band
+    (``f3 < f2``).
 
-    Parameters
-    ----------
-    phase_band : (float, float)
-        ``(f1, f2)``, the band of the source's phase, cycles per sample.
-    amp_band : (float, float)
-        ``(f3, f4)``, the band of the target's amplitude, cycles per sample.
-        Requires ``f3 >= f2`` and ``f4 - f3 >= 2 f2``.
-    statistic : {"mi", "mvl", "mi_excess", "mvl_excess", "mi_z", "mvl_z"}
-        Tort modulation index or Özkurt-Schnitzler normalised MVL: raw, as the
-        excess over their time-shift surrogates' mean, or as a z-score against
-        them.
-    n_bins : int
-        Phase bins of the modulation index (Tort et al. use 18 of 20 degrees).
-        Ignored by the MVL statistics. A value other than 18 is appended to the
-        identifier as ``_nbins-<n>``.
-    n_surr : int
-        Number of time-shift surrogates (at least 2) of the ``_excess`` and
-        ``_z`` statistics; ignored by the raw ones. A value other than 100 is
-        appended to the identifier as ``_nsurr-<n>``.
+    ``phase_band = (f1, f2)`` and ``amp_band = (f3, f4)`` are in cycles per
+    sample, with ``f3 >= f2`` and ``f4 - f3 >= 2 f2``. ``statistic`` is
+    ``"mi"`` or ``"mvl"``, raw or with the suffix ``_excess`` or ``_z``.
+    ``n_bins`` (default 18, Tort et al.'s 20-degree bins) is the number of
+    phase bins of the modulation index; a value other than 18 is appended to
+    the identifier as ``_nbins-<n>``. ``n_surr`` (default 100, at least 2) is
+    the number of time-shift surrogates of the normalised statistics; a value
+    other than 100 is appended to the identifier as ``_nsurr-<n>``.
 
     The identifier is ``pac_<statistic>_p-<f1>-<f2>_a-<f3>-<f4>`` with decimal
     points written as dashes, as in ``spectral.py``: ``pac_mi_p-0-01-0-05_a-
@@ -255,24 +237,6 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     Its direction is a role, which process supplies the phase and which the
     amplitude, not temporal precedence as in the Granger-type SPIs: ``A[i, j]
     > A[j, i]`` does not by itself mean that ``i`` drives ``j``.
-
-    References
-    ----------
-    Tort, Komorowski, Eichenbaum & Kopell (2010). Measuring phase-amplitude
-    coupling between neuronal oscillations of different frequencies.
-    J Neurophysiol 104:1195-1210.
-
-    Özkurt & Schnitzler (2011). A critical note on the definition of
-    phase-amplitude cross-frequency coupling. J Neurosci Methods 201:438-443.
-
-    Canolty et al. (2006). High gamma power is phase-locked to theta
-    oscillations in human neocortex. Science 313:1626-1628.
-
-    Aru et al. (2015). Untangling cross-frequency coupling in neuroscience.
-    Curr Opin Neurobiol 31:51-61.
-
-    Kramer, Tort & Kopell (2008). Sharp edge artifacts and spurious coupling
-    in EEG frequency comodulation measures. J Neurosci Methods 170:352-357.
     """
 
     name = "Phase-amplitude coupling"
