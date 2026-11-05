@@ -128,8 +128,13 @@ def _discretized_sequence(x, ffactor, maxdev, norm=True):
     return x
 
 
-def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12):
-    """Std. of the rescaled y values after binning in x; lower favours x -> y."""
+def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12, min_conditionals=0):
+    """Std. of the rescaled y values after binning in x; lower favours x -> y.
+
+    The statistic is the spread of P(y | x = a) across the x-bins ``a`` holding
+    more than ``minc`` points. Returns NaN when fewer than ``min_conditionals``
+    such bins exist; the default of 0 keeps cdt's behaviour, which returns 0.
+    """
     if isinstance(x_te, np.ndarray):
         x_te = pd.Series(np.asarray(x_te).reshape(-1))
         y_te = pd.Series(np.asarray(y_te).reshape(-1))
@@ -167,6 +172,8 @@ def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12):
                             dtype=float)
         pyx.append(pyxa / pyxa.sum())
 
+    if len(pyx) < min_conditionals:
+        return np.nan
     if not pyx:
         return 0
     pyx = np.array(pyx)
@@ -180,9 +187,9 @@ def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12):
 def reci_score(x, y, degree=3):
     """Mean squared error of a monomial fit of y on x, both min-max scaled.
 
-    The first two polynomial columns (the intercept and the linear term) are
-    zeroed, which is cdt's implementation of the paper's monomial regressor: the
-    fit is over x**2..x**degree only.
+    The polynomial columns for x and x**2 are zeroed (the intercept is fitted
+    by `LinearRegression`), so at the default degree=3 the fit is the paper's
+    monomial a*x**3 + b (as in cdt).
     """
     x = np.reshape(minmax_scale(np.asarray(x, dtype=float).reshape(-1, 1)), (-1, 1))
     y = np.reshape(minmax_scale(np.asarray(y, dtype=float).reshape(-1, 1)), (-1, 1))
@@ -209,6 +216,11 @@ def _eval_entropy(x):
 
 
 def _integral_approx_estimator(x, y):
+    """Slope-based IGCI (Daniusis et al. 2010); > 0 favours x -> y.
+
+    ``a`` and ``b`` are about (m-1) * C_{X->Y} and (m-1) * C_{Y->X}, and the
+    paper infers X -> Y when C_{X->Y} < C_{Y->X}, so the score is ``b - a``.
+    """
     a = b = 0.0
     x = np.asarray(x).ravel()
     y = np.asarray(y).ravel()
@@ -219,7 +231,7 @@ def _integral_approx_estimator(x, y):
     for x1, x2, y1, y2 in zip(x[idy][:-1], x[idy][1:], y[idy][:-1], y[idy][1:]):
         if x1 != x2 and y1 != y2:
             b += np.log(np.abs((x2 - x1) / (y2 - y1)))
-    return (a - b) / len(x)
+    return (b - a) / len(x)
 
 
 def igci_score(x, y, ref_measure="gaussian", estimator="entropy"):

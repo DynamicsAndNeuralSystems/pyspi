@@ -9,10 +9,23 @@ from pyspi.base import Undirected, Signed, parse_bivariate, parse_multivariate
 from pyspi.utils import require_int
 
 
+def _spearman_matrix(Z):
+    """Spearman's rho between the rows of ``Z``: Pearson on average ranks.
+
+    Same values as ``stats.spearmanr(Z, axis=1)``, but always a matrix, and a
+    constant row gives NaN only in its own row and column.
+    """
+    return np.corrcoef(np.apply_along_axis(stats.rankdata, 1, Z))
+
+
 class Estimators(Undirected, Signed):
     """Base class for (functional) connectivity-based statistics
 
     Information on covariance estimators at: https://scikit-learn.org/stable/modules/covariance.html
+
+    When cross-validation selects an ``alpha`` near 0, ``GraphicalLassoCV`` may
+    not converge (silently, as fit warnings are suppressed); on data with a
+    dense precision matrix, prefer ``GraphicalLasso`` or ``LedoitWolf``.
     """
 
     name = "Covariance"
@@ -68,7 +81,8 @@ class Estimators(Undirected, Signed):
     @parse_multivariate
     def multivariate(self, data):
         mycov = self._from_cache(data)
-        matrix = getattr(mycov, self._kind + "_")
+        # Copy, so the cached fit is not modified.
+        matrix = getattr(mycov, self._kind + "_").copy()
         np.fill_diagonal(matrix, np.nan)
         if self._squared:
             return np.square(matrix)
@@ -95,11 +109,11 @@ class Precision(Estimators):
 
 
 class CrossCorrelation(Undirected, Signed):
-
-    name = "Cross correlation"
-    labels = ["basic", "linear", "undirected", "temporal"]
-
     """Sample cross-correlation over lags in [-T//4, +T//4].
+
+    ``r(l) = sum_t x[t+l] y[t] / (T sd_x sd_y)`` on the demeaned series (the
+    biased estimator, so ``r(0)`` is Pearson's r). ``statistic`` reduces the
+    retained lags: ``max`` is the largest signed value, ``mean`` their mean.
 
     ``sigonly`` is a historical misnomer kept for compatibility. It is a
     pointwise amplitude threshold -- keep the lags with
@@ -108,6 +122,9 @@ class CrossCorrelation(Undirected, Signed):
     being applied at every lag in the window. When no lag clears it the
     statistic is 0.
     """
+
+    name = "Cross correlation"
+    labels = ["basic", "linear", "undirected", "temporal"]
 
     def __init__(self, squared=False, statistic="max", sigonly=True):
         self.identifier = "xcorr"
@@ -257,11 +274,9 @@ class SpearmanR(Undirected, Signed):
 
     @parse_multivariate
     def multivariate(self, data):
-        """Vectorized: scipy.stats.spearmanr on full (M, T) matrix at once."""
+        """Vectorized: Spearman's rho on the full (M, T) matrix at once."""
         Z = data.to_numpy(squeeze=True)  # (M, T)
-        rho, _ = stats.spearmanr(Z, axis=1)
-        if Z.shape[0] == 2:
-            rho = np.array([[1.0, rho], [rho, 1.0]])
+        rho = _spearman_matrix(Z)
         if self._squared:
             rho = rho ** 2
         np.fill_diagonal(rho, np.nan)
@@ -354,12 +369,9 @@ class LaggedCorrelation(Undirected, Signed):
         return self._corr(x[tau:], y[:-tau])
 
     def _symmetric_lagged_corr(self, x, y, tau):
+        # NaN if either direction is undefined, as in `multivariate`.
         forward = self._lagged_corr(x, y, tau)
         backward = self._lagged_corr(y, x, tau)
-        if np.isnan(forward):
-            return backward
-        if np.isnan(backward):
-            return forward
         return 0.5 * (forward + backward)
 
     @parse_bivariate
@@ -381,9 +393,7 @@ class LaggedCorrelation(Undirected, Signed):
             if self._estimator == "pearson":
                 C = np.corrcoef(Z)
             elif self._estimator == "spearman":
-                C, _ = stats.spearmanr(Z, axis=1)
-                if M == 2:
-                    C = np.array([[1.0, C], [C, 1.0]])
+                C = _spearman_matrix(Z)
             elif self._estimator == "kendall":
                 C = np.asarray(
                     pd.DataFrame(Z.T).corr(method="kendall").values, dtype=float
@@ -405,17 +415,17 @@ class LaggedCorrelation(Undirected, Signed):
             backward = C_full[M:, :M]
         elif self._estimator == "spearman":
             stacked = np.vstack([Z_lead, Z_lag])
-            rho, _ = stats.spearmanr(stacked, axis=1)
-            if stacked.shape[0] == 2:
-                rho = np.array([[1.0, rho], [rho, 1.0]])
+            rho = _spearman_matrix(stacked)
             forward = rho[:M, M:]
             backward = rho[M:, :M]
         elif self._estimator == "kendall":
-            stacked = np.vstack([Z_lead, Z_lag])
-            df = pd.DataFrame(stacked.T)
-            C_full = df.corr(method="kendall").values
-            forward = C_full[:M, M:]
-            backward = C_full[M:, :M]
+            # Only the lead x lag block is needed; `backward` is its transpose.
+            forward = np.full((M, M), np.nan)
+            for a in range(M):
+                for b in range(M):
+                    if a != b:
+                        forward[a, b] = stats.kendalltau(Z_lead[a], Z_lag[b])[0]
+            backward = forward.T
         else:
             raise ValueError(f"Unknown estimator: {self._estimator}")
 

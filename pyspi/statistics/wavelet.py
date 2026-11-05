@@ -7,7 +7,6 @@ from pyspi.base import (
     parse_multivariate,
 )
 import numpy as np
-import warnings
 from pyspi.utils import fmt_param
 from pyspi.statistics.spectral import _circular_nanmean
 
@@ -17,9 +16,8 @@ class mne(Unsigned):
         if fmax is None:
             fmax = fs / 2
 
+        # fs is passed to mne as sfreq and sets the frequency floor below.
         self._fs = fs
-        if fs != 1:
-            warnings.warn("Multiple sampling frequencies not yet handled.")
         self._fmin = fmin
         self._fmax = fmax
         if statistic == "mean":
@@ -60,7 +58,7 @@ class mne(Unsigned):
                 mode="cwt_morlet",
                 sfreq=self._fs,
                 mt_adaptive=True,
-                fmin=5 / data.n_observations,
+                fmin=5 * self._fs / data.n_observations,
                 fmax=self._fs / 2,
                 cwt_freqs=cwt_freqs,
                 cwt_n_cycles=cwt_n_cycles,
@@ -217,6 +215,35 @@ class debiased_weighted_squared_PhaseLagIndex(mne, Undirected):
 
 
 class PhaseSlopeIndex(mne, Undirected):
+    """Time-averaged instantaneous phase slope from Morlet wavelets.
+
+    Not Nolte et al.'s (2008) phase slope index, which weights each phase
+    difference by the coherence; that index is ``statistics.spectral``'s
+    ``PhaseSlopeIndex``. What this class computes, through mne-connectivity's
+    ``phase_slope_index(mode="cwt_morlet")`` on the record as one epoch:
+
+    - Morlet coefficients ``W_i(f, t)`` at 10 frequencies spaced linearly from
+      ``max(fmin, 5 fs / T)`` to ``fmax`` (7 cycles, fewer where the wavelet
+      would not fit the record);
+    - the coherency at every time point. mne-connectivity averages the
+      cross-spectrum over epochs and nothing else, so with one epoch
+      ``C(f, t) = exp(i dphi(f, t))`` with ``dphi`` the phase of
+      ``W_i W_j*``: ``|C| = 1`` and no coherence weighting;
+    - ``psi(t) = sum_k sin(dphi(f_{k+1}, t) - dphi(f_k, t))`` over the 8
+      interior frequencies (the backend's band is open, so both ends drop out),
+      bounded by 7 in magnitude.
+
+    ``mean`` is the time average of ``psi(t)``: positive when ``i`` leads
+    ``j`` and zero in expectation for independent series, with a standard
+    deviation that falls as ``1 / sqrt(T)``. Neighbouring
+    frequencies are ``df = (fmax - fmin) / 9`` apart, so for a delay longer
+    than about ``1 / (2 df)`` samples the sign reverses (about 9 samples at
+    fs=1 on [0, 0.5]). The value is not proportional to the delay.
+
+    ``max`` is the maximum of ``psi(t)`` over time. It tends to the bound
+    whatever the data, so it carries no lead/lag information.
+    """
+
     name = "Phase slope index (wavelet)"
     labels = ["unsigned", "wavelet"]
 
@@ -244,22 +271,18 @@ class PhaseSlopeIndex(mne, Undirected):
         inside [fmin, fmax], so each band needs its own call. Cached per band
         on the dataset to share across PSI variants with the same band.
         """
-        # Key on the resolved fmin (below), not the requested one, so two
-        # bands that collapse onto the same floor share correctly.
-        key = (self._fs, max(self._fmin, 5.0 / data.n_observations), self._fmax)
+        # Floor fmin at five cycles over the record (5 * fs / T Hz), as in
+        # mne._get_cache: lower frequencies are not resolved by the data.
+        fmin = max(self._fmin, 5.0 * self._fs / data.n_observations)
+        # Key on the resolved fmin, not the requested one, so two bands that
+        # collapse onto the same floor share correctly.
+        key = (self._fs, fmin, self._fmax)
         try:
             return data.mne_psi[key]
         except (AttributeError, KeyError):
             pass
 
         z = np.moveaxis(data.to_numpy(), 2, 0)
-        # Resolve fmin against the frequency the data can actually support.
-        # fmin=0 asks for an unbounded period: MNE reports an unreliable
-        # spectrum and builds an ~11.1-million-sample Morlet wavelet for T=100.
-        # The five-cycle floor is the same criterion the sibling wavelet path
-        # already applies (see mne._get_cache), so this makes the two
-        # consistent rather than inventing a new policy.
-        fmin = max(self._fmin, 5.0 / data.n_observations)
         cwt_freqs = np.linspace(max(fmin, 1e-6), self._fmax, 10)
         # A Morlet wavelet spans n_cycles/f seconds. At MNE's default of 7
         # cycles the low-frequency wavelets are longer than the data (223

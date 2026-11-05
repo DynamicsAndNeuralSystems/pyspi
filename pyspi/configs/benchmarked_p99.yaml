@@ -3,8 +3,7 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 318 / 322 SPIs. The original 2026-05-27 cut was 325 / 328
-# before later removals.
+# Current set: 294 / 296 SPIs (the original 2026-05-27 cut was 325 / 328).
 # Cutoff        : fastest kept <= 332.132s ; slowest dropped >= 342.692s.
 #
 .statistics.basic:
@@ -19,7 +18,6 @@
     dependencies:
     configs:
     - estimator: EmpiricalCovariance
-    - estimator: EllipticEnvelope
     - estimator: GraphicalLasso
     - estimator: GraphicalLassoCV
     - estimator: LedoitWolf
@@ -28,7 +26,6 @@
     - estimator: ShrunkCovariance
     - estimator: EmpiricalCovariance
       squared: true
-    - estimator: EllipticEnvelope
       squared: true
     - estimator: GraphicalLasso
       squared: true
@@ -54,7 +51,6 @@
     dependencies:
     configs:
     - estimator: EmpiricalCovariance
-    - estimator: EllipticEnvelope
     - estimator: GraphicalLasso
     - estimator: GraphicalLassoCV
     - estimator: LedoitWolf
@@ -63,7 +59,6 @@
     - estimator: ShrunkCovariance
     - estimator: EmpiricalCovariance
       squared: true
-    - estimator: EllipticEnvelope
       squared: true
     - estimator: GraphicalLasso
       squared: true
@@ -417,6 +412,8 @@
     - global_constraint: sakoe_chiba
 
   Barycenter:
+    # The DTW-type barycenters bundle `corr` rather than `mean`: the barycenter of
+    # z-scored series has mean ~0, and its squared mean is a monotone function of `corr`.
     labels:
       - undirected
       - nonlinear
@@ -427,23 +424,21 @@
     dependencies:
     configs:
     - mode: euclidean
-      statistic: mean
-    - mode: euclidean
       statistic: max
     - mode: dtw
-      statistic: mean
+      statistic: corr
       labels:
       - M09
     - mode: dtw
       statistic: max
     - mode: sgddtw
-      statistic: mean
+      statistic: corr
       labels:
       - M09
     - mode: sgddtw
       statistic: max
     - mode: softdtw
-      statistic: mean
+      statistic: corr
       labels:
       - M09
     - mode: softdtw
@@ -590,7 +585,6 @@
     configs:
     - estimator: gaussian
     - estimator: kozachenko
-    - estimator: kernel
 
   CrossmapEntropy:
     labels:
@@ -609,8 +603,6 @@
     - estimator: gaussian
       history_length: 10
     - estimator: kozachenko
-      history_length: 10
-    - estimator: kernel
       history_length: 10
 
   DirectedInfo:
@@ -902,14 +894,6 @@
       fmax: 0.5
       labels:
       - M01
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
 
   WeightedPhaseLagIndex:
     labels:
@@ -931,20 +915,9 @@
       fmax: 0.5
       labels:
       - M01
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
 
   DebiasedSquaredPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled. The `max` variants were
-    # removed: the debiased estimates rest on a few tapers of one recording,
-    # and the maximum over frequencies returned exactly 1 for essentially any
-    # input (white noise included), so carried no information.
+    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -1300,6 +1273,8 @@
 
 .statistics.wavelet:
   PhaseSlopeIndex:
+    # The `max` variants are not bundled: the maximum over time of the
+    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent
@@ -1312,15 +1287,6 @@
       fmax: 0.25
     - fmin: 0.25
       fmax: 0.5
-    - fmin: 0
-      fmax: 0.5
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
 
 
 .statistics.misc:
@@ -1335,9 +1301,7 @@
     dependencies:
     configs:
     - model: Ridge
-    - model: Lasso
     - model: SGDRegressor
-    - model: ElasticNet
     - model: BayesianRidge
 
   GPModel:

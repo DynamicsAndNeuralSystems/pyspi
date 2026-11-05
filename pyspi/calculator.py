@@ -207,7 +207,7 @@ def warn_partial_cache_buckets(spis):
             kept[b].add(key)
     if not any(bkey[0] in EXPENSIVE for bkey in kept):
         # Nothing this advisory could say anything about. Checked before the
-        # `full` config is touched: building it instantiates 317 SPIs and pulls
+        # `full` config is touched: building it instantiates every SPI and pulls
         # a heavy dependency tree, which is real import time for a check that
         # only ever comments on `ccm` and `barycenter`.
         return
@@ -407,7 +407,7 @@ class Calculator:
             Which SPIs to compute. Either the name of a bundled config or a path
             to your own YAML file, default="full". Bundled configs are:
 
-            - ``"full"`` -- every SPI (317).
+            - ``"full"`` -- every SPI.
             - ``"fast"`` -- drops the slowest SPIs.
             - ``"sonnet"`` -- 14 representative SPIs, one per module (M01-M14).
             - ``"fabfour"`` -- 4 SPIs: covariance, Spearman, directed information,

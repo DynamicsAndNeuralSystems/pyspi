@@ -549,11 +549,24 @@ def test_kozachenko_entropy_still_refuses_tied_data_rather_than_dithering():
     quantised data reports the dither level. pyspi names the problem instead
     of returning a number set by an implementation constant.
     """
+    import warnings
     import pyspi.statistics.infotheory as it
     from pyspi.data import load_dataset
 
-    with pytest.raises(ValueError, match="tied observations"):
-        it.JointEntropy(estimator="kozachenko").multivariate(load_dataset("forex"))
+    spi = it.JointEntropy(estimator="kozachenko")
+    data = load_dataset("forex")
+    # An undefined pair is NaN with a warning (`pyspi.base.fill_pairwise`); the
+    # refusal is named at the pair level, and re-raised if every pair is tied.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            A = spi.multivariate(data)
+        except ValueError as err:
+            assert "tied observations" in str(err)
+        else:
+            msgs = [str(w.message) for w in caught if "tied observations" in str(w.message)]
+            assert msgs, "tied pairs were neither refused nor reported"
+            assert np.isnan(A).sum() > A.shape[0], "tied pairs returned a (dithered) number"
 
 
 # ---------------------------------------------------------------------------
@@ -731,18 +744,41 @@ def test_dyn_corr_excl_value_reaches_the_identifier_and_the_cache_key():
     assert len({s._getkey() for s in spis}) == 3
 
 
-def test_crossmap_entropy_embedding_dimension():
+@pytest.mark.parametrize("cls_name, param", [
+    ("CrossmapEntropy", "history_length"),
+    ("StochasticInteraction", "delay"),
+])
+@pytest.mark.parametrize("bad", [-2, 0])
+def test_history_and_delay_must_be_positive_integers(cls_name, param, bad):
+    """Refused at construction, as CausalEntropy's ``n`` is.
+
+    A negative value would index wrapped slices, and zero would fail later
+    with an unrelated shape error; a float is a type error.
+    """
+    import pyspi.statistics.infotheory as it
+
+    def make(value):
+        return getattr(it, cls_name)(**{param: value})
+
+    with pytest.raises((ValueError, TypeError)):
+        make(bad)
+    with pytest.raises(TypeError):
+        make(2.5)
+
+
+@pytest.mark.parametrize("k, dims", [(6, [6, 5]), (2, [2, 1]), (1, [2, 1])])
+def test_crossmap_entropy_embedding_dimension(k, dims):
     """`history_length=k` gives k-1 source lags and a k-column joint space.
 
     Pinned rather than corrected: both readings of the parameter are internally
     consistent, cross-map entropy has no canonical published definition to
     arbitrate between them, and re-picking one would change every `xme_*` value
-    on a guess about intent. See the class docstring.
+    on a guess about intent. See the class docstring. The exception is the
+    shipped k=1, which keeps the one source lag X_{t-1} (as k=2 does).
     """
     import pyspi.statistics.infotheory as it
     from pyspi.data import Data
 
-    k = 6
     rng = np.random.default_rng(0)
     data = Data(data=rng.standard_normal((2, 200)), dim_order="ps")
 
@@ -756,7 +792,7 @@ def test_crossmap_entropy_embedding_dimension():
 
     spi._entropy_calc.initialise = record
     spi.bivariate(data, i=0, j=1)
-    assert seen["dims"] == [k, k - 1], seen["dims"]
+    assert seen["dims"] == dims, seen["dims"]
 
 
 def test_cointegration_aeg_tstat_is_signed_and_johansen_is_not():
@@ -885,7 +921,9 @@ def _brute_force_ksg_mi(x, y, k, w=0):
 
     Independent of pyspi's cKDTree machinery: full pairwise L-infinity
     distances, the k-th smallest excluding self, strict marginal counts, and
-    psi(k) - <psi(n_x+1) + psi(n_y+1)> + psi(N). Slow, so it is only used on
+    psi(k) - <psi(n_x+1) + psi(n_y+1)> + <psi(m_i+1)>, where m_i is the number
+    of points i may take as a neighbour (N - 1 at w=0, so the last term is
+    psi(N); a Theiler window shrinks the pool). Slow, so it is only used on
     small continuous fixtures -- but it shares no code with the implementation
     it checks.
     """
@@ -903,7 +941,7 @@ def _brute_force_ksg_mi(x, y, k, w=0):
     n_x = ((dx < eps[:, None]) & allowed).sum(axis=1)
     n_y = ((dy < eps[:, None]) & allowed).sum(axis=1)
     return float(digamma(k) - np.mean(digamma(n_x + 1) + digamma(n_y + 1))
-                 + digamma(n))
+                 + np.mean(digamma(allowed.sum(axis=1) + 1)))
 
 
 def test_ksg_matches_an_independent_brute_force_reference():
@@ -1707,7 +1745,8 @@ def test_multitaper_phase_slope_index_is_the_adjacent_frequency_sum(monkeypatch)
     """Nolte's definition, written out pair by pair from the coherency.
 
     Neighbours are one multitaper bandwidth apart, six FFT bins at the
-    backend's defaults.
+    backend's defaults, over the closed band less the real-valued bins (the
+    rule every phase measure follows).
 
     Also: the backend's all-pairs sum, whose temporaries grow with the square
     of the number of frequencies, is never called.
@@ -1731,7 +1770,9 @@ def test_multitaper_phase_slope_index_is_the_adjacent_frequency_sum(monkeypatch)
         PhaseSlopeIndex._FREQUENCY_STEP)
 
     for fmin, fmax in ((0, 0.5), (0, 0.25), (0.25, 0.5)):
-        inside = [k for k, f in enumerate(freq) if fmin < f < fmax][::6]
+        # The phase rule: closed band less the real-valued bins 0 and fs/2.
+        inside = [k for k, f in enumerate(freq)
+                  if fmin <= f <= fmax and f != 0 and f != 0.5][::6]
         expected = np.zeros((3, 3))
         for i in range(3):
             for j in range(3):

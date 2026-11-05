@@ -1,24 +1,26 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (317 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (296 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
 | 2.0.2 `config.yaml` | 285 |
-| identifier unchanged | 248 |
+| identifier unchanged | 224 |
 | renamed (same class and parameters; identifier changed) | 23 |
-| removed | 14 |
-| added | 46 |
-| 3.0.0 `full.yaml` | 317 |
+| removed | 38 |
+| added | 49 |
+| 3.0.0 `full.yaml` | 296 |
 
-285 - 14 removed + 46 added = 317; 248 + 23 renamed + 46 added = 317.
+285 - 38 removed + 49 added = 296; 224 + 23 renamed + 49 added = 296.
+The 38 removals are 14 made while porting away from JIDT and 24 duplicate, constant or degenerate SPIs; all are in the table below.
 
-## Added (46)
+## Added (49)
 
 | Family | Count | Identifiers |
 |:--|--:|:--|
 | `LaggedCorrelation` (Pearson, Spearman, Kendall at lags 1, 2, 3, 4, 5, 10, 20; each plain and squared) | 42 | `corr_{pearson,spearman,kendall}_tau-{1,2,3,4,5,10,20}[-sq]` |
 | `CrossPairwiseDistance` | 2 | `xpdist_euclidean_tau-1_mean_rmse`, `xpdist_euclidean_tau-1_min_rmse` |
+| `Barycenter` (alignment-adjusted correlation `2 mean(b^2) / mean_energy - 1`; replaces the `mean` statistic) | 3 | `bary_dtw_corr`, `bary_sgddtw_corr`, `bary_softdtw_corr` |
 | `DirectedInfo` (KSG/Frenzel-Pompe) | 1 | `di_kraskov_NN-4_n-5` |
 | `PhaseAlignedCorrelation` (Welch, automatic segment length) | 1 | `phasealigned_welch_nperseg-auto` |
 
@@ -68,13 +70,28 @@ Full list:
 - `corr_spearman_tau-5-sq`
 - `di_kraskov_NN-4_n-5`
 - `phasealigned_welch_nperseg-auto`
+- `bary_dtw_corr`
+- `bary_sgddtw_corr`
+- `bary_softdtw_corr`
 - `xpdist_euclidean_tau-1_mean_rmse`
 - `xpdist_euclidean_tau-1_min_rmse`
 
-## Removed (14)
+## Removed (38)
 
 | Identifier (2.0.2) | Class | Why |
 |:--|:--|:--|
+| `cov_EllipticEnvelope`, `cov-sq_EllipticEnvelope` | `Covariance` | sklearn's `EllipticEnvelope.fit` is `MinCovDet.fit` plus a decision threshold, so the matrices are MinCovDet's. |
+| `prec_EllipticEnvelope`, `prec-sq_EllipticEnvelope` | `Precision` | As above. |
+| `lmfit_Lasso` | `LinearModel` | `Lasso(alpha=1)` zeroes the slope for any z-scored regressor, so every entry is `var(y) = (T-1)/T`: a constant. |
+| `lmfit_ElasticNet` | `LinearModel` | `ElasticNet(alpha=1)` zeroes the slope unless `|r| > 0.5`, so it is mostly constant. |
+| `bary_euclidean_mean` | `Barycenter` | The Euclidean barycenter of two z-scored series has mean identically zero. |
+| `cce_kernel_W-0.5_n-5` | `CausalEntropy` | Fixed-width box kernel over the `n = 5` histories of both series (about ten dimensions) does not converge with `T`. |
+| `xme_kernel_W-0.5_k10` | `CrossmapEntropy` | Fixed-width box kernel in 11 dimensions; as above. `xme_kernel_W-0.5_k1` is kept. |
+| `pli_multitaper_max_*` (3) | `PhaseLagIndex` | With one recording PLI at each frequency is a mean of signs over a few tapers, so the band maximum saturates at 1 once `T >= 1000`. `mean` variants kept. |
+| `wpli_multitaper_max_*` (3) | `WeightedPhaseLagIndex` | As above. |
+| `psi_wavelet_max_*` (3) | `PhaseSlopeIndex` (wavelet) | Maximum over time of a bounded instantaneous phase slope; tends to its bound whatever the data. `mean` variants kept. |
+| `bary_dtw_mean`, `bary_sgddtw_mean`, `bary_softdtw_mean` (3) | `Barycenter` | The mean of a barycenter of two zero-mean series is close to zero. Replaced by `bary_*_corr`. |
+| `bary-sq_dtw_mean`, `bary-sq_sgddtw_mean`, `bary-sq_softdtw_mean` (3) | `Barycenter` | Monotone function of `bary_*_corr`. |
 | `di_kernel_W-0.5` | `DirectedInfo` | DirectedInfo kernel variant dropped (3.8-4.4 on independent data at every T). |
 | `di_kozachenko` | `DirectedInfo` | DirectedInfo kozachenko variant dropped (negative values). |
 | `dspli_multitaper_max_fs-1_fmin-0-25_fmax-0-5` | `DebiasedSquaredPhaseLagIndex` | Constant 1.0 for essentially any input (few-taper debiased estimate); `mean` variants kept. |

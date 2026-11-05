@@ -21,7 +21,8 @@ required), and ``tests/tools/jidt_reference/`` regenerates them. Known
 deviations: kernel TE differs from JIDT by up to 1.9e-4 bits (per-column rather
 than whole-series normalisation); Gaussian estimators carry a deterministic
 1e-8 relative ridge; KSG breaks ties with a small seeded jitter (hctsa-style)
-where JIDT adds random noise by default.
+where JIDT adds random noise by default; with a Theiler window, KSG MI takes
+its psi(N) term over the reduced neighbour pool (see _ksg_pool_digamma).
 """
 
 import math
@@ -34,7 +35,7 @@ import warnings
 from scipy.spatial import cKDTree
 from scipy.special import digamma, gammaln
 
-from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_bivariate, parse_multivariate
+from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_bivariate, parse_multivariate, fill_pairwise
 
 # ---------------------------------------------------------------------------
 # Pure-numpy entropy calculators (drop-in replacements for JIDT)
@@ -770,6 +771,23 @@ def _ksg_counts(tree, points, radius, w):
     return n
 
 
+def _ksg_pool_digamma(N, w):
+    """KSG's ``psi(N)`` term for a neighbour pool reduced by a Theiler window.
+
+    ``psi(N)`` is ``psi(m + 1)`` for a pool of ``m = N - 1`` candidate
+    neighbours. The window removes ``|j - i| <= w`` from point i's pool,
+    leaving ``m_i = N - 1 - min(i, w) - min(N - 1 - i, w)``, so the term is
+    the mean of ``psi(m_i + 1)``; at ``w == 0`` it is ``digamma(N)``. (JIDT
+    keeps ``psi(N)``, which biases MI upward by about ``ln(N / (N - 2w))``.)
+    In the Frenzel-Pompe CMI the pool term cancels, so only MI needs it.
+    """
+    if w == 0:
+        return digamma(N)
+    i = np.arange(N)
+    pool = N - 1 - np.minimum(i, w) - np.minimum(N - 1 - i, w)
+    return float(np.mean(digamma(pool + 1)))
+
+
 def _ksg_mi_pair(x, y, k, w):
     """KSG Estimator 1 MI for a single pair of scalar series."""
     N = len(x)
@@ -799,10 +817,9 @@ def _ksg_mi_pair(x, y, k, w):
     n_x = _ksg_counts(tree_x, x, eps, w)
     n_y = _ksg_counts(tree_y, y, eps, w)
 
-    # psi(N) uses the full, unreduced N (KSG1 convention; only the neighbour
-    # set is window-restricted, not the normalisation). See JIDT
-    # MutualInfoCalculatorMultiVariateKraskov.
-    mi = digamma(k) - np.mean(digamma(n_x + 1) + digamma(n_y + 1)) + digamma(N)
+    # psi(pool size + 1); a Theiler window shrinks the pool (_ksg_pool_digamma).
+    mi = (digamma(k) - np.mean(digamma(n_x + 1) + digamma(n_y + 1))
+          + _ksg_pool_digamma(N, w))
     return float(mi)
 
 
@@ -810,8 +827,9 @@ def _ksg_mi_general(A, B, k_nn, w=0, condition=True):
     """KSG Estimator 1 MI(A; B) for multivariate A (N,dA), B (N,dB), L-inf norm.
 
     Generalisation of _ksg_mi_pair to arbitrary marginal dimensions.
-    Marginal neighbours are counted strictly (< eps); psi(N) uses full N. An
-    optional Theiler window w excludes |j-i| <= w from the neighbour set.
+    Marginal neighbours are counted strictly (< eps). An optional Theiler
+    window w excludes |j-i| <= w from the neighbour set, and psi(N) becomes
+    the mean psi of the reduced pool (_ksg_pool_digamma).
     """
     A = np.asarray(A, dtype=np.float64)
     B = np.asarray(B, dtype=np.float64)
@@ -835,7 +853,7 @@ def _ksg_mi_general(A, B, k_nn, w=0, condition=True):
     n_a = _ksg_counts(tree_a, A, eps, w)
     n_b = _ksg_counts(tree_b, B, eps, w)
 
-    return float(digamma(k_nn) + digamma(N)
+    return float(digamma(k_nn) + _ksg_pool_digamma(N, w)
                  - np.mean(digamma(n_a + 1) + digamma(n_b + 1)))
 
 
@@ -1405,12 +1423,47 @@ class InfoTheoryBase(Unsigned):
             H_Y = self._entropy_calc.computeAverageLocalOfObservations()
             return H_XY - H_Y
 
+    def _per_process(self, data, tag, i, compute):
+        """``compute()`` for process ``i``, cached on ``data.entropy``.
+
+        For a quantity of one series that a pairwise statistic would otherwise
+        recompute for every partner. ``tag`` names it and carries every
+        parameter it depends on beyond ``_getkey()``. ``data.entropy`` is in
+        ``Data._CACHE_ATTRS``, so the cache is dropped when the series change.
+        """
+        if not hasattr(data, "entropy"):
+            data.entropy = {}
+        key = self._getkey() + tag
+        if key not in data.entropy:
+            data.entropy[key] = np.full((data.n_processes,), -np.inf)
+        if data.entropy[key][i] == -np.inf:
+            data.entropy[key][i] = compute()
+        return data.entropy[key][i]
+
+    def _upper_triangle_multivariate(self, data):
+        """Each unordered pair once, mirrored.
+
+        Same result as ``Undirected.multivariate``, which evaluates both
+        orders and keeps ``i < j``, at half the cost.
+        """
+        M = data.n_processes
+        A = np.full((M, M), np.nan)
+        pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
+        return fill_pairwise(self.identifier, A, pairs,
+                             lambda i, j: self.bivariate(data, i=i, j=j),
+                             mirror=True)
+
     def _resolve_theiler(self, data, i, j):
         """Theiler/dynamic-correlation-exclusion window for pair (i, j).
 
         None -> 0 (no window); an integer -> that window; "AUTO" -> the
-        autocorrelation time 2*<acf(x_i), acf(x_j)>, cached per dataset.
-        Shared by MI/TLMI/TE; only the kNN (kraskov) paths consume it.
+        autocorrelation time 2*<acf(x_i), acf(x_j)>, capped at N // 10 and
+        cached per dataset. Shared by MI/TLMI/TE; only the kNN (kraskov)
+        paths consume it.
+
+        The cap is hctsa's rule for autocorrelation-derived parameters. For
+        two slowly decaying autocorrelation functions the uncapped window can
+        approach or exceed the series length, leaving too few neighbours.
         """
         raw_w = getattr(self, '_dyn_corr_excl', None)
         if raw_w is None:
@@ -1419,12 +1472,12 @@ class InfoTheoryBase(Unsigned):
             if not hasattr(data, 'theiler'):
                 z = data.to_numpy()
                 M = data.n_processes
+                cap = data.n_observations // 10
                 theiler = -np.ones((M, M))
                 for _i in range(M):
                     for _j in range(_i + 1, M):
-                        theiler[_i, _j] = 2 * np.dot(
-                            utils.acf(z[_i]), utils.acf(z[_j])
-                        )
+                        w = 2 * np.dot(utils.acf(z[_i]), utils.acf(z[_j]))
+                        theiler[_i, _j] = min(int(w), cap)
                         theiler[_j, _i] = theiler[_i, _j]
                 data.theiler = theiler
             return int(data.theiler[i, j])
@@ -1538,13 +1591,12 @@ class MutualInfo(InfoTheoryBase, Undirected):
             M, N = Z.shape
             k = int(self._prop_k)
             result = np.full((M, M), np.nan)
-            for i in range(M):
-                for j in range(i + 1, M):
-                    w = self._resolve_theiler(data, i, j)
-                    mi = _ksg_mi_pair(Z[i], Z[j], k, w)
-                    result[i, j] = result[j, i] = mi
-            return result
-        return super().multivariate(data)
+            pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
+            return fill_pairwise(
+                self.identifier, result, pairs,
+                lambda i, j: _ksg_mi_pair(Z[i], Z[j], k, self._resolve_theiler(data, i, j)),
+                mirror=True)
+        return self._upper_triangle_multivariate(data)
 
 
 class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
@@ -1604,18 +1656,21 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
             Z_src = Z[:, :-1]
             Z_tgt = Z[:, 1:]
             result = np.full((M, M), np.nan)
-            for i in range(M):
-                for j in range(M):
-                    if i == j:
-                        continue
-                    w = self._resolve_theiler(data, i, j)
-                    mi = _ksg_mi_pair(Z_src[i], Z_tgt[j], k, w)
-                    result[i, j] = mi
-            return result
+            pairs = [(i, j) for i in range(M) for j in range(M) if i != j]
+            return fill_pairwise(
+                self.identifier, result, pairs,
+                lambda i, j: _ksg_mi_pair(Z_src[i], Z_tgt[j], k, self._resolve_theiler(data, i, j)))
         return super().multivariate(data)
 
 
 class TransferEntropy(InfoTheoryBase, Directed):
+    """Transfer entropy from the row (source) to the column (target).
+
+    With the Gaussian estimator (identifier ``gc``) this is
+    ``0.5 * ln(var_restricted / var_full)`` in nats (Barnett, Barrett & Seth
+    2009): half of Geweke's (1982) Granger causality as reported by
+    ``statsmodels``.
+    """
 
     name = "Transfer entropy"
     identifier = "te"
@@ -1861,6 +1916,9 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     consistent -- "k source lags" would need ``range(2, k + 1)`` -- and the
     implementation has always been the second one.
 
+    The exception is ``history_length=1``: the first source column is always
+    present, so ``xme_*_k1`` is ``H(Y_t | X_{t-1})``, the same quantity as k=2.
+
     It is documented here rather than changed. Cross-map entropy has no
     canonical published definition to arbitrate between the two conventions,
     and silently re-picking one would change every ``xme_*`` value on a guess
@@ -1875,6 +1933,8 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
 
     def __init__(self, history_length=10, **kwargs):
         super().__init__(**kwargs)
+        history_length = utils.require_int("history_length", history_length,
+                                           minimum=1)
         self.identifier += f"_k{history_length}"
         self._history_length = history_length
 
@@ -1896,9 +1956,14 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
         self._entropy_calc.setObservations(joint)
         H_xy = self._entropy_calc.computeAverageLocalOfObservations()
 
-        self._entropy_calc.initialise(src_past.shape[1])
-        self._entropy_calc.setObservations(src_past)
-        H_y = self._entropy_calc.computeAverageLocalOfObservations()
+        # H(source past) depends on the source alone: computed once per process.
+        def source_past_entropy():
+            self._entropy_calc.initialise(src_past.shape[1])
+            self._entropy_calc.setObservations(src_past)
+            return self._entropy_calc.computeAverageLocalOfObservations()
+
+        H_y = self._per_process(data, ("xme_source_past", k), i,
+                                source_past_entropy)
 
         return H_xy - H_y
 
@@ -2040,6 +2105,13 @@ class DirectedInfo(CausalEntropy, Directed):
 
 
 class StochasticInteraction(InfoTheoryBase, Undirected):
+    """Stochastic interaction ``H(X_t|X_{t-d}) + H(Y_t|Y_{t-d}) - H(X_t,Y_t|X_{t-d},Y_{t-d})``.
+
+    With the kernel estimator (``si_kernel_W-0.5_k-1``) the estimate is
+    consistent but positively biased at short lengths (the bias falls roughly
+    as ``T**-0.65``, about +1 nat at T=100), so compare pairs within a dataset
+    rather than reading the absolute level.
+    """
 
     name = "Stochastic interaction"
     identifier = "si"
@@ -2047,6 +2119,7 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
 
     def __init__(self, delay=1, **kwargs):
         super().__init__(**kwargs)
+        delay = utils.require_int("delay", delay, minimum=1)
         self._delay = delay
         self.identifier += f"_k-{delay}"
 
@@ -2057,10 +2130,18 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
         tau = self._delay
 
         H_joint = self._compute_conditional_entropy(xy[tau:], xy[:-tau])
-        H_src = self._compute_conditional_entropy(x[tau:], x[:-tau])
-        H_targ = self._compute_conditional_entropy(y[tau:], y[:-tau])
+        # H(X_t | X_{t-tau}) depends on one series: computed once per process.
+        tag = ("si_conditional", tau)
+        H_src = self._per_process(data, tag, i, lambda: (
+            self._compute_conditional_entropy(x[tau:], x[:-tau])))
+        H_targ = self._per_process(data, tag, j, lambda: (
+            self._compute_conditional_entropy(y[tau:], y[:-tau])))
 
         return H_src + H_targ - H_joint
+
+    @parse_multivariate
+    def multivariate(self, data):
+        return self._upper_triangle_multivariate(data)
 
 
 class IntegratedInformation(Undirected, Unsigned):

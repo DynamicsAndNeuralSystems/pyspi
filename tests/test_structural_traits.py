@@ -8,7 +8,7 @@ symmetry) misdescribes them for any downstream filtering or grouping.
 Resolved here:
 
 * ``Cointegration`` declared ``Undirected`` while ``aeg`` computes
-  ``stattools.coint(z[i], z[j])``, which is not symmetric in its arguments
+  ``stattools.coint`` on the pair, which is not symmetric in its arguments
   (measured: ~0.8 mean absolute difference between orientations, up to ~1.6).
   The cache then wrote the one computed value to both ``(i, j)`` and
   ``(j, i)``, so which orientation you got depended on visit order. ``aeg`` is

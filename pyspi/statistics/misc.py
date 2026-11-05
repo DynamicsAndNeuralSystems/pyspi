@@ -2,6 +2,7 @@ import warnings
 import inspect
 import numpy as np
 
+from scipy.linalg import solve_triangular
 from statsmodels.tsa import stattools
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from sklearn.gaussian_process import kernels, GaussianProcessRegressor
@@ -45,11 +46,15 @@ class Cointegration(Directed, Unsigned):
     mean over orientations) is a scientific decision with no settled convention,
     and silently picking one is what caused the original problem. ``johansen``
     keeps the cache alias, since for it the two orientations are provably equal.
+
+    For ``aeg``, ``table[i, j]`` is the Engle-Granger t-statistic of process
+    *j* regressed on process *i* (regressor on the row, as for ``lmfit``).
     """
 
     name = "Cointegration"
     identifier = "coint"
-    labels = ["misc", "unsigned", "temporal", "undirected", "nonlinear"]
+    # Johansen fits a VECM and Engle-Granger an OLS regression.
+    labels = ["misc", "unsigned", "temporal", "undirected", "linear"]
     _cache_namespace = "coint"
 
     @property
@@ -114,9 +119,10 @@ class Cointegration(Directed, Unsigned):
             z = data.to_numpy(squeeze=True)
 
             if self._method == "aeg":
+                # statsmodels regresses its first argument on its second.
                 stats = stattools.coint(
-                    z[i],
                     z[j],
+                    z[i],
                     autolag=self._autolag,
                     maxlag=self._maxlag,
                     trend=self._trend,
@@ -154,6 +160,13 @@ class Cointegration(Directed, Unsigned):
 
 
 class LinearModel(Directed, Unsigned):
+    """Mean squared error of a linear fit of the column on the row.
+
+    ``table[i, j]`` regresses process *j* on process *i* and returns the
+    in-sample MSE, so lower means a better prediction of the column from the
+    row. On z-scored data an uninformative regressor gives ``(T - 1) / T``.
+    """
+
     name = "Linear model regression"
     identifier = "lmfit"
     labels = ["misc", "unsigned", "unordered", "normal", "linear", "directed"]
@@ -178,12 +191,28 @@ class LinearModel(Directed, Unsigned):
 
 
 class GPModel(Directed, Unsigned):
+    """Gaussian process regression of process j on process i.
+
+    ``table[i, j]`` is the leave-one-out mean squared error of a GP that
+    predicts ``z[j]`` from ``z[i]`` (lower is better; about 1 for an unrelated
+    pair of z-scored series). The kernel is ``ConstantKernel() + WhiteKernel()
+    + {RBF, DotProduct}()``, with hyperparameters maximising the log marginal
+    likelihood; ``DotProduct`` makes it Bayesian linear regression.
+
+    The error is leave-one-out at the fitted hyperparameters (Rasmussen &
+    Williams 2006, eq. 5.12). The in-sample error is not used because the RBF
+    fit can interpolate the data, driving it to zero on unrelated pairs.
+    """
+
     name = "Gaussian process regression"
     identifier = "gpfit"
     labels = ["misc", "unsigned", "unordered", "normal", "nonlinear", "directed"]
 
     def __init__(self, kernel="RBF"):
         self.identifier += f"_{kernel}"
+        if kernel == "DotProduct":
+            # Bayesian linear regression.
+            self.labels = [l for l in self.labels if l != "nonlinear"] + ["linear"]
         self._kernel = kernels.ConstantKernel() + kernels.WhiteKernel()
         self._kernel += getattr(kernels, kernel)()
 
@@ -194,8 +223,12 @@ class GPModel(Directed, Unsigned):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             gp = GaussianProcessRegressor(kernel=self._kernel).fit(z[i], np.ravel(z[j]))
-        y_predict = gp.predict(z[i])
-        return mean_squared_error(y_predict, np.ravel(z[j]))
+        # Leave-one-out residuals y_t - mu_{-t} = [K^-1 y]_t / [K^-1]_tt, from
+        # the lower Cholesky factor of K (noise included) the fit already holds.
+        L_inv = solve_triangular(gp.L_, np.eye(len(gp.alpha_)), lower=True,
+                                 check_finite=False)
+        resid = gp.alpha_ / np.einsum("ij,ij->j", L_inv, L_inv)
+        return float(np.mean(resid ** 2))
 
 
 class PowerEnvelopeCorrelation(Undirected, Unsigned):
@@ -214,6 +247,11 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
         self._absolute = absolute
         if absolute:
             self.identifier += "_abs"
+        # A correlation in [-1, 1]; only the orthogonalised variant with
+        # `absolute` is non-negative (MNE ignores `absolute` otherwise).
+        if not (self._orth and absolute):
+            self.labels = [l for l in self.labels if l != "unsigned"] + ["signed"]
+            self.issigned = lambda: True
 
     @parse_multivariate
     def multivariate(self, data):

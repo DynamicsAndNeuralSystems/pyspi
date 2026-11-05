@@ -467,7 +467,13 @@ SCHEMA_VERSION = 1
 #         in pyspi (both variants had equalled plain `lcss`). tslearn >= 0.10,
 #         whose subgradient DBA behind the four `bary*_sgddtw_*` SPIs changed
 #         its update and stopping rule.
-COMPUTATION_VERSION = "3.0.0.r10"
+#   r11 -- ccm, softdtw constraints, dcorrx/mgcx, hsic, KSG MI with a Theiler
+#         window, phi_Geo, dspli, the bivariate directed spectral measures and
+#         parametric spectral GC.
+#   r12 -- coint_aeg, gd, the phase measures' band, psi_multitaper, gwtau and
+#         gpfit.
+#   r13 -- the AUTO Theiler window is capped at N // 10.
+COMPUTATION_VERSION = "3.0.0.r13"
 
 
 def read_manifest(checkpoint_dir: Path):

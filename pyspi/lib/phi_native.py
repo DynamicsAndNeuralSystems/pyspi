@@ -287,6 +287,10 @@ def phi_g_gauss_al(Cov_X, Cov_E, A, Z, normalization=0, maxiter=100000, error=1e
 
     Cov_E_p = Cov_E.copy()
     val_constraint_past = 0
+    # Converged: the objective has stopped moving and the iterate satisfies
+    # the disconnection constraint (PhiToolbox tests only the first).
+    feasibility_tol = (1e-8 * np.linalg.norm(A)) ** 2
+    converged = False
 
     for iter_count in range(maxiter):
         Cov_E_p_past = Cov_E_p.copy()
@@ -333,10 +337,21 @@ def phi_g_gauss_al(Cov_X, Cov_E, A, Z, normalization=0, maxiter=100000, error=1e
 
         # Check convergence
         phi_update = logdet(Cov_E_p) - logdet(Cov_E_p_past)
-        if abs(phi_update) < error:
+        if abs(phi_update) < error and val_constraint <= feasibility_tol:
+            converged = True
             break
 
-    # Calculate phi_G
+    if not converged:
+        warnings.warn(f"phi_G did not converge in {maxiter} iterations")
+
+    # Evaluate phi_G at an exactly disconnected model: the block-diagonal part
+    # of the final iterate, with its optimal noise covariance.
+    A_disconnected = np.zeros((n, n))
+    for M in M_cells:
+        A_disconnected[np.ix_(M, M)] = A_p[np.ix_(M, M)]
+    A_p = A_disconnected
+    A_diff = A - A_p
+    Cov_E_p = Cov_E + A_diff @ Cov_X @ A_diff.T
     phi_G = (logdet(Cov_E_p) - logdet(Cov_E)) / 2
 
     # Apply normalization if requested

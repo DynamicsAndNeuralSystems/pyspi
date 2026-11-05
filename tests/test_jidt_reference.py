@@ -139,9 +139,27 @@ def test_gaussian_te(data, name, kw):
 
 @pytest.mark.parametrize("w", [0, 5, 20])
 def test_ksg_mi_theiler_window(data, w):
+    """Neighbour search and counts match JIDT exactly; the psi(N) term does not.
+
+    JIDT 1.6.1 keeps psi(N) with a Theiler window although the window shrinks
+    every point's neighbour pool (its source marks this as an open TODO), which
+    adds ~ln(N / (N - 2w)): its own MI on this fixture climbs 0.045 -> 0.066 ->
+    0.127 across w = 0, 5, 20. pyspi uses the mean psi(m_i + 1) of the reduced
+    pools. The difference is that one closed-form term, so adding it back must
+    recover JIDT's value to round-off: everything else is still pinned.
+    """
+    from scipy.special import digamma
+
     # w=0 is pyspi's "no exclusion" (dyn_corr_excl=None).
     v = _mi("kraskov", data, dyn_corr_excl=(None if w == 0 else w))
-    _close(v, JIDT[f"mi_ksg_w{w}"], KSG_TOL, f"mi_ksg_w{w}")
+    n = data.to_numpy().shape[1]
+    i = np.arange(n)
+    pool = n - 1 - np.minimum(i, w) - np.minimum(n - 1 - i, w)
+    jidt_psi_n_offset = digamma(n) - np.mean(digamma(pool + 1))
+    _close(v + jidt_psi_n_offset, JIDT[f"mi_ksg_w{w}"], KSG_TOL, f"mi_ksg_w{w}")
+    if w:
+        # pyspi's value does not drift with the window.
+        assert abs(v - JIDT["mi_ksg_w0"]) < 0.002
 
 
 @pytest.mark.parametrize("name, kw", [
