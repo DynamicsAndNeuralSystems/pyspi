@@ -111,7 +111,7 @@ def _band_series(data, band, kind):
 
 
 class PhaseAmplitudeCoupling(Directed, Unsigned):
-    """Phase-amplitude coupling (PAC) from the source's phase to the target's amplitude.
+    """Phase-amplitude coupling (PAC), source phase to target amplitude.
 
     ``A[i, j]`` measures how strongly the amplitude envelope of process ``j``
     (column, target) in a high band ``amp_band = (f3, f4)`` is modulated by the
@@ -120,11 +120,9 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     quantities (``A[j, i]`` takes the *phase* of ``j``), so the SPI is
     directed; both statistics are in [0, 1] and unsigned.
 
-    Signals
-    -------
-    Each process is band-passed with a zero-phase (forward-backward,
-    ``scipy.signal.sosfiltfilt``) order-4 Butterworth filter, and the analytic
-    signal is taken with ``scipy.signal.hilbert``:
+    **Signals.** Each process is band-passed with a zero-phase
+    (forward-backward, ``scipy.signal.sosfiltfilt``) order-4 Butterworth
+    filter, and the analytic signal is taken with ``scipy.signal.hilbert``:
 
     ``phi_t = angle(H[bp_{f1,f2}(x_i)]_t)``, ``A_t = |H[bp_{f3,f4}(x_j)]_t|``.
 
@@ -139,9 +137,7 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     the edge is capped at ``T // 4`` samples, with a warning.
     ``edge_samples(T)`` returns the number of samples discarded at each end.
 
-    Statistics
-    ----------
-    With ``n`` retained samples:
+    **Statistics.** With ``n`` retained samples:
 
     - ``"mi"``: the modulation index of Tort et al. (2010). The source phase is
       divided into ``n_bins`` equal bins on [-pi, pi), ``m_k`` is the mean
@@ -165,29 +161,21 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     through its phase, and ``P`` and the MVL are ratios in ``A``), so they do
     not depend on z-scoring.
 
-    Validity of the bands
-    ---------------------
-    The envelope of the target can follow a modulation at frequency ``f``
-    only if the amplitude band passes the sidebands at ``carrier +/- f``, so
-    its bandwidth ``f4 - f3`` must be at least twice the highest phase
-    frequency ``f2`` (Aru et al. 2015). A narrower amplitude band filters the
-    modulation out and biases the coupling towards zero, so construction
-    raises ``ValueError`` for such a band pair. It also raises if the amplitude
-    band starts below the top of the phase band (``f3 < f2``).
+    **Validity of the bands.** The envelope of the target can follow a
+    modulation at frequency ``f`` only if the amplitude band passes the
+    sidebands at ``carrier +/- f``, so its bandwidth ``f4 - f3`` must be at
+    least twice the highest phase frequency ``f2`` (Aru et al. 2015). A
+    narrower amplitude band filters the modulation out and biases the coupling
+    towards zero, so construction raises ``ValueError`` for such a band pair.
+    It also raises if the amplitude band starts below the top of the phase band
+    (``f3 < f2``).
 
-    Parameters
-    ----------
-    phase_band : (float, float)
-        ``(f1, f2)``, the band of the source's phase, cycles per sample.
-    amp_band : (float, float)
-        ``(f3, f4)``, the band of the target's amplitude, cycles per sample.
-        Requires ``f3 >= f2`` and ``f4 - f3 >= 2 f2``.
-    statistic : {"mi", "mvl"}
-        Tort modulation index or Özkurt-Schnitzler normalised MVL.
-    n_bins : int
-        Phase bins of the modulation index (Tort et al. use 18 of 20 degrees).
-        Ignored by ``"mvl"``. A value other than 18 is appended to the
-        identifier as ``_nbins-<n>``.
+    ``phase_band = (f1, f2)`` and ``amp_band = (f3, f4)`` are in cycles per
+    sample, with ``f3 >= f2`` and ``f4 - f3 >= 2 f2``. ``statistic`` is
+    ``"mi"`` (Tort modulation index) or ``"mvl"`` (Özkurt-Schnitzler normalised
+    MVL). ``n_bins`` (default 18, Tort et al.'s 20-degree bins) is the number
+    of phase bins of the modulation index; a value other than 18 is appended to
+    the identifier as ``_nbins-<n>``.
 
     The identifier is ``pac_<statistic>_p-<f1>-<f2>_a-<f3>-<f4>`` with decimal
     points written as dashes, as in ``spectral.py``: ``pac_mi_p-0-01-0-05_a-
@@ -197,21 +185,6 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     Its direction is a role, which process supplies the phase and which the
     amplitude, not temporal precedence as in the Granger-type SPIs: ``A[i, j]
     > A[j, i]`` does not by itself mean that ``i`` drives ``j``.
-
-    References
-    ----------
-    Tort, Komorowski, Eichenbaum & Kopell (2010). Measuring phase-amplitude
-    coupling between neuronal oscillations of different frequencies.
-    J Neurophysiol 104:1195-1210.
-
-    Özkurt & Schnitzler (2011). A critical note on the definition of
-    phase-amplitude cross-frequency coupling. J Neurosci Methods 201:438-443.
-
-    Canolty et al. (2006). High gamma power is phase-locked to theta
-    oscillations in human neocortex. Science 313:1626-1628.
-
-    Aru et al. (2015). Untangling cross-frequency coupling in neuroscience.
-    Curr Opin Neurobiol 31:51-61.
     """
 
     name = "Phase-amplitude coupling"
