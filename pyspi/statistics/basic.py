@@ -349,40 +349,31 @@ def _xi_target_terms(y):
 
 
 class ChatterjeeXi(Directed, Unsigned):
-    r"""Chatterjee's rank correlation coefficient xi (Chatterjee 2021).
+    """Chatterjee's rank correlation xi (Chatterjee 2021, JASA 116, 2009-2022).
 
     For a source ``X`` and a target ``Y`` of length ``n``, sort the pairs by
     ``X`` and let ``Y_(1), ..., Y_(n)`` be the targets in that order. With
     ``r_k = #{j : Y_j <= Y_(k)}`` and ``l_k = #{j : Y_j >= Y_(k)}``,
+    ``xi_n(X, Y) = 1 - n sum_k |r_{k+1} - r_k| / (2 sum_k l_k (n - l_k))``,
+    the first sum over ``k = 1..n-1`` and the second over ``k = 1..n``. This
+    is the general form, valid with ties in ``Y``.
 
-    .. math::
+    It uses ranks only. As ``n -> infinity`` it tends to 0 if and only if
+    ``Y`` is independent of ``X``, and to 1 if and only if ``Y`` is a
+    measurable function of ``X``, so it also detects non-monotone dependence
+    such as ``Y = X^2``. Under independence it can be slightly negative.
 
-        \xi_n(X, Y) = 1 - \frac{n \sum_{k=1}^{n-1} |r_{k+1} - r_k|}
-                               {2 \sum_{k=1}^{n} l_k (n - l_k)}.
+    Asymmetric and unsigned: ``A[i, j] = xi(X = x_i, Y = x_j)``, row = source,
+    measures how nearly the column process is a function of the row process.
 
-    As ``n -> infinity``, ``xi`` tends to 0 if and only if ``Y`` is
-    independent of ``X`` and to 1 if and only if ``Y`` is a measurable
-    function of ``X``. It uses ranks only.
+    ``tau`` is the lag in samples (default 0). For ``tau > 0`` the SPI is
+    ``xi(x_i[:-tau], x_j[tau:])``: how much ``x_j[t]`` is a function of
+    ``x_i[t - tau]``.
 
-    ``xi`` is asymmetric and unsigned: ``A[i, j] = xi(X = x_i, Y = x_j)``
-    (row = source) measures how nearly the column process is a function of
-    the row process. Under independence it can be slightly negative.
-
-    Chatterjee breaks ties in ``X`` at random; here they are broken by a
-    fixed seeded permutation, so values are reproducible.
-
-    Parameters
-    ----------
-    tau : int, default 0
-        Lag in samples. For ``tau > 0`` the SPI is
-        ``xi(x_i[:-tau], x_j[tau:])``: how much ``x_j[t]`` is a function of
-        ``x_i[t - tau]``.
-
-    References
-    ----------
-    S. Chatterjee, "A new coefficient of correlation", Journal of the
-    American Statistical Association 116, 2009-2022 (2021).
-    doi:10.1080/01621459.2020.1758115
+    Chatterjee breaks ties in ``X`` at random; here they are broken by a fixed
+    seeded permutation, so values are reproducible. The value is NaN when the
+    target is constant, when either series has a non-finite sample, or when
+    fewer than two samples remain after the lag.
     """
 
     name = "Chatterjee's xi correlation"
