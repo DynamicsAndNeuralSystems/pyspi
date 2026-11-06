@@ -1319,8 +1319,7 @@
         log: True
         absolute: True
 
-  # Coupling nonstationarity from the edge time series e_t = z_x(t) z_y(t)
-  # (Faskowitz et al. 2020; Esfahlani et al. 2020)
+  # Edge time series
   EdgeTimeSeries:
     labels:
       - undirected
