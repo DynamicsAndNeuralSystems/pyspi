@@ -1359,6 +1359,7 @@
     configs:
       - order: bic
 
+  # Partial coherence
   PartialCoherence:
     labels:
       - undirected

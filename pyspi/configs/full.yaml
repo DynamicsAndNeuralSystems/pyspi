@@ -1602,7 +1602,7 @@
         fmin: 0.25
         fmax: 0.5
 
-  # Conditional generalised partial directed coherence
+  # Conditional generalized partial directed coherence
   ConditionalGeneralizedPartialDirectedCoherence:
     labels:
       - directed
