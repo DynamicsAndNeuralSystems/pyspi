@@ -64,8 +64,8 @@ def test_spectral_cache_distinguishes_sampling_frequency():
 def test_spectral_cache_uses_one_key_type():
     """The written and read cache keys must be the same type."""
     data = _fixture_data()
-    # Two calls: the first creates the dict with a *string* key, the second
-    # misses on the tuple lookup and inserts a *tuple* key alongside it.
+    # Two calls: if the writer used a *string* key, the second call would miss
+    # on the tuple lookup and insert a *tuple* key alongside it.
     _spi(1).multivariate(data)
     _spi(1).multivariate(data)
 
@@ -104,8 +104,8 @@ def test_cache_sharing_never_changes_a_value():
 
     That is mechanical, needs no per-class knowledge, and fails precisely when
     a parameter that changes the cached value is missing from the key -- the
-    second SPI would be served the first one's intermediate. `dyn_corr_excl`
-    and the spectral `fs` were both of that shape.
+    second SPI would be served the first one's intermediate (as a missing
+    `dyn_corr_excl` or spectral `fs` would be).
     """
     import os
 

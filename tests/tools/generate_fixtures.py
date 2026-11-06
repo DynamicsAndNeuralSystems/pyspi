@@ -18,8 +18,7 @@ matching the ``.npy`` files bundled in ``pyspi/data/``. The generators build
 fast (SPI cost is at worst quadratic in ``M`` and roughly linear-to-quadratic in
 ``T``) while still leaving enough samples for the embedding- and
 spectrum-based estimators, which need a few dozen effective observations after
-lagging. It also matches the ``T`` of the fixtures these replace, so baseline
-run times are directly comparable.
+lagging.
 
 These are test fixtures, not shipped data: they live under ``tests/data/fixtures/``
 and are deliberately *not* reachable via ``pyspi.data.load_dataset``.

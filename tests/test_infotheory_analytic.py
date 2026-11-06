@@ -77,9 +77,9 @@ MI_ESTIMATORS = [
 def _expected(value_in_nats, estimator):
     """Analytic values need no conversion: the whole module reports nats.
 
-    Kept as a function, and `BITS_ESTIMATORS` kept as an (empty) set, so that
-    reintroducing a base-2 estimator has an obvious place to declare itself
-    rather than silently landing on an axis differing by ln 2.
+    A function, with `BITS_ESTIMATORS` an (empty) set, so that a base-2
+    estimator has an obvious place to declare itself rather than silently
+    landing on an axis differing by ln 2.
     """
     return value_in_nats / np.log(2) if estimator in BITS_ESTIMATORS else value_in_nats
 
@@ -625,10 +625,10 @@ def test_embedding_search_is_a_brute_force_argmax_of_the_scorer():
 def test_max_corr_ais_selects_source_and_destination_independently():
     """All four selected values must reach the estimator.
 
-    `MAX_CORR_AIS` searched the destination only and hard-coded the source
-    embedding to (1, 1), while its name denotes selection for both. An injected
-    scorer that deliberately prefers different embeddings for the two series
-    makes the difference observable.
+    `MAX_CORR_AIS` denotes selection for both destination and source, so a
+    search of the destination only, with the source fixed at (1, 1), must
+    fail here. An injected scorer that deliberately prefers different
+    embeddings for the two series makes the difference observable.
     """
     import pyspi.statistics.infotheory as it
 
@@ -702,11 +702,11 @@ def _te_design(src, targ, k, k_tau, l, l_tau):
         source past    src[t],  src[t - l_tau], ...    (l columns, lag 0 first)
 
     The source past starts at lag **0**, contemporaneous with the newest target
-    history sample. An earlier version of this oracle used lags 1..l and a
-    lookback of `l*l_tau`, i.e. source columns one sample older throughout. It
-    still passed at rel=2e-3, because on a smoothly autocorrelated source the
-    two lag sets carry nearly the same predictive information -- which is
-    exactly why the fixture below is chosen to make the difference large.
+    history sample. Lags 1..l with a lookback of `l*l_tau` (source columns one
+    sample older throughout) would pass at rel=2e-3 on a smoothly
+    autocorrelated source, because the two lag sets carry nearly the same
+    predictive information -- which is exactly why the fixture below is
+    chosen to make the difference large.
     """
     T = len(src)
     lookback = max((k - 1) * k_tau, (l - 1) * l_tau)
@@ -1098,11 +1098,11 @@ def test_ais_scorer_rejects_a_candidate_that_leaves_too_few_samples():
     """`T - 1 - (dim-1)*delay`, not `T - (dim-1)*delay`.
 
     `_ksg_ais` aligns a one-step-ahead future against the embedding, so it
-    spends a sample on the shift as well as on the lookback. With the
-    off-by-one, T=5 / kNN=4 / dimension 1 passed the guard on a claimed N=5
-    while the aligned arrays have N=4 -- and `_ksg_mi_general` had no guard of
-    its own, so `tree.query(..., k=5)` padded with infinities and the candidate
-    scored a finite 0.0.
+    spends a sample on the shift as well as on the lookback. At T=5 / kNN=4 /
+    dimension 1 the aligned arrays have N=4, which `T - (dim-1)*delay` would
+    count as N=5 and pass. `_ksg_mi_general` must refuse the same input on its
+    own account, or `tree.query(..., k=5)` pads with infinities and the
+    candidate scores a finite 0.0.
     """
     from pyspi.statistics.infotheory import _ais_scorer, _ksg_mi_general
 

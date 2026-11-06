@@ -13,9 +13,8 @@ run reproduces, which defeats the purpose of the drift test: we want an exact
 oracle so genuine sub-percent changes in deterministic SPIs are visible. The
 benchmark datasets are frozen fixtures and the overwhelming majority of SPIs
 are deterministic given the data, so a single seeded pass is both honest and
-strictly more useful. The handful of estimator-based SPIs that consume the
-global RNG are pinned by ``--seed`` (default 42) and are compared under a
-looser tolerance by the test.
+strictly more useful. ``--seed`` (default 42) seeds the global RNG as the
+test does, so any SPI that did read it would land in the same place.
 
 Usage
 -----
@@ -88,8 +87,7 @@ def build_tables(dataset_name, config="full", seed=42):
     if unexpected:
         # Refusing rather than freezing. A baseline written from a run with
         # failed SPIs records the failure as the expected answer, and the drift
-        # suite then agrees with it forever -- which is how three all-NaN
-        # `gd_*` columns stayed in the baselines unnoticed.
+        # suite then agrees with it forever.
         raise RuntimeError(
             f"[{dataset_name}] {len(unexpected)} SPI(s) raised; refusing to "
             f"freeze a baseline over them:\n  "

@@ -288,10 +288,10 @@ def test_build_tasks_starts_with_the_expensive_buckets():
 def test_parallel_run_leaves_the_parent_environment_alone(monkeypatch):
     """The thread pins are for the workers and must not outlive the pool.
 
-    Left in the parent, ``NUMBA_NUM_THREADS=1`` contradicted a numba runtime
-    that had already launched its threads, and numba then refused every later
-    compilation in the process: a serial run after a parallel one failed any SPI
-    whose numba kernel had not been compiled yet.
+    Left in the parent, ``NUMBA_NUM_THREADS=1`` would contradict a numba
+    runtime that had already launched its threads, and numba would then refuse
+    every later compilation in the process: a serial run after a parallel one
+    would fail any SPI whose numba kernel had not been compiled yet.
     """
     monkeypatch.delenv("NUMBA_NUM_THREADS", raising=False)
     monkeypatch.setenv("NUMEXPR_NUM_THREADS", "1")

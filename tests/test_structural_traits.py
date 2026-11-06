@@ -93,8 +93,7 @@ def _classify(mat):
 
     Antisymmetry (``A[i,j] == -A[j,i]``) is a genuine third category, not a
     broken form of either other one: phase-based measures such as PLI, wPLI and
-    PSI carry a sign that encodes lead/lag. The label vocabulary currently has
-    no word for it, which is why they show up as "undirected but asymmetric".
+    PSI carry a sign that encodes lead/lag, and are labelled `antisymmetric`.
     """
     finite = np.isfinite(mat)
     pairwise = finite & finite.T & ~np.eye(mat.shape[0], dtype=bool)
@@ -370,8 +369,8 @@ def test_wavelet_psi_is_permutation_invariant(statistic):
     is filled by negating. That fill must happen *before* the band statistic:
     negating after reduction is only valid for a statistic commuting with
     negation. mean commutes, max does not --
-    ``max_f(-v) = -min_f(v) != -max_f(v)`` -- so reducing first made the max
-    variants permutation-dependent by up to 11.5.
+    ``max_f(-v) = -min_f(v) != -max_f(v)`` -- so reducing first would make the
+    max variants permutation-dependent.
     """
     from pyspi.statistics.wavelet import PhaseSlopeIndex
 
@@ -424,9 +423,9 @@ def test_no_spi_declares_both_signed_and_unsigned():
 def test_every_bundled_spi_declares_a_signedness():
     """`_rmmin` calls `issigned()` unguarded, so a missing one is an exception.
 
-    `CrossPairwiseDistance` subclassed only `Undirected`, which supplies no
-    `issigned`, so `Calculator._rmmin()` raised AttributeError on any config
-    containing it.
+    `Undirected` alone supplies no `issigned`, so an SPI subclassing only it
+    (as `CrossPairwiseDistance` might) would make `Calculator._rmmin()` raise
+    AttributeError on any config containing it.
     """
     spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
     missing = [i for i, s in spis.items() if not hasattr(s, "issigned")]
@@ -469,9 +468,9 @@ def test_group_delay_traits_survive_a_yaml_family_label(tmp_path):
     """A family-level `directed` must not displace the SPI's own trait.
 
     `gd_*_rvalue` is symmetric by construction -- it stores |r| -- and declares
-    itself undirected, but the family label put `directed` back alongside it, so
-    `filter_spis(["directed"])` and `filter_spis(["undirected"])` both returned
-    it. `delay` and `slope` are antisymmetric, which displaces both.
+    itself undirected; a family label that put `directed` back alongside it
+    would make both `filter_spis(["directed"])` and `filter_spis(["undirected"])`
+    return it. `delay` and `slope` are antisymmetric, which displaces both.
     """
     from pyspi.calculator import load_spis_from_yaml
 
@@ -537,7 +536,7 @@ def test_igci_is_named_and_labelled_for_what_it_computes():
     """It is Information-Geometric Causal *Inference*, and its score is signed.
 
     The score is a difference of two entropies, hence exactly antisymmetric.
-    Reporting it unsigned was not cosmetic: `Calculator._rmmin` shifts every
+    Reporting it unsigned would not be cosmetic: `Calculator._rmmin` shifts every
     column it believes unsigned by that column's minimum, which on an
     antisymmetric matrix moves both orientations equally and destroys the sign,
     and `set_group` folds the directions together through `abs()`.

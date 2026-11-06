@@ -101,8 +101,9 @@ documented exception lives in `KNOWN_UNESTIMABLE`, shared with the baseline
 generator so the two cannot disagree, and the suite fails if a listed exception
 starts succeeding.
 
-Tolerances are `1e-9` relative / `1e-12` absolute for every SPI, including `causal` and `misc`, whose optimisers and permutation tests reproduce bit-exactly.
-Per-SPI exceptions go in `LOOSE_SPIS`; `tools/measure_reproducibility.py` checks reproducibility.
+Tolerances default to `1e-9` relative / `1e-12` absolute, including for `causal` and `misc`, whose optimisers and permutation tests reproduce bit-exactly.
+Looser tolerances cover cross-platform BLAS/LAPACK sensitivity only: per SPI in `LOOSE_SPIS` (`anm`) and per estimator family in `LOOSE_PREFIXES`.
+`tools/measure_reproducibility.py` checks reproducibility.
 
 ## Open findings
 

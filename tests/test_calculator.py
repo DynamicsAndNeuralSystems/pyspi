@@ -375,10 +375,10 @@ def test_correlation_frame_normal_operation():
 
 
 def test_correlation_frame_with_labels():
-    """The with_labels=True path was silently broken by a stale method name.
+    """The with_labels=True path of CorrelationFrame runs and attaches labels.
 
-    It called Calculator.getstatlabels(), which does not exist (the method is
-    get_stat_labels). Nothing exercised it, so it never surfaced.
+    It reads each Calculator's labels through `get_stat_labels()`; nothing
+    else in the suite exercises this path.
     """
     datasets = [Data(data=np.random.randn(3, 100)) for _ in range(3)]
     frame = CalculatorFrame(datasets=datasets, names=['d1', 'd2', 'd3'],
@@ -449,12 +449,11 @@ def test_load_table_rejects_non_npz(tmp_path):
 
 
 def test_load_table_exposes_the_metadata_save_writes(tmp_path):
-    """`save()` has always written run_spec, run_digest and errors.
+    """`load_table()` returns the run_spec, run_digest and errors `save()` writes.
 
-    `load_table()` read none of them, so a loaded table could not be asked
-    which SPIs failed, what produced it, or whether it matched a rerun --
-    and a NaN column is otherwise indistinguishable from a legitimately
-    undefined statistic.
+    Without them a loaded table could not be asked which SPIs failed, what
+    produced it, or whether it matched a rerun -- and a NaN column is
+    otherwise indistinguishable from a legitimately undefined statistic.
     """
     from pyspi.calculator import load_table
 
@@ -474,7 +473,8 @@ def test_load_table_exposes_the_metadata_save_writes(tmp_path):
 
 
 def test_load_table_validates_the_whole_shape(tmp_path):
-    """`ndim` and axis 0 only; a wrong width reached MultiIndex.from_product."""
+    """Every axis is checked, not just `ndim` and axis 0, so a wrong width is
+    refused before it reaches MultiIndex.from_product."""
     from pyspi.calculator import load_table
 
     path = tmp_path / "bad.npz"
@@ -505,10 +505,10 @@ def test_run_digest_binds_to_the_computation_version(monkeypatch):
 def test_process_names_must_be_unique_and_round_trip_exactly(tmp_path):
     """They label the rows and columns, and `to_frame()` stacks on them.
 
-    Duplicates surfaced as pandas' "Columns with duplicate values are not
+    Duplicates would surface as pandas' "Columns with duplicate values are not
     supported in stack" from four frames away, with nothing pointing at the
-    names. Non-string names were written to the NPZ as a `U` array and came
-    back as their `str()`, so the file did not round-trip.
+    names. Non-string names would be written to the NPZ as a `U` array and come
+    back as their `str()`, so the file would not round-trip.
     """
     from pyspi.calculator import load_table
 
@@ -571,11 +571,12 @@ def two_copies_of_one_config(tmp_path):
 
 
 def test_run_digest_ignores_where_the_config_lives(two_copies_of_one_config):
-    """It hashed the absolute resolved path, so the same config and the same
-    data digested differently in a source checkout and an installed wheel.
+    """The digest hashes the config's content, not its absolute path.
 
-    A false negative -- a checkpoint refused when it should have been accepted
-    -- rather than unsafe reuse, but it defeats the point of a content hash.
+    Hashing the path would make the same config and the same data digest
+    differently in a source checkout and an installed wheel: a false negative
+    -- a checkpoint refused when it should have been accepted -- rather than
+    unsafe reuse, but it defeats the point of a content hash.
     """
     first, second = two_copies_of_one_config
     assert _digest_calculator(first).run_digest == _digest_calculator(second).run_digest

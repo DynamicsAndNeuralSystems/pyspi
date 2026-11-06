@@ -83,9 +83,9 @@ def test_imports():
 def test_kraskov_rejected_for_composed_measures(cls_name):
     """kraskov must fail loudly where no KSG estimator exists.
 
-    These six composed the measure from marginal entropies and were handed
-    GaussianEntropyCalculator for "kraskov", so they returned exactly the
-    Gaussian result while their identifier claimed kraskov_NN-<k>.
+    These six compose the measure from marginal entropies, which have no KSG
+    estimator, so accepting "kraskov" would return the Gaussian result under an
+    identifier claiming kraskov_NN-<k>.
     """
     import pyspi.statistics.infotheory as it
     with pytest.raises(NotImplementedError, match="kraskov"):
