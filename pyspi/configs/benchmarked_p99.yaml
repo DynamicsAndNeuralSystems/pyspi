@@ -315,17 +315,6 @@
     - biased: false
     - biased: true
 
-  # HellerHellerGorfine:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-
   CrossMultiscaleGraphCorrelation:
     labels:
       - undirected
@@ -337,7 +326,6 @@
     dependencies:
     configs:
     - max_lag: 1
-    # - max_lag: 10
 
   CrossDistanceCorrelation:
     labels:
@@ -1273,7 +1261,6 @@
     dependencies:
     configs:
     - kernel: DotProduct
-    # - kernel: RBF
 
   Cointegration:
     labels:

@@ -278,80 +278,6 @@
     - metric: canberra
     - metric: braycurtis
 
-  # DistanceCorrelation:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - biased: false
-  #   - biased: true
-
-  # MultiscaleGraphCorrelation:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-
-  # HilbertSchmidtIndependenceCriterion:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - biased: false
-  #   - biased: true
-
-  # HellerHellerGorfine:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-
-  # CrossMultiscaleGraphCorrelation:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - time-dependent
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - max_lag: 1
-  #   - max_lag: 10
-
-  # CrossDistanceCorrelation:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - time-dependent
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - max_lag: 1
-  #   - max_lag: 10
-
   DynamicTimeWarping:
     labels:
       - undirected
@@ -382,34 +308,6 @@
     - metric: euclidean
       tau: 1
       statistic: mean
-
-  # SoftDynamicTimeWarping:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - time-dependent
-  #     - M10
-  #   dependencies:
-  #   configs:
-  #   - global_constraint: null
-  #   - global_constraint: itakura
-  #   - global_constraint: sakoe_chiba
-
-  # LongestCommonSubsequence:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - time-dependent
-  #     - M10
-  #   dependencies:
-  #   configs:
-  #   - global_constraint: null
-  #   - global_constraint: itakura
-  #   - global_constraint: sakoe_chiba
 
   Barycenter:
     labels:
@@ -457,20 +355,6 @@
     - mode: sgddtw
       statistic: max
       squared: true
-    # - mode: softdtw
-    #   statistic: mean
-    #   labels:
-    #   - M09
-    # - mode: softdtw
-    #   statistic: max
-    # - mode: softdtw
-    #   statistic: mean
-    #   squared: true
-    #   labels:
-    #   - M09
-    # - mode: softdtw
-    #   statistic: max
-    #   squared: true
 
   GromovWasserstainTau:
     labels:
@@ -485,28 +369,6 @@
 
 
 .statistics.causal:
-  # AdditiveNoiseModel:
-  #   labels:
-  #     - directed
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M02
-  #   dependencies:
-  #   configs:
-
-  # ConditionalDistributionSimilarity:
-  #   labels:
-  #     - directed
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M02
-  #   dependencies:
-  #   configs:
-
   RegressionErrorCausalInference:
     labels:
       - directed
@@ -517,32 +379,6 @@
       - M14
     dependencies:
     configs:
-
-  # ConvergentCrossMapping:
-  #   labels:
-  #     - directed
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - time-dependent
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - statistic: mean
-  #   - statistic: max
-  #   - statistic: diff
-  #   - statistic: mean
-  #     embedding_dimension: 1
-  #   - statistic: max
-  #     embedding_dimension: 1
-  #   - statistic: diff
-  #     embedding_dimension: 1
-  #   - statistic: mean
-  #     embedding_dimension: 10
-  #   - statistic: max
-  #     embedding_dimension: 10
-  #   - statistic: diff
-  #     embedding_dimension: 10
 
 
 .statistics.infotheory:
@@ -582,8 +418,6 @@
       - M03
     configs:
     - estimator: gaussian
-    # - estimator: kozachenko
-    # - estimator: kernel
 
   CrossmapEntropy:
     labels:
@@ -601,10 +435,6 @@
       history_length: 1
     - estimator: gaussian
       history_length: 10
-    # - estimator: kozachenko
-    #   history_length: 10
-    # - estimator: kernel
-    #   history_length: 10
 
   DirectedInfo:
     labels:
@@ -616,7 +446,6 @@
       - M03
     configs:
     - estimator: gaussian
-    # - estimator: kernel
 
   StochasticInteraction:
     labels:
@@ -631,7 +460,6 @@
       labels:
       - M05
     - estimator: kozachenko
-    # - estimator: kernel
 
   MutualInfo:
     labels:
@@ -663,11 +491,6 @@
     - estimator: gaussian
     - estimator: kernel
       kernel_width: 0.25
-    # - estimator: kraskov
-    #   prop_k: 4
-    # - estimator: kraskov
-    #   prop_k: 4
-    #   dyn_corr_excl: AUTO
 
   TransferEntropy:
     labels:
@@ -689,37 +512,6 @@
       l_history: 1
       labels:
       - M05
-    # - estimator: kraskov
-    #   prop_k: 4
-    #   auto_embed_method: MAX_CORR_AIS
-    #   k_search_max: 10
-    #   tau_search_max: 4
-    # - estimator: kraskov
-    #   prop_k: 4
-    #   auto_embed_method: MAX_CORR_AIS
-    #   k_search_max: 10
-    #   tau_search_max: 4
-    #   dyn_corr_excl: AUTO
-    # - estimator: kraskov
-    #   prop_k: 4
-    #   k_history: 2
-    #   l_history: 1
-    #   dyn_corr_excl: AUTO
-    # - estimator: kraskov
-    #   prop_k: 4
-    #   k_history: 1
-    #   l_history: 1
-    #   dyn_corr_excl: AUTO
-    # - estimator: kraskov
-    #   prop_k: 4
-    #   k_history: 1
-    #   l_history: 1
-    # - estimator: kernel
-    #   kernel_width: 0.25
-    #   k_history: 1
-    #   l_history: 1
-    #   labels:
-    #   - M14
 
   IntegratedInformation:
     labels:
@@ -1029,54 +821,6 @@
       fmax: 0.5
       statistic: max
 
-  # GeneralizedPartialDirectedCoherence:
-  #   labels:
-  #     - unsigned
-  #     - directed
-  #     - linear
-  #     - bivariate
-  #     - frequency-dependent
-  #     - M06
-  #   dependencies:
-  #   configs:
-  #   - fs: 1
-  #   - fmin: 0
-  #     fmax: 0.25
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #   - fs: 1
-  #     statistic: max
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # DirectDirectedTransferFunction:
-  #   labels:
-  #     - directed
-  #     - linear
-  #     - unsigned
-  #     - bivariate
-  #     - frequency-dependent
-  #     - M06
-  #   dependencies:
-  #   configs:
-  #   - fs: 1
-  #   - fmin: 0
-  #     fmax: 0.25
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #   - fs: 1
-  #     statistic: max
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
   GroupDelay:
     labels:
       - directed
@@ -1247,9 +991,6 @@
     configs:
     - fmin: 0.25
       fmax: 0.5
-    # - fs: 1
-    # - fmin: 0
-    #   fmax: 0.25
 
 
 .statistics.misc:
@@ -1266,19 +1007,6 @@
     - model: Ridge
     - model: SGDRegressor
     - model: BayesianRidge
-
-  # GPModel:
-  #   labels:
-  #     - directed
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - kernel: DotProduct
-  #   - kernel: RBF
 
   Cointegration:
     labels:
