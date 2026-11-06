@@ -1548,7 +1548,7 @@
         log: True
         absolute: True
 
-  # Edge time series
+  # Edge time series (coupling nonstationarity)
   EdgeTimeSeries:
     labels:
       - undirected
