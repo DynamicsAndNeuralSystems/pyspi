@@ -1414,7 +1414,7 @@
       - fmin: 0.25
         fmax: 0.5
 
-# statistics that couple different frequencies
+# Cross-frequency statistics
 .statistics.crossfreq:
   # Phase-amplitude coupling
   PhaseAmplitudeCoupling:
