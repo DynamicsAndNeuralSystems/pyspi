@@ -258,8 +258,8 @@ def _to_source_target(spi, adj):
     spectral backends (spectral_connectivity, nitime) instead follow the
     DTF/PDC literature, where element ``[i, j]`` is the flow *into* i *from* j
     (Kaminski & Blinowska 1991; the library normalises "by inflow"). Passing
-    their output through unchanged would leave every directed spectral SPI transposed
-    relative to every other directed SPI in the library.
+    their output through unchanged would leave every directed spectral SPI
+    transposed relative to every other directed SPI in the library.
 
     Only directed SPIs are transposed. The undirected spectral measures share
     this code path, and several of them (PhaseLagIndex, WeightedPhaseLagIndex,
@@ -371,7 +371,7 @@ class _FactoredConnectivity(sc.Connectivity):
     the same spectrum, so keeping the first result changes no value.
 
     Once factorised, the Fourier coefficients and the factor itself are let go:
-    one of these objects is held per ordered pair, and they would otherwise 
+    one of these objects is held per ordered pair, and they would otherwise
     be most of its memory.
     """
 
@@ -1140,9 +1140,9 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                     # That is the signature of over-fitting at this record
                     # length, not of a transient numerical problem, and the
                     # bare message ("Model estimation order did not converge at
-                    # max_order = 50") says nothing about the data. Relaying it 
-                    # as an all-NaN return would bury the cause under pyspi's 
-                    # generic 'returned no finite off-diagonal values".
+                    # max_order = 50") says nothing about the data. Relaying it
+                    # as an all-NaN return would bury the cause under pyspi's
+                    # generic "returned no finite off-diagonal values".
                     if "did not converge" not in str(err):
                         raise
                     raise ValueError(

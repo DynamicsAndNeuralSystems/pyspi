@@ -149,8 +149,7 @@ class CrossCorrelation(Undirected, Signed):
     # Lags are examined out to +/- T // 4. Beyond a quarter of the record the
     # sample cross-correlation is estimated from fewer than 3T/4 overlapping
     # points and its variance grows without bound under the biased
-    # normalisation used here; the quarter cut is the convention pyspi shipped
-    # and is kept.
+    # normalisation used here.
     _MAX_LAG_FRACTION = 4
 
     @parse_bivariate

@@ -1112,8 +1112,6 @@ def _require_positive_int(name, value):
     """Thin alias for `utils.require_int(..., minimum=1)`; see it for the rules."""
     return utils.require_int(name, value, minimum=1)
 
-# Auto-embedding selection criteria that are actually implemented. The search
-# maximises active information storage under the destination's own estimator.
 # Auto-embedding selection criteria that are actually implemented, and what
 # each one selects. Both maximise the bias-corrected active information storage
 # of a series over (dimension, delay); they differ only in which series.
@@ -1768,8 +1766,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
             self._calc.setProperty(self._K_SEARCH_MAX_PROP_NAME, str(k_search_max))
             self._calc.setProperty(self._TAU_SEARCH_MAX_PROP_NAME, str(tau_search_max))
             # The method is in the identifier because it changes what is
-            # computed: MAX_CORR_AIS selects the source embedding too, 
-            # and MAX_CORR_AIS_DEST_ONLY only the destination's.
+            # computed: MAX_CORR_AIS selects the source embedding too, and
+            # MAX_CORR_AIS_DEST_ONLY only the destination's.
             self.identifier += "_{}_k-max-{}_tau-max-{}".format(
                 auto_embed_method.replace("_", "-"), k_search_max, tau_search_max)
             if auto_embed_method == _AUTO_EMBED_DEST_ONLY:
