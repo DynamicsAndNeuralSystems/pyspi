@@ -38,6 +38,9 @@ class Cointegration(Directed, Unsigned):
 
     For ``aeg``, ``table[i, j]`` is the Engle-Granger t-statistic of process
     *j* regressed on process *i* (regressor on the row, as for ``lmfit``).
+
+    ``det_order`` sets the deterministic terms of the Johansen VECM: -1 for
+    none, 0 for a constant, 1 for a linear trend.
     """
 
     name = "Cointegration"

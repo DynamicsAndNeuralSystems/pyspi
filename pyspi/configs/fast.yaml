@@ -127,6 +127,7 @@
         squared: True
         sigonly: False
 
+# Distance-based statistics
 .statistics.distance:
   PairwiseDistance:
     labels:
@@ -205,6 +206,7 @@
     dependencies:
     configs:
 
+# Causal inference statistics
 .statistics.causal:
   # Additive noise model
   AdditiveNoiseModel:
@@ -244,7 +246,7 @@
 
 # Information-theoretic statistics
 .statistics.infotheory:
-  JointEntropy: # No theiler window yet
+  JointEntropy:
     labels:
       - undirected
       - nonlinear
@@ -257,7 +259,7 @@
       - estimator: kozachenko
       - estimator: kernel
 
-  ConditionalEntropy: # No theiler window yet
+  ConditionalEntropy:
     labels:
       - directed
       - nonlinear
@@ -269,7 +271,7 @@
     - estimator: gaussian
     - estimator: kernel
 
-  CrossmapEntropy: # No theiler window yet
+  CrossmapEntropy:
     labels:
       - unsigned
       - directed
@@ -293,7 +295,7 @@
         history_length: 10
 
 
-  StochasticInteraction: # No theiler window
+  StochasticInteraction:
     labels:
       - undirected
       - nonlinear
@@ -354,7 +356,6 @@
 
   # Transfer entropy
   TransferEntropy:
-    # Kraskov estimator with fixed embedding of 1 for source/target and DCE
     labels:
       - directed
       - nonlinear
@@ -372,10 +373,9 @@
       - estimator: gaussian
         k_history: 1
         l_history: 1
-
-# statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
         labels:
           - M05
+# Spectral (frequency-domain) statistics (see Schoegl and Supp, 2006)
 .statistics.spectral:
   CoherencePhase:
     labels:
@@ -798,7 +798,6 @@
         statistic: delay
 
   SpectralGrangerCausality:
-    # Non-parametric Granger causality (no VAR model)
     labels:
       - directed
       - linear
@@ -838,9 +837,6 @@
         fmax: 0.5
         statistic: max
 
-        # Parametric Granger causality (VAR model with inferred or predefined order)
-
-        # AR order optimised by BIC
       - method: parametric
         fmin: 0
         fmax: 0.5
@@ -859,8 +855,6 @@
         fmax: 0.5
         method: parametric
         statistic: mean
-
-        # AR order 1
         labels:
           - M05
       - fs: 1
@@ -883,8 +877,6 @@
         order: 1
         method: parametric
         statistic: mean
-
-        # AR order 20
         labels:
           - M05
       - fs: 1
@@ -904,7 +896,6 @@
         method: parametric
         statistic: mean
 
-        # AR order optimised by BIC
       - fs: 1
         method: parametric
         statistic: max
@@ -922,8 +913,6 @@
         fmax: 0.5
         method: parametric
         statistic: max
-
-        # AR order 1
         labels:
           - M05
       - fs: 1
@@ -946,8 +935,6 @@
         order: 1
         method: parametric
         statistic: max
-
-        # AR order 20
         labels:
           - M05
       - fs: 1
@@ -967,7 +954,7 @@
         method: parametric
         statistic: max
 
-# statistics that analyse in the wavlet-domain (only Mortlet wavelet's at the moment)
+# Wavelet (time-frequency) statistics, from Morlet wavelets
 .statistics.wavelet:
   PhaseSlopeIndex:
     labels:
@@ -985,6 +972,7 @@
       - fmin: 0.25
         fmax: 0.5
 
+# Miscellaneous statistics
 .statistics.misc:
   LinearModel:
     labels:
@@ -1012,7 +1000,7 @@
     configs:
       - method: johansen
         statistic: max_eig_stat
-        det_order: 0 # Constant trend
+        det_order: 0
         k_ar_diff: 10
 
       - method: johansen
@@ -1022,7 +1010,7 @@
 
       - method: johansen
         statistic: max_eig_stat
-        det_order: 0 # Constant trend
+        det_order: 0
         k_ar_diff: 1
 
       - method: johansen
@@ -1032,7 +1020,7 @@
 
       - method: johansen
         statistic: max_eig_stat
-        det_order: 1 # Linear trend
+        det_order: 1
         k_ar_diff: 10
 
       - method: johansen
@@ -1110,7 +1098,7 @@
       - undirected
       - nonlinear
     dependencies:
-    configs: # default params
+    configs:
       - terms: 6
         pnorm: 'max'
         bandwidth: 0.5

@@ -1141,6 +1141,11 @@ class InfoTheoryBase(Unsigned):
     **Every measure in this module is reported in nats**, so magnitudes are
     comparable across estimators. JIDT reports bits for its kernel and
     symbolic (discrete) estimators; divide by ln 2 to compare with those.
+
+    ``dyn_corr_excl`` sets a Theiler window and applies only to the
+    ``kraskov`` estimator, so the measures composed from marginal entropies
+    (joint, conditional, causal and cross-map entropy, stochastic interaction)
+    have none.
     """
 
     _AUTO_EMBED_METHOD_PROP_NAME = "AUTO_EMBED_METHOD"

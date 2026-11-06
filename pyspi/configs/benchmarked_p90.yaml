@@ -460,7 +460,6 @@
     configs:
     - estimator: gaussian
     - estimator: kozachenko
-    #
   CrossmapEntropy:
     labels:
       - unsigned
