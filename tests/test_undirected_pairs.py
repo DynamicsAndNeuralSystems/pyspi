@@ -1,15 +1,14 @@
 """``Undirected.multivariate`` evaluates each unordered pair once.
 
-It used to evaluate ``bivariate`` for both orders of every pair and then copy
-the upper triangle over the lower one, discarding half the work. It now visits
-``i < j`` only, in the order the old loop reached the upper triangle, and
-mirrors each value (and each failure) onto ``(j, i)``. These tests pin:
+It visits ``i < j`` only, in the order ``Directed.multivariate`` reaches the
+upper triangle, and mirrors each value (and each failure) onto ``(j, i)``.
+These tests pin:
 
 * the calls: one per unordered pair, as ``(i, j)`` with ``i < j``, in column
   order -- for a stub and for every undirected SPI in the bundled configs;
 * the mirrored values and quality codes, the pair errors and the warning;
 * the SPI raising when every pair fails;
-* bit-identical values against the old both-orders loop, including the SPIs
+* bit-identical values against a reference loop over both orders, including the SPIs
   whose ``bivariate`` caches a result for the opposite orientation.
 """
 import warnings

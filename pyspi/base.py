@@ -236,8 +236,7 @@ class Undirected(Directed):
 
         The pairs are visited column by column, ``(0, 1), (0, 2), (1, 2),
         (0, 3), ...``: the order in which ``Directed.multivariate`` reaches the
-        upper triangle, which is the half this method used to keep after
-        evaluating both orders of every pair. An SPI whose ``bivariate`` caches
+        upper triangle. An SPI whose ``bivariate`` caches
         a result for the opposite orientation must compute it in an
         orientation that does not depend on which of ``(i, j)`` and ``(j, i)``
         comes first (see ``Barycenter``, ``CrossCorrelation`` and

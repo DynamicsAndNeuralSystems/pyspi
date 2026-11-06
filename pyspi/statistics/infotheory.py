@@ -1365,8 +1365,8 @@ class InfoTheoryBase(Unsigned):
             # asked for first: the value is cached for both, and the
             # Kozachenko-Leonenko estimate of [x, y] and of [y, x] can differ
             # in the last bit, so the order the pairs are visited in would
-            # otherwise decide it. Both multivariate loops used to reach
-            # (larger, smaller) first, so their values are unchanged.
+            # otherwise decide it. (larger, smaller) is the orientation the
+            # stored baselines use.
             x, y = data.to_numpy()[[max(i, j), min(i, j)]]
             joint = np.concatenate([x, y], axis=1)
             est = self._estimator
