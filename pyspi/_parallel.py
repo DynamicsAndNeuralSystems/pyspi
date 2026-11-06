@@ -113,7 +113,7 @@ def resolve_n_jobs(n_jobs) -> int:
 
     Positive values pass through; ``-1`` means every core this process may use
     (see :func:`available_cores`), ``-2`` all but one, and so on, floored at 1.
-    ``0`` and non-integers raise: a silent serial fallback hid typos.
+    ``0`` and non-integers raise: a silent serial fallback would hide typos.
     ``None`` reads ``PYSPI_N_JOBS`` (default 1).
     """
     if n_jobs is None:
@@ -370,8 +370,8 @@ def cache_bucket(spi):
 # picks up first, so a stale or missing entry costs some makespan and nothing
 # else -- it cannot change a computed value. Anything unlisted is treated as
 # cheap.
-# spectral_bv was 1.6 there; it is rescaled by the 7.6x measured when its
-# SPIs began sharing one factorisation per pair.
+# spectral_bv's SPIs share one factorisation per pair, so its entry is the
+# anchor-cell figure (1.6) divided by the 7.6x speed-up that sharing gives.
 _NAMESPACE_COST = {"ccm": 292.7, "barycenter": 11.1, "spectral_bv": 0.2,
                    "spectral_mv": 0.3, "coint": 0.3, "covariance": 0.3}
 
@@ -383,12 +383,11 @@ def build_tasks(spi_keys, spis) -> list[list[str]]:
     built once on the worker's Data and reused; SPIs that cache nothing become
     single-SPI tasks.
 
-    Bucketing by ``_cache_namespace`` alone -- as this did -- serialises SPIs
-    that share no cache at all. On ``full`` it produced one 84-member
-    ``spectral_mv`` task covering 16 independent caches, and the longest task
-    is what bounds the makespan: no amount of parallelism could split it.
-    Bucketing on ``cache_bucket`` gives 43 shareable groups whose largest has
-    24 members.
+    Bucketing on ``cache_bucket`` rather than ``_cache_namespace`` matters
+    because the longest task bounds the makespan: the namespace alone would
+    put all 84 ``spectral_mv`` SPIs of ``full`` (16 independent caches) in one
+    task. ``cache_bucket`` gives 43 shareable groups whose largest has 24
+    members.
 
     Ordering is by estimated cost (members times the namespace's measured
     amortized cost) rather than member count, so a 3-member ``ccm`` bucket
@@ -644,7 +643,7 @@ def run_parallel(
         # The pins are for the workers. Left behind, NUMBA_NUM_THREADS=1 would
         # contradict a numba runtime that has already launched its threads in
         # this process, and numba refuses to compile anything further once it
-        # sees that -- so the next SPI needing a fresh compilation here failed.
+        # sees that.
         for var, value in parent_env.items():
             if value is None:
                 os.environ.pop(var, None)
