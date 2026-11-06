@@ -2,7 +2,6 @@
 .statistics.basic:
   # Covariance
   Covariance:
-    # EllipticEnvelope is not bundled: its covariance_ and precision_ are MinCovDet's.
     labels:
       - undirected
       - linear
@@ -36,7 +35,6 @@
 
   # Precision
   Precision:
-    # EllipticEnvelope is not bundled; see Covariance.
     labels:
       - undirected
       - linear
@@ -68,6 +66,25 @@
       - estimator: ShrunkCovariance
         squared: True
 
+  # Partial correlation
+  PartialCorrelation:
+    labels:
+      - undirected
+      - linear
+      - signed
+      - multivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
+      - estimator: GraphicalLasso
+      - estimator: GraphicalLassoCV
+      - estimator: LedoitWolf
+      - estimator: MinCovDet
+      - estimator: OAS
+      - estimator: ShrunkCovariance
+
   # Spearman's correlation coefficient
   SpearmanR:
     labels:
@@ -96,7 +113,24 @@
       - squared: True
       - squared: False
 
-  # Lagged correlation coefficient (class in pyspi/statistics/basic.py)
+  # Chatterjee's rank correlation xi
+  ChatterjeeXi:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - M14
+    dependencies:
+    configs:
+      - tau: 0
+        labels:
+          - contemporaneous
+      - tau: 1
+        labels:
+          - time-dependent
+
+  # Lagged correlation coefficient
   LaggedCorrelation:
     labels:
       - undirected
@@ -162,7 +196,7 @@
         tau: 20
         squared: True
 
-  # statistics based on cross-correlation (squared means we square the xcorr, not the output)
+  # Cross correlation
   CrossCorrelation:
     labels:
       - undirected
@@ -192,7 +226,9 @@
         squared: True
         sigonly: False
 
+# Distance-based statistics
 .statistics.distance:
+  # Pairwise distance
   PairwiseDistance:
     labels:
       - unsigned
@@ -289,6 +325,7 @@
       - max_lag: 1
       - max_lag: 10
 
+  # Dynamic time warping
   DynamicTimeWarping:
     labels:
       - undirected
@@ -303,8 +340,7 @@
       - global_constraint: itakura
       - global_constraint: sakoe_chiba
 
-  # Cross pairwise distance (class in pyspi/statistics/distance.py)
-  # Shifted-path Euclidean upper bound on DTW.
+  # Cross pairwise distance
   CrossPairwiseDistance:
     labels:
       - undirected
@@ -322,6 +358,7 @@
         tau: 1
         statistic: "mean"
 
+  # Soft dynamic time warping
   SoftDynamicTimeWarping:
     labels:
       - undirected
@@ -336,6 +373,7 @@
       - global_constraint: itakura
       - global_constraint: sakoe_chiba
 
+  # Longest common subsequence
   LongestCommonSubsequence:
     labels:
       - undirected
@@ -350,10 +388,8 @@
       - global_constraint: itakura
       - global_constraint: sakoe_chiba
 
+  # Barycenter
   Barycenter:
-    # The DTW-type barycenters bundle `corr` rather than `mean`: the barycenter of
-    # z-scored series has mean ~0, and its squared mean is a monotone function of `corr`.
-    # bary_euclidean_mean is not bundled: it is identically zero on z-scored data.
     labels:
       - undirected
       - nonlinear
@@ -404,7 +440,7 @@
         statistic: max
         squared: True
 
-  # Gromov-Wasserstain Distance
+  # Gromov-Wasserstein distance (GW_tau)
   GromovWasserstainTau:
     labels:
       - unsigned
@@ -416,6 +452,7 @@
     dependencies:
     configs:
 
+# Causal inference statistics
 .statistics.causal:
   # Additive noise model
   AdditiveNoiseModel:
@@ -453,17 +490,6 @@
     dependencies:
     configs:
 
-  # Information-geometric causal inference (disabled heuristic)
-  # InformationGeometricCausalInference:
-  #   labels:
-  #     - directed
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #   dependencies:
-  #   configs:
-
   # Convergent-cross mapping
   ConvergentCrossMapping:
     labels:
@@ -493,7 +519,8 @@
 
 # Information-theoretic statistics
 .statistics.infotheory:
-  JointEntropy: # No theiler window yet
+  # Joint entropy
+  JointEntropy:
     labels:
       - undirected
       - nonlinear
@@ -506,7 +533,8 @@
       - estimator: kozachenko
       - estimator: kernel
 
-  ConditionalEntropy: # No theiler window yet
+  # Conditional entropy
+  ConditionalEntropy:
     labels:
       - directed
       - nonlinear
@@ -519,9 +547,8 @@
       - estimator: kozachenko
       - estimator: kernel
 
-  CausalEntropy: # No theiler window yet
-    # The kernel estimator is not bundled: a fixed-width box kernel in about ten
-    # dimensions does not converge with T.
+  # Causally conditioned entropy
+  CausalEntropy:
     labels:
       - directed
       - nonlinear
@@ -533,9 +560,8 @@
       - estimator: gaussian
       - estimator: kozachenko
 
-  CrossmapEntropy: # No theiler window yet
-    # The kernel estimator at history_length 10 is not bundled: a fixed-width box
-    # kernel in 11 dimensions does not converge with T.
+  # Cross-map entropy
+  CrossmapEntropy:
     labels:
       - unsigned
       - directed
@@ -559,17 +585,8 @@
         history_length: 10
 
 
-  DirectedInfo: # No theiler window yet
-      # Disabled: composing directed information from four separately-estimated
-      # entropies leaves each with its own dimension-dependent bias, and they do
-      # not cancel. On independent data the kernel variant sat at 3.8-4.4 for
-      # every T from 100 to 8000 (a fixed bandwidth in ~11 dimensions does not
-      # improve with sample size) and kozachenko returned negatives, for a
-      # quantity bounded below by zero. Use estimator: kraskov, which estimates
-      # each conditional-MI term directly.
-      # - estimator: kernel
-      # - estimator: kozachenko
-
+  # Directed information
+  DirectedInfo:
     labels:
       - directed
       - nonlinear
@@ -579,15 +596,11 @@
       - M03
     configs:
       - estimator: gaussian
-      # Direct KSG/Frenzel-Pompe conditional-MI estimate. The kernel and
-      # kozachenko variants were dropped because composing DI from separate
-      # entropies leaves each with its own dimension-dependent bias; this
-      # estimates each I(X^i; Y_i | Y^{i-1}) term directly, so the biases
-      # cancel. Not added to the benchmarked_p* sets until it has been timed.
       - estimator: kraskov
         prop_k: 4
 
-  StochasticInteraction: # No theiler window
+  # Stochastic interaction
+  StochasticInteraction:
     labels:
       - undirected
       - nonlinear
@@ -624,7 +637,7 @@
       - estimator: kernel
         kernel_width: 0.25
 
-  # Mutual information
+  # Time-lagged mutual information
   TimeLaggedMutualInfo:
     labels:
       - directed
@@ -656,7 +669,6 @@
       - time-dependent
       - M04
     configs:
-      # Kraskov estimator with auto-embedding on source/target and DCE
       - estimator: kraskov
         prop_k: 4
         auto_embed_method: MAX_CORR_AIS
@@ -670,41 +682,29 @@
         tau_search_max: 4
         dyn_corr_excl: AUTO
 
-      # Kraskov estimator with auto-embedding on target-only, src history of 1, and DCE
       - estimator: kraskov
         prop_k: 4
         k_history: 2
         l_history: 1
         dyn_corr_excl: AUTO
 
-      # Kraskov estimator with fixed embedding of 1 for source/target and DCE
       - estimator: kraskov
         prop_k: 4
         k_history: 1
         l_history: 1
         dyn_corr_excl: AUTO
 
-      # Same as above with no DCE
       - estimator: kraskov
         prop_k: 4
         k_history: 1
         l_history: 1
 
-      # Currently the Kernel method has an overload issue with the AIS calculator..
-      # Kernel estimator with auto-embedding on source/target and DCE
-      # - estimator: kernel
-      #   auto_embed_method: MAX_CORR_AIS
-      #   k_search_max: 4
-      #   kernel_width: 0.25
-
-      # Kernel estimator with no auto-embedding on source/target and DCE
       - estimator: kernel
         kernel_width: 0.25
         k_history: 1
         labels:
           - M14
 
-      # Gaussian estimation has no Theiler/dynamic-correlation exclusion option
       - estimator: gaussian
         auto_embed_method: MAX_CORR_AIS
         k_search_max: 10
@@ -722,26 +722,7 @@
         labels:
           - M05
 
-      # Disabled: k_history=1 gives a single ordinal symbol, so the transfer
-      # entropy is identically zero. Rejected at construction; kept here as a
-      # record of what was dropped.
-      # - estimator: symbolic
-      #   k_history: 1
-      #   l_history: 1
-      #   labels:
-      #     - M05
-      #
-      # Disabled: severely undersampled and unvalidated at T=100. 10! symbols
-      # against ~91 usable samples: on var1 and cml every joint count is 1, so
-      # the value tracks sample size rather than dependence, but that does not
-      # hold universally (kuramoto: 3 of 42 pairs). Still constructible, and
-      # defensible for long series where the symbol space is populated.
-      # - estimator: symbolic
-      #   k_history: 10
-      #   l_history: 1
-      #   labels:
-      #     - M05
-
+  # Integrated information
   IntegratedInformation:
     labels:
       - undirected
@@ -762,8 +743,9 @@
       - phitype: "Geo"
         normalization: 1
 
-# statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
+# Spectral (frequency-domain) statistics (see Schoegl and Supp, 2006)
 .statistics.spectral:
+  # Coherence phase
   CoherencePhase:
     labels:
       - linear
@@ -782,6 +764,7 @@
       - fmin: 0.25
         fmax: 0.5
 
+  # Magnitude-squared coherence
   CoherenceMagnitude:
     labels:
       - undirected
@@ -811,8 +794,7 @@
         fmax: 0.5
         statistic: max
 
-  # Phase-aligned correlation: zero-lag correlation maximised over
-  # all-pass filters, from Welch cross-spectra. nperseg null = automatic length.
+  # Phase-aligned correlation
   PhaseAlignedCorrelation:
     labels:
       - undirected
@@ -825,7 +807,7 @@
     configs:
       - nperseg: null
 
-  # Coherence (ordinal or squared? imaginary components of the coherence)
+  # Imaginary coherence
   ImaginaryCoherence:
     labels:
       - undirected
@@ -855,6 +837,7 @@
         fmax: 0.5
         statistic: max
 
+  # Phase slope index
   PhaseSlopeIndex:
     labels:
       - linear/nonlinear
@@ -873,6 +856,7 @@
       - fmin: 0.25
         fmax: 0.5
 
+  # Phase locking value
   PhaseLockingValue:
     labels:
       - undirected
@@ -906,9 +890,8 @@
         fmax: 0.5
         statistic: max
 
+  # Phase lag index
   PhaseLagIndex:
-    # Only the `mean` band statistic is bundled: with one recording the PLI at each
-    # frequency is a mean of signs over a few tapers, so its band maximum saturates at 1.
     labels:
       - linear
       - unsigned
@@ -932,8 +915,8 @@
           - M01
 
 
+  # Weighted phase lag index
   WeightedPhaseLagIndex:
-    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - linear
       - unsigned
@@ -957,8 +940,8 @@
           - M01
 
 
+  # Debiased squared phase lag index
   DebiasedSquaredPhaseLagIndex:
-    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -982,8 +965,8 @@
         labels:
           - M12
 
+  # Debiased squared weighted phase-lag index
   DebiasedSquaredWeightedPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled; see DebiasedSquaredPhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -1007,6 +990,7 @@
         labels:
           - M12
 
+  # Pairwise phase consistency
   PairwisePhaseConsistency:
     labels:
       - undirected
@@ -1036,6 +1020,7 @@
         fmax: 0.5
         statistic: max
 
+  # Directed transfer function
   DirectedTransferFunction:
     labels:
       - directed
@@ -1065,33 +1050,8 @@
         fmax: 0.5
         statistic: max
 
-  # partial_coherence:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
+  # Directed coherence
   DirectedCoherence:
-    # Directed coherence is recomputed in pyspi (see DirectedCoherence in
-    # statistics/spectral.py): the backend puts |H|^2 in the numerator while
-    # the denominator is on the magnitude scale, which made it unbounded
-    # (baselines reached 3.27 / 1.84 / 1139.47). The corrected form is bounded
-    # in [0,1] and reproduces sqrt(directed_transfer_function()) to 4e-16 under
-    # an identity noise covariance, which is the identity DC must satisfy.
     labels:
       - directed
       - linear
@@ -1120,6 +1080,7 @@
         fmax: 0.5
         statistic: max
 
+  # Partial directed coherence
   PartialDirectedCoherence:
     labels:
       - directed
@@ -1149,6 +1110,7 @@
         fmax: 0.5
         statistic: max
 
+  # Generalized partial directed coherence
   GeneralizedPartialDirectedCoherence:
     labels:
       - unsigned
@@ -1178,6 +1140,7 @@
         fmax: 0.5
         statistic: max
 
+  # Direct directed transfer function
   DirectDirectedTransferFunction:
     labels:
       - directed
@@ -1207,6 +1170,7 @@
         fmax: 0.5
         statistic: max
 
+  # Group delay
   GroupDelay:
     labels:
       - directed
@@ -1229,8 +1193,8 @@
         fmax: 0.5
         statistic: delay
 
+  # Spectral Granger causality
   SpectralGrangerCausality:
-    # Non-parametric Granger causality (no VAR model)
     labels:
       - directed
       - linear
@@ -1270,9 +1234,6 @@
         fmax: 0.5
         statistic: max
 
-        # Parametric Granger causality (VAR model with inferred or predefined order)
-
-        # AR order optimised by BIC
       - method: parametric
         fmin: 0
         fmax: 0.5
@@ -1294,7 +1255,6 @@
         labels:
           - M05
 
-        # AR order 1
       - fs: 1
         order: 1
         method: parametric
@@ -1318,7 +1278,6 @@
         labels:
           - M05
 
-        # AR order 20
       - fs: 1
         order: 20
         method: parametric
@@ -1336,7 +1295,6 @@
         method: parametric
         statistic: mean
 
-        # AR order optimised by BIC
       - fs: 1
         method: parametric
         statistic: max
@@ -1357,7 +1315,6 @@
         labels:
           - M05
 
-        # AR order 1
       - fs: 1
         order: 1
         method: parametric
@@ -1381,7 +1338,6 @@
         labels:
           - M05
 
-        # AR order 20
       - fs: 1
         order: 20
         method: parametric
@@ -1399,11 +1355,10 @@
         method: parametric
         statistic: max
 
-# statistics that analyse in the wavelet-domain (only Mortlet wavelet's at the moment)
+# Wavelet (time-frequency) statistics, from Morlet wavelets
 .statistics.wavelet:
+  # Phase slope index (wavelet)
   PhaseSlopeIndex:
-    # The `max` variants are not bundled: the maximum over time of the
-    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent
@@ -1419,11 +1374,10 @@
       - fmin: 0.25
         fmax: 0.5
 
+# Miscellaneous statistics
 .statistics.misc:
+  # Linear model regression
   LinearModel:
-    # Lasso and ElasticNet are not bundled: at sklearn's default alpha=1 the L1
-    # penalty zeroes the slope on z-scored data (always for Lasso, unless |r| > 0.5
-    # for ElasticNet), so the MSE is mostly the constant (T-1)/T.
     labels:
       - directed
       - linear
@@ -1437,6 +1391,7 @@
       - model: SGDRegressor
       - model: BayesianRidge
 
+  # Gaussian process regression
   GPModel:
     labels:
       - directed
@@ -1462,7 +1417,7 @@
     configs:
       - method: johansen
         statistic: max_eig_stat
-        det_order: 0 # Constant trend
+        det_order: 0
         k_ar_diff: 10
 
       - method: johansen
@@ -1472,7 +1427,7 @@
 
       - method: johansen
         statistic: max_eig_stat
-        det_order: 0 # Constant trend
+        det_order: 0
         k_ar_diff: 1
 
       - method: johansen
@@ -1482,7 +1437,7 @@
 
       - method: johansen
         statistic: max_eig_stat
-        det_order: 1 # Linear trend
+        det_order: 1
         k_ar_diff: 10
 
       - method: johansen
@@ -1560,7 +1515,7 @@
       - undirected
       - nonlinear
     dependencies:
-    configs: # default params
+    configs:
       - terms: 6
         pnorm: 'max'
         bandwidth: 0.5

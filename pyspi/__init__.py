@@ -1,12 +1,12 @@
 import logging
 import numpy as np
 
-# No OMP_NUM_THREADS default here. A setdefault at this point runs after numpy
-# (imported above, and by the caller) has already initialised its BLAS, so it
-# never pinned anything in-process; it only mutated the environment of every
-# program that imports pyspi. Thread pinning lives in pyspi._parallel: workers
-# pin BLAS in _worker_init, and Calculator.compute warns about (or, on a
-# single-core allocation, pins) an oversubscribed setup.
+# No OMP_NUM_THREADS default here: a setdefault at this point would run after
+# numpy has initialised its BLAS, so it would pin nothing in-process and only
+# change the environment of every program that imports pyspi. Thread pinning
+# lives in pyspi._parallel: workers pin BLAS in _worker_init, and
+# Calculator.compute warns about (or, on a single-core allocation, pins) an
+# oversubscribed setup.
 
 # Standard library practice: a library should not emit log output unless the
 # application configures a handler. Calculator(verbose=...) attaches a real
