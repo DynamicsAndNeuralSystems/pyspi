@@ -177,7 +177,7 @@
         tau: 20
         squared: True
 
-  # statistics based on cross-correlation (squared means we square the xcorr, not the output)
+  # Cross correlation
   CrossCorrelation:
     labels:
       - undirected
@@ -207,7 +207,9 @@
         squared: True
         sigonly: False
 
+# Distance-based statistics
 .statistics.distance:
+  # Pairwise distance
   PairwiseDistance:
     labels:
       - unsigned
@@ -304,6 +306,7 @@
       - max_lag: 1
       - max_lag: 10
 
+  # Dynamic time warping
   DynamicTimeWarping:
     labels:
       - undirected
@@ -336,6 +339,7 @@
         tau: 1
         statistic: "mean"
 
+  # Soft dynamic time warping
   SoftDynamicTimeWarping:
     labels:
       - undirected
@@ -350,6 +354,7 @@
       - global_constraint: itakura
       - global_constraint: sakoe_chiba
 
+  # Longest common subsequence
   LongestCommonSubsequence:
     labels:
       - undirected
@@ -364,6 +369,7 @@
       - global_constraint: itakura
       - global_constraint: sakoe_chiba
 
+  # Barycenter
   Barycenter:
     labels:
       - undirected
@@ -415,7 +421,7 @@
         statistic: max
         squared: True
 
-  # Gromov-Wasserstain Distance
+  # Gromov-Wasserstein distance (GW_tau)
   GromovWasserstainTau:
     labels:
       - unsigned
@@ -427,6 +433,7 @@
     dependencies:
     configs:
 
+# Causal inference statistics
 .statistics.causal:
   # Additive noise model
   AdditiveNoiseModel:
@@ -493,6 +500,7 @@
 
 # Information-theoretic statistics
 .statistics.infotheory:
+  # Joint entropy
   JointEntropy: # No theiler window yet
     labels:
       - undirected
@@ -506,6 +514,7 @@
       - estimator: kozachenko
       - estimator: kernel
 
+  # Conditional entropy
   ConditionalEntropy: # No theiler window yet
     labels:
       - directed
@@ -519,6 +528,7 @@
       - estimator: kozachenko
       - estimator: kernel
 
+  # Causally conditioned entropy
   CausalEntropy: # No theiler window yet
     labels:
       - directed
@@ -531,6 +541,7 @@
       - estimator: gaussian
       - estimator: kozachenko
 
+  # Cross-map entropy
   CrossmapEntropy: # No theiler window yet
     labels:
       - unsigned
@@ -555,6 +566,7 @@
         history_length: 10
 
 
+  # Directed information
   DirectedInfo: # No theiler window yet
     labels:
       - directed
@@ -568,6 +580,7 @@
       - estimator: kraskov
         prop_k: 4
 
+  # Stochastic interaction
   StochasticInteraction: # No theiler window
     labels:
       - undirected
@@ -605,7 +618,7 @@
       - estimator: kernel
         kernel_width: 0.25
 
-  # Mutual information
+  # Time-lagged mutual information
   TimeLaggedMutualInfo:
     labels:
       - directed
@@ -691,6 +704,7 @@
         labels:
           - M05
 
+  # Integrated information
   IntegratedInformation:
     labels:
       - undirected
@@ -711,8 +725,9 @@
       - phitype: "Geo"
         normalization: 1
 
-# statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
+# Spectral (frequency-domain) statistics (see Schoegl and Supp, 2006)
 .statistics.spectral:
+  # Coherence phase
   CoherencePhase:
     labels:
       - linear
@@ -731,6 +746,7 @@
       - fmin: 0.25
         fmax: 0.5
 
+  # Magnitude-squared coherence
   CoherenceMagnitude:
     labels:
       - undirected
@@ -773,7 +789,7 @@
     configs:
       - nperseg: null
 
-  # Coherence (ordinal or squared? imaginary components of the coherence)
+  # Imaginary coherence
   ImaginaryCoherence:
     labels:
       - undirected
@@ -803,6 +819,7 @@
         fmax: 0.5
         statistic: max
 
+  # Phase slope index
   PhaseSlopeIndex:
     labels:
       - linear/nonlinear
@@ -821,6 +838,7 @@
       - fmin: 0.25
         fmax: 0.5
 
+  # Phase locking value
   PhaseLockingValue:
     labels:
       - undirected
@@ -854,6 +872,7 @@
         fmax: 0.5
         statistic: max
 
+  # Phase lag index
   PhaseLagIndex:
     labels:
       - linear
@@ -878,6 +897,7 @@
           - M01
 
 
+  # Weighted phase lag index
   WeightedPhaseLagIndex:
     labels:
       - linear
@@ -902,6 +922,7 @@
           - M01
 
 
+  # Debiased squared phase lag index
   DebiasedSquaredPhaseLagIndex:
     labels:
       - undirected
@@ -926,6 +947,7 @@
         labels:
           - M12
 
+  # Debiased squared weighted phase-lag index
   DebiasedSquaredWeightedPhaseLagIndex:
     labels:
       - undirected
@@ -950,6 +972,7 @@
         labels:
           - M12
 
+  # Pairwise phase consistency
   PairwisePhaseConsistency:
     labels:
       - undirected
@@ -979,6 +1002,7 @@
         fmax: 0.5
         statistic: max
 
+  # Directed transfer function
   DirectedTransferFunction:
     labels:
       - directed
@@ -1008,6 +1032,7 @@
         fmax: 0.5
         statistic: max
 
+  # Directed coherence
   DirectedCoherence:
     labels:
       - directed
@@ -1037,6 +1062,7 @@
         fmax: 0.5
         statistic: max
 
+  # Partial directed coherence
   PartialDirectedCoherence:
     labels:
       - directed
@@ -1066,6 +1092,7 @@
         fmax: 0.5
         statistic: max
 
+  # Generalized partial directed coherence
   GeneralizedPartialDirectedCoherence:
     labels:
       - unsigned
@@ -1095,6 +1122,7 @@
         fmax: 0.5
         statistic: max
 
+  # Direct directed transfer function
   DirectDirectedTransferFunction:
     labels:
       - directed
@@ -1124,6 +1152,7 @@
         fmax: 0.5
         statistic: max
 
+  # Group delay
   GroupDelay:
     labels:
       - directed
@@ -1146,6 +1175,7 @@
         fmax: 0.5
         statistic: delay
 
+  # Spectral Granger causality
   SpectralGrangerCausality:
     # Non-parametric Granger causality (no VAR model)
     labels:
@@ -1316,8 +1346,9 @@
         method: parametric
         statistic: max
 
-# statistics that analyse in the wavelet-domain (only Mortlet wavelet's at the moment)
+# Wavelet (time-frequency) statistics, from Morlet wavelets
 .statistics.wavelet:
+  # Phase slope index (wavelet)
   PhaseSlopeIndex:
     labels:
       - unsigned
@@ -1334,7 +1365,9 @@
       - fmin: 0.25
         fmax: 0.5
 
+# Miscellaneous statistics
 .statistics.misc:
+  # Linear model regression
   LinearModel:
     labels:
       - directed
@@ -1349,6 +1382,7 @@
       - model: SGDRegressor
       - model: BayesianRidge
 
+  # Gaussian process regression
   GPModel:
     labels:
       - directed
