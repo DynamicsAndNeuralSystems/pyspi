@@ -77,8 +77,7 @@ def _gaussian_pairwise_joint_entropy(Z, ridge_rel=GAUSSIAN_RIDGE):
     """Vectorised pairwise Gaussian joint entropy, matching the scalar path.
 
     Same ridge as _gaussian_log_det, so bivariate() and multivariate() cannot
-    disagree; before either was regularised consistently they differed by 8.406
-    nats on singular data.
+    disagree.
     """
     R = np.corrcoef(Z)
     V = np.var(Z, axis=1, ddof=1)
@@ -963,23 +962,16 @@ def _ais_scorer(estimator, k_nn=None, w=0):
         return lambda series, dim, delay: _gaussian_ais(series, dim, delay)
     if estimator == "kraskov":
         def score(series, dim, delay):
-            # `T - 1 - (dim-1)*delay`, not `T - (dim-1)*delay`. `_ksg_ais`
+            # `T - 1 - (dim-1)*delay`, not `T - (dim-1)*delay`: `_ksg_ais`
             # aligns a one-step-ahead future against the embedding, so it
-            # spends a sample on the shift as well as on the lookback. The
-            # off-by-one let a candidate that the estimator cannot support be
-            # scored: at T=5, k_nn=4, dim=1 the guard saw N=5 (usable
-            # neighbours 4, exactly k) and passed, while the aligned arrays
-            # have N=4 (usable 3) -- and `_ksg_mi_general` had no guard of its
-            # own, so it returned a finite 0.0 for a candidate with fewer
-            # neighbours than k.
+            # spends a sample on the shift as well as on the lookback.
             n_eff = len(series) - 1 - (dim - 1) * delay
             try:
                 _validate_ksg_sample(n_eff, k_nn, w)
             except ValueError:
                 # Skip candidates the estimator cannot support rather than
-                # ranking them and failing on the winner: on kuramoto M7/T100
-                # an invalid (k=10, tau=4, w=33) candidate won and the whole
-                # SPI then failed, though valid smaller embeddings existed.
+                # ranking them and failing on the winner, so a valid smaller
+                # embedding is chosen when one exists.
                 return -np.inf
             return _ksg_ais(series, dim, delay, k_nn, w)
         return score
@@ -1071,9 +1063,8 @@ def _ksg_cmi(A, B, C, k_nn, w=0, condition=True):
                 _knn_condition(np.column_stack([A, B])), [A.shape[1]], axis=1)
     if not has_C:
         # With nothing to condition on this *is* mutual information, so use the
-        # MI estimator rather than emulating it. Faking the conditioning count
-        # as a constant N-(2w+1) matched _ksg_mi_general only at w=0 and drifted
-        # with the Theiler window (0.005 at w=1, 0.051 at w=10 on a probe).
+        # MI estimator rather than emulating it: a constant conditioning count of
+        # N-(2w+1) matches _ksg_mi_general only at w=0.
         return _ksg_mi_general(A, B, k_nn, w, condition=False)
 
     joint = np.concatenate([A, B, C], axis=1)
@@ -1216,13 +1207,12 @@ class InfoTheoryBase(Unsigned):
 
         self.identifier = self.identifier + "_" + estimator
         if estimator == "kraskov":
-            # Only the measures with a genuine KSG implementation may accept it.
-            # The composed measures (joint/conditional/crossmap/causal entropy,
-            # directed info, stochastic interaction) are built from marginal
-            # entropies, and _getcalc hands them GaussianEntropyCalculator for
-            # "kraskov" -- so they returned exactly the Gaussian result while
-            # advertising kraskov_NN-<k> in the identifier. Reporting a k-NN
-            # estimate that was never computed is worse than refusing.
+            # Only the measures with a genuine KSG implementation may accept
+            # it. The composed measures (joint/conditional/crossmap/causal
+            # entropy, directed info, stochastic interaction) are built from
+            # marginal entropies, for which "kraskov" has no estimator, so
+            # accepting it would advertise kraskov_NN-<k> over a Gaussian
+            # result.
             if not isinstance(self, (MutualInfo, TimeLaggedMutualInfo,
                                      TransferEntropy, DirectedInfo)):
                 raise NotImplementedError(
@@ -1267,10 +1257,8 @@ class InfoTheoryBase(Unsigned):
             self._dyn_corr_excl = None
 
         if self._dyn_corr_excl:
-            # The *value*, not just the flag. `_DCE` alone gave
-            # dyn_corr_excl=5, =10 and ="AUTO" one identifier between them --
-            # three different Theiler windows, three different numbers, one
-            # name -- so a config setting two of them collided silently.
+            # The *value*, not just the flag: dyn_corr_excl=5, =10 and "AUTO"
+            # are three Theiler windows and need three identifiers.
             self.identifier = self.identifier + f"_DCE-{self._dyn_corr_excl}"
 
     def __getstate__(self):
@@ -1495,12 +1483,11 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
 
     name = "Conditional entropy"
     identifier = "ce"
-    # Directed: H(X|Y) != H(Y|X). Measured on var1_M3_T100 under the default
-    # z-scoring, max|A - A.T| is 0.115 for kozachenko and 0.039 for kernel; the
-    # Gaussian form is symmetric there only because equal marginal variances
-    # make it so, and it becomes asymmetric (0.73) with zscore=False. A
-    # structural label describes the measure, not one estimator under one
-    # preprocessing default.
+    # Directed: H(X|Y) != H(Y|X) in general. The kozachenko and kernel
+    # estimators are asymmetric even after z-scoring; the Gaussian form is
+    # symmetric only when the marginal variances are equal, as z-scoring makes
+    # them. A structural label describes the measure, not one estimator under
+    # one preprocessing default.
     labels = ["unsigned", "infotheory", "unordered", "directed"]
 
     def __init__(self, **kwargs):
@@ -1714,9 +1701,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
                     )
 
         if auto_embed_method is None:
-            # Search bounds with nothing to search are not a harmless default:
-            # they reached the identifier under the auto branch only, so here
-            # they were accepted and silently discarded.
+            # Search bounds with nothing to search are rejected rather than
+            # accepted and ignored.
             for name, value in (("k_search_max", k_search_max),
                                 ("tau_search_max", tau_search_max)):
                 if value is not None:
@@ -1725,9 +1711,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
                         f"with a fixed embedding there is nothing to search."
                     )
         else:
-            # A selected embedding and a supplied one cannot both be honoured.
-            # Silently ignoring the supplied value is how the identifier came to
-            # advertise parameters the estimator never used.
+            # A selected embedding and a supplied one cannot both be honoured,
+            # so the supplied one is refused rather than silently ignored.
             fixed = {"k_history": k_history, "k_tau": k_tau}
             if auto_embed_method != _AUTO_EMBED_DEST_ONLY:
                 fixed.update({"l_history": l_history, "l_tau": l_tau})
@@ -1783,8 +1768,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
             self._calc.setProperty(self._K_SEARCH_MAX_PROP_NAME, str(k_search_max))
             self._calc.setProperty(self._TAU_SEARCH_MAX_PROP_NAME, str(tau_search_max))
             # The method is in the identifier because it changes what is
-            # computed: MAX_CORR_AIS selects the source embedding too, and used
-            # to name a search that only ever touched the destination.
+            # computed: MAX_CORR_AIS selects the source embedding too, 
+            # and MAX_CORR_AIS_DEST_ONLY only the destination's.
             self.identifier += "_{}_k-max-{}_tau-max-{}".format(
                 auto_embed_method.replace("_", "-"), k_search_max, tau_search_max)
             if auto_embed_method == _AUTO_EMBED_DEST_ONLY:
@@ -1897,7 +1882,7 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     ``range(2, k)``, so the joint space [source past, target future] has
     exactly ``k`` columns. Both readings of the parameter are internally
     consistent -- "k source lags" would need ``range(2, k + 1)`` -- and the
-    implementation has always been the second one.
+    implementation uses the second.
 
     The exception is ``history_length=1``: the first source column is always
     present, so ``xme_*_k1`` is ``H(Y_t | X_{t-1})``, the same quantity as k=2.
@@ -2004,7 +1989,7 @@ class DirectedInfo(CausalEntropy, Directed):
     labels = ["unsigned", "infotheory", "temporal", "directed"]
 
     def __init__(self, n=5, **kwargs):
-        # n is handled by CausalEntropy; re-appending here doubled the suffix.
+        # n is handled by CausalEntropy; re-appending here would double the suffix.
         super().__init__(n=n, **kwargs)
 
     def _entropy_of(self, M):
@@ -2060,7 +2045,7 @@ class DirectedInfo(CausalEntropy, Directed):
                 # biases cancel. Composing the same term from four separate
                 # entropies does not: each is biased in its own dimensionality,
                 # which is why the kernel and kozachenko compositions are unusable
-                # here (kernel sat near +4 on independent data at every T).
+                # here.
                 w = self._resolve_theiler(data, i, j) if self._dyn_corr_excl else 0
                 _validate_ksg_sample(y_now.shape[0], int(self._prop_k), w,
                                      context="directed information")
