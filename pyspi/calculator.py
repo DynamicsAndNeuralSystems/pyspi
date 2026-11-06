@@ -74,11 +74,10 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
     # family and per-config labels are folded in, so it is what the class and
     # `__init__` decided from the shape of the matrix they produce.
     #
-    # Exactly one of the four traits survives. Without this, `gd_*` carried the
-    # class's `antisymmetric` and the config's `directed` at once, and
-    # `gd_*_rvalue` -- symmetric by construction, since it stores |r| -- came
-    # back both `undirected` and `directed` when loaded through YAML, so
-    # `filter_spis` answered either way for the same SPI.
+    # Exactly one of the four traits survives, so `filter_spis` cannot answer
+    # both ways for one SPI: `gd_*` would otherwise carry the class's
+    # `antisymmetric` and the config's `directed` together, and
+    # `gd_*_rvalue` (symmetric, since it stores |r|) both labels.
     _DIRECTEDNESS = ("antisymmetric", "asymmetric", "undirected", "directed")
     own = [label for label in _DIRECTEDNESS if label in labels]
     if own:
@@ -185,12 +184,8 @@ def warn_partial_cache_buckets(spis):
     generated configs up to whole buckets; this gives a hand-written config
     the same nudge.
     """
-    # Only caches expensive enough for the advice to matter. Amortized cost per
-    # SPI at the M=16, T=800 anchor cell (bench/results/analysis/report.md):
-    #   ccm 292.7s | barycenter 11.1s | spectral_bv 1.6s | spectral_mv, coint,
-    #   covariance all <0.3s.
-    # Warning on the cheap ones is noise: fabfour deliberately keeps 1 of 32
-    # covariance SPIs, and the whole covariance cache is 0.6s.
+    # Only caches expensive enough for the advice to matter. Warning on the
+    # cheap ones is noise: fabfour deliberately keeps 1 of 32 covariance SPIs.
     EXPENSIVE = {"ccm", "barycenter"}
 
     from collections import defaultdict
@@ -207,7 +202,7 @@ def warn_partial_cache_buckets(spis):
             kept[b].add(key)
     if not any(bkey[0] in EXPENSIVE for bkey in kept):
         # Nothing this advisory could say anything about. Checked before the
-        # `full` config is touched: building it instantiates 317 SPIs and pulls
+        # `full` config is touched: building it instantiates every SPI and pulls
         # a heavy dependency tree, which is real import time for a check that
         # only ever comments on `ccm` and `barycenter`.
         return
@@ -274,15 +269,14 @@ def load_table(path):
         values = f["values"]
         spis = [str(s) for s in f["spis"]]
         procs = [str(p) for p in f["processes"]]
-        # Provenance. `save()` has always written these three and `load_table`
-        # has never read them, so a loaded table could not be asked which SPIs
-        # failed, what produced it, or whether it matched a rerun.
+        # Provenance. `save()` writes these three, so a loaded table can report
+        # which SPIs failed, what produced it, and whether it matches a rerun.
         meta = {name: str(f[name]) for name in ("run_spec", "run_digest", "errors")
                 if name in f.files}
 
-    # The whole shape, not just `ndim` and axis 0. A file whose matrices were
-    # the wrong width reached `MultiIndex.from_product` and failed there, with
-    # a reshape error rather than a statement about the file.
+    # The whole shape, not just `ndim` and axis 0, so a file of the wrong width
+    # fails here with a statement about the file rather than later in
+    # `MultiIndex.from_product` with a reshape error.
     if values.shape != (len(spis), len(procs), len(procs)):
         raise ValueError(
             f"{path} is malformed: values has shape {values.shape}, expected "
@@ -351,9 +345,8 @@ def _insert_spi(spis, spi, module_name, fcn, params):
     """Insert an SPI, rejecting identifier collisions.
 
     The identifier is the primary key: it names the table column and the
-    checkpoint file. Detecting duplicates *after* building the dict could never
-    work, because dict insertion has already discarded the loser -- the old
-    ``Counter(self._spis.keys())`` check could not return a count above 1.
+    checkpoint file. Duplicates are caught on insertion, because once in the
+    dict the loser has already been discarded.
     """
     existing = spis.get(spi.identifier)
     if existing is not None:
@@ -407,7 +400,7 @@ class Calculator:
             Which SPIs to compute. Either the name of a bundled config or a path
             to your own YAML file, default="full". Bundled configs are:
 
-            - ``"full"`` -- every SPI (317).
+            - ``"full"`` -- every SPI.
             - ``"fast"`` -- drops the slowest SPIs.
             - ``"sonnet"`` -- 14 representative SPIs, one per module (M01-M14).
             - ``"fabfour"`` -- 4 SPIs: covariance, Spearman, directed information,
@@ -501,23 +494,17 @@ class Calculator:
     def run_digest(self):
         """Content hash of the resolved run: spec plus the input data itself.
 
-        This is what a checkpoint is bound to. Resume previously validated only
-        the SPI identifier and an ``(M, M)`` shape, so any other run of the same
-        width silently inherited the earlier run's numbers -- a different
-        dataset, different preprocessing, a different config, or a permuted
-        process order all resumed clean.
+        This is what a checkpoint is bound to: a checkpoint resumes only into a
+        run with the same dataset, preprocessing, config, process order and
+        computation version, not merely the same SPI identifiers and width.
 
         The dataset bytes are hashed, not just its shape and name: two datasets
         of the same width with the same name are exactly the case that needs
         separating.
         """
-        # Location-only fields are excluded. `config` and `configfile` are the
-        # name and the *absolute resolved path*, so hashing the spec verbatim
-        # made an identical config and dataset digest differently in a source
-        # checkout and in an installed wheel -- and differently again in a
-        # temporary directory. That is a false negative rather than an unsafe
-        # reuse (a checkpoint is refused when it should have been accepted), but
-        # it defeats the point of a content hash. The path stays in `run_spec`
+        # Location-only fields are excluded: `configfile` is an absolute path,
+        # which differs between a source checkout, an installed wheel and a
+        # temporary directory for the same config. The path stays in `run_spec`
         # as provenance; the *contents* are hashed below.
         spec = {k: v for k, v in self.run_spec.items()
                 if k not in _DIGEST_EXCLUDED_SPEC_FIELDS}
@@ -530,14 +517,13 @@ class Calculator:
         # bumped whenever a change alters computed values.
         h.update(_parallel.COMPUTATION_VERSION.encode())
         # Hash the config *contents*, not just its path and the identifiers it
-        # produces. A config edited in place otherwise produced an identical
-        # digest and silently resumed the previous parameterisation's results.
+        # produces, so a config edited in place gives a different digest.
         h.update(self._config_bytes)
         dataset = getattr(self, "_dataset", None)
         if dataset is not None:
             arr = np.ascontiguousarray(dataset.to_numpy())
-            # Native dtype: coercing to float64 first made distinct large-integer
-            # datasets collide.
+            # Native dtype: coercing to float64 first would make distinct
+            # large-integer datasets collide.
             h.update(f"{arr.dtype.str}{arr.shape}".encode())
             h.update(arr.tobytes())
         return h.hexdigest()
@@ -631,9 +617,8 @@ class Calculator:
     def _repr_html_(self):
         """Rendered by Jupyter in place of the default object repr.
 
-        The bare `<Calculator at 0x...>` told you nothing about whether the run
-        had happened or how it went, which is the first thing you want after
-        calling compute().
+        Shows whether the run has happened and how it went, which the bare
+        ``<Calculator at 0x...>`` does not.
         """
         s = self.summary()
         rows = [
@@ -739,12 +724,10 @@ class Calculator:
                 detrend=self._detrend,
             )
         else:
-            # Snapshot rather than alias. A caller-owned Data could be mutated
-            # after construction -- changing its width left the table at the old
-            # shape and computation failed; a same-width change silently kept
-            # stale process labels. The snapshot also records the preprocessing
-            # the data *actually* carries, not the Calculator flags that were
-            # bypassed when a prepared Data was supplied.
+            # Snapshot rather than alias, so mutating the caller's Data after
+            # construction cannot change this run. The snapshot also records
+            # the preprocessing the data *actually* carries, not the Calculator
+            # flags that were bypassed when a prepared Data was supplied.
             self._dataset = Data._from_prepared_array(
                 np.array(dataset.to_numpy(), copy=True),
                 procnames=dataset.procnames,
@@ -788,8 +771,7 @@ class Calculator:
             np.savez_compressed(
                 path, values=values,
                 # dtype='U', not object: object arrays are only loadable with
-                # allow_pickle=True, which reintroduces arbitrary code execution
-                # on load -- the exact hazard that motivated dropping pickle.
+                # allow_pickle=True, which allows arbitrary code execution on load.
                 spis=np.array(keys, dtype="U"),
                 processes=np.array(self.dataset.procnames, dtype="U"),
                 schema=np.array(_NPZ_SCHEMA),
@@ -864,9 +846,8 @@ class Calculator:
             digest = self.run_digest
             owned, reason = _parallel.checkpoint_owner_matches(cp_dir, digest)
             if not owned:
-                # Refuse to inherit another run's results. Resuming here is how
-                # a different dataset of the same width silently returned the
-                # previous run's numbers.
+                # Refuse to inherit another run's results, e.g. those of a
+                # different dataset of the same width.
                 self._resume_rejected = True
                 # Refuse rather than delete. Deleting another run's results to
                 # make room is destructive and, if interrupted midway, relabels
@@ -941,10 +922,8 @@ class Calculator:
             self._errors[key] = err
             warnings.warn(f'Caught error for SPI "{key}": {err}')
         else:
-            # A recomputation that succeeds clears the previous failure. Without
-            # this, `compute(retry_failed=True)` on a resumed run left the old
-            # entry in `calc.errors` next to the good column it had just
-            # written, and `save()` froze that contradiction into the file.
+            # A recomputation that succeeds clears the previous failure, so
+            # `retry_failed=True` leaves no stale entry in `calc.errors`.
             self._errors.pop(key, None)
 
     def _rmmin(self):
@@ -1018,10 +997,8 @@ class Calculator:
         if rmmin:
             self._rmmin()
 
-        # Flatten (get Edge-by-SPI matrix). future_stack=True is the pandas 3
-        # behaviour; unlike the legacy default it keeps all-NaN rows, so the
-        # explicit dropna reproduces the old semantics (self-pairs are all-NaN
-        # because the SPI diagonals are NaN). Verified equivalent on pandas 2.3.
+        # Flatten (get Edge-by-SPI matrix). future_stack=True keeps all-NaN
+        # rows, so dropna removes the self-pairs (the SPI diagonals are NaN).
         edges = self.table.stack(future_stack=True).dropna(how="all")
 
         # Correlate the edge matrix (using pearson and/or spearman correlation)
@@ -1135,9 +1112,9 @@ class CalculatorFrame:
             )
         elif isinstance(calc, Calculator):
             # Keep one Calculator per row in a stable, explicitly named column.
-            # Concatenating a named Series into an empty DataFrame happened to
-            # produce column 0 in pandas 2, but pandas 3 uses the Series name as
-            # the column label and successive calculators form a sparse frame.
+            # Concatenating a named Series into an empty DataFrame gives column 0
+            # in pandas 2 but uses the Series name in pandas 3, where successive
+            # calculators would form a sparse frame.
             self._calculators = pd.concat(
                 [self._calculators, pd.DataFrame({0: [calc]})],
                 ignore_index=True,
