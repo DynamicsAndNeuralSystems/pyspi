@@ -1,14 +1,10 @@
 """Data ownership, cache lifecycle, and process-name consistency.
 
-These began as red tests. Most are now green: ``Data`` copies and freezes its
-input, ``to_numpy()`` hands out a read-only view, every statistic cache listed
-in ``Data._CACHE_ATTRS`` is dropped when the series change, the builder path
-works, process names track add/remove, and ``dim_order``/non-finite inputs are
-validated.
-
-Nothing here is red or xfailed any more -- the last outstanding one, positional
-``bivariate(data, i, j)`` binding ``i`` to ``data2``, is now rejected at the
-decorator.
+``Data`` copies and freezes its input, ``to_numpy()`` hands out a read-only
+view, every statistic cache listed in ``Data._CACHE_ATTRS`` is dropped when the
+series change, the builder path works, process names track add/remove,
+``dim_order``/non-finite inputs are validated, and positional
+``bivariate(data, i, j)`` is rejected at the decorator.
 
 Do not relax an assertion to make one of these pass. Fix the code.
 """
@@ -129,11 +125,9 @@ def test_bivariate_accepts_raw_arrays():
 def test_bivariate_rejects_indices_passed_positionally():
     """``bivariate(data, 0, 1)`` reads as (data, i, j) but binds data2=0, i=1.
 
-    It used to produce an obscure dimension error from deep inside an estimator
-    -- or, worse, no error at all: ``j=None`` reached ``z[None]``, which numpy
-    reads as ``np.newaxis``, so the "pair" became the whole (1, M, T) block and
-    the SPI computed something unrelated to what was asked for. Now rejected at
-    the decorator, with a message that names the signature.
+    It is rejected at the decorator, with a message that names the signature.
+    Unchecked, ``j=None`` would reach ``z[None]``, which numpy reads as
+    ``np.newaxis``, and the SPI would compute something unrelated.
     """
     from pyspi.statistics import infotheory as it
 

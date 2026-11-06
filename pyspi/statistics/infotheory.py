@@ -10,16 +10,16 @@ validated against -- the Java Information Dynamics Toolkit (JIDT):
     https://github.com/jlizier/jidt  (GPL-3.0-or-later; (C) 2012- J. T. Lizier
     and contributors)
 
-pyspi 2.x called JIDT through JPype; pyspi 3 reimplements the algorithms in
-NumPy and no longer ships the jar. The code here is an independent NumPy
+pyspi 3 reimplements JIDT's algorithms in NumPy and needs no Java runtime
+(pyspi 2.x called JIDT through JPype). The code here is an independent NumPy
 implementation, but the estimator definitions, parameter names and default
 behaviours (k_HISTORY, DYN_CORR_EXCL, KERNEL_WIDTH, AUTO_EMBED_METHOD, ...)
 derive from JIDT. JIDT's copyright notice is retained in
 ``pyspi/lib/LICENSE-jidt.txt``. The version used for validation was JIDT 1.6.1;
 ``tests/test_jidt_reference.py`` pins JIDT's outputs on a fixed dataset (no Java
 required), and ``tests/tools/jidt_reference/`` regenerates them. Known
-deviations: kernel TE differs from JIDT by up to 1.9e-4 bits (per-column rather
-than whole-series normalisation); Gaussian estimators carry a deterministic
+deviations: kernel TE differs slightly from JIDT (per-column rather than
+whole-series normalisation); Gaussian estimators carry a deterministic
 1e-8 relative ridge; KSG breaks ties with a small seeded jitter (hctsa-style)
 where JIDT adds random noise by default; with a Theiler window, KSG MI takes
 its psi(N) term over the reduced neighbour pool (see _ksg_pool_digamma).
@@ -47,8 +47,8 @@ from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_b
 #
 #     Sigma  ->  Sigma + GAUSSIAN_RIDGE * diag(diag(Sigma)).
 #
-# Two properties make this the version worth having, as opposed to the
-# isotropic eps = ridge * mean(diag(Sigma)) it replaces:
+# Two properties make this preferable to an isotropic
+# eps = ridge * mean(diag(Sigma)):
 #
 #   * It commutes with the compositions. log|.| of a 1-D block is
 #     log(V(1+ridge)), of a 2-D block log(V_i V_j((1+ridge)^2 - r^2)), so
@@ -57,11 +57,6 @@ from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_b
 #     have this property, because eps then depends on which block it is in.
 #   * It is equivariant to per-variable rescaling, so the regularisation does
 #     not quietly depend on the units of the loudest process.
-#
-# The previous mismatch was not subtle. Gaussian MI clipped r^2 at 1 - 1e-15,
-# giving -0.5*log(1e-15) = 17.2698 nats on a pair of identical N=100 series,
-# while the entropy path's ridge gave 8.8638 for the same quantity on the same
-# data. Both now return 8.8638.
 GAUSSIAN_RIDGE = 1e-8
 
 
@@ -82,8 +77,7 @@ def _gaussian_pairwise_joint_entropy(Z, ridge_rel=GAUSSIAN_RIDGE):
     """Vectorised pairwise Gaussian joint entropy, matching the scalar path.
 
     Same ridge as _gaussian_log_det, so bivariate() and multivariate() cannot
-    disagree; before either was regularised consistently they differed by 8.406
-    nats on singular data.
+    disagree.
     """
     R = np.corrcoef(Z)
     V = np.var(Z, axis=1, ddof=1)
@@ -572,12 +566,8 @@ class SymbolicTECalculator:
             """Joint entropy of integer-valued arrays using histograms.
 
             Counts distinct rows directly rather than packing the symbols into
-            a single integer. The previous encoding multiplied by a multiplier
-            that squared at each step, so the packed value reached (k!)^3 and
-            exceeded int64 for k >= 10, wrapping silently. Wrapping is not the
-            same as colliding -- no collisions occur on the shipped fixtures --
-            but the encoding gave no guarantee, and correctness should not rest
-            on the arithmetic happening to stay injective.
+            a single integer, which can overflow int64 for large alphabets
+            (e.g. ordinal patterns at k >= 10).
             """
             if len(arrs) == 1:
                 _, counts = np.unique(arrs[0], return_counts=True)
@@ -685,9 +675,8 @@ def _validate_ksg_sample(N, k, w, context=""):
     """Reject KSG settings that cannot produce a meaningful estimate.
 
     The estimator needs k neighbours drawn from the points that survive the
-    Theiler exclusion. Without this check, k >= N silently returned a finite
-    number that grows with k: k=30 on N=20 gave 0.414 and k=100 gave 1.63,
-    neither of which is an estimate of anything.
+    Theiler exclusion. Without it, k >= N would return a finite number that
+    grows with k and estimates nothing.
     """
     effective = N - (2 * w + 1) if w else N - 1
     where = f" ({context})" if context else ""
@@ -973,23 +962,16 @@ def _ais_scorer(estimator, k_nn=None, w=0):
         return lambda series, dim, delay: _gaussian_ais(series, dim, delay)
     if estimator == "kraskov":
         def score(series, dim, delay):
-            # `T - 1 - (dim-1)*delay`, not `T - (dim-1)*delay`. `_ksg_ais`
+            # `T - 1 - (dim-1)*delay`, not `T - (dim-1)*delay`: `_ksg_ais`
             # aligns a one-step-ahead future against the embedding, so it
-            # spends a sample on the shift as well as on the lookback. The
-            # off-by-one let a candidate that the estimator cannot support be
-            # scored: at T=5, k_nn=4, dim=1 the guard saw N=5 (usable
-            # neighbours 4, exactly k) and passed, while the aligned arrays
-            # have N=4 (usable 3) -- and `_ksg_mi_general` had no guard of its
-            # own, so it returned a finite 0.0 for a candidate with fewer
-            # neighbours than k.
+            # spends a sample on the shift as well as on the lookback.
             n_eff = len(series) - 1 - (dim - 1) * delay
             try:
                 _validate_ksg_sample(n_eff, k_nn, w)
             except ValueError:
                 # Skip candidates the estimator cannot support rather than
-                # ranking them and failing on the winner: on kuramoto M7/T100
-                # an invalid (k=10, tau=4, w=33) candidate won and the whole
-                # SPI then failed, though valid smaller embeddings existed.
+                # ranking them and failing on the winner, so a valid smaller
+                # embedding is chosen when one exists.
                 return -np.inf
             return _ksg_ais(series, dim, delay, k_nn, w)
         return score
@@ -1081,9 +1063,8 @@ def _ksg_cmi(A, B, C, k_nn, w=0, condition=True):
                 _knn_condition(np.column_stack([A, B])), [A.shape[1]], axis=1)
     if not has_C:
         # With nothing to condition on this *is* mutual information, so use the
-        # MI estimator rather than emulating it. Faking the conditioning count
-        # as a constant N-(2w+1) matched _ksg_mi_general only at w=0 and drifted
-        # with the Theiler window (0.005 at w=1, 0.051 at w=10 on a probe).
+        # MI estimator rather than emulating it: a constant conditioning count of
+        # N-(2w+1) matches _ksg_mi_general only at w=0.
         return _ksg_mi_general(A, B, k_nn, w, condition=False)
 
     joint = np.concatenate([A, B, C], axis=1)
@@ -1131,8 +1112,6 @@ def _require_positive_int(name, value):
     """Thin alias for `utils.require_int(..., minimum=1)`; see it for the rules."""
     return utils.require_int(name, value, minimum=1)
 
-# Auto-embedding selection criteria that are actually implemented. The search
-# maximises active information storage under the destination's own estimator.
 # Auto-embedding selection criteria that are actually implemented, and what
 # each one selects. Both maximise the bias-corrected active information storage
 # of a series over (dimension, delay); they differ only in which series.
@@ -1148,18 +1127,14 @@ _AUTO_EMBED_DEST_ONLY = "MAX_CORR_AIS_DEST_ONLY"
 class InfoTheoryBase(Unsigned):
     """Base for the information-theoretic SPIs.
 
-    **Every measure in this module is reported in nats.** The kernel and
-    symbolic calculators used to report bits, inherited from JIDT, which uses
-    base 2 for its box-kernel and discrete estimators and base e for its
-    Gaussian and k-nearest-neighbour ones. Carrying that split into a single
-    results table means `mi_kernel_W-0-5` and `mi_gaussian` are on axes
-    differing by a factor of ln 2 with nothing in the identifier to say so, so
-    anything comparing *magnitudes* across that boundary -- one threshold over
-    several estimators, a difference or ratio of two columns, a "which found
-    the most information" ranking across estimators -- is off by that factor.
-    (A Pearson or Spearman correlation between two columns is invariant to a
-    positive rescaling and was never affected.) Divide by ln 2 to recover the
-    JIDT-comparable value.
+    **Every measure in this module is reported in nats**, so magnitudes are
+    comparable across estimators. JIDT reports bits for its kernel and
+    symbolic (discrete) estimators; divide by ln 2 to compare with those.
+
+    ``dyn_corr_excl`` sets a Theiler window and applies only to the
+    ``kraskov`` estimator, so the measures composed from marginal entropies
+    (joint, conditional, causal and cross-map entropy, stochastic interaction)
+    have none.
     """
 
     _AUTO_EMBED_METHOD_PROP_NAME = "AUTO_EMBED_METHOD"
@@ -1171,9 +1146,8 @@ class InfoTheoryBase(Unsigned):
     _TAU_SEARCH_MAX_PROP_NAME = "AUTO_EMBED_TAU_SEARCH_MAX"
 
     # Which estimator each optional parameter belongs to. A parameter supplied
-    # to an estimator that ignores it is rejected rather than silently dropped:
-    # accepting kernel_width under estimator="gaussian" told the caller a
-    # kernel width had been applied when nothing used it.
+    # to an estimator that ignores it is rejected rather than silently dropped,
+    # so e.g. kernel_width under estimator="gaussian" is an error.
     _PARAM_OWNER = {
         "kernel_width": ("kernel",),
         "prop_k": ("kraskov",),
@@ -1231,13 +1205,12 @@ class InfoTheoryBase(Unsigned):
 
         self.identifier = self.identifier + "_" + estimator
         if estimator == "kraskov":
-            # Only the measures with a genuine KSG implementation may accept it.
-            # The composed measures (joint/conditional/crossmap/causal entropy,
-            # directed info, stochastic interaction) are built from marginal
-            # entropies, and _getcalc hands them GaussianEntropyCalculator for
-            # "kraskov" -- so they returned exactly the Gaussian result while
-            # advertising kraskov_NN-<k> in the identifier. Reporting a k-NN
-            # estimate that was never computed is worse than refusing.
+            # Only the measures with a genuine KSG implementation may accept
+            # it. The composed measures (joint/conditional/crossmap/causal
+            # entropy, directed info, stochastic interaction) are built from
+            # marginal entropies, for which "kraskov" has no estimator, so
+            # accepting it would advertise kraskov_NN-<k> over a Gaussian
+            # result.
             if not isinstance(self, (MutualInfo, TimeLaggedMutualInfo,
                                      TransferEntropy, DirectedInfo)):
                 raise NotImplementedError(
@@ -1282,10 +1255,8 @@ class InfoTheoryBase(Unsigned):
             self._dyn_corr_excl = None
 
         if self._dyn_corr_excl:
-            # The *value*, not just the flag. `_DCE` alone gave
-            # dyn_corr_excl=5, =10 and ="AUTO" one identifier between them --
-            # three different Theiler windows, three different numbers, one
-            # name -- so a config setting two of them collided silently.
+            # The *value*, not just the flag: dyn_corr_excl=5, =10 and "AUTO"
+            # are three Theiler windows and need three identifiers.
             self.identifier = self.identifier + f"_DCE-{self._dyn_corr_excl}"
 
     def __getstate__(self):
@@ -1503,12 +1474,11 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
 
     name = "Conditional entropy"
     identifier = "ce"
-    # Directed: H(X|Y) != H(Y|X). Measured on var1_M3_T100 under the default
-    # z-scoring, max|A - A.T| is 0.115 for kozachenko and 0.039 for kernel; the
-    # Gaussian form is symmetric there only because equal marginal variances
-    # make it so, and it becomes asymmetric (0.73) with zscore=False. A
-    # structural label describes the measure, not one estimator under one
-    # preprocessing default.
+    # Directed: H(X|Y) != H(Y|X) in general. The kozachenko and kernel
+    # estimators are asymmetric even after z-scoring; the Gaussian form is
+    # symmetric only when the marginal variances are equal, as z-scoring makes
+    # them. A structural label describes the measure, not one estimator under
+    # one preprocessing default.
     labels = ["unsigned", "infotheory", "unordered", "directed"]
 
     def __init__(self, **kwargs):
@@ -1685,8 +1655,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
         super().__init__(**kwargs)
 
         if auto_embed_method is not None and auto_embed_method not in _AUTO_EMBED_METHODS:
-            # The value was previously never inspected: any non-None string
-            # took the auto-embed branch, so a typo silently ran MAX_CORR_AIS.
+            # Validated, so a typo cannot silently fall through to MAX_CORR_AIS.
             raise ValueError(
                 f"Unknown auto_embed_method {auto_embed_method!r}; implemented: "
                 f"{sorted(_AUTO_EMBED_METHODS)}. Ragwitz local-prediction "
@@ -1723,9 +1692,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
                     )
 
         if auto_embed_method is None:
-            # Search bounds with nothing to search are not a harmless default:
-            # they reached the identifier under the auto branch only, so here
-            # they were accepted and silently discarded.
+            # Search bounds with nothing to search are rejected rather than
+            # accepted and ignored.
             for name, value in (("k_search_max", k_search_max),
                                 ("tau_search_max", tau_search_max)):
                 if value is not None:
@@ -1734,9 +1702,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
                         f"with a fixed embedding there is nothing to search."
                     )
         else:
-            # A selected embedding and a supplied one cannot both be honoured.
-            # Silently ignoring the supplied value is how the identifier came to
-            # advertise parameters the estimator never used.
+            # A selected embedding and a supplied one cannot both be honoured,
+            # so the supplied one is refused rather than silently ignored.
             fixed = {"k_history": k_history, "k_tau": k_tau}
             if auto_embed_method != _AUTO_EMBED_DEST_ONLY:
                 fixed.update({"l_history": l_history, "l_tau": l_tau})
@@ -1792,8 +1759,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
             self._calc.setProperty(self._K_SEARCH_MAX_PROP_NAME, str(k_search_max))
             self._calc.setProperty(self._TAU_SEARCH_MAX_PROP_NAME, str(tau_search_max))
             # The method is in the identifier because it changes what is
-            # computed: MAX_CORR_AIS selects the source embedding too, and used
-            # to name a search that only ever touched the destination.
+            # computed: MAX_CORR_AIS selects the source embedding too, and
+            # MAX_CORR_AIS_DEST_ONLY only the destination's.
             self.identifier += "_{}_k-max-{}_tau-max-{}".format(
                 auto_embed_method.replace("_", "-"), k_search_max, tau_search_max)
             if auto_embed_method == _AUTO_EMBED_DEST_ONLY:
@@ -1880,8 +1847,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
                 l_history, l_tau = self._l_history, self._l_tau
             else:
                 # Selected from the *source*, independently and by the same
-                # criterion. The previous implementation hard-coded (1, 1) here
-                # while the method name claimed selection for both.
+                # criterion.
                 l_history, l_tau = self._selected_embedding(data, i, src, scorer, w)
 
             if est == 'gaussian':
@@ -1907,7 +1873,7 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     ``range(2, k)``, so the joint space [source past, target future] has
     exactly ``k`` columns. Both readings of the parameter are internally
     consistent -- "k source lags" would need ``range(2, k + 1)`` -- and the
-    implementation has always been the second one.
+    implementation uses the second.
 
     The exception is ``history_length=1``: the first source column is always
     present, so ``xme_*_k1`` is ``H(Y_t | X_{t-1})``, the same quantity as k=2.
@@ -1944,7 +1910,7 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
 
         joint = np.concatenate([src_past, np.expand_dims(targ_future, axis=1)], axis=1)
 
-        # All estimators now have numpy entropy calculators
+        # All estimators have numpy entropy calculators
         self._entropy_calc.initialise(joint.shape[1])
         self._entropy_calc.setObservations(joint)
         H_xy = self._entropy_calc.computeAverageLocalOfObservations()
@@ -2014,7 +1980,7 @@ class DirectedInfo(CausalEntropy, Directed):
     labels = ["unsigned", "infotheory", "temporal", "directed"]
 
     def __init__(self, n=5, **kwargs):
-        # n is handled by CausalEntropy; re-appending here doubled the suffix.
+        # n is handled by CausalEntropy; re-appending here would double the suffix.
         super().__init__(n=n, **kwargs)
 
     def _entropy_of(self, M):
@@ -2037,13 +2003,6 @@ class DirectedInfo(CausalEntropy, Directed):
             I(X^n \to Y^n) = \sum_{i=1}^{n} I(X^i; Y_i \mid Y^{i-1})
                            = \sum_{i=1}^{n} \left[ H(Y_i \mid Y^{i-1})
                              - H(Y_i \mid Y^{i-1}, X^i) \right]
-
-        The previous implementation summed :math:`H(Y^i)/i` and subtracted the
-        causal entropy. That is not the above and is not a dependence measure:
-        with a source statistically independent of the target it returned 0.007
-        at target autocorrelation 0, rising to 1.53 at 0.95 -- it grew with how
-        predictable the *target* was from its own past, with no source coupling
-        present at all.
 
         Each conditional entropy is expanded as a difference of joint entropies
         over one common row window, so the terms telescope correctly and every
@@ -2077,7 +2036,7 @@ class DirectedInfo(CausalEntropy, Directed):
                 # biases cancel. Composing the same term from four separate
                 # entropies does not: each is biased in its own dimensionality,
                 # which is why the kernel and kozachenko compositions are unusable
-                # here (kernel sat near +4 on independent data at every T).
+                # here.
                 w = self._resolve_theiler(data, i, j) if self._dyn_corr_excl else 0
                 _validate_ksg_sample(y_now.shape[0], int(self._prop_k), w,
                                      context="directed information")

@@ -480,10 +480,8 @@ class DynamicTimeWarping(TimeWarping):
                     )
                     A[i, j] = d
                     A[j, i] = d
-            # The bivariate path and the dtaidistance path both divide by
-            # sqrt(T) under `normalise`; this branch did not, so
-            # `bivariate(data, i, j)` and `multivariate(data)[i, j]` differed by
-            # a factor of sqrt(T) for the itakura constraint alone.
+            # Divide by sqrt(T) under `normalise`, as the bivariate and
+            # dtaidistance paths do, so every entry point agrees.
             if self._normalise:
                 A = A / np.sqrt(Z.shape[1])
             return A
@@ -528,12 +526,10 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
 
     The band (tslearn's own Sakoe-Chiba radius-1 or Itakura slope-2 mask)
     restricts which pairs count as matches, not where the recursion may pass
-    (Vlachos et al. 2002). tslearn < 0.10 ignored the band altogether, so both
-    constrained SPIs equalled `lcss`. tslearn 0.10 applies it by holding every
-    masked cell at zero, which is the same thing for the Sakoe-Chiba band but
-    not for the Itakura parallelogram: that pinches to a single cell at each
-    end, so any pair whose last samples differ by more than `eps` scores
-    exactly 0 (43% of random pairs at T=100), and the rest can read low.
+    (Vlachos et al. 2002). tslearn's own LCSS is not used: before 0.10 it
+    ignores the band, and 0.10 holds every masked cell at zero, which for the
+    Itakura parallelogram (a single cell at each end) scores any pair whose
+    last samples differ by more than `eps` as exactly 0.
 
     A row of the LCSS table is non-decreasing, and a match cell's
     `A[i-1, j-1] + 1` is never below its left or upper neighbour, so each row
@@ -626,9 +622,8 @@ class Barycenter(Undirected, Signed):
         elif mode == "sgddtw":
             # A generator of its own for every fit. Left to its default,
             # tslearn draws the update order from the global NumPy stream, so
-            # a pair's barycenter depended on how many had been fitted before
-            # it: on process order, on which SPIs ran earlier, on serial
-            # versus parallel, and on which other pairs were computed at all.
+            # a pair's barycenter would depend on process order, on which SPIs
+            # ran earlier, and on serial versus parallel execution.
             self._fn = functools.partial(
                 dtw_barycenter_averaging_subgradient, random_state=42)
         elif mode == "softdtw":
@@ -791,9 +786,8 @@ class CrossPairwiseDistance(Undirected, Unsigned):
     def __init__(self, metric="euclidean", tau=1, statistic="min"):
         if metric != "euclidean":
             raise ValueError(f"Unsupported metric: {metric!r}. Only 'euclidean' supported.")
-        # `int(tau) < 0` accepted `tau=1.7` (truncated to 1), `tau=True`
-        # (silently 1) and raised an opaque conversion error on nan/inf. tau
-        # counts samples, so it must be an integer.
+        # tau counts samples, so it must be an integer: `int(tau)` would turn
+        # 1.7 into 1 and True into 1, and fail opaquely on nan/inf.
         tau = require_int("tau", tau, minimum=0)
         stat = str(statistic).lower()
         if stat not in {"min", "mean"}:
