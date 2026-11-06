@@ -226,6 +226,32 @@
         squared: True
         sigonly: False
 
+  # Lag-resolved cross-correlation
+  LagResolvedCorrelation:
+    labels:
+      - directed
+      - linear
+      - signed
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: lag
+      - statistic: peak
+      - statistic: asym
+      - statistic: onesided
+        tau: 1
+      - statistic: onesided
+        tau: "1e"
+      - statistic: onesidedpeak
+      - statistic: lag
+        max_lag: 10
+      - statistic: peak
+        max_lag: 10
+      - statistic: asym
+        max_lag: 10
+
 # Distance-based statistics
 .statistics.distance:
   # Pairwise distance
