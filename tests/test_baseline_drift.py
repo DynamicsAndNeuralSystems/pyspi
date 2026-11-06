@@ -8,8 +8,8 @@ What is ENFORCED (hard assertion failure):
     so a newly-broken or renamed SPI cannot disappear by having no baseline;
   * the shape of each matrix;
   * the NaN *pattern*. A SPI going from finite to all-NaN (or back) is a
-    categorical regression, not drift — this fork changed NaN-on-failure
-    semantics, so that is precisely the signal worth failing on.
+    categorical change, not drift: a failed SPI reports NaN, so that is
+    precisely the signal worth failing on.
 
 What is also ENFORCED:
   * numerical drift in the finite entries. Exceedances are routed to a
@@ -18,13 +18,13 @@ What is also ENFORCED:
 
 Baselines live in ``tests/data/baselines/<dataset>.npz`` (one MxM array per
 SPI identifier), plus optional ``<dataset>.<name>.npz`` files that hold the
-SPIs of one added family and are merged on load. They are regenerated from the *current* fork by
-``tests/tools/generate_benchmark_tables.py``. They are a forward-looking
-change detector, not an independent oracle: the fork deliberately rewrote the
-information-theoretic estimators, so upstream pyspi 2.0.1 values are the wrong
-reference for exactly the code that most needs one. Independent correctness
-lives in analytic and structural contract tests, including
-``test_infotheory_analytic.py`` and ``test_structural_traits.py``.
+SPIs of one added family and are merged on load. They are regenerated from the
+current code by ``tests/tools/generate_benchmark_tables.py``. They are a
+forward-looking change detector, not an independent oracle: pyspi 3
+reimplements the information-theoretic estimators, so upstream pyspi 2.0.1
+values are the wrong reference for exactly the code that most needs one.
+Independent correctness lives in analytic and structural contract tests,
+including ``test_infotheory_analytic.py`` and ``test_structural_traits.py``.
 
 Frozen fixtures live in ``tests/data/fixtures/`` (not in ``pyspi/data/``: they
 are test inputs, not shipped demo data) and are built by
@@ -71,29 +71,25 @@ SEED = 42
 # measured so far is a deterministic function of them, so re-running the same
 # code on the same machine reproduces the baseline to float round-off. 1e-9
 # sits well above that (~1e-12) while still catching genuine sub-percent
-# regressions that the old blanket RTOL=1e-2 would have hidden.
+# regressions that a blanket rtol of 1e-2 would hide.
 TIGHT = (1e-12, 1e-9)   # (atol, rtol)
 # LOOSE is for SPIs that are genuinely not a pure function of the data under
 # this suite's protocol (seed the global RNG, then compute).
 LOOSE = (1e-6, 1e-2)
 
-# Per-SPI, not per-module. The previous version applied LOOSE to every SPI in
-# the `causal` and `misc` modules on the assumption that the causal-discovery
-# optimisers, GP
-# restarts and randomised independence tests made them irreproducible. Measured,
-# that is false: `tests/tools/measure_reproducibility.py` computes the full
-# config twice per fixture and, on all three fixtures, **316 of 316 SPIs
-# reproduce bit-exactly** -- max |difference| identically 0, including every
-# `anm`/`cds`/`reci`/`ccm`, every `coint_*`, `gpfit_*` (GaussianProcessRegressor
-# defaults to n_restarts_optimizer=0, so there are no random restarts),
-# `lmfit_*` (random_state pinned to 42) and `ids` (deterministic: the only
-# RNG use in its library is a permutation-test helper pyspi never calls; see
-# `test_no_p90_spi_depends_on_the_global_rng`). A module-wide 1e-2 band over 62 SPIs, ~50 of them
-# deterministic, is slack that hides deterministic regressions -- exactly the
-# failure mode this suite exists to catch.
+# Per-SPI, not per-module: a module-wide loose band is slack that hides
+# deterministic regressions -- exactly the failure mode this suite exists to
+# catch. `tests/tools/measure_reproducibility.py` computes the full config
+# twice per fixture, and on all three fixtures every SPI reproduces
+# bit-exactly on one machine, including every `anm`/`cds`/`reci`/`ccm`, every
+# `coint_*`, `gpfit_*` (GaussianProcessRegressor defaults to
+# n_restarts_optimizer=0, so there are no random restarts), `lmfit_*`
+# (random_state pinned to 42) and `ids` (deterministic: the only RNG use in its
+# library is a permutation-test helper pyspi never calls; see
+# `test_no_p90_spi_depends_on_the_global_rng`). The entries below are for
+# cross-platform BLAS/LAPACK sensitivity, not randomness.
 #
-# So the map was empty, and that was a measurement, not an assumption. Re-measure
-# with:
+# Re-measure with:
 #     python tests/tools/measure_reproducibility.py
 # and add an entry here -- keyed by SPI identifier, valued (atol, rtol) -- for
 # anything that comes back non-zero, with the mechanism named. The tier stays
@@ -264,8 +260,7 @@ def current_tables():
 def test_baseline_covers_every_spi(dataset_name, baseline_tables, current_tables):
     """The baseline and the current Calculator must expose the same SPI set.
 
-    Without this, an SPI that is renamed or newly added is silently untested,
-    which is how ~45-50 SPIs per dataset escaped the old suite.
+    Without this, an SPI that is renamed or newly added is silently untested.
     """
     baseline = baseline_tables(dataset_name)
     _, spis, _ = current_tables(dataset_name)
@@ -297,8 +292,8 @@ def test_baseline_drift(dataset_name, spi_key, baseline_tables, current_tables,
 
     # --- Enforced: NaN pattern -------------------------------------------
     # Compared as masks, never coerced to 0. Folding NaN into 0 on both sides
-    # (the old behaviour) turns "this SPI now fails everywhere" into a small
-    # numeric drift entry, hiding the one regression class that matters most.
+    # would turn "this SPI now fails everywhere" into a small numeric drift
+    # entry, hiding the one regression class that matters most.
     ref_nan = ~np.isfinite(ref)
     new_nan = ~np.isfinite(new)
     if not np.array_equal(ref_nan, new_nan):
@@ -312,9 +307,8 @@ def test_baseline_drift(dataset_name, spi_key, baseline_tables, current_tables,
         )
 
     # --- Enforced: a baseline with nothing in it is not an oracle ---------
-    # `if not finite.any(): return` used to pass here, so an SPI that produced
-    # an all-NaN column at freeze time was recorded as such and then agreed
-    # with itself forever. All three `gd_*` SPIs sat in that state.
+    # Otherwise an SPI that produced an all-NaN column at freeze time would
+    # agree with itself forever.
     off_diagonal = ~np.eye(ref.shape[0], dtype=bool)
     if spi_key in KNOWN_UNESTIMABLE.get(dataset_name, {}):
         pytest.skip(KNOWN_UNESTIMABLE[dataset_name][spi_key])
@@ -356,9 +350,10 @@ def test_baseline_drift(dataset_name, spi_key, baseline_tables, current_tables,
         num_exceed,
         num_interactions,
     )
-    # Reported *and* failed. Logging alone made every tolerance in this file
-    # decorative: a deterministic SPI could move by any amount and the suite
-    # still exited 0, with the evidence in a summary banner nobody gates on.
+    # Reported *and* failed. Logging alone would make every tolerance in this
+    # file decorative: a deterministic SPI could move by any amount and the
+    # suite would still exit 0, with the evidence in a summary banner nobody
+    # gates on.
     pytest.fail(
         f"[{dataset_name}] {spi_key}: {num_exceed} of {num_interactions} "
         f"interaction(s) exceed the drift tolerance "
