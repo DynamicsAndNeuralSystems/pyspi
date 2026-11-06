@@ -1443,7 +1443,6 @@
         amp_band: [0.2, 0.45]
         statistic: mvl
 
-      # The modulation index minus its mean over 100 time-shift surrogates (signed)
       - phase_band: [0.01, 0.05]
         amp_band: [0.15, 0.4]
         statistic: mi_excess
