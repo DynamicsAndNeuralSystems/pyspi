@@ -1536,3 +1536,87 @@
         statistic: coef
         labels:
           - signed
+
+  # Conditional partial directed coherence
+  ConditionalPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
+
+  # Conditional generalized partial directed coherence
+  ConditionalGeneralizedPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
+
+  # Conditional direct directed transfer function
+  ConditionalDirectDirectedTransferFunction:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
+
+  # Partial coherence
+  PartialCoherence:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M12
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5

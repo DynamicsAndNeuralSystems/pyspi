@@ -1155,3 +1155,29 @@
     dependencies:
     configs:
       - order: bic
+
+  # Conditional partial directed coherence
+  ConditionalPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+  # Partial coherence
+  PartialCoherence:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M12
+    dependencies:
+    configs:
+      - order: bic
