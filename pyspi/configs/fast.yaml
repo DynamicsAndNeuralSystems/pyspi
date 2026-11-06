@@ -1331,7 +1331,7 @@
         pnorm: 'max'
         bandwidth: 0.5
 
-# Coupling of extremes and events
+# Event and extreme-value statistics
 .statistics.events:
   # Event synchronisation
   EventSynchronisation:
