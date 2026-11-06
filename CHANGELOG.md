@@ -263,6 +263,11 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 
 ### Added
 
+- **`xi_tau-0` and `xi_tau-1`: Chatterjee's rank correlation xi** (Chatterjee 2021, JASA 116:2009), class `ChatterjeeXi` in `pyspi/statistics/basic.py`.
+  It is directed (`A[i, j] = xi(x_i, x_j)`, row = source): it tends to 1 iff the column process is a measurable function of the row process and to 0 iff they are independent, so it also detects non-monotone dependence such as `y = x^2`.
+  `tau > 0` pairs `x_i[:-tau]` with `x_j[tau:]`.
+  Ties in the source are broken by a fixed seeded permutation, so values are deterministic.
+  `xi_tau-0` is also in `fast`.
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
