@@ -60,7 +60,7 @@ def require_positive_float(name, value):
 def acf(x, mode='positive'):
     """Return the autocorrelation function using FFT-based computation.
 
-    O(N log N) via FFT, replacing the original O(N^2) np.correlate approach.
+    O(N log N) via FFT.
     """
     if x.ndim > 1:
         x = np.squeeze(x)
@@ -145,8 +145,8 @@ def filter_spis(keywords, output_name = None, configfile= None):
     # the family labels written in the YAML. Several traits are set per variant
     # in __init__ -- 'antisymmetric' for phase measures whose band statistic is
     # the mean, 'directed' for cointegration's aeg method -- and are invisible
-    # in the raw file. Matching families also selected every config in them,
-    # so a family could not be filtered down to the variants that qualified.
+    # in the raw file. Matching on families would select
+    # every config in a family rather than the variants that qualify.
     import importlib
     from pyspi.calculator import (
         _merge_spi_labels,
@@ -293,15 +293,11 @@ def fmt_param(x):
     """Format a parameter value for use inside an SPI identifier, losslessly.
 
     Identifiers are the package's primary key: they name table columns, name
-    checkpoint files, and are compared when resuming. Formatting floats with
-    ``.3g``/``.4g`` made them lossy, so two genuinely different
-    parameterisations could render to the same identifier and silently overwrite
-    one another at dict insertion.
-
+    checkpoint files, and are compared when resuming, so the formatting must be
+    lossless -- ``.3g``/``.4g`` would let two different parameterisations
+    render to the same identifier and overwrite one another.
     ``repr`` of a Python float is the shortest string that round-trips, so it is
-    both lossless and stable across platforms. Values that already print
-    identically under ``.3g`` are unaffected, which is why no bundled config's
-    identifiers change.
+    both lossless and stable across platforms.
     """
     if isinstance(x, float):
         if x != x or x in (float("inf"), float("-inf")):

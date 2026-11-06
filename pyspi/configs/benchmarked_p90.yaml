@@ -4,16 +4,10 @@
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
 # Current set: 264 of the 296 SPIs benchmarked (including two manual te_kraskov DCE variants).
-# The original 2026-05-27 cut was 297 / 328 before later removals.
 # Cutoff        : fastest kept <= 5.520s ; slowest dropped >= 6.790s.
 #
-# Manual edit: the two te_kraskov_NN-4_DCE_k-{1,2}_kt-1_l-1_lt-1 variants are
-# uncommented (added back to the kept set) for methodological coverage. Dynamic
-# Correlation Exclusion (DCE) corrects the kraskov nearest-neighbour estimator
-# for temporal autocorrelation; without it, TE on autocorrelated signals is
-# biased upward. The amortized-cost cut sees only their cost (7.3s, 7.7s) and
-# dropped them at p90; the methodological correctness argument adds them back.
-# Re-running bench/cut_config will overwrite this edit — re-apply by hand.
+# Manual edit: te_kraskov_NN-4_DCE_k-{1,2}_kt-1_l-1_lt-1 are kept for coverage;
+# re-apply after re-running bench/cut_config.py.
 #
 .statistics.basic:
   Covariance:
@@ -300,67 +294,6 @@
     - biased: false
     - biased: true
 
-  # MultiscaleGraphCorrelation:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-
-  # HilbertSchmidtIndependenceCriterion:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - biased: false
-  #   - biased: true
-
-  # HellerHellerGorfine:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-
-  # CrossMultiscaleGraphCorrelation:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - time-dependent
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - max_lag: 1
-  #   - max_lag: 10
-
-  # CrossDistanceCorrelation:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - time-dependent
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - max_lag: 1
-  #   - max_lag: 10
-
   DynamicTimeWarping:
     labels:
       - undirected
@@ -392,20 +325,6 @@
       tau: 1
       statistic: mean
 
-  # SoftDynamicTimeWarping:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - time-dependent
-  #     - M10
-  #   dependencies:
-  #   configs:
-  #   - global_constraint: null
-  #   - global_constraint: itakura
-  #   - global_constraint: sakoe_chiba
-
   LongestCommonSubsequence:
     labels:
       - undirected
@@ -421,8 +340,6 @@
     - global_constraint: sakoe_chiba
 
   Barycenter:
-    # The DTW-type barycenters bundle `corr` rather than `mean`: the barycenter of
-    # z-scored series has mean ~0, and its squared mean is a monotone function of `corr`.
     labels:
       - undirected
       - nonlinear
@@ -458,20 +375,6 @@
     - mode: sgddtw
       statistic: max
       squared: true
-    # - mode: softdtw
-    #   statistic: mean
-    #   labels:
-    #   - M09
-    # - mode: softdtw
-    #   statistic: max
-    # - mode: softdtw
-    #   statistic: mean
-    #   squared: true
-    #   labels:
-    #   - M09
-    # - mode: softdtw
-    #   statistic: max
-    #   squared: true
 
   GromovWasserstainTau:
     labels:
@@ -486,21 +389,6 @@
 
 
 .statistics.causal:
-  # Disabled 2026-08-22: in Gadi pilot 177018028, all six M=20,T=1000
-  # datasets remained inside ANM for >18 CPU-minutes each after reaching it;
-  # no dataset completed. Its exact GP fit scales cubically in T for every
-  # directed channel pair, so the old p90 benchmark does not extrapolate here.
-  # AdditiveNoiseModel:
-  #   labels:
-  #     - directed
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M02
-  #   dependencies:
-  #   configs:
-
   ConditionalDistributionSimilarity:
     labels:
       - directed
@@ -522,32 +410,6 @@
       - M14
     dependencies:
     configs:
-
-  # ConvergentCrossMapping:
-  #   labels:
-  #     - directed
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - time-dependent
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - statistic: mean
-  #   - statistic: max
-  #   - statistic: diff
-  #   - statistic: mean
-  #     embedding_dimension: 1
-  #   - statistic: max
-  #     embedding_dimension: 1
-  #   - statistic: diff
-  #     embedding_dimension: 1
-  #   - statistic: mean
-  #     embedding_dimension: 10
-  #   - statistic: max
-  #     embedding_dimension: 10
-  #   - statistic: diff
-  #     embedding_dimension: 10
 
 
 .statistics.infotheory:
@@ -588,7 +450,6 @@
     configs:
     - estimator: gaussian
     - estimator: kozachenko
-    #
   CrossmapEntropy:
     labels:
       - unsigned
@@ -609,16 +470,6 @@
       history_length: 10
 
   DirectedInfo:
-      # Disabled: composing directed information from four separately-estimated
-      # entropies leaves each with its own dimension-dependent bias, and they do
-      # not cancel. On independent data the kernel variant sat at 3.8-4.4 for
-      # every T from 100 to 8000 (a fixed bandwidth in ~11 dimensions does not
-      # improve with sample size) and kozachenko returned negatives, for a
-      # quantity bounded below by zero. Use estimator: kraskov, which estimates
-      # each conditional-MI term directly.
-      # - estimator: kernel
-      # - estimator: kozachenko
-
     labels:
       - directed
       - nonlinear
@@ -681,26 +532,6 @@
       kernel_width: 0.25
 
   TransferEntropy:
-      # Disabled: k_history=1 gives a single ordinal symbol, so the transfer
-      # entropy is identically zero. Rejected at construction; kept here as a
-      # record of what was dropped.
-      # - estimator: symbolic
-      #   k_history: 1
-      #   l_history: 1
-      #   labels:
-      #     - M05
-      #
-      # Disabled: severely undersampled and unvalidated at T=100. 10! symbols
-      # against ~91 usable samples: on var1 and cml every joint count is 1, so
-      # the value tracks sample size rather than dependence, but that does not
-      # hold universally (kuramoto: 3 of 42 pairs). Still constructible, and
-      # defensible for long series where the symbol space is populated.
-      # - estimator: symbolic
-      #   k_history: 10
-      #   l_history: 1
-      #   labels:
-      #     - M05
-
     labels:
       - directed
       - nonlinear
@@ -729,17 +560,6 @@
       l_history: 1
       labels:
       - M05
-    # - estimator: kraskov
-    #   prop_k: 4
-    #   auto_embed_method: MAX_CORR_AIS
-    #   k_search_max: 10
-    #   tau_search_max: 4
-    # - estimator: kraskov
-    #   prop_k: 4
-    #   auto_embed_method: MAX_CORR_AIS
-    #   k_search_max: 10
-    #   tau_search_max: 4
-    #   dyn_corr_excl: AUTO
     - estimator: kraskov
       prop_k: 4
       k_history: 2
@@ -920,7 +740,6 @@
       - M01
 
   DebiasedSquaredPhaseLagIndex:
-    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -943,7 +762,6 @@
       - M12
 
   DebiasedSquaredWeightedPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled; see DebiasedSquaredPhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -1014,12 +832,6 @@
       statistic: max
 
   DirectedCoherence:
-    # Directed coherence is recomputed in pyspi (see DirectedCoherence in
-    # statistics/spectral.py): the backend puts |H|^2 in the numerator while
-    # the denominator is on the magnitude scale, which made it unbounded
-    # (baselines reached 3.27 / 1.84 / 1139.47). The corrected form is bounded
-    # in [0,1] and reproduces sqrt(directed_transfer_function()) to 4e-16 under
-    # an identity noise covariance, which is the identity DC must satisfy.
     labels:
       - directed
       - linear
@@ -1276,8 +1088,6 @@
 
 .statistics.wavelet:
   PhaseSlopeIndex:
-    # The `max` variants are not bundled: the maximum over time of the
-    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent
@@ -1287,9 +1097,6 @@
     configs:
     - fmin: 0.25
       fmax: 0.5
-    # - fs: 1
-    # - fmin: 0
-    #   fmax: 0.25
 
 
 .statistics.misc:
@@ -1306,19 +1113,6 @@
     - model: Ridge
     - model: SGDRegressor
     - model: BayesianRidge
-
-  # GPModel:
-  #   labels:
-  #     - directed
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-  #   - kernel: DotProduct
-  #   - kernel: RBF
 
   Cointegration:
     labels:

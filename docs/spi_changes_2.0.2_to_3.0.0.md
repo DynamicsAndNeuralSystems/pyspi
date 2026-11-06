@@ -111,7 +111,7 @@ Full list:
 | `dswpli_multitaper_max_fs-1_fmin-0-25_fmax-0-5` | `DebiasedSquaredWeightedPhaseLagIndex` | Constant 1.0 for essentially any input (few-taper debiased estimate); `mean` variants kept. |
 | `dswpli_multitaper_max_fs-1_fmin-0_fmax-0-25` | `DebiasedSquaredWeightedPhaseLagIndex` | Constant 1.0 for essentially any input (few-taper debiased estimate); `mean` variants kept. |
 | `dswpli_multitaper_max_fs-1_fmin-0_fmax-0-5` | `DebiasedSquaredWeightedPhaseLagIndex` | Constant 1.0 for essentially any input (few-taper debiased estimate); `mean` variants kept. |
-| `igci` | `InformationGeometricConditionalIndependence` | IGCI is commented out of `full.yaml` (it was active in 2.0.2). |
+| `igci` | `InformationGeometricConditionalIndependence` | IGCI is no longer in `full.yaml` (it was active in 2.0.2). |
 | `phase_multitaper_max_fs-1_fmin-0-25_fmax-0-5` | `CoherencePhase` | Maximum of wrapped phase depends on the branch cut; the constructor now refuses `statistic="max"`. |
 | `phase_multitaper_max_fs-1_fmin-0_fmax-0-25` | `CoherencePhase` | Maximum of wrapped phase depends on the branch cut; the constructor now refuses `statistic="max"`. |
 | `phase_multitaper_max_fs-1_fmin-0_fmax-0-5` | `CoherencePhase` | Maximum of wrapped phase depends on the branch cut; the constructor now refuses `statistic="max"`. |
