@@ -97,7 +97,7 @@
         labels:
           - contemporaneous
 
-  # statistics based on cross-correlation (squared means we square the xcorr, not the output)
+  # Cross correlation
   CrossCorrelation:
     labels:
       - undirected
@@ -129,6 +129,7 @@
 
 # Distance-based statistics
 .statistics.distance:
+  # Pairwise distance
   PairwiseDistance:
     labels:
       - unsigned
@@ -173,6 +174,7 @@
       - biased: False
       - biased: True
 
+  # Barycenter
   Barycenter:
     labels:
       - undirected
@@ -194,7 +196,7 @@
         statistic: max
         squared: True
         
-  # Gromov-Wasserstain Distance
+  # Gromov-Wasserstein distance (GW_tau)
   GromovWasserstainTau:
     labels:
       - unsigned
@@ -246,6 +248,7 @@
 
 # Information-theoretic statistics
 .statistics.infotheory:
+  # Joint entropy
   JointEntropy:
     labels:
       - undirected
@@ -259,6 +262,7 @@
       - estimator: kozachenko
       - estimator: kernel
 
+  # Conditional entropy
   ConditionalEntropy:
     labels:
       - directed
@@ -271,6 +275,7 @@
     - estimator: gaussian
     - estimator: kernel
 
+  # Cross-map entropy
   CrossmapEntropy:
     labels:
       - unsigned
@@ -295,6 +300,7 @@
         history_length: 10
 
 
+  # Stochastic interaction
   StochasticInteraction:
     labels:
       - undirected
@@ -332,7 +338,7 @@
       - estimator: kernel
         kernel_width: 0.25
 
-  # Mutual information
+  # Time-lagged mutual information
   TimeLaggedMutualInfo:
     labels:
       - directed
@@ -377,6 +383,7 @@
           - M05
 # Spectral (frequency-domain) statistics (see Schoegl and Supp, 2006)
 .statistics.spectral:
+  # Coherence phase
   CoherencePhase:
     labels:
       - linear
@@ -395,6 +402,7 @@
       - fmin: 0.25
         fmax: 0.5
 
+  # Magnitude-squared coherence
   CoherenceMagnitude:
     labels:
       - undirected
@@ -424,7 +432,7 @@
         fmax: 0.5
         statistic: max
 
-  # Coherence (ordinal or squared? imaginary components of the coherence)
+  # Imaginary coherence
   ImaginaryCoherence:
     labels:
       - undirected
@@ -454,6 +462,7 @@
         fmax: 0.5
         statistic: max
 
+  # Phase slope index
   PhaseSlopeIndex:
     labels:
       - linear/nonlinear
@@ -472,6 +481,7 @@
       - fmin: 0.25
         fmax: 0.5
 
+  # Phase locking value
   PhaseLockingValue:
     labels:
       - undirected
@@ -505,6 +515,7 @@
         fmax: 0.5
         statistic: max
 
+  # Phase lag index
   PhaseLagIndex:
     labels:
       - linear
@@ -529,6 +540,7 @@
           - M01
 
 
+  # Weighted phase lag index
   WeightedPhaseLagIndex:
     labels:
       - linear
@@ -553,6 +565,7 @@
           - M01
 
 
+  # Debiased squared phase lag index
   DebiasedSquaredPhaseLagIndex:
     labels:
       - undirected
@@ -577,6 +590,7 @@
         labels:
           - M12
 
+  # Debiased squared weighted phase-lag index
   DebiasedSquaredWeightedPhaseLagIndex:
     labels:
       - undirected
@@ -601,6 +615,7 @@
         labels:
           - M12
 
+  # Pairwise phase consistency
   PairwisePhaseConsistency:
     labels:
       - undirected
@@ -630,6 +645,7 @@
         fmax: 0.5
         statistic: max
 
+  # Directed transfer function
   DirectedTransferFunction:
     labels:
       - directed
@@ -659,6 +675,7 @@
         fmax: 0.5
         statistic: max
 
+  # Directed coherence
   DirectedCoherence:
     labels:
       - directed
@@ -688,6 +705,7 @@
         fmax: 0.5
         statistic: max
 
+  # Partial directed coherence
   PartialDirectedCoherence:
     labels:
       - directed
@@ -717,6 +735,7 @@
         fmax: 0.5
         statistic: max
 
+  # Generalized partial directed coherence
   GeneralizedPartialDirectedCoherence:
     labels:
       - unsigned
@@ -746,6 +765,7 @@
         fmax: 0.5
         statistic: max
 
+  # Direct directed transfer function
   DirectDirectedTransferFunction:
     labels:
       - directed
@@ -775,6 +795,7 @@
         fmax: 0.5
         statistic: max
 
+  # Group delay
   GroupDelay:
     labels:
       - directed
@@ -797,6 +818,7 @@
         fmax: 0.5
         statistic: delay
 
+  # Spectral Granger causality
   SpectralGrangerCausality:
     labels:
       - directed
@@ -956,6 +978,7 @@
 
 # Wavelet (time-frequency) statistics, from Morlet wavelets
 .statistics.wavelet:
+  # Phase slope index (wavelet)
   PhaseSlopeIndex:
     labels:
       - unsigned
@@ -974,6 +997,7 @@
 
 # Miscellaneous statistics
 .statistics.misc:
+  # Linear model regression
   LinearModel:
     labels:
       - directed
