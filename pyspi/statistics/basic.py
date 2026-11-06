@@ -5,8 +5,15 @@ from scipy import stats, signal
 import numpy as np
 import pandas as pd
 
-from pyspi.base import (Directed, Undirected, Signed, fill_pairwise,
-                        parse_bivariate, parse_multivariate)
+from pyspi.base import (
+    Directed,
+    Undirected,
+    Signed,
+    Unsigned,
+    fill_pairwise,
+    parse_bivariate,
+    parse_multivariate,
+)
 from pyspi.utils import acf, require_int
 
 
@@ -59,15 +66,14 @@ class Estimators(Undirected, Signed):
 
             estimator = getattr(cov, self._estimator)
             # MinCovDet and EllipticEnvelope search from random subsets of the
-            # observations. Unpinned they drew those from the global NumPy
-            # stream, so the fit -- and all four SPIs read from it -- changed
-            # from run to run and with whatever had consumed the stream first.
+            # observations, so each is given its own fixed-seed generator:
+            # drawn from the global NumPy stream, the fit (and all four SPIs
+            # read from it) would change from run to run.
             params = inspect.signature(estimator).parameters
             kwargs = {"random_state": 42} if "random_state" in params else {}
-            # GraphicalLasso(CV) stop at the default tol=1e-4, so their values
-            # depended on the solver path, which scikit-learn 1.8 changed (gap-
-            # safe screening, new stopping rule): up to 1.5e-4 apart. Converging
-            # tightly makes the result the solution, not the path (~1e-9 apart).
+            # GraphicalLasso(CV) are converged tightly so the result is the
+            # solution, not the solver path: at the default tol=1e-4 the value
+            # depends on the path, which differs between scikit-learn versions.
             if "enet_tol" in params:
                 kwargs.update(tol=1e-8, enet_tol=1e-8)
             with warnings.catch_warnings():
@@ -79,11 +85,13 @@ class Estimators(Undirected, Signed):
                 data.covariance = {self._estimator: mycov}
         return mycov
 
+    def _matrix(self, mycov):
+        """Copy of the cached fit's ``M x M`` matrix, so the cache is not modified."""
+        return getattr(mycov, self._kind + "_").copy()
+
     @parse_multivariate
     def multivariate(self, data):
-        mycov = self._from_cache(data)
-        # Copy, so the cached fit is not modified.
-        matrix = getattr(mycov, self._kind + "_").copy()
+        matrix = self._matrix(self._from_cache(data))
         np.fill_diagonal(matrix, np.nan)
         if self._squared:
             return np.square(matrix)
@@ -107,6 +115,47 @@ class Precision(Estimators):
 
     def __init__(self, estimator="EmpiricalCovariance", squared=False):
         super().__init__(kind="precision", squared=squared, estimator=estimator)
+
+
+class PartialCorrelation(Estimators):
+    """Partial correlation (Marrelec et al. 2006, NeuroImage 32, 228-237).
+
+    With ``P`` the precision (inverse covariance) matrix of the ``M`` processes
+    as estimated by the scikit-learn covariance ``estimator``,
+    ``pcorr_ij = -P_ij / sqrt(P_ii P_jj)``: the correlation between ``x_i``
+    and ``x_j`` conditional on (after linearly regressing out) all other
+    ``M - 2`` processes, at lag 0. For ``EmpiricalCovariance`` this is the
+    Pearson correlation of the OLS residuals of ``x_i`` and ``x_j`` on the
+    remaining processes; the other estimators shrink or sparsify ``P`` first.
+
+    Undirected and signed, in ``[-1, 1]``, with the opposite sign and the
+    same zero pattern as the off-diagonal of ``prec_<estimator>``.
+
+    ``estimator`` is any ``sklearn.covariance`` estimator that ``Precision``
+    accepts, and ``squared=True`` squares the result (unsigned). The
+    covariance fit is shared with ``Covariance`` and ``Precision``
+    (``data.covariance[estimator]``).
+    """
+
+    name = "Partial correlation"
+    identifier = "pcorr"
+
+    def __init__(self, estimator="EmpiricalCovariance", squared=False):
+        super().__init__(
+            kind="partial_correlation", squared=squared, estimator=estimator
+        )
+
+    def _matrix(self, mycov):
+        prec = mycov.precision_
+        with np.errstate(invalid="ignore", divide="ignore"):
+            # A non-positive diagonal (a singular fit) gives NaN, not a value.
+            d = np.sqrt(np.where(np.diag(prec) > 0, np.diag(prec), np.nan))
+            return -prec / np.outer(d, d)
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        # Conditions on every other process, so needs the whole (cached) fit.
+        return self.multivariate(data)[i, j]
 
 
 # Lags are examined out to +/- T // 4: further out the sample
@@ -211,29 +260,17 @@ class CrossCorrelation(Undirected, Signed):
         # in the window. Read it as "drop the small lags", not as "these lags
         # are significant".
         if getattr(self, "_sigonly", False):
-            # The previous threshold was `1.96/sqrt(len(r_ij)//2)` -- the
-            # half-width of the lag *window*, T//4 -- so it was twice too wide
-            # and moved with the lag cut rather than with the sample size.
+            # Scaled by the sample size T, not by the width of the lag window.
             threshold = 1.96 / np.sqrt(T)
             above = np.abs(r_ij) > threshold
             if not above.any():
                 # Nothing clears the cut, so the thresholded association is
-                # zero. Falling back to the unfiltered window instead reported
-                # the largest of ~T/2 sample correlations under the null: on
-                # two independent length-400 series that is about 0.135 for the
-                # `max` statistic, which is the opposite of what a threshold is
-                # supposed to do at the null.
+                # zero, not the largest of ~T/2 null sample correlations.
                 return 0.0
             # Selecting *the lags above the cut*, rather than the contiguous
-            # run of them around lag zero. The previous code walked outwards
-            # from the centre, which is only right when the peak is at lag 0:
-            # for a pair where i leads j by one sample, r(0) is already below
-            # the cut, so the lobe extended one way and not the other and the
-            # two orientations of an SPI declared *undirected* disagreed --
-            # measured 0.9957 against -0.0202 on a lag-1 pair. A set of lags is
-            # invariant under the l -> -l reversal; a one-sided run is not.
-            # (Its slice was independently wrong: `r_ij[N - fzr : N + fzf]`
-            # mirrored `fzr`, which was already an absolute index.)
+            # run of them around lag zero: a set of lags is invariant under the
+            # l -> -l reversal, so the two orientations of this undirected SPI
+            # agree even when the peak is off lag 0.
             r_ij = r_ij[above]
 
         if self._squared:
@@ -580,6 +617,116 @@ class KendallTau(Undirected, Signed):
             tau = tau ** 2
         np.fill_diagonal(tau, np.nan)
         return tau
+
+
+# Seed of the permutation that breaks ties in ChatterjeeXi's source reproducibly.
+_XI_TIE_SEED = 0
+
+
+def _xi_source_order(x):
+    """Indices that sort ``x``, with ties broken by a fixed seeded permutation."""
+    perm = np.random.default_rng(_XI_TIE_SEED).permutation(x.size)
+    return perm[np.argsort(x[perm], kind="stable")]
+
+
+def _xi_target_terms(y):
+    """``(r, denominator)`` for the target ``y``.
+
+    ``r[k] = #{j : y_j <= y_k}`` and the denominator is
+    ``2 * sum_k l_k (n - l_k) / n`` with ``l_k = #{j : y_j >= y_k}``.
+    The denominator is 0 (xi undefined) when ``y`` is constant.
+    """
+    n = y.size
+    r = stats.rankdata(y, method="max").astype(np.int64)
+    l = n - stats.rankdata(y, method="min").astype(np.int64) + 1
+    return r, 2 * np.sum(l * (n - l)) / n
+
+
+class ChatterjeeXi(Directed, Unsigned):
+    """Chatterjee's rank correlation xi (Chatterjee 2021, JASA 116, 2009-2022).
+
+    For a source ``X`` and a target ``Y`` of length ``n``, sort the pairs by
+    ``X`` and let ``Y_(1), ..., Y_(n)`` be the targets in that order. With
+    ``r_k = #{j : Y_j <= Y_(k)}`` and ``l_k = #{j : Y_j >= Y_(k)}``,
+    ``xi_n(X, Y) = 1 - n sum_k |r_{k+1} - r_k| / (2 sum_k l_k (n - l_k))``,
+    the first sum over ``k = 1..n-1`` and the second over ``k = 1..n``. This
+    is the general form, valid with ties in ``Y``.
+
+    It uses ranks only. As ``n -> infinity`` it tends to 0 if and only if
+    ``Y`` is independent of ``X``, and to 1 if and only if ``Y`` is a
+    measurable function of ``X``, so it also detects non-monotone dependence
+    such as ``Y = X^2``. Under independence it can be slightly negative.
+
+    Asymmetric and unsigned: ``A[i, j] = xi(X = x_i, Y = x_j)``, row = source,
+    measures how nearly the column process is a function of the row process.
+
+    ``tau`` is the lag in samples (default 0). For ``tau > 0`` the SPI is
+    ``xi(x_i[:-tau], x_j[tau:])``: how much ``x_j[t]`` is a function of
+    ``x_i[t - tau]``.
+
+    Chatterjee breaks ties in ``X`` at random; here they are broken by a fixed
+    seeded permutation, so values are reproducible. The value is NaN when the
+    target is constant, when either series has a non-finite sample, or when
+    fewer than two samples remain after the lag.
+    """
+
+    name = "Chatterjee's xi correlation"
+    identifier = "xi"
+    labels = ["basic", "rank", "nonlinear", "directed", "unsigned"]
+
+    def __init__(self, tau=0):
+        self._tau = require_int("tau", tau, minimum=0)
+        self.identifier = f"xi_tau-{self._tau}"
+        self.labels = ChatterjeeXi.labels + (
+            ["unordered"] if self._tau == 0 else ["temporal"]
+        )
+
+    @staticmethod
+    def _xi(order, r, denom):
+        if not denom > 0:
+            return np.nan
+        steps = np.abs(np.diff(r[order])).sum()
+        return float(1.0 - steps / denom)
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        z = data.to_numpy(squeeze=True)
+        if z.shape[-1] - self._tau < 2:
+            return np.nan
+        tau = self._tau
+        x, y = (z[i], z[j]) if tau == 0 else (z[i, :-tau], z[j, tau:])
+        if not (np.all(np.isfinite(x)) and np.all(np.isfinite(y))):
+            return np.nan
+        r, denom = _xi_target_terms(y)
+        return self._xi(_xi_source_order(x), r, denom)
+
+    @parse_multivariate
+    def multivariate(self, data):
+        """Sort each source once and rank each target once."""
+        Z = data.to_numpy(squeeze=True)  # (M, T)
+        M, T = Z.shape
+        A = np.full((M, M), np.nan)
+        if T - self._tau < 2:
+            return A
+        tau = self._tau
+        X, Y = (Z, Z) if tau == 0 else (Z[:, :-tau], Z[:, tau:])
+        finite_x = np.all(np.isfinite(X), axis=1)
+        finite_y = np.all(np.isfinite(Y), axis=1)
+        orders = [_xi_source_order(X[i]) if finite_x[i] else None for i in range(M)]
+        R = np.zeros(Y.shape, dtype=np.int64)
+        denoms = np.full(M, np.nan)
+        for j in range(M):
+            if finite_y[j]:
+                R[j], denoms[j] = _xi_target_terms(Y[j])
+        valid_y = finite_y & (denoms > 0)
+        for i in range(M):
+            if orders[i] is None:
+                continue
+            # steps[j] = sum_k |R[j, order_k+1] - R[j, order_k]| for every target
+            steps = np.abs(np.diff(R[:, orders[i]], axis=1)).sum(axis=1)
+            A[i, valid_y] = 1.0 - steps[valid_y] / denoms[valid_y]
+        np.fill_diagonal(A, np.nan)
+        return A
 
 
 class LaggedCorrelation(Undirected, Signed):

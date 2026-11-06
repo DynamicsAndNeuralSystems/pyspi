@@ -107,10 +107,8 @@ def main(argv=None) -> int:
     calc.save(out)
     print(f"Wrote results table -> {out}")
 
-    # Report failures on the way out, unconditionally. `--quiet` suppresses the
-    # computation summary, which used to be the only place a failed SPI was
-    # mentioned -- so `pyspi compute --quiet` printed "Wrote results table" and
-    # exited 0 over a table that could be entirely NaN.
+    # Report failures on the way out, unconditionally: `--quiet` suppresses the
+    # computation summary, so this is the only failure report it leaves.
     n_failed = len(calc.errors)
     if n_failed:
         print(f"{n_failed} of {calc.n_spis} SPI(s) failed: "
