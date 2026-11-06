@@ -1,6 +1,6 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (296 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (305 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
@@ -8,17 +8,19 @@ Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs
 | identifier unchanged | 224 |
 | renamed (same class and parameters; identifier changed) | 23 |
 | removed | 38 |
-| added | 49 |
-| 3.0.0 `full.yaml` | 296 |
+| added | 58 |
+| 3.0.0 `full.yaml` | 305 |
 
-285 - 38 removed + 49 added = 296; 224 + 23 renamed + 49 added = 296.
+285 - 38 removed + 58 added = 305; 224 + 23 renamed + 58 added = 305.
 The 38 removals are 14 made while porting away from JIDT and 24 duplicate, constant or degenerate SPIs; all are in the table below.
 
-## Added (49)
+## Added (58)
 
 | Family | Count | Identifiers |
 |:--|--:|:--|
 | `LaggedCorrelation` (Pearson, Spearman, Kendall at lags 1, 2, 3, 4, 5, 10, 20; each plain and squared) | 42 | `corr_{pearson,spearman,kendall}_tau-{1,2,3,4,5,10,20}[-sq]` |
+| `PartialCorrelation` (`-P_ij / sqrt(P_ii P_jj)` from each bundled covariance estimator's precision matrix) | 7 | `pcorr_{EmpiricalCovariance,GraphicalLasso,GraphicalLassoCV,LedoitWolf,MinCovDet,OAS,ShrunkCovariance}` |
+| `ChatterjeeXi` (Chatterjee's rank correlation xi at lags 0 and 1) | 2 | `xi_tau-0`, `xi_tau-1` |
 | `CrossPairwiseDistance` | 2 | `xpdist_euclidean_tau-1_mean_rmse`, `xpdist_euclidean_tau-1_min_rmse` |
 | `Barycenter` (alignment-adjusted correlation `2 mean(b^2) / mean_energy - 1`; replaces the `mean` statistic) | 3 | `bary_dtw_corr`, `bary_sgddtw_corr`, `bary_softdtw_corr` |
 | `DirectedInfo` (KSG/Frenzel-Pompe) | 1 | `di_kraskov_NN-4_n-5` |
@@ -75,6 +77,15 @@ Full list:
 - `bary_softdtw_corr`
 - `xpdist_euclidean_tau-1_mean_rmse`
 - `xpdist_euclidean_tau-1_min_rmse`
+- `pcorr_EmpiricalCovariance`
+- `pcorr_GraphicalLasso`
+- `pcorr_GraphicalLassoCV`
+- `pcorr_LedoitWolf`
+- `pcorr_MinCovDet`
+- `pcorr_OAS`
+- `pcorr_ShrunkCovariance`
+- `xi_tau-0`
+- `xi_tau-1`
 
 ## Removed (38)
 
