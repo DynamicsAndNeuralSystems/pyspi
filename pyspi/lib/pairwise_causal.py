@@ -1,11 +1,10 @@
 """Pairwise causal-direction scores, in NumPy/SciPy/scikit-learn.
 
-These replace the four functions pyspi used from the Causal Discovery Toolbox
-(`cdt.causality.pairwise`): the ANM independence score, the conditional
-distribution similarity statistic, the RECI regression-error score, and IGCI.
-Nothing else in cdt was ever used, and cdt eagerly imports its Torch-backed
-models at package load, so a ~2 GB dependency and a multi-second import were
-being paid for four functions that need none of it.
+These are the four functions of the Causal Discovery Toolbox
+(`cdt.causality.pairwise`) that pyspi uses: the ANM independence score, the
+conditional distribution similarity statistic, the RECI regression-error
+score, and IGCI. They are reimplemented here because cdt imports its
+Torch-backed models at package load.
 
 Each function below is a transcription of the corresponding cdt 0.6
 implementation, kept close enough that the numbers are bit-identical on
