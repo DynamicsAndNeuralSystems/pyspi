@@ -199,6 +199,12 @@ def test_bundled_configs_matches_shipped_set():
     """bundled_configs() is exactly the advertised set - catches a stray or missing yaml."""
     assert sorted(bundled_configs()) == sorted(EXPECTED_CONFIGS)
 
+@pytest.mark.parametrize("name", [c for c in EXPECTED_CONFIGS if c != "full"])
+def test_bundled_config_is_a_subset_of_full(name):
+    """An SPI removed from `full` is removed from every smaller set too."""
+    extra = set(Calculator(config=name).spis) - set(Calculator(config="full").spis)
+    assert not extra, f"'{name}' has SPIs that are not in 'full': {sorted(extra)}"
+
 def test_unknown_config_name_raises():
     with pytest.raises(ValueError, match="Unknown config"):
         Calculator(config="does_not_exist")
