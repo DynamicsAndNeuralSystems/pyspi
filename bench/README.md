@@ -81,14 +81,14 @@ Cost model (`--mode`):
 - `raw` — each SPI's own measured walltime. Written to
   `benchmarked_p<N>_raw.yaml` so it never overwrites the shipped amortized cut.
 
-Output goes to `pyspi/configs/benchmarked_p<N>.yaml`; by default dropped SPIs
-are commented out (not deleted) so the YAML carries the full provenance of the
-cut. Pass `--no-preserve-dropped` to delete instead.
+Output goes to `pyspi/configs/benchmarked_p<N>.yaml`. Dropped SPIs are left
+out of the YAML and listed with their cost in the `# --- DROPPED ---` footer.
+Pass `--preserve-dropped` to keep them as commented-out blocks instead.
 
 **`benchmarked_p90.yaml` carries a hand edit**: the two `te_kraskov_..._DCE_k-{1,2}`
 variants were added back after the cut for methodological reasons. Re-running
-`cut_config` overwrites it. The rationale lives in the config's own header
-(`pyspi/configs/benchmarked_p90.yaml`, lines 6-16) — read it before regenerating.
+`cut_config` overwrites it, so re-apply it by hand afterwards (the config's
+header names the two variants).
 
 ## Analyse
 
