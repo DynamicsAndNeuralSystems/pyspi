@@ -67,12 +67,7 @@ def _rbf_dot(X, deg):
 
 
 def _fast_hsic_test_gamma(X, Y, sig=(-1, -1), maxpnt=200):
-    """Biased HSIC statistic, on at most `maxpnt` evenly-spaced samples.
-
-    The subsampling is part of the estimator as pyspi has always used it, not an
-    optimisation: it fixes the statistic's scale, so removing it would change
-    every `anm` value.
-    """
+    """Biased HSIC statistic, on at most `maxpnt` evenly-spaced samples."""
     X = np.asarray(X)
     Y = np.asarray(Y)
     m = X.shape[0]
