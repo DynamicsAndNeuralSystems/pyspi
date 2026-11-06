@@ -1,9 +1,8 @@
-"""The four pairwise causal scores, after cdt and torch were removed.
+"""The four pairwise causal scores in `pyspi/lib/pairwise_causal.py`.
 
-pyspi used exactly four functions from `cdt.causality.pairwise`: the ANM
-independence score, the conditional distribution similarity statistic, the RECI
-regression-error score and IGCI. They are now transcribed in
-`pyspi/lib/pairwise_causal.py`.
+These are transcribed from `cdt.causality.pairwise`: the ANM independence
+score, the conditional distribution similarity statistic, the RECI
+regression-error score and IGCI.
 
 Three kinds of evidence here, deliberately separated:
 
@@ -16,9 +15,8 @@ Three kinds of evidence here, deliberately separated:
   antisymmetry, determinism, and synthetic pairs whose causal direction is known
   by construction.
 * **A frozen cdt 0.6 fixture**, `tests/data/fixtures/cdt_pairwise_reference.npz`,
-  recorded from cdt before the dependency was dropped. Regression evidence, not
-  ground truth: it pins that removing cdt changed nothing, and it is the reason
-  no baseline moved.
+  recorded from cdt. Differential evidence, not ground truth: it pins that the
+  transcription reproduces cdt.
 """
 import os
 
@@ -46,11 +44,11 @@ def cdt_reference():
 
 
 # ---------------------------------------------------------------------------
-# Differential regression against the dependency that was removed
+# Differential test against cdt 0.6
 # ---------------------------------------------------------------------------
 
 def test_local_scores_reproduce_cdt_0_6_exactly(cdt_reference):
-    """Bit-identical, so no bundled SPI value changed when cdt was dropped.
+    """Bit-identical to cdt 0.6, so the transcription changes no bundled SPI value.
 
     Five fixtures spanning the input shapes the estimators behave differently
     on: a nonlinear additive-noise pair, a random walk, a quantised source (CDS
@@ -223,10 +221,10 @@ def test_scores_are_deterministic(score):
 
 
 def test_cdt_and_torch_are_not_imported_by_pyspi():
-    """The point of the exercise: neither is a dependency any more.
+    """Neither cdt nor torch is a dependency.
 
     `cdt` eagerly imports its Torch-backed models at package load, so importing
-    it pulled in torch -- roughly 2 GB installed -- for four functions that
+    it would pull in torch -- roughly 2 GB installed -- for four functions that
     need neither.
     """
     import subprocess

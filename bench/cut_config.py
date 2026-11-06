@@ -66,9 +66,11 @@ def parse_args(argv=None):
     p.add_argument("-o", "--output", type=Path, default=None,
                    help="Output config path (default: pyspi/configs/benchmarked_p<keep>.yaml, "
                         "suffixed _raw under --mode raw).")
-    p.add_argument("--no-preserve-dropped", action="store_true",
-                   help="Delete dropped variants/classes from the output instead of "
-                        "commenting them out (default: preserve as comments).")
+    p.add_argument("--preserve-dropped", action=argparse.BooleanOptionalAction,
+                   default=False,
+                   help="Keep dropped variants/classes in the output as commented-out "
+                        "blocks (default: delete them; the DROPPED footer still lists "
+                        "every dropped SPI).")
     return p.parse_args(argv)
 
 
@@ -194,7 +196,7 @@ def _render_class_block(class_name: str, src_entry: dict,
 
 
 def emit_config(source_path: Path, records: list, kept_ids: set[str], header: str,
-                preserve_dropped: bool = True) -> str:
+                preserve_dropped: bool = False) -> str:
     """Emit the cut YAML. If preserve_dropped, dropped variants/classes are kept
     as commented blocks instead of being removed."""
     source = yaml.safe_load(source_path.read_text())
@@ -297,7 +299,7 @@ def main(argv=None) -> int:
         f"{drop_min:.3f}s.\n#\n"
     )
     text = emit_config(source_config, records, kept, header,
-                       preserve_dropped=not args.no_preserve_dropped)
+                       preserve_dropped=args.preserve_dropped)
     if dropped:
         text += "\n# --- DROPPED (slowest %d, %s cost) ---\n" % (len(dropped), args.mode)
         text += "".join(f"#   {cost[i]:9.3f}s  {i}\n" for i in reversed(dropped))
