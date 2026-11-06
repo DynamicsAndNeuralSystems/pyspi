@@ -271,6 +271,12 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
+- **`pac_{mi,mvl}_p-<f1>-<f2>_a-<f3>-<f4>`: phase-amplitude coupling**, class `PhaseAmplitudeCoupling` in the new module `pyspi/statistics/crossfreq.py`.
+  `A[i, j]` measures how strongly the phase of the row process in `phase_band` modulates the amplitude envelope of the column process in `amp_band` (cycles per sample), from zero-phase order-4 Butterworth band-passes and the Hilbert transform, with two filter lengths discarded at each end.
+  `mi` is the modulation index of Tort et al. (2010, J Neurophysiol 104:1195) over 18 phase bins; `mvl` is the normalised mean vector length of Özkurt & Schnitzler (2011, J Neurosci Methods 201:438).
+  Both are directed, unsigned and in [0, 1].
+  An amplitude band narrower than twice the top phase frequency cannot carry the modulation (Aru et al. 2015, Curr Opin Neurobiol 31:51) and is refused at construction.
+  `full` bundles the band pairs (0.01-0.05, 0.15-0.4) and (0.05-0.1, 0.2-0.45) with both statistics.
 
 ### Dependencies
 

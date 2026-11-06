@@ -107,6 +107,7 @@ class Data:
         "ccm",
         "coint",
         "covariance",
+        "crossfreq",
         "entropy",
         "joint_entropy",
         "mne",
