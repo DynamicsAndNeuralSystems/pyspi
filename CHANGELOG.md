@@ -168,7 +168,7 @@ Three group-delay SPIs that shipped as silent all-NaN columns are now recorded f
 
 - **Eleven `sgc_*` identifiers (in `full`) named a frequency band they did not use.** Spectral GC is undefined at zero frequency, so `fmin=0` is overridden to 1e-5 — but the identifier was built from the argument. **`sgc_*_fmin-0_*` is renamed to `sgc_*_fmin-1e-05_*`**; values unchanged.
 
-- **Symbolic and kernel transfer entropy accepted embedding parameters they ignore.** `SymbolicTECalculator` reads only `k_HISTORY` and applies that one ordinal-pattern length to source and destination alike at unit delay — which is how Staniek & Lehnertz (2008) define it — yet `k_tau`, `l_history` and `l_tau` were accepted, stored, never read, and written into the identifier: `te_symbolic_k-3_kt-1_l-1_lt-1` advertised a destination history of 3 against a source history of 1 while computing 3 for both. The kernel calculator has the same contract and accepted them just as silently. They are now refused, symbolic identifiers become `te_symbolic_k-<k>`, and non-positive histories and delays are rejected at construction. Implementing separately aligned histories was the alternative and is the wrong call here: there is no oracle left to validate `k != l` against, and every symbolic variant is already commented out of every shipped config.
+- **Symbolic and kernel transfer entropy accepted embedding parameters they ignore.** `SymbolicTECalculator` reads only `k_HISTORY` and applies that one ordinal-pattern length to source and destination alike at unit delay — which is how Staniek & Lehnertz (2008) define it — yet `k_tau`, `l_history` and `l_tau` were accepted, stored, never read, and written into the identifier: `te_symbolic_k-3_kt-1_l-1_lt-1` advertised a destination history of 3 against a source history of 1 while computing 3 for both. The kernel calculator has the same contract and accepted them just as silently. They are now refused, symbolic identifiers become `te_symbolic_k-<k>`, and non-positive histories and delays are rejected at construction. Implementing separately aligned histories was the alternative and is the wrong call here: there is no oracle left to validate `k != l` against, and no shipped config includes a symbolic variant.
 
 - **`dyn_corr_excl` named three different Theiler windows with one identifier.** The suffix was a bare `_DCE`, so 5, 10 and `"AUTO"` collided; a config setting two of them produced two identical identifiers. Now `_DCE-<value>`, which reaches `_getkey()` as well. **Shipped SPIs are renamed `..._DCE` → `..._DCE-AUTO`**; values unchanged.
 
@@ -263,6 +263,14 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 
 ### Added
 
+- **`xi_tau-0` and `xi_tau-1`: Chatterjee's rank correlation xi** (Chatterjee 2021, JASA 116:2009), class `ChatterjeeXi` in `pyspi/statistics/basic.py`.
+  It is directed (`A[i, j] = xi(x_i, x_j)`, row = source): it tends to 1 iff the column process is a measurable function of the row process and to 0 iff they are independent, so it also detects non-monotone dependence such as `y = x^2`.
+  `tau > 0` pairs `x_i[:-tau]` with `x_j[tau:]`.
+  Ties in the source are broken by a fixed seeded permutation, so values are deterministic.
+  `xi_tau-0` is also in `fast`.
+- **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
+  It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
+  Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
 - **Conditional Granger causality, `cgc_*`** (new module `pyspi/statistics/var.py`).
   One OLS VAR(p) is fitted to all processes, and `F[i, j] = ln(var_r / var_f)` compares target j's residual variance with and without the lags of source i (Geweke 1984; Barnett & Seth 2014).
   Conditioning on every other process means an indirect link or a common driver gives about 0.
@@ -392,7 +400,7 @@ Definitions the corrected measures are checked against:
 | **Added** | 49 | `LaggedCorrelation` (42), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1) |
 | 3.0.0 `full.yaml` | 296 | 285 − 38 + 49 |
 
-Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 194, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (294, 281, 266 and 239 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
+Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 194, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (291, 278, 264 and 237 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
 Every removal and rename below is deliberate.
 
@@ -418,7 +426,7 @@ Some kept SPIs are deterministic functions of others (`je_gaussian`/`ce_gaussian
 | `di_kozachenko` | Negative values, for a nonnegative quantity. |
 | `phase_multitaper_max_*` (3) | Ordinary maxima of wrapped phase depend on the branch cut and were exactly π off-diagonal on the VAR fixture. The constructors now refuse this statistic. |
 | `dspli_multitaper_max_*`, `dswpli_multitaper_max_*` (6) | Constant 1.0 on essentially any input (above). |
-| `igci` | Active in 2.0.2's `config.yaml`; commented out of `full.yaml` as a disabled heuristic. The class remains as `InformationGeometricCausalInference`. |
+| `igci` | Active in 2.0.2's `config.yaml`; removed from `full.yaml` as a disabled heuristic. The class remains as `InformationGeometricCausalInference`. |
 | `cov_EllipticEnvelope`, `cov-sq_EllipticEnvelope`, `prec_EllipticEnvelope`, `prec-sq_EllipticEnvelope` (4) | Equal to the `*_MinCovDet` SPIs (`EllipticEnvelope.fit` is `MinCovDet.fit` plus an outlier threshold). |
 | `lmfit_Lasso`, `lmfit_ElasticNet` (2) | Constant `(T - 1) / T` (Lasso, always; ElasticNet unless `|r| > 0.5`) at sklearn's `alpha = 1` on z-scored data. |
 | `bary_euclidean_mean` | Identically 0: the Euclidean barycenter of two zero-mean series has mean 0. |
