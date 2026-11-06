@@ -74,11 +74,10 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
     # family and per-config labels are folded in, so it is what the class and
     # `__init__` decided from the shape of the matrix they produce.
     #
-    # Exactly one of the four traits survives. Without this, `gd_*` carried the
-    # class's `antisymmetric` and the config's `directed` at once, and
-    # `gd_*_rvalue` -- symmetric by construction, since it stores |r| -- came
-    # back both `undirected` and `directed` when loaded through YAML, so
-    # `filter_spis` answered either way for the same SPI.
+    # Exactly one of the four traits survives, so `filter_spis` cannot answer
+    # both ways for one SPI: `gd_*` would otherwise carry the class's
+    # `antisymmetric` and the config's `directed` together, and
+    # `gd_*_rvalue` (symmetric, since it stores |r|) both labels.
     _DIRECTEDNESS = ("antisymmetric", "asymmetric", "undirected", "directed")
     own = [label for label in _DIRECTEDNESS if label in labels]
     if own:
@@ -270,15 +269,14 @@ def load_table(path):
         values = f["values"]
         spis = [str(s) for s in f["spis"]]
         procs = [str(p) for p in f["processes"]]
-        # Provenance. `save()` has always written these three and `load_table`
-        # has never read them, so a loaded table could not be asked which SPIs
-        # failed, what produced it, or whether it matched a rerun.
+        # Provenance. `save()` writes these three, so a loaded table can report
+        # which SPIs failed, what produced it, and whether it matches a rerun.
         meta = {name: str(f[name]) for name in ("run_spec", "run_digest", "errors")
                 if name in f.files}
 
-    # The whole shape, not just `ndim` and axis 0. A file whose matrices were
-    # the wrong width reached `MultiIndex.from_product` and failed there, with
-    # a reshape error rather than a statement about the file.
+    # The whole shape, not just `ndim` and axis 0, so a file of the wrong width
+    # fails here with a statement about the file rather than later in
+    # `MultiIndex.from_product` with a reshape error.
     if values.shape != (len(spis), len(procs), len(procs)):
         raise ValueError(
             f"{path} is malformed: values has shape {values.shape}, expected "
@@ -619,9 +617,8 @@ class Calculator:
     def _repr_html_(self):
         """Rendered by Jupyter in place of the default object repr.
 
-        The bare `<Calculator at 0x...>` told you nothing about whether the run
-        had happened or how it went, which is the first thing you want after
-        calling compute().
+        Shows whether the run has happened and how it went, which the bare
+        ``<Calculator at 0x...>`` does not.
         """
         s = self.summary()
         rows = [
@@ -774,8 +771,7 @@ class Calculator:
             np.savez_compressed(
                 path, values=values,
                 # dtype='U', not object: object arrays are only loadable with
-                # allow_pickle=True, which reintroduces arbitrary code execution
-                # on load -- the exact hazard that motivated dropping pickle.
+                # allow_pickle=True, which allows arbitrary code execution on load.
                 spis=np.array(keys, dtype="U"),
                 processes=np.array(self.dataset.procnames, dtype="U"),
                 schema=np.array(_NPZ_SCHEMA),
@@ -1116,9 +1112,9 @@ class CalculatorFrame:
             )
         elif isinstance(calc, Calculator):
             # Keep one Calculator per row in a stable, explicitly named column.
-            # Concatenating a named Series into an empty DataFrame happened to
-            # produce column 0 in pandas 2, but pandas 3 uses the Series name as
-            # the column label and successive calculators form a sparse frame.
+            # Concatenating a named Series into an empty DataFrame gives column 0
+            # in pandas 2 but uses the Series name in pandas 3, where successive
+            # calculators would form a sparse frame.
             self._calculators = pd.concat(
                 [self._calculators, pd.DataFrame({0: [calc]})],
                 ignore_index=True,
