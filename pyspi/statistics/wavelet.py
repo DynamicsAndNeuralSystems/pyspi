@@ -326,8 +326,7 @@ class PhaseSlopeIndex(mne, Undirected):
         # Negating after reduction is only valid for a statistic that commutes
         # with negation. mean does; max does not:
         #     max_f psi[i,j,f] = max_f(-psi[j,i,f]) = -min_f psi[j,i,f]
-        # which is not -max_f psi[j,i,f]. Reducing first and negating second
-        # made the max variants fail a process-permutation test by up to 11.5.
+        # which is not -max_f psi[j,i,f].
         #
         # Subtracting the transpose fills both triangles in one step, since the
         # upper triangle is zero: lower keeps psi[i,j,f], upper becomes
