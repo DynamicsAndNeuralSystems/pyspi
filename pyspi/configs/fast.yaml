@@ -239,8 +239,7 @@
   #   dependencies:
   #   configs:
 
-  # Rank-based nonlinear interdependence L (Chicharro & Andrzejak 2009):
-  # A[i, j] = L(x_i | x_j), read as i -> j
+  # Nonlinear interdependence
   NonlinearInterdependence:
     labels:
       - directed

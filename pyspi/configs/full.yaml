@@ -491,8 +491,7 @@
       - statistic: diff
         embedding_dimension: 10
 
-  # Nonlinear interdependence H, N and L from delay embeddings (Arnhold et al. 1999;
-  # Quian Quiroga et al. 2002; Chicharro & Andrzejak 2009): A[i, j] = A(x_i | x_j), read as i -> j
+  # Nonlinear interdependence
   NonlinearInterdependence:
     labels:
       - directed
