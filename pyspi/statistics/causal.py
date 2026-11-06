@@ -129,8 +129,8 @@ class InformationGeometricCausalInference(Directed, Signed):
     SPIs through `abs()`, both of which would destroy the lead/lag the sign
     carries.
 
-    It is commented out of the bundled configs; the heuristic is not claimed
-    to be reliable.
+    It is in none of the bundled configs; the heuristic is not claimed to be
+    reliable.
     """
 
     name = "Information-geometric causal inference"
