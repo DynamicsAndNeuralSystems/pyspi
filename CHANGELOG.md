@@ -271,6 +271,15 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
+- **`Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature.**
+  The table holds every SPI as a full `M x M` matrix.
+  For an `undirected` SPI the lower triangle copies the upper one, and for an `antisymmetric` SPI (`phase`, `pli`, `wpli`, `psi`, the `gd` delay, `ccm_*_diff`) it is the negation, so the vector keeps only the pairs `(i, j)` with `i < j` for these.
+  A positive antisymmetric value at `(i, j)` means process `i` leads process `j` (row = source).
+  `directed` and `asymmetric` SPIs keep both orientations.
+  Self-pairs are dropped unless `include_self=True`, and NaNs are kept, so the length and order depend only on the config and `M`.
+  The result is a `pandas.Series` indexed by `(spi, source, target)`, as in `to_frame()`.
+  `pyspi.feature_vector(table)` takes a table from `load_table` and rebuilds each SPI's trait from the config recorded in `table.attrs["run_spec"]`, or takes an explicit `directedness={identifier: trait}`.
+- **`Directed.directedness()`** returns the one symmetry trait an SPI carries: `undirected`, `antisymmetric`, `directed` or `asymmetric`.
 
 ### Dependencies
 
