@@ -65,15 +65,14 @@ class Estimators(Undirected, Signed):
 
             estimator = getattr(cov, self._estimator)
             # MinCovDet and EllipticEnvelope search from random subsets of the
-            # observations. Unpinned they drew those from the global NumPy
-            # stream, so the fit -- and all four SPIs read from it -- changed
-            # from run to run and with whatever had consumed the stream first.
+            # observations, so each is given its own fixed-seed generator:
+            # drawn from the global NumPy stream, the fit (and all four SPIs
+            # read from it) would change from run to run.
             params = inspect.signature(estimator).parameters
             kwargs = {"random_state": 42} if "random_state" in params else {}
-            # GraphicalLasso(CV) stop at the default tol=1e-4, so their values
-            # depended on the solver path, which scikit-learn 1.8 changed (gap-
-            # safe screening, new stopping rule): up to 1.5e-4 apart. Converging
-            # tightly makes the result the solution, not the path (~1e-9 apart).
+            # GraphicalLasso(CV) are converged tightly so the result is the
+            # solution, not the solver path: at the default tol=1e-4 the value
+            # depends on the path, which differs between scikit-learn versions.
             if "enet_tol" in params:
                 kwargs.update(tol=1e-8, enet_tol=1e-8)
             with warnings.catch_warnings():
@@ -162,29 +161,12 @@ class CrossCorrelation(Undirected, Signed):
         except (KeyError, AttributeError):
             x, y = data.to_numpy(squeeze=True)[[i, j]]
 
-            # Demeaned, and normalised by T rather than T-1. Three separate
-            # problems with the previous line
-            # `correlate(x, y) / x.std() / y.std() / (T - 1)`:
-            #
-            #   * `signal.correlate` was given the *raw* series while the
-            #     divisor used `std()`, which demeans. The two halves of the
-            #     ratio therefore described different quantities: on
-            #     `arange(10)` against itself with zscore=False it returned
-            #     3.8384 for a correlation.
-            #   * The lag-l sum has T - |l| terms, not T - 1. Dividing by T - 1
-            #     is neither the biased (T) nor the unbiased (T - |l|)
-            #     normalisation, and it put the zero lag of a series with
-            #     itself at T/(T-1): exactly 1.1111 for T = 10.
-            #   * `std()` is the sample standard deviation (ddof=0 in numpy,
-            #     so 1/T) while the divisor was T-1 -- mismatched conventions
-            #     in the same expression.
-            #
-            # Biased (divide by T) rather than unbiased (divide by T - |l|):
-            # the result is a *correlation*, so it must stay in [-1, 1], the
-            # zero lag must equal Pearson's r, and the `max` statistic must not
-            # be dominated by the high-variance tail that the unbiased
-            # normalisation produces at large lags. This is the same choice
-            # statsmodels' `ccf(adjusted=False)` and matplotlib's `xcorr` make.
+            # Demeaned, and divided by T (the biased estimator) rather than
+            # T - |l|: the result is a correlation, so it stays in [-1, 1], the
+            # zero lag equals Pearson's r, and `max` is not dominated by the
+            # high-variance tail the unbiased normalisation gives at large
+            # lags. statsmodels' `ccf(adjusted=False)` and matplotlib's `xcorr`
+            # make the same choice.
             x = x - x.mean()
             y = y - y.mean()
             scale = T * np.sqrt(np.mean(x ** 2) * np.mean(y ** 2))
@@ -193,10 +175,9 @@ class CrossCorrelation(Undirected, Signed):
             r_full = signal.correlate(x, y, "full", method="fft") / scale
 
             # correlate(x, y, "full")[T - 1 + l] == sum_t x[t + l] * y[t], so
-            # the zero lag sits at T - 1 and the window must be centred there.
-            # `r_full[T - T//4 : T + T//4]` was centred on T, i.e. on lag +1:
-            # the lag window was asymmetric, which makes `max` over it depend
-            # on the order of the pair for a measure declared undirected.
+            # the zero lag sits at T - 1 and the window is centred there. An
+            # off-centre window would make `max` depend on the order of the
+            # pair, for a measure that is undirected.
             lag_max = T // self._MAX_LAG_FRACTION
             r_ij = r_full[T - 1 - lag_max: T + lag_max]
 
@@ -205,8 +186,7 @@ class CrossCorrelation(Undirected, Signed):
             except AttributeError:
                 data.xcorr = {(i, j): r_ij}
             # r_yx(l) == r_xy(-l), so the opposite orientation is the reversed
-            # sequence, not the same one. Aliasing the two made `bivariate(j,i)`
-            # return the lag profile of (i,j).
+            # sequence, not the same one.
             data.xcorr[(j, i)] = r_ij[::-1]
 
         # `sigonly` is a pointwise amplitude threshold, not an inferential
