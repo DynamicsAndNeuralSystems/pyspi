@@ -1333,7 +1333,7 @@
 
 # Coupling of extremes and events
 .statistics.events:
-  # Event synchronisation: delay asymmetry of extreme events (Quian Quiroga et al. 2002)
+  # Event synchronisation
   EventSynchronisation:
     labels:
       - undirected
@@ -1347,7 +1347,7 @@
       - statistic: q
         quantile: 0.95
 
-  # Upper minus lower empirical tail dependence (Schmidt & Stadtmueller 2006)
+  # Tail-dependence asymmetry
   TailDependenceAsymmetry:
     labels:
       - undirected
