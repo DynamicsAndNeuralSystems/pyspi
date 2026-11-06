@@ -271,6 +271,10 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
+- **`EdgeTimeSeries`** (`edge_excessvar`, `edge_topshare_f-0-05`, `edge_acf1`; `pyspi/statistics/misc.py`): whether a correlation is steady or bursty.
+  The edge time series `e_t = z_x(t) z_y(t)` resolves Pearson's r into per-frame contributions (Faskowitz et al., 2020; Esfahlani et al., 2020).
+  `excessvar` is its excess variance, `topshare` the excess share of `sum |e|` carried by the 5% highest-amplitude frames, and `acf1` its excess lag-1 autocorrelation.
+  Each is referenced to a Gaussian pair with the sample r, so it is ~0 in expectation for Gaussian data; `edge_excessvar` is also in `fast`.
 
 ### Dependencies
 

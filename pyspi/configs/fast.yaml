@@ -1129,6 +1129,19 @@
         log: True
         absolute: True
 
+  # Edge time series (coupling nonstationarity)
+  EdgeTimeSeries:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - time-dependent
+      - M11
+    dependencies:
+    configs:
+      - statistic: excessvar
+
   # Interdependence score
   InterDependenceScore:
     labels:
