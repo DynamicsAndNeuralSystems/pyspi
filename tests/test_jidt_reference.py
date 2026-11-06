@@ -2,10 +2,10 @@
 
 pyspi 2.x computed its information-theoretic measures with JIDT (Lizier, 2014;
 https://github.com/jlizier/jidt, GPL-3.0-or-later). pyspi 3 reimplements the
-KSG, kernel, Gaussian and symbolic estimators in NumPy and no longer ships or
-needs the JIDT jar. This module keeps the evidence that the port reproduces
-JIDT: the constants below were produced by JIDT itself and are asserted against
-pyspi's estimators. **No Java is needed to run this test.**
+KSG, kernel, Gaussian and symbolic estimators in NumPy, with no JIDT jar. This
+module checks that the NumPy estimators reproduce JIDT: the constants below
+were produced by JIDT itself and are asserted against pyspi's estimators. **No
+Java is needed to run this test.**
 
 Provenance of the constants
 ---------------------------
