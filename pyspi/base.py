@@ -50,12 +50,10 @@ def parse_bivariate(function):
                     f'pair. (Use multivariate() for the whole matrix.)'
                 )
         elif i is None or j is None:
-            # One index alone was a warning-free path straight into
-            # `z[None]`, which numpy reads as `np.newaxis`: the "pair" became
-            # the whole (1, M, T) block and the SPI computed something with no
-            # relation to what was asked for. The signature is
-            # `(data, data2, i, j)`, so `bivariate(data, 0, 3)` -- the obvious
-            # way to write it -- lands here with i=3 and j unset.
+            # One index alone would reach `z[None]`, which numpy reads as
+            # `np.newaxis`: the "pair" would become the whole (1, M, T) block.
+            # The signature is `(data, data2, i, j)`, so `bivariate(data, 0, 3)`
+            # -- the obvious way to write it -- lands here with i=3 and j unset.
             raise ValueError(
                 f'Both i and j must be given (got i={i!r}, j={j!r}). Note the '
                 f'signature is bivariate(data, data2=None, i=None, j=None), so '

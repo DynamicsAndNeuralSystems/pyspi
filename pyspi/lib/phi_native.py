@@ -1,8 +1,7 @@
 """
 Native Python implementation of integrated information (phi) calculation.
 
-This module provides a pure Python implementation of the phi computation
-algorithms from the PhiToolbox, eliminating the need for MATLAB/Octave emulation.
+This module implements the PhiToolbox phi algorithms in pure Python.
 
 Author:
 Lipeng Lin (https://github.com/ErronLLP)
@@ -378,7 +377,8 @@ def phi_g_gauss(Cov_X, Cov_XY, Cov_Y, Z, method=None, normalization=0):
         Cov_XY: Cross-covariance between past and present
         Cov_Y: Covariance of present data
         Z: Partition array
-        method: Optimization method ('AL' for Augmented Lagrangian, 'LI' for LBFGS+Iterative)
+        method: Optimization method. Only 'AL' (Augmented Lagrangian) is
+            implemented; any other value warns and uses 'AL'.
         normalization: Whether to normalize by entropy
 
     Returns:
@@ -397,11 +397,11 @@ def phi_g_gauss(Cov_X, Cov_XY, Cov_Y, Z, method=None, normalization=0):
         K = len(np.unique(Z))
         method = 'AL' if K <= 3 else 'LI'
 
-    # For now, only implement AL method
+    # Only the AL method is implemented.
     if method == 'AL':
         return phi_g_gauss_al(Cov_X, Cov_E, A, Z, normalization)
     else:
-        # Fall back to AL method for now
+        # Any other method falls back to AL.
         warnings.warn(f"Method '{method}' not implemented, using 'AL' instead")
         return phi_g_gauss_al(Cov_X, Cov_E, A, Z, normalization)
 
@@ -427,7 +427,7 @@ def phi_comp(X, Z, params, options):
     normalization = options.get('normalization', 0)
     phi_g_method = options.get('phi_G_OptimMethod', None)
 
-    # Only support Gaussian distributions for now
+    # Only Gaussian distributions are supported.
     if dist_type != 'Gauss':
         raise NotImplementedError("Only Gaussian distributions are currently supported")
 

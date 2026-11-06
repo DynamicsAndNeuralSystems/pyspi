@@ -112,7 +112,7 @@ def test_a_raising_spi_is_error_off_the_diagonal(serial):
 
 
 def test_an_infinite_cell_keeps_the_finite_ones(serial):
-    """Inf used to fail the whole SPI; now only its cells are lost."""
+    """An Inf loses only its own cells; the rest of the SPI is kept."""
     calc, msgs = serial
     key = "one_infinite"
     assert np.array_equal(_q(calc, key), _expected(
@@ -125,7 +125,7 @@ def test_an_infinite_cell_keeps_the_finite_ones(serial):
 
 
 def test_complex_output_is_labelled_not_truncated(serial):
-    """`np.array(S, dtype=float)` used to drop the imaginary part silently."""
+    """A non-zero imaginary part is labelled COMPLEX, not dropped by the cast to float."""
     calc, msgs = serial
     key = "complex_output"
     assert np.array_equal(_q(calc, key), _expected(GOOD, [((0, 2), Quality.COMPLEX)]))
@@ -136,8 +136,7 @@ def test_complex_output_is_labelled_not_truncated(serial):
 
 
 def test_an_all_nan_spi_keeps_its_nan_codes_and_its_error(serial):
-    """The all-NaN error entry stays: three group-delay SPIs once shipped
-    all-NaN with no warning."""
+    """An all-NaN SPI keeps its NAN codes and still carries an error, so it is not silent."""
     calc, _ = serial
     assert np.array_equal(_q(calc, "all_nan"), _expected(NAN))
     assert calc.errors["all_nan"] == _parallel.NO_FINITE_VALUES

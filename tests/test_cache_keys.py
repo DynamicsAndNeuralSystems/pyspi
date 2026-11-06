@@ -1,22 +1,17 @@
 """Parameterised statistic caches must key on every parameter.
 
-These began as red tests and are now green. The spectral cache had two
-defects that compounded:
+Two spectral-cache properties are checked:
 
-1. ``NonparametricSpectral.key`` omitted ``fs``, so two SPIs differing only in
-   sampling frequency collided in the cache.
-2. ``_get_cache`` *wrote* the first result under ``self.measure`` (a plain
-   string) but *read* under ``self.key`` (a tuple). The first write was
-   therefore unreachable, and staleness only surfaced from the third call
-   onward, once a tuple-keyed entry finally existed.
+1. ``NonparametricSpectral.key`` includes ``fs``, so two SPIs differing only in
+   sampling frequency do not collide in the cache.
+2. ``_get_cache`` writes and reads under the same key (``self.key``). A
+   mismatch would leave the first write unreachable, so staleness would only
+   surface from the third call onward.
 
-Defect 2 is why a naive two-call probe reports no problem. The sequence below
-(fs=1 -> 4 -> 1 -> 4) is the minimum that exposes it, and every value is
-compared against a freshly-constructed Data rather than against its
+Property 2 is why a naive two-call probe is not enough. The sequence below
+(fs=1 -> 4 -> 1 -> 4) is the minimum that exposes a mismatch, and every value
+is compared against a freshly-constructed Data rather than against its
 predecessor.
-
-Keep these as regression tests: both defects were invisible to the obvious
-probe, and the second would return silently wrong numbers if reintroduced.
 """
 import numpy as np
 import pytest
@@ -69,8 +64,8 @@ def test_spectral_cache_distinguishes_sampling_frequency():
 def test_spectral_cache_uses_one_key_type():
     """The written and read cache keys must be the same type."""
     data = _fixture_data()
-    # Two calls: the first creates the dict with a *string* key, the second
-    # misses on the tuple lookup and inserts a *tuple* key alongside it.
+    # Two calls: if the writer used a *string* key, the second call would miss
+    # on the tuple lookup and insert a *tuple* key alongside it.
     _spi(1).multivariate(data)
     _spi(1).multivariate(data)
 
@@ -109,8 +104,8 @@ def test_cache_sharing_never_changes_a_value():
 
     That is mechanical, needs no per-class knowledge, and fails precisely when
     a parameter that changes the cached value is missing from the key -- the
-    second SPI would be served the first one's intermediate. `dyn_corr_excl`
-    and the spectral `fs` were both of that shape.
+    second SPI would be served the first one's intermediate (as a missing
+    `dyn_corr_excl` or spectral `fs` would be).
     """
     import os
 
