@@ -258,7 +258,7 @@ def _to_source_target(spi, adj):
     spectral backends (spectral_connectivity, nitime) instead follow the
     DTF/PDC literature, where element ``[i, j]`` is the flow *into* i *from* j
     (Kaminski & Blinowska 1991; the library normalises "by inflow"). Passing
-    their output through unchanged left every directed spectral SPI transposed
+    their output through unchanged would leave every directed spectral SPI transposed
     relative to every other directed SPI in the library.
 
     Only directed SPIs are transposed. The undirected spectral measures share
@@ -371,7 +371,8 @@ class _FactoredConnectivity(sc.Connectivity):
     the same spectrum, so keeping the first result changes no value.
 
     Once factorised, the Fourier coefficients and the factor itself are let go:
-    one of these objects is held per ordered pair, and they were most of it.
+    one of these objects is held per ordered pair, and they would otherwise 
+    be most of its memory.
     """
 
     @functools.cached_property
@@ -424,7 +425,7 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
         # One bucket for every directed measure at a sampling frequency: they
         # share the pair's Connectivity and, through _FactoredConnectivity, its
         # factorisation, which is nearly all of the cost. Split by class, each
-        # worker repeated that factorisation for every pair. fs mirrors `key`.
+        # worker would repeat that factorisation for every pair. fs mirrors `key`.
         return (self._fs,)
 
     def _get_cache(self, data, i, j):
@@ -800,10 +801,10 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     ``mean`` in its identifiers (``psi_multitaper_mean_*``) is the only
     statistic it accepts and names this *sum* over the band, not an average.
 
-    Computed here rather than by ``Connectivity.phase_slope_index``. In
-    spectral-connectivity 2.0 that method sums over *all* pairs of frequencies,
-    which is not this index -- it fell as the lag grew and changed sign near 50
-    samples -- and later releases change it; doing the sum here keeps the value
+    Computed here rather than by ``Connectivity.phase_slope_index``, which in
+    spectral-connectivity 2.0 sums over *all* pairs of frequencies -- not this
+    index; it falls as the lag grows and changes sign near 50 samples -- and
+    which later releases change. Doing the sum here keeps the value
     independent of the backend version.
     """
 
@@ -905,8 +906,8 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
             ] + ["undirected"]
         # Always use `_get_statistic`. The dispatcher's fallback is
         # `except TypeError`, and `Connectivity.group_delay()` accepts a
-        # no-argument call, so the backend's (all-NaN, see below) result was
-        # returned without the band arguments ever being passed.
+        # no-argument call, so otherwise the backend's (all-NaN, see below)
+        # result would be returned without the band arguments.
         self._recompute = True
 
     @property
@@ -1139,9 +1140,9 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                     # That is the signature of over-fitting at this record
                     # length, not of a transient numerical problem, and the
                     # bare message ("Model estimation order did not converge at
-                    # max_order = 50") says nothing about the data. Relaying it
-                    # as an all-NaN return buried the cause under pyspi's
-                    # generic "returned no finite off-diagonal values".
+                    # max_order = 50") says nothing about the data. Relaying it 
+                    # as an all-NaN return would bury the cause under pyspi's 
+                    # generic 'returned no finite off-diagonal values".
                     if "did not converge" not in str(err):
                         raise
                     raise ValueError(
@@ -1175,12 +1176,9 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
 
             result = _to_source_target(self, self._statfn(cache[0, freq_id, :, :], axis=0))
 
-            # Transformed the same way as the values it masks. The result is
-            # put into pyspi's (source, target) orientation while the mask was
-            # left in the backend's, so a directionally asymmetric NaN pattern
-            # blanked the *mirror* of the affected pair: the cell that was
-            # actually unestimable was already NaN, and a perfectly good one
-            # next to it was destroyed.
+            # Transformed the same way as the values it masks: a mask left
+            # in the backend's orientation would blank the *mirror* of an
+            # unestimable cell -- a good estimate -- instead of the cell.
             nan_pct = _to_source_target(
                 self, np.isnan(cache[0, freq_id, :, :]).mean(axis=0))
             np.fill_diagonal(nan_pct, 0.0)
