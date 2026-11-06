@@ -55,6 +55,20 @@
       - estimator: ShrunkCovariance
         squared: True
 
+  # Partial correlation
+  PartialCorrelation:
+    labels:
+      - undirected
+      - linear
+      - signed
+      - multivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
+      - estimator: LedoitWolf
+
   # Spearman's correlation coefficient
   SpearmanR:
     labels:

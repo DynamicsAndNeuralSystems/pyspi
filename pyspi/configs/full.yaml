@@ -68,6 +68,25 @@
       - estimator: ShrunkCovariance
         squared: True
 
+  # Partial correlation
+  PartialCorrelation:
+    labels:
+      - undirected
+      - linear
+      - signed
+      - multivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
+      - estimator: GraphicalLasso
+      - estimator: GraphicalLassoCV
+      - estimator: LedoitWolf
+      - estimator: MinCovDet
+      - estimator: OAS
+      - estimator: ShrunkCovariance
+
   # Spearman's correlation coefficient
   SpearmanR:
     labels:
