@@ -271,6 +271,9 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
+- **`LiangInformationFlow`: the Liang-Kleeman rate of information flow** (`liang_rate_k-1`, `liang_norm_k-1`, `liang-cond_rate_k-1`, `liang-cond_norm_k-1`; `liang_norm_k-1` also in `fast`).
+  It is the closed-form maximum-likelihood estimator of the flow from source to target under a linear stochastic model, in nats per sample and signed: positive means the source makes the target more uncertain, negative that it stabilises it.
+  `liang_*` is the pairwise estimator of Liang (2014, *Phys. Rev. E* 90, 052150), `liang-cond_*` the multivariate one of Liang (2021, *Entropy* 23, 679), which conditions on every other series, and `*_norm_*` divides by the target's entropy budget (Liang 2015, *Phys. Rev. E* 92, 022126) to give a share in [-1, 1].
 
 ### Dependencies
 

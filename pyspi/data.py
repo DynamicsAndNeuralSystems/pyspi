@@ -109,6 +109,7 @@ class Data:
         "covariance",
         "entropy",
         "joint_entropy",
+        "liang",
         "mne",
         "mne_psi",
         "spectral_bv",
