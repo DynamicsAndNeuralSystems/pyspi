@@ -6,10 +6,9 @@ non-finite value is reported the same way in both paths, and whether the
 failure survives into a structured, inspectable place rather than only a
 transient ``warnings.warn``.
 
-These began as red tests and are now green: both paths route through
-``_parallel.run_spi``, failures land in ``calc.errors``, worker-side warnings
-are returned to the parent and re-emitted there, and ``calc.run_spec`` records
-the resolved run.
+Both paths route through ``_parallel.run_spi``, failures land in
+``calc.errors``, worker-side warnings are returned to the parent and re-emitted
+there, and ``calc.run_spec`` records the resolved run.
 
 The misbehaving SPIs live in ``tests/failing_spis.py``; ``tests/`` is put on
 PYTHONPATH so spawned workers can import them too.

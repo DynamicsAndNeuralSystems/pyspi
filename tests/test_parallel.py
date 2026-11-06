@@ -131,9 +131,7 @@ def test_failure_isolation(dataset):
 def test_pin_worker_thread_pools_installs_the_blas_limiter():
     """Worker pinning must reach the BLAS/OpenMP pools.
 
-    It used to also pin cdt's NJOBS and torch's thread counts; both
-    dependencies are gone, and threadpoolctl is what is left to pin. n_jobs
-    workers each fanning out to cpu_count() BLAS threads is the quadratic
+    n_jobs workers each fanning out to cpu_count() BLAS threads is the quadratic
     blow-up this exists to prevent.
 
     The limiter object is what is asserted, not `threadpool_info()`: that comes
@@ -192,12 +190,9 @@ def cli_env(monkeypatch):
 def test_cli_exits_nonzero_on_a_partial_failure_by_default(tmp_path, capsys, cli_env):
     """A table with failed columns is one a pipeline must not ingest silently.
 
-    `--quiet` suppresses the computation summary, which used to be the only
-    place a failed SPI was named, and the exit status was 0 unconditionally --
-    so `pyspi compute --quiet` printed "Wrote results table" and exited 0 over a
-    table that could be entirely NaN. The default is now 1, with the failed
-    identifiers on stderr, and the results file is still written so the partial
-    table is available for inspection.
+    Even under `--quiet`, which suppresses the computation summary, the exit
+    status is 1, with the failed identifiers on stderr. The results file is
+    still written so the partial table is available for inspection.
     """
     from pyspi.__main__ import main
 
@@ -249,12 +244,10 @@ def test_cli_exits_nonzero_when_every_spi_is_empty(tmp_path, cli_env):
 def test_build_tasks_splits_namespaces_into_the_caches_they_actually_share():
     """The longest task bounds the makespan, so it must not be a fiction.
 
-    `build_tasks` bucketed on `_cache_namespace` alone, which serialises SPIs
-    that share no cache at all: on `full` that produced one 84-member
-    `spectral_mv` task covering 16 independent caches, and no amount of
-    parallelism could split it. `_cache_subkey` is what separates them, and
-    `calculator.warn_partial_cache_buckets` and `bench/cut_config.py` were
-    already using it -- the scheduler was the odd one out.
+    `build_tasks` buckets on `cache_bucket`, i.e. `_cache_namespace` plus
+    `_cache_subkey`. The namespace alone would serialise SPIs that share no
+    cache at all: on `full`, one 84-member `spectral_mv` task covering 16
+    independent caches.
     """
     from pyspi._parallel import build_tasks, cache_bucket
     from pyspi.calculator import load_spis_from_yaml, resolve_config
@@ -295,10 +288,10 @@ def test_build_tasks_starts_with_the_expensive_buckets():
 def test_parallel_run_leaves_the_parent_environment_alone(monkeypatch):
     """The thread pins are for the workers and must not outlive the pool.
 
-    Left in the parent, ``NUMBA_NUM_THREADS=1`` contradicted a numba runtime
-    that had already launched its threads, and numba then refused every later
-    compilation in the process: a serial run after a parallel one failed any SPI
-    whose numba kernel had not been compiled yet.
+    Left in the parent, ``NUMBA_NUM_THREADS=1`` would contradict a numba
+    runtime that had already launched its threads, and numba would then refuse
+    every later compilation in the process: a serial run after a parallel one
+    would fail any SPI whose numba kernel had not been compiled yet.
     """
     monkeypatch.delenv("NUMBA_NUM_THREADS", raising=False)
     monkeypatch.setenv("NUMEXPR_NUM_THREADS", "1")

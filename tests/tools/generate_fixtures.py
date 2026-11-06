@@ -18,8 +18,7 @@ matching the ``.npy`` files bundled in ``pyspi/data/``. The generators build
 fast (SPI cost is at worst quadratic in ``M`` and roughly linear-to-quadratic in
 ``T``) while still leaving enough samples for the embedding- and
 spectrum-based estimators, which need a few dozen effective observations after
-lagging. It also matches the ``T`` of the fixtures these replace, so baseline
-run times are directly comparable.
+lagging.
 
 These are test fixtures, not shipped data: they live under ``tests/data/fixtures/``
 and are deliberately *not* reachable via ``pyspi.data.load_dataset``.
@@ -77,7 +76,7 @@ def generate_kuramoto(M=7, T=100, dt=0.2, K=0.8, omega_spread=2.0, seed=0):
     ``K`` and the natural-frequency spread are set for *partial* synchronisation.
     Strong coupling drives the lattice to a single locked phase, at which point
     every process is a copy of every other and most pairwise statistics become
-    degenerate (that was the failure mode of the fixture this replaces).
+    degenerate.
     """
     rng = np.random.default_rng(seed)
     omega = rng.uniform(-omega_spread, omega_spread, size=M)
