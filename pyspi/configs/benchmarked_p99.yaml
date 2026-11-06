@@ -3,7 +3,7 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 291 / 296 SPIs (the original 2026-05-27 cut was 325 / 328).
+# Current set: 291 / 296 SPIs.
 # Cutoff        : fastest kept <= 332.132s ; slowest dropped >= 342.692s.
 #
 .statistics.basic:
@@ -315,17 +315,6 @@
     - biased: false
     - biased: true
 
-  # HellerHellerGorfine:
-  #   labels:
-  #     - undirected
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #     - M14
-  #   dependencies:
-  #   configs:
-
   CrossMultiscaleGraphCorrelation:
     labels:
       - undirected
@@ -337,7 +326,6 @@
     dependencies:
     configs:
     - max_lag: 1
-    # - max_lag: 10
 
   CrossDistanceCorrelation:
     labels:
@@ -412,8 +400,6 @@
     - global_constraint: sakoe_chiba
 
   Barycenter:
-    # The DTW-type barycenters bundle `corr` rather than `mean`: the barycenter of
-    # z-scored series has mean ~0, and its squared mean is a monotone function of `corr`.
     labels:
       - undirected
       - nonlinear
@@ -591,16 +577,6 @@
       history_length: 10
 
   DirectedInfo:
-      # Disabled: composing directed information from four separately-estimated
-      # entropies leaves each with its own dimension-dependent bias, and they do
-      # not cancel. On independent data the kernel variant sat at 3.8-4.4 for
-      # every T from 100 to 8000 (a fixed bandwidth in ~11 dimensions does not
-      # improve with sample size) and kozachenko returned negatives, for a
-      # quantity bounded below by zero. Use estimator: kraskov, which estimates
-      # each conditional-MI term directly.
-      # - estimator: kernel
-      # - estimator: kozachenko
-
     labels:
       - directed
       - nonlinear
@@ -663,26 +639,6 @@
       kernel_width: 0.25
 
   TransferEntropy:
-      # Disabled: k_history=1 gives a single ordinal symbol, so the transfer
-      # entropy is identically zero. Rejected at construction; kept here as a
-      # record of what was dropped.
-      # - estimator: symbolic
-      #   k_history: 1
-      #   l_history: 1
-      #   labels:
-      #     - M05
-      #
-      # Disabled: severely undersampled and unvalidated at T=100. 10! symbols
-      # against ~91 usable samples: on var1 and cml every joint count is 1, so
-      # the value tracks sample size rather than dependence, but that does not
-      # hold universally (kuramoto: 3 of 42 pairs). Still constructible, and
-      # defensible for long series where the symbol space is populated.
-      # - estimator: symbolic
-      #   k_history: 10
-      #   l_history: 1
-      #   labels:
-      #     - M05
-
     labels:
       - directed
       - nonlinear
@@ -902,7 +858,6 @@
       - M01
 
   DebiasedSquaredPhaseLagIndex:
-    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -925,7 +880,6 @@
       - M12
 
   DebiasedSquaredWeightedPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled; see DebiasedSquaredPhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -996,12 +950,6 @@
       statistic: max
 
   DirectedCoherence:
-    # Directed coherence is recomputed in pyspi (see DirectedCoherence in
-    # statistics/spectral.py): the backend puts |H|^2 in the numerator while
-    # the denominator is on the magnitude scale, which made it unbounded
-    # (baselines reached 3.27 / 1.84 / 1139.47). The corrected form is bounded
-    # in [0,1] and reproduces sqrt(directed_transfer_function()) to 4e-16 under
-    # an identity noise covariance, which is the identity DC must satisfy.
     labels:
       - directed
       - linear
@@ -1258,8 +1206,6 @@
 
 .statistics.wavelet:
   PhaseSlopeIndex:
-    # The `max` variants are not bundled: the maximum over time of the
-    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent
@@ -1300,7 +1246,6 @@
     dependencies:
     configs:
     - kernel: DotProduct
-    # - kernel: RBF
 
   Cointegration:
     labels:

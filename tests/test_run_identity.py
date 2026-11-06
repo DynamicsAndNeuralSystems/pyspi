@@ -1,14 +1,11 @@
 """A checkpoint must identify the run that produced it.
 
-These began as red tests and are now green. Resume used to validate only the
-SPI identifier and an ``(M, M)`` shape, so any other run of the same width
-silently inherited the previous run's numbers -- valid-looking results with no
-warning and no trace. Checkpoints are now bound to ``Calculator.run_digest``
-via a ``run.json`` manifest.
+Checkpoints are bound to ``Calculator.run_digest`` via a ``run.json``
+manifest, so a run of the same width but different data, preprocessing or
+config cannot inherit another run's numbers.
 
-Also covered: identifier collisions. Identifiers were formatted with ``.3g``/
-``.4g``, so distinct parameterisations could render to the same string, and
-dictionary insertion overwrote the loser before any duplicate check ran.
+Also covered: identifier collisions. Distinct parameterisations must render to
+distinct identifiers, and a duplicate is rejected at insertion.
 """
 import numpy as np
 import pytest
@@ -204,8 +201,8 @@ def test_non_pyspi_npz_is_rejected(tmp_path):
 def test_invalid_checkpoint_is_retried_not_kept(tmp_path):
     """A non-finite checkpoint must be recomputed, not resumed.
 
-    The validation used to run *after* the retry decision, so an inf-filled
-    matrix was marked failed and then kept.
+    Validation runs before the retry decision, so an inf-filled matrix is
+    recomputed rather than marked failed and kept.
     """
     from pyspi import _parallel
 
