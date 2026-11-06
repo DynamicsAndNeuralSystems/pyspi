@@ -271,6 +271,10 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
+- **`nli_*`: nonlinear interdependence S, H, N and L from delay-embedded neighbourhoods** (Arnhold et al. 1999, Physica D 134:419; Quian Quiroga et al. 2002, PRE 65:041903; Chicharro & Andrzejak 2009, PRE 80:026217), class `NonlinearInterdependence` in `pyspi/statistics/causal.py`.
+  Each measures how well close delay vectors (dimension `m`, delay `tau`) of the column process map onto close delay vectors of the row process, using `k` nearest neighbours and a Theiler window (default `m * tau`).
+  It is directed with `A[i, j] = A(x_i | x_j)`, read as `i -> j` (row = source); only the asymmetry `A[i, j] - A[j, i]` indicates direction.
+  `full` bundles `nli_L_m-5_tau-1_k-5`, `nli_N_m-5_tau-1_k-5`, `nli_H_m-5_tau-1_k-5` and `nli_L_m-3_tau-1_k-5`, and `fast` bundles `nli_L_m-5_tau-1_k-5`.
 
 ### Dependencies
 
