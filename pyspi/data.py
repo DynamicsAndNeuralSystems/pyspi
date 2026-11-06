@@ -21,12 +21,11 @@ def _validate_procnames(procnames, n_processes):
     """Coerce process names to unique strings, or say why they cannot be.
 
     Names are the column and row labels of the results table, and
-    ``Calculator.to_frame()`` stacks on them: duplicates raised pandas'
-    "Columns with duplicate values are not supported in stack" from four frames
-    away, with nothing pointing at the names. They are also written to the NPZ
-    as a ``U`` array, so a non-string name came back as its ``str()`` and the
-    file did not round-trip -- ``procnames=[1, 2]`` loaded as ``["1", "2"]``.
-    Coercing here makes the object and the file agree from the start.
+    ``Calculator.to_frame()`` stacks on them, so duplicates would fail there
+    with pandas' "Columns with duplicate values are not supported in stack",
+    far from the cause. They are also written to the NPZ as a ``U`` array, so a
+    non-string name would load back as its ``str()``. Coercing here makes the
+    object and the file agree from the start.
     """
     names = [str(p) for p in procnames]
     if len(names) != n_processes:
@@ -277,11 +276,9 @@ class Data:
         if squeeze:
             dat = np.squeeze(dat)
 
-        # Always freeze, never conditionally. Guarding on `owndata` was exactly
-        # backwards: the shared-memory worker path is precisely where owndata is
-        # False, so the one case that most needed protecting was the one case
-        # left writable -- a worker could mutate the block every other worker
-        # was reading.
+        # Always freeze, never conditionally. The shared-memory worker path is
+        # where `owndata` is False, so guarding on it would leave writable
+        # exactly the block every other worker is reading.
         dat = dat.view()
         dat.setflags(write=False)
         return dat
