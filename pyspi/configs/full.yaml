@@ -516,6 +516,28 @@
         embedding_dimension: 10
       - statistic: diff
         embedding_dimension: 10
+      - statistic: convergence
+      - statistic: convergence
+        embedding_dimension: 1
+      - statistic: convergence
+        embedding_dimension: 10
+      - statistic: slope
+
+  # Lagged convergent cross-mapping
+  LaggedConvergentCrossMapping:
+    labels:
+      - directed
+      - nonlinear
+      - signed
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: tp
+        max_lag: 5
+      - statistic: skill
+        max_lag: 5
 
 # Information-theoretic statistics
 .statistics.infotheory:

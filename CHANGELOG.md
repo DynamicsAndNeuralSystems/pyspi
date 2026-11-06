@@ -271,6 +271,14 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
+- **`ccm_E-{None,1,10}_convergence` and `ccm_E-None_slope`: CCM convergence statistics** (`ConvergentCrossMapping(statistic="convergence" | "slope")`; Sugihara et al. 2012, Science 338:496).
+  `convergence` is `rho(L_max) - rho(L_min)`, the cross-map skill at the largest library size minus the skill at the smallest, and `slope` is the least-squares slope of skill against `ln L` over the finite library sizes.
+  Both are signed and directed (negative when skill falls with L) and are read off the cached CCM skill curve.
+  `ConvergentCrossMapping` also has a `bivariate` method.
+- **`lccm_E-None_k-5_{tp,skill}`: lagged convergent cross-mapping** (`LaggedConvergentCrossMapping`, Ye et al. 2015, Sci. Rep. 5:14750).
+  For each ordered pair and each prediction horizon `Tp` in `[-k, k]` it computes the cross-map skill at the largest library size, with the target's shadow manifold at time t estimating the source at `t + Tp`.
+  `tp` is the horizon of peak skill: negative for a causal row -> column link (the target's manifold recovers the source's past), `>= 0` under synchrony.
+  `skill` is the peak skill.
 
 ### Dependencies
 
