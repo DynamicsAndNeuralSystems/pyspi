@@ -55,6 +55,20 @@
       - estimator: ShrunkCovariance
         squared: True
 
+  # Partial correlation
+  PartialCorrelation:
+    labels:
+      - undirected
+      - linear
+      - signed
+      - multivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - estimator: EmpiricalCovariance
+      - estimator: LedoitWolf
+
   # Spearman's correlation coefficient
   SpearmanR:
     labels:
@@ -83,7 +97,21 @@
       - squared: True
       - squared: False
 
-  # statistics based on cross-correlation (squared means we square the xcorr, not the output)
+  # Chatterjee's rank correlation xi
+  ChatterjeeXi:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - M14
+    dependencies:
+    configs:
+      - tau: 0
+        labels:
+          - contemporaneous
+
+  # Cross correlation
   CrossCorrelation:
     labels:
       - undirected
@@ -113,7 +141,9 @@
         squared: True
         sigonly: False
 
+# Distance-based statistics
 .statistics.distance:
+  # Pairwise distance
   PairwiseDistance:
     labels:
       - unsigned
@@ -158,6 +188,7 @@
       - biased: False
       - biased: True
 
+  # Barycenter
   Barycenter:
     labels:
       - undirected
@@ -179,7 +210,7 @@
         statistic: max
         squared: True
         
-  # Gromov-Wasserstain Distance
+  # Gromov-Wasserstein distance (GW_tau)
   GromovWasserstainTau:
     labels:
       - unsigned
@@ -191,6 +222,7 @@
     dependencies:
     configs:
 
+# Causal inference statistics
 .statistics.causal:
   # Additive noise model
   AdditiveNoiseModel:
@@ -228,20 +260,10 @@
     dependencies:
     configs:
 
-  # Information-geometric causal inference (disabled heuristic)
-  # InformationGeometricCausalInference:
-  #   labels:
-  #     - directed
-  #     - nonlinear
-  #     - unsigned
-  #     - bivariate
-  #     - contemporaneous
-  #   dependencies:
-  #   configs:
-
 # Information-theoretic statistics
 .statistics.infotheory:
-  JointEntropy: # No theiler window yet
+  # Joint entropy
+  JointEntropy:
     labels:
       - undirected
       - nonlinear
@@ -254,7 +276,8 @@
       - estimator: kozachenko
       - estimator: kernel
 
-  ConditionalEntropy: # No theiler window yet
+  # Conditional entropy
+  ConditionalEntropy:
     labels:
       - directed
       - nonlinear
@@ -266,7 +289,8 @@
     - estimator: gaussian
     - estimator: kernel
 
-  CrossmapEntropy: # No theiler window yet
+  # Cross-map entropy
+  CrossmapEntropy:
     labels:
       - unsigned
       - directed
@@ -290,7 +314,8 @@
         history_length: 10
 
 
-  StochasticInteraction: # No theiler window
+  # Stochastic interaction
+  StochasticInteraction:
     labels:
       - undirected
       - nonlinear
@@ -327,7 +352,7 @@
       - estimator: kernel
         kernel_width: 0.25
 
-  # Mutual information
+  # Time-lagged mutual information
   TimeLaggedMutualInfo:
     labels:
       - directed
@@ -351,7 +376,6 @@
 
   # Transfer entropy
   TransferEntropy:
-    # Kraskov estimator with fixed embedding of 1 for source/target and DCE
     labels:
       - directed
       - nonlinear
@@ -369,30 +393,11 @@
       - estimator: gaussian
         k_history: 1
         l_history: 1
-      # Disabled: k_history=1 gives a single ordinal symbol, so the transfer
-      # entropy is identically zero. Rejected at construction; kept here as a
-      # record of what was dropped.
-      # - estimator: symbolic
-      #   k_history: 1
-      #   l_history: 1
-      #   labels:
-      #     - M05
-      #
-      # Disabled: severely undersampled and unvalidated at T=100. 10! symbols
-      # against ~91 usable samples: on var1 and cml every joint count is 1, so
-      # the value tracks sample size rather than dependence, but that does not
-      # hold universally (kuramoto: 3 of 42 pairs). Still constructible, and
-      # defensible for long series where the symbol space is populated.
-      # - estimator: symbolic
-      #   k_history: 10
-      #   l_history: 1
-      #   labels:
-      #     - M05
-
-# statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
         labels:
           - M05
+# Spectral (frequency-domain) statistics (see Schoegl and Supp, 2006)
 .statistics.spectral:
+  # Coherence phase
   CoherencePhase:
     labels:
       - linear
@@ -411,6 +416,7 @@
       - fmin: 0.25
         fmax: 0.5
 
+  # Magnitude-squared coherence
   CoherenceMagnitude:
     labels:
       - undirected
@@ -440,7 +446,7 @@
         fmax: 0.5
         statistic: max
 
-  # Coherence (ordinal or squared? imaginary components of the coherence)
+  # Imaginary coherence
   ImaginaryCoherence:
     labels:
       - undirected
@@ -470,6 +476,7 @@
         fmax: 0.5
         statistic: max
 
+  # Phase slope index
   PhaseSlopeIndex:
     labels:
       - linear/nonlinear
@@ -488,6 +495,7 @@
       - fmin: 0.25
         fmax: 0.5
 
+  # Phase locking value
   PhaseLockingValue:
     labels:
       - undirected
@@ -521,6 +529,7 @@
         fmax: 0.5
         statistic: max
 
+  # Phase lag index
   PhaseLagIndex:
     labels:
       - linear
@@ -545,6 +554,7 @@
           - M01
 
 
+  # Weighted phase lag index
   WeightedPhaseLagIndex:
     labels:
       - linear
@@ -569,8 +579,8 @@
           - M01
 
 
+  # Debiased squared phase lag index
   DebiasedSquaredPhaseLagIndex:
-    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -594,8 +604,8 @@
         labels:
           - M12
 
+  # Debiased squared weighted phase-lag index
   DebiasedSquaredWeightedPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled; see DebiasedSquaredPhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -619,6 +629,7 @@
         labels:
           - M12
 
+  # Pairwise phase consistency
   PairwisePhaseConsistency:
     labels:
       - undirected
@@ -648,6 +659,7 @@
         fmax: 0.5
         statistic: max
 
+  # Directed transfer function
   DirectedTransferFunction:
     labels:
       - directed
@@ -677,33 +689,8 @@
         fmax: 0.5
         statistic: max
 
-  # partial_coherence:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
+  # Directed coherence
   DirectedCoherence:
-    # Directed coherence is recomputed in pyspi (see DirectedCoherence in
-    # statistics/spectral.py): the backend puts |H|^2 in the numerator while
-    # the denominator is on the magnitude scale, which made it unbounded
-    # (baselines reached 3.27 / 1.84 / 1139.47). The corrected form is bounded
-    # in [0,1] and reproduces sqrt(directed_transfer_function()) to 4e-16 under
-    # an identity noise covariance, which is the identity DC must satisfy.
     labels:
       - directed
       - linear
@@ -732,6 +719,7 @@
         fmax: 0.5
         statistic: max
 
+  # Partial directed coherence
   PartialDirectedCoherence:
     labels:
       - directed
@@ -761,6 +749,7 @@
         fmax: 0.5
         statistic: max
 
+  # Generalized partial directed coherence
   GeneralizedPartialDirectedCoherence:
     labels:
       - unsigned
@@ -790,6 +779,7 @@
         fmax: 0.5
         statistic: max
 
+  # Direct directed transfer function
   DirectDirectedTransferFunction:
     labels:
       - directed
@@ -819,6 +809,7 @@
         fmax: 0.5
         statistic: max
 
+  # Group delay
   GroupDelay:
     labels:
       - directed
@@ -841,8 +832,8 @@
         fmax: 0.5
         statistic: delay
 
+  # Spectral Granger causality
   SpectralGrangerCausality:
-    # Non-parametric Granger causality (no VAR model)
     labels:
       - directed
       - linear
@@ -882,9 +873,6 @@
         fmax: 0.5
         statistic: max
 
-        # Parametric Granger causality (VAR model with inferred or predefined order)
-
-        # AR order optimised by BIC
       - method: parametric
         fmin: 0
         fmax: 0.5
@@ -903,8 +891,6 @@
         fmax: 0.5
         method: parametric
         statistic: mean
-
-        # AR order 1
         labels:
           - M05
       - fs: 1
@@ -927,8 +913,6 @@
         order: 1
         method: parametric
         statistic: mean
-
-        # AR order 20
         labels:
           - M05
       - fs: 1
@@ -948,7 +932,6 @@
         method: parametric
         statistic: mean
 
-        # AR order optimised by BIC
       - fs: 1
         method: parametric
         statistic: max
@@ -966,8 +949,6 @@
         fmax: 0.5
         method: parametric
         statistic: max
-
-        # AR order 1
         labels:
           - M05
       - fs: 1
@@ -990,8 +971,6 @@
         order: 1
         method: parametric
         statistic: max
-
-        # AR order 20
         labels:
           - M05
       - fs: 1
@@ -1011,181 +990,10 @@
         method: parametric
         statistic: max
 
-# statistics that analyse in the wavlet-domain (only Mortlet wavelet's at the moment)
+# Wavelet (time-frequency) statistics, from Morlet wavelets
 .statistics.wavelet:
-  # CoherenceMagnitude:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # CoherencePhase:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  # # Coherence (ordinal or squared? imaginary components of the coherence)
-  # ImaginaryCoherence:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # PhaseLockingValue:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # PairwisePhaseConsistency:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # PhaseLagIndex:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # DebiasedSquaredWeightedPhaseLagIndex:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # WeightedPhaseLagIndex:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
-  # debiased_weighted_squared_PhaseLagIndex:
-  #   - fs: 1
-
-  #   - fmin: 0
-  #     fmax: 0.25
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-
-  #   - fs: 1
-  #     statistic: max
-
-  #   - fmin: 0
-  #     fmax: 0.25
-  #     statistic: max
-
-  #   - fmin: 0.25
-  #     fmax: 0.5
-  #     statistic: max
-
+  # Phase slope index (wavelet)
   PhaseSlopeIndex:
-    # The `max` variants are not bundled: the maximum over time of the
-    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent
@@ -1201,7 +1009,9 @@
       - fmin: 0.25
         fmax: 0.5
 
+# Miscellaneous statistics
 .statistics.misc:
+  # Linear model regression
   LinearModel:
     labels:
       - directed
@@ -1228,7 +1038,7 @@
     configs:
       - method: johansen
         statistic: max_eig_stat
-        det_order: 0 # Constant trend
+        det_order: 0
         k_ar_diff: 10
 
       - method: johansen
@@ -1238,7 +1048,7 @@
 
       - method: johansen
         statistic: max_eig_stat
-        det_order: 0 # Constant trend
+        det_order: 0
         k_ar_diff: 1
 
       - method: johansen
@@ -1248,7 +1058,7 @@
 
       - method: johansen
         statistic: max_eig_stat
-        det_order: 1 # Linear trend
+        det_order: 1
         k_ar_diff: 10
 
       - method: johansen
@@ -1326,7 +1136,7 @@
       - undirected
       - nonlinear
     dependencies:
-    configs: # default params
+    configs:
       - terms: 6
         pnorm: 'max'
         bandwidth: 0.5

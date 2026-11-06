@@ -13,7 +13,9 @@
     configs:
       - estimator: EmpiricalCovariance
 
+# Distance-based statistics
 .statistics.distance:
+  # Dynamic time warping
   DynamicTimeWarping:
     labels:
       - undirected
@@ -26,9 +28,8 @@
     configs:
       - global_constraint: itakura
 
+  # Barycenter
   Barycenter:
-    # The DTW-type barycenters bundle `corr` rather than `mean`: the barycenter of
-    # z-scored series has mean ~0, and its squared mean is a monotone function of `corr`.
     labels:
       - undirected
       - nonlinear
@@ -43,6 +44,7 @@
         labels:
           - M09
 
+# Causal inference statistics
 .statistics.causal:
 
   # Additive noise model
@@ -60,7 +62,8 @@
 
 # Information-theoretic statistics
 .statistics.infotheory:
-  DirectedInfo: # No theiler window yet
+  # Directed information
+  DirectedInfo:
     labels:
       - directed
       - nonlinear
@@ -70,15 +73,6 @@
       - M03
     configs:
       - estimator: gaussian
-      # Disabled: composing directed information from four separately-estimated
-      # entropies leaves each with its own dimension-dependent bias, and they do
-      # not cancel. On independent data the kernel variant sat at 3.8-4.4 for
-      # every T from 100 to 8000 (a fixed bandwidth in ~11 dimensions does not
-      # improve with sample size) and kozachenko returned negatives, for a
-      # quantity bounded below by zero. Use estimator: kraskov, which estimates
-      # each conditional-MI term directly.
-      # - estimator: kernel
-      # - estimator: kozachenko
 
   # Transfer entropy
   TransferEntropy:
@@ -97,25 +91,6 @@
         tau_search_max: 4
         dyn_corr_excl: AUTO
   
-      # Disabled: k_history=1 gives a single ordinal symbol, so the transfer
-      # entropy is identically zero. Rejected at construction; kept here as a
-      # record of what was dropped.
-      # - estimator: symbolic
-      #   k_history: 1
-      #   l_history: 1
-      #   labels:
-      #     - M05
-      #
-      # Disabled: severely undersampled and unvalidated at T=100. 10! symbols
-      # against ~91 usable samples: on var1 and cml every joint count is 1, so
-      # the value tracks sample size rather than dependence, but that does not
-      # hold universally (kuramoto: 3 of 42 pairs). Still constructible, and
-      # defensible for long series where the symbol space is populated.
-      # - estimator: symbolic
-      #   k_history: 10
-      #   l_history: 1
-      #   labels:
-      #     - M05
 
   # Integrated information
   IntegratedInformation:
@@ -130,9 +105,10 @@
     configs:
       - phitype: 'star'
 
-# statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
+# Spectral (frequency-domain) statistics (see Schoegl and Supp, 2006)
 .statistics.spectral:
 
+  # Magnitude-squared coherence
   CoherenceMagnitude:
     labels:
       - undirected
@@ -145,6 +121,7 @@
     configs:
       - fs: 1
 
+  # Phase slope index
   PhaseSlopeIndex:
     labels:
       - linear/nonlinear
@@ -157,6 +134,7 @@
       - fmin: 0
         fmax: 0.5
 
+  # Phase lag index
   PhaseLagIndex:
     labels:
       - linear
@@ -171,8 +149,8 @@
         labels:
           - M14
 
+  # Spectral Granger causality
   SpectralGrangerCausality:
-      # Non-parametric Granger causality (no VAR model)
     labels:
       - directed
       - linear
@@ -187,8 +165,9 @@
         fmax: 0.5
         statistic: mean
 
-# statistics that analyse in the wavlet-domain (only Mortlet wavelet's at the moment)
+# Wavelet (time-frequency) statistics, from Morlet wavelets
 .statistics.wavelet:
+  # Phase slope index (wavelet)
   PhaseSlopeIndex:
     labels:
       - unsigned
@@ -199,6 +178,7 @@
     configs:
       - fs: 1
 
+# Miscellaneous statistics
 .statistics.misc:
   # Cointegration
   Cointegration:
