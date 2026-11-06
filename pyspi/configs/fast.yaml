@@ -239,7 +239,7 @@
   #   dependencies:
   #   configs:
 
-  # Normalised Liang-Kleeman information flow, pairwise (Liang 2014, 2015)
+  # Liang-Kleeman information flow
   LiangInformationFlow:
     labels:
       - directed

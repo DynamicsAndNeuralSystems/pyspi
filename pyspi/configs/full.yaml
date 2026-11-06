@@ -491,8 +491,7 @@
       - statistic: diff
         embedding_dimension: 10
 
-  # Liang-Kleeman rate of information flow, pairwise (Liang 2014) or conditioned
-  # on all series (Liang 2021), raw or normalised (Liang 2015)
+  # Liang-Kleeman information flow
   LiangInformationFlow:
     labels:
       - directed
