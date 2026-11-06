@@ -83,8 +83,7 @@
       - squared: True
       - squared: False
 
-  # Chatterjee's rank correlation xi (Chatterjee 2021): directed, row = source;
-  # tau > 0 pairs x_i[:-tau] with x_j[tau:]
+  # Chatterjee's rank correlation xi
   ChatterjeeXi:
     labels:
       - directed
@@ -384,25 +383,6 @@
       - estimator: gaussian
         k_history: 1
         l_history: 1
-      # Disabled: k_history=1 gives a single ordinal symbol, so the transfer
-      # entropy is identically zero. Rejected at construction; kept here as a
-      # record of what was dropped.
-      # - estimator: symbolic
-      #   k_history: 1
-      #   l_history: 1
-      #   labels:
-      #     - M05
-      #
-      # Disabled: severely undersampled and unvalidated at T=100. 10! symbols
-      # against ~91 usable samples: on var1 and cml every joint count is 1, so
-      # the value tracks sample size rather than dependence, but that does not
-      # hold universally (kuramoto: 3 of 42 pairs). Still constructible, and
-      # defensible for long series where the symbol space is populated.
-      # - estimator: symbolic
-      #   k_history: 10
-      #   l_history: 1
-      #   labels:
-      #     - M05
 
 # statistics that analyse in the frequency-domain (see Schoegl and Supp, 2006)
         labels:
@@ -585,7 +565,6 @@
 
 
   DebiasedSquaredPhaseLagIndex:
-    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -610,7 +589,6 @@
           - M12
 
   DebiasedSquaredWeightedPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled; see DebiasedSquaredPhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -713,12 +691,6 @@
   #     statistic: max
 
   DirectedCoherence:
-    # Directed coherence is recomputed in pyspi (see DirectedCoherence in
-    # statistics/spectral.py): the backend puts |H|^2 in the numerator while
-    # the denominator is on the magnitude scale, which made it unbounded
-    # (baselines reached 3.27 / 1.84 / 1139.47). The corrected form is bounded
-    # in [0,1] and reproduces sqrt(directed_transfer_function()) to 4e-16 under
-    # an identity noise covariance, which is the identity DC must satisfy.
     labels:
       - directed
       - linear
@@ -1199,8 +1171,6 @@
   #     statistic: max
 
   PhaseSlopeIndex:
-    # The `max` variants are not bundled: the maximum over time of the
-    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent

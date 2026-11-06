@@ -2,7 +2,6 @@
 .statistics.basic:
   # Covariance
   Covariance:
-    # EllipticEnvelope is not bundled: its covariance_ and precision_ are MinCovDet's.
     labels:
       - undirected
       - linear
@@ -36,7 +35,6 @@
 
   # Precision
   Precision:
-    # EllipticEnvelope is not bundled; see Covariance.
     labels:
       - undirected
       - linear
@@ -96,8 +94,7 @@
       - squared: True
       - squared: False
 
-  # Chatterjee's rank correlation xi (Chatterjee 2021): directed, row = source;
-  # tau > 0 pairs x_i[:-tau] with x_j[tau:]
+  # Chatterjee's rank correlation xi
   ChatterjeeXi:
     labels:
       - directed
@@ -114,7 +111,7 @@
         labels:
           - time-dependent
 
-  # Lagged correlation coefficient (class in pyspi/statistics/basic.py)
+  # Lagged correlation coefficient
   LaggedCorrelation:
     labels:
       - undirected
@@ -321,8 +318,7 @@
       - global_constraint: itakura
       - global_constraint: sakoe_chiba
 
-  # Cross pairwise distance (class in pyspi/statistics/distance.py)
-  # Shifted-path Euclidean upper bound on DTW.
+  # Cross pairwise distance
   CrossPairwiseDistance:
     labels:
       - undirected
@@ -369,9 +365,6 @@
       - global_constraint: sakoe_chiba
 
   Barycenter:
-    # The DTW-type barycenters bundle `corr` rather than `mean`: the barycenter of
-    # z-scored series has mean ~0, and its squared mean is a monotone function of `corr`.
-    # bary_euclidean_mean is not bundled: it is identically zero on z-scored data.
     labels:
       - undirected
       - nonlinear
@@ -538,8 +531,6 @@
       - estimator: kernel
 
   CausalEntropy: # No theiler window yet
-    # The kernel estimator is not bundled: a fixed-width box kernel in about ten
-    # dimensions does not converge with T.
     labels:
       - directed
       - nonlinear
@@ -552,8 +543,6 @@
       - estimator: kozachenko
 
   CrossmapEntropy: # No theiler window yet
-    # The kernel estimator at history_length 10 is not bundled: a fixed-width box
-    # kernel in 11 dimensions does not converge with T.
     labels:
       - unsigned
       - directed
@@ -578,16 +567,6 @@
 
 
   DirectedInfo: # No theiler window yet
-      # Disabled: composing directed information from four separately-estimated
-      # entropies leaves each with its own dimension-dependent bias, and they do
-      # not cancel. On independent data the kernel variant sat at 3.8-4.4 for
-      # every T from 100 to 8000 (a fixed bandwidth in ~11 dimensions does not
-      # improve with sample size) and kozachenko returned negatives, for a
-      # quantity bounded below by zero. Use estimator: kraskov, which estimates
-      # each conditional-MI term directly.
-      # - estimator: kernel
-      # - estimator: kozachenko
-
     labels:
       - directed
       - nonlinear
@@ -597,11 +576,6 @@
       - M03
     configs:
       - estimator: gaussian
-      # Direct KSG/Frenzel-Pompe conditional-MI estimate. The kernel and
-      # kozachenko variants were dropped because composing DI from separate
-      # entropies leaves each with its own dimension-dependent bias; this
-      # estimates each I(X^i; Y_i | Y^{i-1}) term directly, so the biases
-      # cancel. Not added to the benchmarked_p* sets until it has been timed.
       - estimator: kraskov
         prop_k: 4
 
@@ -722,7 +696,6 @@
         labels:
           - M14
 
-      # Gaussian estimation has no Theiler/dynamic-correlation exclusion option
       - estimator: gaussian
         auto_embed_method: MAX_CORR_AIS
         k_search_max: 10
@@ -735,25 +708,6 @@
         l_history: 1
         labels:
           - M05
-      # Disabled: k_history=1 gives a single ordinal symbol, so the transfer
-      # entropy is identically zero. Rejected at construction; kept here as a
-      # record of what was dropped.
-      # - estimator: symbolic
-      #   k_history: 1
-      #   l_history: 1
-      #   labels:
-      #     - M05
-      #
-      # Disabled: severely undersampled and unvalidated at T=100. 10! symbols
-      # against ~91 usable samples: on var1 and cml every joint count is 1, so
-      # the value tracks sample size rather than dependence, but that does not
-      # hold universally (kuramoto: 3 of 42 pairs). Still constructible, and
-      # defensible for long series where the symbol space is populated.
-      # - estimator: symbolic
-      #   k_history: 10
-      #   l_history: 1
-      #   labels:
-      #     - M05
 
   IntegratedInformation:
     labels:
@@ -824,8 +778,7 @@
         fmax: 0.5
         statistic: max
 
-  # Phase-aligned correlation: zero-lag correlation maximised over
-  # all-pass filters, from Welch cross-spectra. nperseg null = automatic length.
+  # Phase-aligned correlation
   PhaseAlignedCorrelation:
     labels:
       - undirected
@@ -920,8 +873,6 @@
         statistic: max
 
   PhaseLagIndex:
-    # Only the `mean` band statistic is bundled: with one recording the PLI at each
-    # frequency is a mean of signs over a few tapers, so its band maximum saturates at 1.
     labels:
       - linear
       - unsigned
@@ -946,7 +897,6 @@
 
 
   WeightedPhaseLagIndex:
-    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - linear
       - unsigned
@@ -971,7 +921,6 @@
 
 
   DebiasedSquaredPhaseLagIndex:
-    # Only the `mean` band statistic is bundled; see PhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -996,7 +945,6 @@
           - M12
 
   DebiasedSquaredWeightedPhaseLagIndex:
-    # NOTE: only the `mean` band statistic is bundled; see DebiasedSquaredPhaseLagIndex.
     labels:
       - undirected
       - linear
@@ -1099,12 +1047,6 @@
   #     statistic: max
 
   DirectedCoherence:
-    # Directed coherence is recomputed in pyspi (see DirectedCoherence in
-    # statistics/spectral.py): the backend puts |H|^2 in the numerator while
-    # the denominator is on the magnitude scale, which made it unbounded
-    # (baselines reached 3.27 / 1.84 / 1139.47). The corrected form is bounded
-    # in [0,1] and reproduces sqrt(directed_transfer_function()) to 4e-16 under
-    # an identity noise covariance, which is the identity DC must satisfy.
     labels:
       - directed
       - linear
@@ -1415,8 +1357,6 @@
 # statistics that analyse in the wavelet-domain (only Mortlet wavelet's at the moment)
 .statistics.wavelet:
   PhaseSlopeIndex:
-    # The `max` variants are not bundled: the maximum over time of the
-    # instantaneous phase slope tends to its bound whatever the data.
     labels:
       - unsigned
       - time/frequency dependent
@@ -1434,9 +1374,6 @@
 
 .statistics.misc:
   LinearModel:
-    # Lasso and ElasticNet are not bundled: at sklearn's default alpha=1 the L1
-    # penalty zeroes the slope on z-scored data (always for Lasso, unless |r| > 0.5
-    # for ElasticNet), so the MSE is mostly the constant (T-1)/T.
     labels:
       - directed
       - linear
