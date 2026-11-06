@@ -1140,3 +1140,32 @@
       - terms: 6
         pnorm: 'max'
         bandwidth: 0.5
+
+# Event and extreme-value statistics
+.statistics.events:
+  # Event synchronisation
+  EventSynchronisation:
+    labels:
+      - undirected
+      - nonlinear
+      - signed/unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: q
+        quantile: 0.95
+
+  # Tail-dependence asymmetry
+  TailDependenceAsymmetry:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - quantile: 0.95

@@ -271,6 +271,13 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
+- **Event synchronisation of extremes (`EventSynchronisation`, new module `pyspi/statistics/events.py`).**
+  Each series is reduced to the onsets of its runs above its own `quantile`, and coincidences within half the local inter-event gaps are counted (Quian Quiroga, Kreuz & Grassberger 2002; Odenweller & Donner 2020).
+  `es_Q_q-*` is the synchronisation strength in [0, 1] (undirected) and `es_q_q-*` the delay asymmetry in [-1, 1] (antisymmetric; `q[i, j] > 0` when the extremes of i precede those of j).
+  Four SPIs in `full` (`es_{Q,q}_q-0-95`, `es_{Q,q}_q-0-9`), `es_q_q-0-95` in `fast`.
+- **Tail-dependence asymmetry (`TailDependenceAsymmetry`, same module).**
+  `tailasym_q-*` is the empirical upper minus lower tail-dependence coefficient on ranks (Joe 1997; Schmidt & Stadtmueller 2006), in [-1, 1], undirected and signed; it is zero under any elliptical copula.
+  Two SPIs in `full` (`tailasym_q-0-95`, `tailasym_q-0-9`), `tailasym_q-0-95` in `fast`.
 
 ### Dependencies
 
