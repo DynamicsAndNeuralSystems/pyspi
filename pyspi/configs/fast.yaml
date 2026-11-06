@@ -1346,8 +1346,7 @@
     configs:
       - order: bic
 
-  # Conditional partial directed coherence and squared partial coherence from the
-  # same VAR as cgc_* (Baccala & Sameshima 2001; Dahlhaus 2000)
+  # Conditional partial directed coherence
   ConditionalPartialDirectedCoherence:
     labels:
       - directed

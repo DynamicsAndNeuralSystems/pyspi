@@ -1581,8 +1581,7 @@
         labels:
           - signed
 
-  # Conditional partial directed coherence from the same VAR as cgc_*
-  # (Baccala & Sameshima 2001)
+  # Conditional partial directed coherence
   ConditionalPartialDirectedCoherence:
     labels:
       - directed
@@ -1603,8 +1602,7 @@
         fmin: 0.25
         fmax: 0.5
 
-  # Conditional generalised PDC, each target weighted by its innovation variance
-  # (Baccala, Sameshima & Takahashi 2007)
+  # Conditional generalised partial directed coherence
   ConditionalGeneralizedPartialDirectedCoherence:
     labels:
       - directed
@@ -1625,8 +1623,7 @@
         fmin: 0.25
         fmax: 0.5
 
-  # Conditional direct DTF: full-frequency DTF times the partial coherence
-  # (Korzeniewska et al. 2003)
+  # Conditional direct directed transfer function
   ConditionalDirectDirectedTransferFunction:
     labels:
       - directed
@@ -1647,8 +1644,7 @@
         fmin: 0.25
         fmax: 0.5
 
-  # Squared partial coherence given all other processes, from the same VAR
-  # (Dahlhaus 2000)
+  # Partial coherence
   PartialCoherence:
     labels:
       - undirected
