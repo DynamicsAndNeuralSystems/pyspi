@@ -1331,7 +1331,7 @@
         pnorm: 'max'
         bandwidth: 0.5
 
-# statistics from one vector autoregressive (VAR) model of all processes
+# Vector autoregressive (VAR) model statistics
 .statistics.var:
   # Conditional Granger causality
   ConditionalGrangerCausality:
