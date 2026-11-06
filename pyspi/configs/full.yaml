@@ -1416,8 +1416,7 @@
 
 # statistics that couple different frequencies
 .statistics.crossfreq:
-  # Phase-amplitude coupling, row phase -> column amplitude: modulation index
-  # (Tort et al. 2010) and normalised mean vector length (Ozkurt & Schnitzler 2011)
+  # Phase-amplitude coupling
   PhaseAmplitudeCoupling:
     labels:
       - directed
