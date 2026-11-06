@@ -1515,3 +1515,24 @@
       - terms: 6
         pnorm: 'max'
         bandwidth: 0.5
+
+# Vector autoregressive (VAR) model statistics
+.statistics.var:
+  # Conditional Granger causality
+  ConditionalGrangerCausality:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - time-dependent
+      - M05
+    dependencies:
+    configs:
+      - order: 1
+      - order: 2
+      - order: bic
+      - order: bic
+        statistic: coef
+        labels:
+          - signed

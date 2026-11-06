@@ -271,6 +271,11 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
+- **Conditional Granger causality, `cgc_*`** (new module `pyspi/statistics/var.py`).
+  One OLS VAR(p) is fitted to all processes, and `F[i, j] = ln(var_r / var_f)` compares target j's residual variance with and without the lags of source i (Geweke 1984; Barnett & Seth 2014).
+  Conditioning on every other process means an indirect link or a common driver gives about 0.
+  It is on Geweke's scale, twice that of `gc_gaussian_*`.
+  Bundled as `cgc_p-1`, `cgc_p-2`, `cgc_p-bic` (order 1-10 chosen by BIC; also in `fast`) and `cgc_p-bic_coef` (signed net lagged coefficient).
 
 ### Dependencies
 
