@@ -240,8 +240,8 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **A failed pair is `ERROR`, not an anonymous NaN.**
   A pair that raises inside an SPI that otherwise succeeds (see "One undefined pair no longer voids an SPI" under Changed) is still NaN with one warning, and is now labelled `ERROR`, with its message in the new `calc.pair_errors` (`{spi: [(source, target, message), ...]}`).
   `calc.errors` keeps its shape and holds SPI-level failures only.
-  An undirected SPI built on `Undirected.multivariate` overwrites its lower triangle with the upper one, so only upper-triangle failures count: each is mirrored onto its lower cell, keeping the codes symmetric like the values, and a lower-triangle failure is discarded with its value (not reported, not counted in the warning).
-  Such an SPI now raises when every upper-triangle pair fails, giving the estimator's message in `calc.errors`; it had been an all-NaN failure with a generic message.
+  An undirected SPI built on `Undirected.multivariate` evaluates each pair once, as `(i, j)` with `i < j`, and mirrors it, so a failure is mirrored onto its lower cell, keeping the codes symmetric like the values, and counted once in the warning.
+  Such an SPI now raises when every pair fails, giving the estimator's message in `calc.errors`; it had been an all-NaN failure with a generic message.
 - An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, as before with its message in `calc.errors`.
   An SPI that returns only NaN keeps code `NAN` and its `calc.errors` entry.
 - **Files and checkpoints keep the codes.**
@@ -291,6 +291,15 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **Distance correlation and the Kraskov estimators are faster, with identical values.** `dcorr` and `dcorr_biased` evaluated both orders of every pair and discarded one; they now evaluate the retained order only (2.0x at M=8, T=5000). Kraskov MI, time-lagged MI and transfer entropy counted marginal neighbours by materialising a Python list per observation, and with a Theiler window by one tree query per observation; counts now come from one batched query, less the temporally excluded neighbours found inside the ball, one time offset at a time in O(N) memory (3-10x on the seven p90 Kraskov SPIs at T=5000, more with `dyn_corr_excl`). Radii, strict boundaries, the exclusion window and errors are unchanged and every output is bit-identical, so `COMPUTATION_VERSION` does not move.
 - **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (30 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
 - **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
+- **Undirected SPIs evaluate each unordered pair once, with identical values.**
+  `Undirected.multivariate` evaluated `bivariate` for both orders of every pair and then copied the upper triangle over the lower one, discarding half the work.
+  It now evaluates `i < j` only, in the order the old loop reached those pairs, and mirrors each value and each failure.
+  `phi_*` is 1.9x faster (0.73 s to 0.38 s for the four `full` SPIs at M=10, T=500).
+  The other SPIs on this loop (`bary_*`, `xcorr_*`, `je_kozachenko`, `je_kernel_*`) already served the second order from a cache, and `hsic`, `hhg`, `dcorr`, `mgc`, `lcss`, `softdtw`, `gwtau`, `mi_kernel_*` and `si_*` already skipped it through their own loops, so their cost is unchanged; those loops are removed and the classes use the shared one.
+  For the distance SPIs among them (`hsic*`, `hhg`, `dcorr*`, `mgc`, `lcss*`, `softdtw*`, `gwtau`) this means a pair that raises is NaN with a warning, as for every other SPI, instead of failing the SPI.
+  `xcorr_*` and the joint-entropy cache shared by `je_*` and `ce_*` now compute a pair in one orientation, (larger, smaller), whichever is asked for first: the orientation the old loops computed it in.
+  Every stored value, quality code and pair error is bit-identical on the three drift fixtures and the three bundled datasets, so `COMPUTATION_VERSION` does not move.
+  A direct `bivariate(data, i=i, j=j)` call with `i < j` on a fresh `Data` can differ in the last bit for `xcorr_*`, `je_*` and `ce_*`.
 
 ### Added
 

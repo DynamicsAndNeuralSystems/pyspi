@@ -1819,7 +1819,7 @@ def _dcorr_inputs():
 
 @pytest.mark.parametrize("biased", [False, True])
 @pytest.mark.parametrize("case", list(_dcorr_inputs()))
-def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
+def test_distance_correlation_equals_the_both_orders_pair_loop(case, biased):
     """Same matrix, bit for bit, as evaluating both orders and keeping one.
 
     Constant and three-sample inputs are included: the outcome (NaN, or a
@@ -1827,8 +1827,15 @@ def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
     """
     import warnings
 
-    from pyspi.base import Undirected
+    from pyspi.base import Directed
     from pyspi.statistics.distance import DistanceCorrelation
+
+    def both_orders(spi, data):
+        # What `Undirected.multivariate` did before it evaluated i < j only.
+        A = Directed.multivariate(spi, data)
+        lower = np.tril_indices(data.n_processes, -1)
+        A[lower] = A.T[lower]
+        return A
 
     series = _dcorr_inputs()[case]
     spi = DistanceCorrelation(biased=biased)
@@ -1846,7 +1853,7 @@ def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
         return out
 
     retained, reference = (run(DistanceCorrelation.multivariate),
-                           run(Undirected.multivariate))
+                           run(both_orders))
     assert retained[0] == reference[0]
     if retained[0] == "raised":
         assert retained == reference
@@ -1857,8 +1864,9 @@ def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
 
 
 def test_distance_correlation_calls_each_pair_once_in_the_retained_order(monkeypatch):
-    """Half the calls, each as (i, j) with i < j, in the inherited order."""
-    from pyspi.base import Undirected
+    """Half the calls of the both-orders loop, each as (i, j) with i < j, in
+    the order that loop reached them."""
+    from pyspi.base import Directed
     from pyspi.statistics.distance import DistanceCorrelation
 
     data = _data(m=5, t=40)
@@ -1871,7 +1879,7 @@ def test_distance_correlation_calls_each_pair_once_in_the_retained_order(monkeyp
     spi = DistanceCorrelation()
     spi.multivariate(data)
     retained, calls[:] = list(calls), []
-    Undirected.multivariate(spi, data)
+    Directed.multivariate(spi, data)
 
     assert len(retained) == 10 and len(calls) == 20
     assert retained == [(i, j) for i, j in calls if i < j]
