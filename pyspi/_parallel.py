@@ -44,7 +44,6 @@ def default_mp_context() -> str:
 
     fork on Linux: workers inherit the parent's already-imported modules and
     instantiated SPIs via copy-on-write, so worker startup is near-instant.
-    Measured ~2x faster end-to-end than spawn for a 252-SPI run.
 
     spawn elsewhere: fork is unsafe on macOS (Accelerate/CoreFoundation after
     init) and absent on Windows; spawn re-imports per worker but is correct.
