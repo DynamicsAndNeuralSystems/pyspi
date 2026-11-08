@@ -1,6 +1,6 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (305 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (306 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
@@ -8,13 +8,13 @@ Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs
 | identifier unchanged | 224 |
 | renamed (same class and parameters; identifier changed) | 23 |
 | removed | 38 |
-| added | 58 |
-| 3.0.0 `full.yaml` | 305 |
+| added | 59 |
+| 3.0.0 `full.yaml` | 306 |
 
-285 - 38 removed + 58 added = 305; 224 + 23 renamed + 58 added = 305.
+285 - 38 removed + 59 added = 306; 224 + 23 renamed + 59 added = 306.
 The 38 removals are 14 made while porting away from JIDT and 24 duplicate, constant or degenerate SPIs; all are in the table below.
 
-## Added (58)
+## Added (59)
 
 | Family | Count | Identifiers |
 |:--|--:|:--|
@@ -25,6 +25,7 @@ The 38 removals are 14 made while porting away from JIDT and 24 duplicate, const
 | `Barycenter` (alignment-adjusted correlation `2 mean(b^2) / mean_energy - 1`; replaces the `mean` statistic) | 3 | `bary_dtw_corr`, `bary_sgddtw_corr`, `bary_softdtw_corr` |
 | `DirectedInfo` (KSG/Frenzel-Pompe) | 1 | `di_kraskov_NN-4_n-5` |
 | `PhaseAlignedCorrelation` (Welch, automatic segment length) | 1 | `phasealigned_welch_nperseg-auto` |
+| `TransferEntropy` (symbolic, 3-sample ordinal patterns) | 1 | `te_symbolic_k-3` |
 
 Full list:
 
@@ -86,6 +87,7 @@ Full list:
 - `pcorr_ShrunkCovariance`
 - `xi_tau-0`
 - `xi_tau-1`
+- `te_symbolic_k-3`
 
 ## Removed (38)
 
