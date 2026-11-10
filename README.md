@@ -136,7 +136,7 @@ name or a path to your own YAML:
 | `"fast"` | 197 | General use; drops the slowest SPIs. |
 | `"benchmarked_p99"` | 291 | Near-complete, with only the worst cost outliers removed. |
 | `"benchmarked_p95"` | 278 | Good coverage/cost trade-off. |
-| `"benchmarked_p90"` | 264 | Recommended default for large batches. |
+| `"benchmarked_p90"` | 274 | Recommended default for large batches. |
 | `"benchmarked_p80"` | 237 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14). |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |
@@ -147,6 +147,8 @@ distribution. They were derived from a benchmark grid spanning *M* ∈ {4..64} a
 *T* ∈ {200..3200}; see [`bench/README.md`](bench/README.md) for the methodology
 and [`bench/results/analysis/report.md`](bench/results/analysis/report.md) for
 the measurements.
+
+`benchmarked_p90` also retains explicit coverage additions: two Kraskov TE variants with dynamic correlation exclusion, both Chatterjee ξ lags, all seven partial correlations and symbolic TE with three-sample ordinal patterns. These additions are not a fresh percentile cut; see the config header when regenerating it.
 
 To build your own subset by keyword:
 

@@ -263,6 +263,8 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 
 ### Added
 
+- `benchmarked_p90` includes `xi_tau-{0,1}`, all seven `pcorr_<estimator>` variants and `te_symbolic_k-3` (264 → 274 SPIs). These are explicit coverage additions to the existing benchmark-derived set; no existing SPI is removed or numerically changed.
+
 - **`xi_tau-0` and `xi_tau-1`: Chatterjee's rank correlation xi** (Chatterjee 2021, JASA 116:2009), class `ChatterjeeXi` in `pyspi/statistics/basic.py`.
   It is directed (`A[i, j] = xi(x_i, x_j)`, row = source): it tends to 1 iff the column process is a measurable function of the row process and to 0 iff they are independent, so it also detects non-monotone dependence such as `y = x^2`.
   `tau > 0` pairs `x_i[:-tau]` with `x_j[tau:]`.
@@ -393,7 +395,7 @@ Definitions the corrected measures are checked against:
 | **Added** | 59 | `LaggedCorrelation` (42), `PartialCorrelation` (7), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `ChatterjeeXi` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1), `te_symbolic_k-3` (1) |
 | 3.0.0 `full.yaml` | 306 | 285 − 38 + 59 |
 
-Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 197, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (291, 278, 264 and 237 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
+Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 197, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (291, 278, 274 and 237 SPIs); `p90` includes the coverage additions listed above. The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
 Every removal and rename below is deliberate.
 

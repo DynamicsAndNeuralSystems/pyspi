@@ -3,11 +3,12 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 264 of the 296 SPIs benchmarked (including two manual te_kraskov DCE variants).
+# Current set: 274 SPIs (262 from the 296-SPI benchmark plus 12 coverage additions).
 # Cutoff        : fastest kept <= 5.520s ; slowest dropped >= 6.790s.
 #
-# Manual edit: te_kraskov_NN-4_DCE_k-{1,2}_kt-1_l-1_lt-1 are kept for coverage;
-# re-apply after re-running bench/cut_config.py.
+# Coverage additions: te_kraskov_NN-4_DCE_k-{1,2}_kt-1_l-1_lt-1,
+# xi_tau-{0,1}, all seven pcorr_<estimator> variants and te_symbolic_k-3.
+# Re-apply after re-running bench/cut_config.py; this is not a new percentile cut.
 #
 .statistics.basic:
   Covariance:
@@ -76,6 +77,25 @@
     - estimator: ShrunkCovariance
       squared: true
 
+  # Partial correlation
+  PartialCorrelation:
+    labels:
+      - undirected
+      - linear
+      - signed
+      - multivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+    - estimator: EmpiricalCovariance
+    - estimator: GraphicalLasso
+    - estimator: GraphicalLassoCV
+    - estimator: LedoitWolf
+    - estimator: MinCovDet
+    - estimator: OAS
+    - estimator: ShrunkCovariance
+
   SpearmanR:
     labels:
       - undirected
@@ -101,6 +121,23 @@
     configs:
     - squared: true
     - squared: false
+
+  # Chatterjee's rank correlation xi
+  ChatterjeeXi:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - M14
+    dependencies:
+    configs:
+    - tau: 0
+      labels:
+      - contemporaneous
+    - tau: 1
+      labels:
+      - time-dependent
 
   LaggedCorrelation:
     labels:
@@ -570,6 +607,10 @@
       k_history: 1
       l_history: 1
       dyn_corr_excl: AUTO
+    - estimator: symbolic
+      k_history: 3
+      labels:
+      - M05
 
   IntegratedInformation:
     labels:
