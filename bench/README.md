@@ -85,10 +85,7 @@ Output goes to `pyspi/configs/benchmarked_p<N>.yaml`. Dropped SPIs are left
 out of the YAML and listed with their cost in the `# --- DROPPED ---` footer.
 Pass `--preserve-dropped` to keep them as commented-out blocks instead.
 
-**`benchmarked_p90.yaml` carries a hand edit**: the two `te_kraskov_..._DCE_k-{1,2}`
-variants were added back after the cut for methodological reasons. Re-running
-`cut_config` overwrites it, so re-apply it by hand afterwards (the config's
-header names the two variants).
+**`benchmarked_p90.yaml` carries coverage additions**: two `te_kraskov_..._DCE_k-{1,2}` variants, `xi_tau-{0,1}`, all seven `pcorr_<estimator>` variants and `te_symbolic_k-3`. Its 274 SPIs comprise 262 retained from the original 296-SPI benchmark and these 12 additions; this is not a fresh percentile cut. Re-running `cut_config` overwrites the additions, so re-apply them afterwards (the config header names them).
 
 ## Analyse
 
