@@ -6,7 +6,7 @@ non-finite value is reported the same way in both paths, and whether the
 failure survives into a structured, inspectable place rather than only a
 transient ``warnings.warn``.
 
-Both paths route through ``_parallel.run_spi``, failures land in
+Both paths route through ``_parallel.execute_spi``, failures land in
 ``calc.errors``, worker-side warnings are returned to the parent and re-emitted
 there, and ``calc.run_spec`` records the resolved run.
 

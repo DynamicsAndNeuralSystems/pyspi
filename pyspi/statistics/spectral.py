@@ -41,7 +41,7 @@ def _surface_backend_log_warnings():
     gPDC, nonparametric spectral GC) is computed from that factor.
 
     pyspi records per-SPI diagnostics from the ``warnings`` channel only
-    (``_parallel.run_spi``), and logging is a different channel. This bridges
+    (``_parallel.execute_spi``), and logging is a different channel. This bridges
     the two for the duration of one backend call, so a caller inspecting
     ``calc.errors``/warnings can see which pairs the factorisation failed on.
     It does not change any value. Improving the estimate itself (longer series,
