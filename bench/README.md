@@ -89,7 +89,7 @@ Pass `--preserve-dropped` to keep them as commented-out blocks instead.
 `te_kraskov_..._DCE_k-{1,2}` variants were added back to `benchmarked_p90`
 after the cut for methodological reasons, and the kernel `_DCE-AUTO` SPIs,
 added since the last bench, are in the cuts whose cutoff their estimated cost
-clears. Re-running
+(at the largest AUTO window) clears. Re-running
 `cut_config` overwrites them, so re-apply them by hand afterwards.
 
 **A new SPI goes into `benchmarked_p90`** (and so `p95` and `p99`, keeping

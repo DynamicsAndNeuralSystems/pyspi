@@ -9,7 +9,7 @@
 # Manual edit: te_kraskov_NN-4_DCE_k-{1,2}_kt-1_l-1_lt-1 are kept for coverage;
 # re-apply after re-running bench/cut_config.py.
 # Manual edit: {mi,tlmi}_kernel_W-0.25_DCE-AUTO and te_kernel_W-0.25_DCE-AUTO_k-1 are added untimed,
-# at an estimated 1.2x their timed no-window variants (under the cutoff);
+# at an estimated 1.2-2.1x their timed no-window variants (under the cutoff);
 # re-apply after re-running bench/cut_config.py.
 #
 .statistics.basic:
