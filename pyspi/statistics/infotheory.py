@@ -318,7 +318,8 @@ class KernelMICalculator:
     With JIDT's ``DYN_CORR_EXCL = dce > 0`` the counts exclude
     ``|j - i| < dce`` (see `_kernel_counts`), ``N`` becomes the number of
     samples each point was compared with, and, as in JIDT, a sample with an
-    empty joint box contributes 0 to the mean over all ``N`` samples.
+    empty joint box contributes 0 to the mean over all ``N`` samples. When
+    every joint box is empty the result is NaN (JIDT gives 0).
     """
 
     def __init__(self):
@@ -381,6 +382,9 @@ class KernelMICalculator:
         n_pool = (N - np.minimum(i, dce - 1) - np.minimum(N - 1 - i, dce - 1) - 1)
         # n_xy > 0 implies n_x, n_y > 0; JIDT adds 0 for an empty joint box.
         nz = n_xy > 0
+        if not nz.any():
+            # No sample has a neighbour, so there is nothing to estimate from.
+            return float('nan')
         local = np.zeros(N)
         local[nz] = (np.log(n_xy[nz]) + np.log(n_pool[nz])
                      - np.log(n_x[nz]) - np.log(n_y[nz]))
@@ -392,7 +396,8 @@ class KernelTECalculator:
 
     TE(X→Y) = mean(log(n_yn_yp_x * n_yp / (n_yp_x * n_yn_yp)))  [nats]
     Uses box kernel with L∞ norm, half-width = kernel_width.
-    ``DYN_CORR_EXCL`` excludes neighbours as in `KernelMICalculator`.
+    ``DYN_CORR_EXCL`` excludes neighbours as in `KernelMICalculator`, and the
+    result is NaN when every joint box is empty.
     """
 
     def __init__(self):
@@ -466,6 +471,9 @@ class KernelTECalculator:
         # n_yn_yp_x > 0 implies the other three are > 0. As in JIDT, a sample
         # with an empty joint box adds 0 to the mean over all samples.
         nz = n_yn_yp_x > 0
+        if not nz.any():
+            # No sample has a neighbour, so there is nothing to estimate from.
+            return float('nan')
         local = np.zeros(n_pts)
         local[nz] = (np.log(n_yn_yp_x[nz]) + np.log(n_yp[nz])
                      - np.log(n_yp_x[nz]) - np.log(n_yn_yp[nz]))
@@ -1156,8 +1164,9 @@ class InfoTheoryBase(Unsigned):
     ``kraskov`` directed information), so the measures composed from marginal
     entropies (joint, conditional, causal and cross-map entropy, stochastic
     interaction) have none. A window ``w`` excludes neighbours ``|j - i| <= w``
-    for both estimators; 0 means none. An ``AUTO`` window that resolves to 0
-    still excludes the point itself, which KSG always does.
+    for both estimators; 0 means none. An ``AUTO`` window is at least 1 for
+    series of 10 or more samples. For shorter series it is 0, which for the
+    kernel estimators still excludes the point itself, as KSG always does.
     """
 
     _AUTO_EMBED_METHOD_PROP_NAME = "AUTO_EMBED_METHOD"
@@ -1492,7 +1501,10 @@ class InfoTheoryBase(Unsigned):
         """
         if not self._dyn_corr_excl:
             return 0
-        return self._resolve_theiler(data, i, j) + 1
+        w = self._resolve_theiler(data, i, j)
+        if w < 0:
+            raise ValueError(f"Theiler window must be >= 0, got w={w}.")
+        return w + 1
 
 
 class JointEntropy(InfoTheoryBase, Undirected):
