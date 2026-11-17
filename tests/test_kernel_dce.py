@@ -1,7 +1,7 @@
 """Dynamic correlation exclusion (Theiler window) for the kernel estimators.
 
 JIDT parity is pinned in `test_jidt_reference.py`; this module checks the
-contract around it: no window is the existing estimator bit for bit, the
+contract around it: no window and a window of 0 are one estimator, the
 identifier and validation, an independent brute-force reference of the window
 ``|j - i| <= w`` (the kraskov window), and the effect on spurious dependence
 between autocorrelated series.
@@ -49,8 +49,8 @@ def ar_data():
 
 @pytest.mark.parametrize("cls, kw", KERNEL_CLASSES)
 def test_no_window_is_the_existing_estimator(ar_data, cls, kw):
-    """dyn_corr_excl None and 0 give the same identifier and identical values,
-    as for kraskov."""
+    """dyn_corr_excl None and 0 give the same identifier and identical values:
+    as for kraskov, the point itself is excluded either way."""
     base = cls(estimator="kernel", kernel_width=0.25, **kw)
     zero = cls(estimator="kernel", kernel_width=0.25, dyn_corr_excl=0, **kw)
     assert zero.identifier == base.identifier
@@ -120,14 +120,15 @@ def _brute_force_kernel_mi(x, y, width, w):
     return total / N
 
 
-@pytest.mark.parametrize("w", [1, 3, 10, 19])
+@pytest.mark.parametrize("w", [0, 1, 3, 10, 19])
 def test_kernel_mi_matches_a_brute_force_reference(w):
-    """Including windows near N / 2, where the edge pools differ most."""
+    """No window (the point itself excluded) and windows up to N / 2, where
+    the edge pools differ most."""
     rng = np.random.default_rng(7)
     x = rng.standard_normal(40)
     y = 0.6 * x + rng.standard_normal(40)
     data = Data(np.vstack([x, y]), dim_order="ps", zscore=False)
-    spi = MutualInfo(estimator="kernel", kernel_width=0.5, dyn_corr_excl=w)
+    spi = MutualInfo(estimator="kernel", kernel_width=0.5, dyn_corr_excl=w or None)
     assert spi.bivariate(data, i=0, j=1) == pytest.approx(
         _brute_force_kernel_mi(x, y, 0.5, w), abs=1e-12)
 
@@ -145,24 +146,18 @@ def test_window_lowers_spurious_dependence_between_autocorrelated_series(
         ar_data, cls, kw):
     """Independent AR(1) pairs: the true MI, TLMI and TE are all 0.
 
-    Without exclusion the kernel estimates are inflated by each point counting
-    itself and by temporally adjacent samples. A window of 50 lowers every
-    off-diagonal estimate well below its uncorrected value. For MI and TLMI
-    it also lowers the estimate below exclusion of the point itself alone (an
-    AUTO window of 0), i.e. the autocorrelation contributes beyond the
-    self-count; that is not asserted for TE, whose conditioning on the target
-    past already absorbs most of it.
+    With only the point itself excluded, temporally adjacent samples still
+    inflate the estimates; a window of 50 lowers every MI and TLMI estimate.
+    That is not asserted for TE, whose conditioning on the target past
+    already absorbs most of it.
     """
     off = ~np.eye(3, dtype=bool)
     none = cls(estimator="kernel", kernel_width=0.25, **kw).multivariate(ar_data)[off]
-    self_only = _self_only(cls, kw, 0.25, ar_data)[off]
     wide = cls(estimator="kernel", kernel_width=0.25, dyn_corr_excl=50,
                **kw).multivariate(ar_data)[off]
     assert np.all(np.isfinite(wide))
-    assert np.all(none > 0.1)
-    assert np.all(wide < none - 0.05)
     if cls is not TransferEntropy:
-        assert np.all(wide < self_only)
+        assert np.all(wide < none)
 
 
 @pytest.mark.parametrize("cls, kw", KERNEL_CLASSES)
@@ -182,23 +177,12 @@ def test_auto_window_is_per_pair_and_survives_pickling(ar_data, cls, kw):
                                                                    abs=1e-12)
 
 
-def _self_only(cls, kw, width, data):
-    """Values with an AUTO window of 0, which excludes the point itself only."""
-    data = Data(data.to_numpy(squeeze=True), dim_order="ps", zscore=False)
-    data.theiler = np.zeros((data.n_processes, data.n_processes))
-    spi = cls(estimator="kernel", kernel_width=width, dyn_corr_excl="AUTO", **kw)
-    return spi.multivariate(data)
-
-
 @pytest.mark.parametrize("cls, kw", KERNEL_CLASSES)
-def test_auto_window_of_zero_excludes_the_point_itself(cls, kw):
-    """As KSG always does; it is not the uncorrected estimator, and a window
-    of 1 also excludes the neighbours at lag 1."""
+def test_auto_window_of_zero_is_no_window(cls, kw):
+    """Both exclude the point itself only, as for kraskov."""
     rng = np.random.default_rng(1)
-    x = np.cumsum(rng.standard_normal((2, 120)), axis=1)
-    data = Data(x, dim_order="ps")
-    v = _self_only(cls, kw, 0.5, data)[0, 1]
-    none = cls(estimator="kernel", kernel_width=0.5, **kw).bivariate(data, i=0, j=1)
-    one = cls(estimator="kernel", kernel_width=0.5, dyn_corr_excl=1,
-              **kw).bivariate(data, i=0, j=1)
-    assert len({v, none, one}) == 3
+    data = Data(np.cumsum(rng.standard_normal((2, 120)), axis=1), dim_order="ps")
+    data.theiler = np.zeros((2, 2))
+    auto = cls(estimator="kernel", kernel_width=0.5, dyn_corr_excl="AUTO", **kw)
+    none = cls(estimator="kernel", kernel_width=0.5, **kw)
+    assert auto.bivariate(data, i=0, j=1) == none.bivariate(data, i=0, j=1)
