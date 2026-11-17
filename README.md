@@ -134,9 +134,9 @@ name or a path to your own YAML:
 |:----------|-----:|:---------|
 | `"full"` (default) | 309 | You want everything and can afford it. |
 | `"fast"` | 199 | General use; drops the slowest SPIs. |
-| `"benchmarked_p99"` | 294 | Near-complete, with only the worst cost outliers removed. |
-| `"benchmarked_p95"` | 281 | Good coverage/cost trade-off. |
-| `"benchmarked_p90"` | 267 | Recommended default for large batches. |
+| `"benchmarked_p99"` | 304 | Near-complete, with only the worst cost outliers removed. |
+| `"benchmarked_p95"` | 291 | Good coverage/cost trade-off. |
+| `"benchmarked_p90"` | 277 | Recommended default for large batches. |
 | `"benchmarked_p80"` | 237 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14). |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |

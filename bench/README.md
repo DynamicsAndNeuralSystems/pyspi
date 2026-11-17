@@ -87,9 +87,9 @@ Pass `--preserve-dropped` to keep them as commented-out blocks instead.
 
 **The shipped cuts carry hand edits**, named in each config's header: the two
 `te_kraskov_..._DCE_k-{1,2}` variants were added back to `benchmarked_p90`
-after the cut for methodological reasons, and the kernel `_DCE-AUTO` SPIs,
-added since the last bench, are in the cuts whose cutoff their estimated cost
-(at the largest AUTO window) clears. Re-running
+after the cut for methodological reasons, and `xi_tau-{0,1}`, the seven
+`pcorr_<estimator>`, `te_symbolic_k-3` and the three kernel `_DCE-AUTO` SPIs,
+added since the last bench, are in `p90`/`p95`/`p99` untimed. Re-running
 `cut_config` overwrites them, so re-apply them by hand afterwards.
 
 **A new SPI goes into `benchmarked_p90`** (and so `p95` and `p99`, keeping

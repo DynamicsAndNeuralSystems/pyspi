@@ -3,12 +3,13 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 281 SPIs; 278 of the 296 SPIs benchmarked, plus 3 untimed (below).
+# Current set: 291 SPIs; 278 of the 296 SPIs benchmarked, plus 13 untimed (below).
 # Cutoff        : fastest kept <= 62.239s ; slowest dropped >= 62.259s.
 #
-# Manual edit: {mi,tlmi}_kernel_W-0.25_DCE-AUTO and te_kernel_W-0.25_DCE-AUTO_k-1 are added untimed,
-# at an estimated 1.2-2.1x their timed no-window variants (under the cutoff);
-# re-apply after re-running bench/cut_config.py.
+# Manual edit: SPIs added after the benchmark, untimed: xi_tau-{0,1}, the seven
+# pcorr_<estimator> (reusing the covariance fits), te_symbolic_k-3, and
+# {mi,tlmi}_kernel_W-0.25_DCE-AUTO and te_kernel_W-0.25_DCE-AUTO_k-1 (estimated
+# 1.2-2.1x their timed no-window variants); re-apply after re-running bench/cut_config.py.
 #
 .statistics.basic:
   Covariance:
@@ -77,6 +78,25 @@
     - estimator: ShrunkCovariance
       squared: true
 
+  # Partial correlation
+  PartialCorrelation:
+    labels:
+      - undirected
+      - linear
+      - signed
+      - multivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+    - estimator: EmpiricalCovariance
+    - estimator: GraphicalLasso
+    - estimator: GraphicalLassoCV
+    - estimator: LedoitWolf
+    - estimator: MinCovDet
+    - estimator: OAS
+    - estimator: ShrunkCovariance
+
   SpearmanR:
     labels:
       - undirected
@@ -102,6 +122,23 @@
     configs:
     - squared: true
     - squared: false
+
+  # Chatterjee's rank correlation xi
+  ChatterjeeXi:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - M14
+    dependencies:
+    configs:
+    - tau: 0
+      labels:
+      - contemporaneous
+    - tau: 1
+      labels:
+      - time-dependent
 
   LaggedCorrelation:
     labels:
@@ -663,6 +700,10 @@
     - estimator: gaussian
       k_history: 1
       l_history: 1
+      labels:
+      - M05
+    - estimator: symbolic
+      k_history: 3
       labels:
       - M05
 

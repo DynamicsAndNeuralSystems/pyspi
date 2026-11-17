@@ -268,6 +268,7 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
   `tau > 0` pairs `x_i[:-tau]` with `x_j[tau:]`.
   Ties in the source are broken by a fixed seeded permutation, so values are deterministic.
   `xi_tau-0` is also in `fast`.
+- `benchmarked_p90`, `p95` and `p99` include the SPIs added after the benchmark that are not expected to be slow, untimed: `xi_tau-{0,1}`, the seven `pcorr_<estimator>` (which reuse the covariance fits), `te_symbolic_k-3` and the three kernel `_DCE-AUTO` SPIs below. No existing SPI is removed or changed. `di_kraskov_NN-4_n-5` and `phasealigned_welch_nperseg-auto` stay out until timed.
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
@@ -397,7 +398,7 @@ Definitions the corrected measures are checked against:
 | **Added** | 62 | `LaggedCorrelation` (42), `PartialCorrelation` (7), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `ChatterjeeXi` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1), `te_symbolic_k-3` (1), kernel MI/TLMI/TE with dynamic correlation exclusion (3) |
 | 3.0.0 `full.yaml` | 309 | 285 − 38 + 62 |
 
-Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 199, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (294, 281, 267 and 237 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
+Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 199, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (304, 291, 277 and 237 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
 Every removal and rename below is deliberate.
 
@@ -444,7 +445,7 @@ Some kept SPIs are deterministic functions of others (`je_gaussian`/`ce_gaussian
 | `bary_{dtw,sgddtw,softdtw}_corr` (3) | `Barycenter`: alignment-adjusted correlation `2 mean(b^2) / mean_energy - 1` of the DBA, subgradient-DBA and soft-DTW barycenters; replaces the `mean` statistic. |
 | `di_kraskov_NN-4_n-5` (1) | Direct KSG/Frenzel-Pompe conditional-MI estimate of directed information; the validated nonlinear replacement for the two dropped variants. Not in the `benchmarked_p*` sets until it has been timed. |
 | `phasealigned_welch_nperseg-auto` (1) | `PhaseAlignedCorrelation`: zero-lag correlation maximised over all-pass (phase-only) filtering of one process, `sum_f w_f |S_jk(f)| / sqrt(sum_f w_f S_jj(f) sum_f w_f S_kk(f))` from Hann-window Welch cross-spectra. Completes the ladder `r <= max xcorr <= P`; a pure delay gives `max xcorr == P`. Undirected, unsigned, in [0, 1], with a null floor of about `sqrt(pi / (4K))` for `K` segments; `nperseg` defaults to the largest power of two not above `T / 8` within [8, 256], refusing `T < 20`. Not in the `benchmarked_p*` sets until it has been timed. |
-| `te_symbolic_k-3` (1) | Symbolic (ordinal-pattern) transfer entropy with 3-sample patterns (6 symbols), populated from a few hundred samples; positively biased at short T. Not in the `benchmarked_p*` sets until it has been timed. |
+| `te_symbolic_k-3` (1) | Symbolic (ordinal-pattern) transfer entropy with 3-sample patterns (6 symbols), populated from a few hundred samples; positively biased at short T. |
 | `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO`, `te_kernel_W-0.25_DCE-AUTO_k-1` (3) | Box-kernel MI, time-lagged MI and TE with the AUTO dynamic correlation exclusion window; see Added above. All three are in `benchmarked_p90`/`p95`/`p99`, at an estimated 1.2-2.1x the cost of the timed no-window variants (the window grows with autocorrelation); MI and TLMI are also in `fast`. |
 
 **Renamed (23)** — no value change, except the DTW row. In every case a parameter that changes the measure was absent from, or misreported by, the identifier.
