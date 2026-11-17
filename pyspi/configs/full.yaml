@@ -637,6 +637,10 @@
       - estimator: kernel
         kernel_width: 0.25
 
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
+
   # Time-lagged mutual information
   TimeLaggedMutualInfo:
     labels:
@@ -658,6 +662,10 @@
 
       - estimator: kernel
         kernel_width: 0.25
+
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
 
   # Transfer entropy
   TransferEntropy:
@@ -702,6 +710,13 @@
       - estimator: kernel
         kernel_width: 0.25
         k_history: 1
+        labels:
+          - M14
+
+      - estimator: kernel
+        kernel_width: 0.25
+        k_history: 1
+        dyn_corr_excl: AUTO
         labels:
           - M14
 

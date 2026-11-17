@@ -131,6 +131,30 @@ public class JidtReference {
       out("te_kernel_bits_k" + kh, te.computeAverageLocalOfObservations());
     }
 
+    // Kernel MI, time-lagged MI and TE with dynamic correlation exclusion (bits).
+    // JIDT's kernel estimators exclude |t - i| < DYN_CORR_EXCL (self included),
+    // one lag fewer than KSG's |t - i| <= DYN_CORR_EXCL. Width 0.1 leaves some
+    // samples with an empty joint box, which JIDT counts as 0.
+    for (String kw : new String[]{"0.5", "0.1"}) {
+      for (int w : new int[]{1, 5, 20}) {
+        String tag = "_W" + kw + "_dce" + w;
+        MutualInfoCalculatorMultiVariateKernel m = new MutualInfoCalculatorMultiVariateKernel();
+        m.setProperty("KERNEL_WIDTH", kw); m.setProperty("DYN_CORR_EXCL", "" + w);
+        m.initialise(1, 1); m.setObservations(x, y);
+        out("mi_kernel_bits" + tag, m.computeAverageLocalOfObservations());
+        m = new MutualInfoCalculatorMultiVariateKernel();
+        m.setProperty("KERNEL_WIDTH", kw); m.setProperty("DYN_CORR_EXCL", "" + w);
+        m.initialise(1, 1);
+        m.setObservations(Arrays.copyOfRange(x, 0, T - 1), Arrays.copyOfRange(y, 1, T));
+        out("tlmi_kernel_bits" + tag, m.computeAverageLocalOfObservations());
+        TransferEntropyCalculatorKernel te = new TransferEntropyCalculatorKernel();
+        te.setProperty("KERNEL_WIDTH", kw); te.setProperty("k_HISTORY", "2");
+        te.setProperty("DYN_CORR_EXCL", "" + w);
+        te.initialise(); te.setObservations(x, y);
+        out("te_kernel_bits_k2" + tag, te.computeAverageLocalOfObservations());
+      }
+    }
+
     // Symbolic TE (ordinal patterns of length k; bits)
     for (int kh : new int[]{2, 3}) {
       TransferEntropyCalculatorSymbolic te = new TransferEntropyCalculatorSymbolic();

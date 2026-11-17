@@ -1,6 +1,6 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (306 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (309 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
@@ -8,13 +8,13 @@ Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs
 | identifier unchanged | 224 |
 | renamed (same class and parameters; identifier changed) | 23 |
 | removed | 38 |
-| added | 59 |
-| 3.0.0 `full.yaml` | 306 |
+| added | 62 |
+| 3.0.0 `full.yaml` | 309 |
 
-285 - 38 removed + 59 added = 306; 224 + 23 renamed + 59 added = 306.
+285 - 38 removed + 62 added = 309; 224 + 23 renamed + 62 added = 309.
 The 38 removals are 14 made while porting away from JIDT and 24 duplicate, constant or degenerate SPIs; all are in the table below.
 
-## Added (59)
+## Added (62)
 
 | Family | Count | Identifiers |
 |:--|--:|:--|
@@ -26,6 +26,7 @@ The 38 removals are 14 made while porting away from JIDT and 24 duplicate, const
 | `DirectedInfo` (KSG/Frenzel-Pompe) | 1 | `di_kraskov_NN-4_n-5` |
 | `PhaseAlignedCorrelation` (Welch, automatic segment length) | 1 | `phasealigned_welch_nperseg-auto` |
 | `TransferEntropy` (symbolic, 3-sample ordinal patterns) | 1 | `te_symbolic_k-3` |
+| `MutualInfo`, `TimeLaggedMutualInfo`, `TransferEntropy` (box kernel with AUTO dynamic correlation exclusion) | 3 | `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO`, `te_kernel_W-0.25_DCE-AUTO_k-1` |
 
 Full list:
 
@@ -88,6 +89,9 @@ Full list:
 - `xi_tau-0`
 - `xi_tau-1`
 - `te_symbolic_k-3`
+- `mi_kernel_W-0.25_DCE-AUTO`
+- `tlmi_kernel_W-0.25_DCE-AUTO`
+- `te_kernel_W-0.25_DCE-AUTO_k-1`
 
 ## Removed (38)
 
