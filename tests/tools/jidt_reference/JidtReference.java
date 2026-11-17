@@ -133,7 +133,8 @@ public class JidtReference {
 
     // Kernel MI, time-lagged MI and TE with dynamic correlation exclusion (bits).
     // JIDT's kernel estimators exclude |t - i| < DYN_CORR_EXCL (self included),
-    // one lag fewer than KSG's |t - i| <= DYN_CORR_EXCL. Width 0.1 leaves some
+    // one lag fewer than KSG's |t - i| <= DYN_CORR_EXCL (pyspi's kernel window w
+    // is DYN_CORR_EXCL = w + 1, so both exclude |t - i| <= w). Width 0.1 leaves some
     // samples with an empty joint box, which JIDT counts as 0.
     for (String kw : new String[]{"0.5", "0.1"}) {
       for (int w : new int[]{1, 5, 20}) {

@@ -3,10 +3,13 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 264 of the 296 SPIs benchmarked (including two manual te_kraskov DCE variants).
+# Current set: 267 SPIs; 264 of the 296 SPIs benchmarked (including two manual te_kraskov DCE variants), plus 3 untimed (below).
 # Cutoff        : fastest kept <= 5.520s ; slowest dropped >= 6.790s.
 #
 # Manual edit: te_kraskov_NN-4_DCE_k-{1,2}_kt-1_l-1_lt-1 are kept for coverage;
+# re-apply after re-running bench/cut_config.py.
+# Manual edit: {mi,tlmi}_kernel_W-0.25_DCE-AUTO and te_kernel_W-0.25_DCE-AUTO_k-1 are added untimed,
+# at an estimated 1.2x their timed no-window variants (under the cutoff);
 # re-apply after re-running bench/cut_config.py.
 #
 .statistics.basic:
@@ -512,6 +515,9 @@
       dyn_corr_excl: AUTO
     - estimator: kernel
       kernel_width: 0.25
+    - estimator: kernel
+      kernel_width: 0.25
+      dyn_corr_excl: AUTO
 
   TimeLaggedMutualInfo:
     labels:
@@ -530,6 +536,9 @@
       dyn_corr_excl: AUTO
     - estimator: kernel
       kernel_width: 0.25
+    - estimator: kernel
+      kernel_width: 0.25
+      dyn_corr_excl: AUTO
 
   TransferEntropy:
     labels:
@@ -547,6 +556,12 @@
     - estimator: kernel
       kernel_width: 0.25
       k_history: 1
+      labels:
+      - M14
+    - estimator: kernel
+      kernel_width: 0.25
+      k_history: 1
+      dyn_corr_excl: AUTO
       labels:
       - M14
     - estimator: gaussian

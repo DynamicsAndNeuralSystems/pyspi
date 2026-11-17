@@ -19,9 +19,11 @@ derive from JIDT. JIDT's copyright notice is retained in
 ``tests/test_jidt_reference.py`` pins JIDT's outputs on a fixed dataset (no Java
 required), and ``tests/tools/jidt_reference/`` regenerates them. Known
 deviations: kernel TE differs slightly from JIDT (per-column rather than
-whole-series normalisation); Gaussian estimators carry a deterministic
-1e-8 relative ridge; KSG breaks ties with a small seeded jitter (hctsa-style)
-where JIDT adds random noise by default; with a Theiler window, KSG MI takes
+whole-series normalisation); a kernel Theiler window w is JIDT's
+DYN_CORR_EXCL = w + 1, so it excludes |j - i| <= w as the KSG window does;
+Gaussian estimators carry a deterministic 1e-8 relative ridge; KSG breaks
+ties with a small seeded jitter (hctsa-style) where JIDT adds random noise
+by default; with a Theiler window, KSG MI takes
 its psi(N) term over the reduced neighbour pool (see _ksg_pool_digamma).
 """
 
@@ -280,33 +282,30 @@ class KernelEntropyCalculator:
                      + d * np.log(2.0 * w) + log_std_total)
 
 
+def _unit_std(data):
+    """Columns divided by their sample std (JIDT's NORMALISE); constant ones kept."""
+    stds = np.std(data, axis=0, ddof=1)
+    stds = np.where(stds > 0, stds, 1.0)
+    return data / stds[None, :]
+
+
 def _kernel_counts(tree, pts, width, dce):
     """Box-kernel neighbour counts of each point of ``pts`` in ``tree``.
 
-    With ``dce > 0`` (JIDT's kernel ``DYN_CORR_EXCL``) only neighbours
-    ``|j - i| >= dce`` count, so the point itself and the ``dce - 1`` samples
-    either side are excluded. This is one lag fewer than the KSG window, which
-    excludes ``|j - i| <= w``; JIDT's kernel and KSG estimators differ in the
-    same way.
+    ``dce`` is JIDT's kernel ``DYN_CORR_EXCL``: when positive, neighbours
+    ``|j - i| < dce`` (the point itself included) do not count. That is the
+    KSG window ``|j - i| <= dce - 1``, so `_ksg_counts` removes them.
     """
-    counts = np.asarray(tree.query_ball_point(pts, r=width, p=np.inf,
-                                              return_length=True),
-                        dtype=np.float64)
     if dce <= 0:
-        return counts
+        return np.asarray(tree.query_ball_point(pts, r=width, p=np.inf,
+                                                return_length=True),
+                          dtype=np.float64)
     if len(pts) < 2 * dce:
         raise ValueError(
-            f"Kernel dynamic correlation exclusion window {dce} leaves no "
-            f"comparison points among N={len(pts)} observations; it needs "
-            f"N >= {2 * dce}.")
-    # Remove the point itself and its in-box neighbours at lags 1..dce-1.
-    pts = np.asarray(pts, dtype=np.float64).reshape(len(pts), -1)
-    counts -= 1.0
-    for d in range(1, dce):
-        close = np.all(np.abs(pts[d:] - pts[:-d]) <= width, axis=1)
-        counts[d:] -= close
-        counts[:-d] -= close
-    return counts
+            f"Kernel Theiler window {dce - 1} (excluding |j - i| <= "
+            f"{dce - 1}) leaves no comparison points among N={len(pts)} "
+            f"observations; it needs N >= {2 * dce}.")
+    return _ksg_counts(tree, pts, np.full(len(pts), float(width)), dce - 1)
 
 
 class KernelMICalculator:
@@ -316,10 +315,10 @@ class KernelMICalculator:
     where n_x, n_y, n_xy are counts within L∞ ball of radius kernel_width.
     Matches JIDT exactly.
 
-    With ``DYN_CORR_EXCL = dce > 0``, as in JIDT, the counts exclude
+    With JIDT's ``DYN_CORR_EXCL = dce > 0`` the counts exclude
     ``|j - i| < dce`` (see `_kernel_counts`), ``N`` becomes the number of
-    samples each point was compared with, and a sample with an empty joint box
-    contributes 0 to the mean over all ``N`` samples.
+    samples each point was compared with, and, as in JIDT, a sample with an
+    empty joint box contributes 0 to the mean over all ``N`` samples.
     """
 
     def __init__(self):
@@ -358,12 +357,8 @@ class KernelMICalculator:
         w = self._kernel_width
 
         if self._normalise:
-            def _norm(data):
-                stds = np.std(data, axis=0, ddof=1)
-                stds = np.where(stds > 0, stds, 1.0)
-                return data / stds[None, :]
-            X = _norm(X)
-            Y = _norm(Y)
+            X = _unit_std(X)
+            Y = _unit_std(Y)
 
         XY = np.column_stack([X, Y])
         tree_x = cKDTree(X)
@@ -397,21 +392,19 @@ class KernelTECalculator:
 
     TE(X→Y) = mean(log(n_yn_yp_x * n_yp / (n_yp_x * n_yn_yp)))  [nats]
     Uses box kernel with L∞ norm, half-width = kernel_width.
-    Matches JIDT exactly.
+    ``DYN_CORR_EXCL`` excludes neighbours as in `KernelMICalculator`.
     """
 
     def __init__(self):
         self._kernel_width = 0.25
         self._normalise = True
         self._k_history = 1
-        self._dyn_corr_excl = None
-        self._props = {}
+        self._dyn_corr_excl = 0
 
     def initialise(self):
         pass
 
     def setProperty(self, key, value):
-        self._props[key] = value
         if key == "KERNEL_WIDTH":
             self._kernel_width = float(value)
         elif key == "NORMALISE":
@@ -442,13 +435,9 @@ class KernelTECalculator:
         x_t = src[k - 1: T - 1].reshape(-1, 1)
 
         if self._normalise:
-            def _norm(data):
-                stds = np.std(data, axis=0, ddof=1)
-                stds = np.where(stds > 0, stds, 1.0)
-                return data / stds[None, :]
-            y_past = _norm(y_past)
-            y_next = _norm(y_next)
-            x_t = _norm(x_t)
+            y_past = _unit_std(y_past)
+            y_next = _unit_std(y_next)
+            x_t = _unit_std(x_t)
 
         # Joint spaces
         yn_yp = np.column_stack([y_next, y_past])
@@ -463,7 +452,6 @@ class KernelTECalculator:
         # JIDT half-width = kernel_width. The Theiler window applies to the
         # embedded sample index, shared by all four spaces.
         dce = self._dyn_corr_excl
-        dce = 0 if dce is None else dce
         n_yp = _kernel_counts(tree_yp, y_past, w, dce)
         n_yn_yp = _kernel_counts(tree_yn_yp, yn_yp, w, dce)
         n_yp_x = _kernel_counts(tree_yp_x, yp_x, w, dce)
@@ -1167,8 +1155,9 @@ class InfoTheoryBase(Unsigned):
     information, time-lagged mutual information and transfer entropy (and
     ``kraskov`` directed information), so the measures composed from marginal
     entropies (joint, conditional, causal and cross-map entropy, stochastic
-    interaction) have none. As in JIDT, a window ``w`` excludes neighbours
-    ``|j - i| <= w`` for ``kraskov`` but ``|j - i| < w`` for ``kernel``.
+    interaction) have none. A window ``w`` excludes neighbours ``|j - i| <= w``
+    for both estimators; 0 means none. An ``AUTO`` window that resolves to 0
+    still excludes the point itself, which KSG always does.
     """
 
     _AUTO_EMBED_METHOD_PROP_NAME = "AUTO_EMBED_METHOD"
@@ -1495,15 +1484,15 @@ class InfoTheoryBase(Unsigned):
             return int(data.theiler[i, j])
         return int(raw_w)
 
-    def _kernel_theiler(self, data, i, j):
-        """`_resolve_theiler` for the kernel estimators.
+    def _kernel_window(self, data, i, j):
+        """JIDT's kernel ``DYN_CORR_EXCL`` for pair (i, j); 0 without a window.
 
-        An AUTO window is at least 1, which excludes the point itself (the
-        KSG estimators always do); a kernel window of 0 would count it, and
-        switch that pair to the uncorrected estimator.
+        JIDT's kernel estimators exclude ``|j - i| < DYN_CORR_EXCL``, so
+        ``w + 1`` excludes ``|j - i| <= w``, the kraskov window.
         """
-        w = self._resolve_theiler(data, i, j)
-        return max(w, 1) if self._dyn_corr_excl == "AUTO" else w
+        if not self._dyn_corr_excl:
+            return 0
+        return self._resolve_theiler(data, i, j) + 1
 
 
 class JointEntropy(InfoTheoryBase, Undirected):
@@ -1593,7 +1582,7 @@ class MutualInfo(InfoTheoryBase, Undirected):
         if self._estimator == 'kernel':
             src, targ = data.to_numpy(squeeze=True)[[i, j]]
             self._calc.initialise(1, 1)
-            self._calc.setProperty("DYN_CORR_EXCL", str(self._kernel_theiler(data, i, j)))
+            self._calc.setProperty("DYN_CORR_EXCL", str(self._kernel_window(data, i, j)))
             self._calc.setObservations(src, targ)
             return self._calc.computeAverageLocalOfObservations()
 
@@ -1653,7 +1642,7 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
             src = src[:-1]
             targ = targ[1:]
             self._calc.initialise(1, 1)
-            self._calc.setProperty("DYN_CORR_EXCL", str(self._kernel_theiler(data, i, j)))
+            self._calc.setProperty("DYN_CORR_EXCL", str(self._kernel_window(data, i, j)))
             self._calc.setObservations(src, targ)
             return self._calc.computeAverageLocalOfObservations()
 
@@ -1920,7 +1909,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
         if est in ('kernel', 'symbolic'):
             self._calc.initialise()
             if est == 'kernel':
-                self._calc.setProperty("DYN_CORR_EXCL", str(self._kernel_theiler(data, i, j)))
+                self._calc.setProperty("DYN_CORR_EXCL", str(self._kernel_window(data, i, j)))
             self._calc.setObservations(src, targ)
             return self._calc.computeAverageLocalOfObservations()
 

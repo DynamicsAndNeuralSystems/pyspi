@@ -32,10 +32,11 @@ Tolerances (achieved maximum |difference| on this fixture in brackets)
   JIDT's stochastic ``NOISE_LEVEL_TO_ADD``; this is the whole difference.
 * Kernel MI, kernel TE at k_history=2, symbolic TE: 1e-12 after the ln 2
   conversion (3e-16 / 2e-16 / 2e-15).
-* Kernel MI, time-lagged MI and TE (k_history=2) with a dynamic correlation
-  exclusion window of 1, 5 and 20 at kernel widths 0.5 and 0.1: 1e-12 after
-  the ln 2 conversion (7e-16). Width 0.1 leaves samples with an empty joint
-  box, which JIDT counts as 0.
+* Kernel MI, time-lagged MI and TE (k_history=2) with JIDT's dynamic
+  correlation exclusion ``DYN_CORR_EXCL`` of 1, 5 and 20 (pyspi windows AUTO
+  resolving to 0, 4 and 19) at kernel widths 0.5 and 0.1: 1e-12 after the
+  ln 2 conversion (6e-16). Width 0.1 leaves samples with an empty joint box,
+  which JIDT counts as 0.
 * Kernel TE at k_history=1 is **not** reproduced exactly. pyspi normalises
   each embedding column separately, whereas JIDT normalises by the standard
   deviation of the whole series, so the kernel widths differ slightly. On this
@@ -86,7 +87,7 @@ JIDT = {
     "mi_kernel_bits": 0.09538573546518486,
     "te_kernel_bits_k1": 0.3111627487933465,
     "te_kernel_bits_k2": 0.44662763106247877,
-    # Kernel with DYN_CORR_EXCL w (excludes |t - i| < w), bits. TLMI is kernel MI
+    # Kernel with DYN_CORR_EXCL W (excludes |t - i| < W), bits. TLMI is kernel MI
     # of (x[:-1], y[1:]); TE uses k_history=2.
     "mi_kernel_bits_W0.5_dce1": 0.027092073335829674,
     "tlmi_kernel_bits_W0.5_dce1": 0.2589376908163566,
@@ -220,17 +221,26 @@ def test_kernel_te_k1_known_discrepancy(data):
 
 
 @pytest.mark.parametrize("width", [0.5, 0.1])
-@pytest.mark.parametrize("w", [1, 5, 20])
+@pytest.mark.parametrize("W", [1, 5, 20])
 @pytest.mark.parametrize("name, cls, kw", [
     ("mi_kernel_bits", MutualInfo, {}),
     ("tlmi_kernel_bits", TimeLaggedMutualInfo, {}),
     ("te_kernel_bits_k2", TransferEntropy, dict(k_history=2)),
 ])
-def test_kernel_dynamic_correlation_exclusion(data, name, cls, kw, w, width):
-    """JIDT's kernel DYN_CORR_EXCL: |t - i| < w excluded, per-sample pool size."""
-    spi = cls(estimator="kernel", kernel_width=width, dyn_corr_excl=w, **kw)
+def test_kernel_dynamic_correlation_exclusion(data, name, cls, kw, W, width):
+    """JIDT's kernel DYN_CORR_EXCL W: |t - i| < W excluded, per-sample pool size.
+
+    pyspi's window w excludes |t - i| <= w, as for KSG, so it is JIDT's
+    W = w + 1; W = 1 (the point itself only) is an AUTO window of 0.
+    """
+    if W == 1:
+        spi = cls(estimator="kernel", kernel_width=width, dyn_corr_excl="AUTO", **kw)
+        data = Data(data.to_numpy(squeeze=True), dim_order="ps", zscore=False)
+        data.theiler = np.zeros((2, 2))
+    else:
+        spi = cls(estimator="kernel", kernel_width=width, dyn_corr_excl=W - 1, **kw)
     v = spi.bivariate(data, i=0, j=1) / LN2
-    key = f"{name}_W{width}_dce{w}"
+    key = f"{name}_W{width}_dce{W}"
     _close(v, JIDT[key], EXACT_TOL, key)
 
 

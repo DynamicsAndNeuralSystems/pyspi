@@ -273,11 +273,10 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
 - **Symbolic transfer entropy with 3-sample ordinal patterns** (`te_symbolic_k-3`), an amplitude-free directed coupling measure (Staniek & Lehnertz 2008).
   Its bias under independence is about 0.13, 0.03 and 0.01 nats at T = 300, 1000 and 3000.
-- **Dynamic correlation exclusion for the kernel estimators** of MI, time-lagged MI and TE: `dyn_corr_excl` (an integer or `"AUTO"`) now applies to `estimator="kernel"` as well as `"kraskov"`, with the same `_DCE-<value>` identifier suffix and the same AUTO window (floored at 1 for the kernel, so that it always excludes at least the point itself, as KSG does).
-  It follows JIDT's kernel `DYN_CORR_EXCL` and matches JIDT 1.6.1 to 1e-15: a window `w` excludes neighbours `|t - i| < w` (so `w = 1` excludes only the point itself, one lag fewer than KSG's `|t - i| <= w`), each probability is normalised by the number of samples compared, and a sample with an empty joint box contributes 0.
-  Excluding the point itself already removes most of the kernel estimators' upward bias on autocorrelated series, and the full window can bias MI below zero: on independent AR(1) pairs (phi = 0.95, T = 500, width 0.25; mean of 20) MI is 0.18, 0.07 and -0.05 nats with no window, `w = 1` and the AUTO window.
-  New SPIs `mi_kernel_W-0.25_DCE-AUTO` and `tlmi_kernel_W-0.25_DCE-AUTO` (in `full` and `fast`) and `te_kernel_W-0.25_DCE-AUTO_k-1` (in `full`); existing kernel SPIs are unchanged.
-  The other kernel measures are composed from marginal entropies and refuse `dyn_corr_excl`.
+- **Dynamic correlation exclusion for the kernel estimators** of MI, time-lagged MI and TE: `dyn_corr_excl` (an integer or `"AUTO"`) now applies to `estimator="kernel"` as well as `"kraskov"`, with the same `_DCE-<value>` suffix and the same window: neighbours `|t - i| <= w` are excluded, the point itself always, so an AUTO window of 0 excludes the point itself as KSG does.
+  Each probability is normalised by the number of samples compared, and a sample with an empty joint box contributes 0, as in JIDT; the values match JIDT 1.6.1 (`DYN_CORR_EXCL = w + 1`, since JIDT's kernel window excludes `|t - i| < DYN_CORR_EXCL`) to 1e-15.
+  Excluding the point itself removes most of the kernel estimators' upward bias on autocorrelated series, and the full window can take MI below zero: on independent AR(1) pairs (phi = 0.95, T = 500, width 0.25; mean of 20) MI is 0.18, 0.07 and -0.05 nats with no window, the point itself excluded, and the AUTO window.
+  New SPIs `mi_kernel_W-0.25_DCE-AUTO` and `tlmi_kernel_W-0.25_DCE-AUTO` (in `full`, `fast` and every `benchmarked_p*` set) and `te_kernel_W-0.25_DCE-AUTO_k-1` (in `full` and `benchmarked_p90`/`p95`/`p99`); existing kernel SPIs are unchanged. The other kernel measures are composed from marginal entropies and refuse `dyn_corr_excl`.
 
 ### Dependencies
 
@@ -398,7 +397,7 @@ Definitions the corrected measures are checked against:
 | **Added** | 62 | `LaggedCorrelation` (42), `PartialCorrelation` (7), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `ChatterjeeXi` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1), `te_symbolic_k-3` (1), kernel MI/TLMI/TE with dynamic correlation exclusion (3) |
 | 3.0.0 `full.yaml` | 309 | 285 − 38 + 62 |
 
-Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 199, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (291, 278, 264 and 237 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
+Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 199, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (294, 281, 267 and 239 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
 Every removal and rename below is deliberate.
 
@@ -446,7 +445,7 @@ Some kept SPIs are deterministic functions of others (`je_gaussian`/`ce_gaussian
 | `di_kraskov_NN-4_n-5` (1) | Direct KSG/Frenzel-Pompe conditional-MI estimate of directed information; the validated nonlinear replacement for the two dropped variants. Not in the `benchmarked_p*` sets until it has been timed. |
 | `phasealigned_welch_nperseg-auto` (1) | `PhaseAlignedCorrelation`: zero-lag correlation maximised over all-pass (phase-only) filtering of one process, `sum_f w_f |S_jk(f)| / sqrt(sum_f w_f S_jj(f) sum_f w_f S_kk(f))` from Hann-window Welch cross-spectra. Completes the ladder `r <= max xcorr <= P`; a pure delay gives `max xcorr == P`. Undirected, unsigned, in [0, 1], with a null floor of about `sqrt(pi / (4K))` for `K` segments; `nperseg` defaults to the largest power of two not above `T / 8` within [8, 256], refusing `T < 20`. Not in the `benchmarked_p*` sets until it has been timed. |
 | `te_symbolic_k-3` (1) | Symbolic (ordinal-pattern) transfer entropy with 3-sample patterns (6 symbols), populated from a few hundred samples; positively biased at short T. Not in the `benchmarked_p*` sets until it has been timed. |
-| `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO`, `te_kernel_W-0.25_DCE-AUTO_k-1` (3) | Box-kernel MI, time-lagged MI and TE with the AUTO dynamic correlation exclusion window; see Added above. MI and TLMI are also in `fast`. Not in the `benchmarked_p*` sets until they have been timed. |
+| `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO`, `te_kernel_W-0.25_DCE-AUTO_k-1` (3) | Box-kernel MI, time-lagged MI and TE with the AUTO dynamic correlation exclusion window; see Added above. MI and TLMI are also in `fast` and every `benchmarked_p*` set, TE in `benchmarked_p90`/`p95`/`p99`, at an estimated 1.2x the cost of the timed no-window variants. |
 
 **Renamed (23)** — no value change, except the DTW row. In every case a parameter that changes the measure was absent from, or misreported by, the identifier.
 
