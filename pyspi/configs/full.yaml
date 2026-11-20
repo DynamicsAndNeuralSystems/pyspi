@@ -81,7 +81,6 @@
       - M14
     dependencies:
     configs:
-      - squared: True
       - squared: False
 
   # Chatterjee's rank correlation xi
