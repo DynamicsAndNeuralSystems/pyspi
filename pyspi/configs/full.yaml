@@ -849,6 +849,18 @@
         fmax: 0.5
         statistic: max
 
+  # Hilbert phase consistency, band-averaged with weights from the pair's shared rhythmic power
+  AdaptivePhaseConsistency:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - MXX
+    dependencies:
+    configs:
+
   # Phase lag index
   PhaseLagIndex:
     labels:
