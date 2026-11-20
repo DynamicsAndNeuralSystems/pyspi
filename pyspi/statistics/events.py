@@ -11,7 +11,7 @@ any strictly increasing transform of either series.
 import numpy as np
 from scipy import stats
 
-from pyspi.base import Directed, Undirected, Signed, parse_bivariate, parse_multivariate
+from pyspi.base import Directed, Undirected, parse_bivariate, parse_multivariate
 from pyspi.utils import fmt_param, require_int
 
 
@@ -112,7 +112,7 @@ def _es_counts(t_src, h_src, t_tgt, h_tgt, max_delay=None):
     return follow, precede
 
 
-class EventSynchronisation(Directed, Signed):
+class EventSynchronisation(Directed):
     """Event synchronisation of extreme events (Quian Quiroga et al. 2002).
 
     **Events.** Each series ``x`` is reduced to the times at which it exceeds
@@ -191,8 +191,11 @@ class EventSynchronisation(Directed, Signed):
             None if max_delay is None
             else require_int("max_delay", max_delay, minimum=1)
         )
-        trait = "undirected" if statistic == "Q" else "antisymmetric"
-        self.labels = EventSynchronisation.labels + [trait]
+        # Q is symmetric and unsigned, q antisymmetric and signed, so the class
+        # takes the generic Directed base and each statistic sets its own
+        # structural trait and sign.
+        traits = ["undirected", "unsigned"] if statistic == "Q" else ["antisymmetric", "signed"]
+        self.labels = EventSynchronisation.labels + traits
         self.identifier = (
             f"{EventSynchronisation.identifier}_{statistic}"
             f"_q-{_level_token(self._quantile)}"
@@ -251,7 +254,7 @@ class EventSynchronisation(Directed, Signed):
         return A
 
 
-class TailDependenceAsymmetry(Undirected, Signed):
+class TailDependenceAsymmetry(Undirected):
     """Asymmetry between upper and lower empirical tail dependence.
 
     With ``R_x(t)`` the rank of ``x[t]`` among the ``T`` samples (average ranks
@@ -306,7 +309,9 @@ class TailDependenceAsymmetry(Undirected, Signed):
             raise ValueError(f"statistic must be one of {self._STATISTICS}, got {statistic!r}.")
         self._statistic = statistic
         self._quantile = _require_level("quantile", quantile, 0.5, 1.0)
-        self.labels = list(TailDependenceAsymmetry.labels)
+        # The asymmetry is signed; the upper and lower coefficients are not.
+        sign = "signed" if statistic == "asymmetry" else "unsigned"
+        self.labels = TailDependenceAsymmetry.labels + [sign]
         stat = "" if statistic == "asymmetry" else f"_{statistic}"
         self.identifier = (
             f"{TailDependenceAsymmetry.identifier}{stat}"

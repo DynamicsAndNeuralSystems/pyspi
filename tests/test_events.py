@@ -11,6 +11,7 @@ import pytest
 import yaml
 from scipy import stats
 
+from pyspi.base import Signed, Undirected, Unsigned
 from pyspi.calculator import Calculator, load_spis_from_yaml, resolve_config
 from pyspi.data import Data
 from pyspi.statistics.events import (
@@ -376,6 +377,52 @@ def test_symmetry_and_antisymmetry(spi, heavy_data):
         assert (A[off] >= 0).all() and (A[off] <= 1).all()
     else:
         assert (np.abs(A[off]) <= 1).all()
+
+
+@pytest.mark.parametrize("spi", ALL_VARIANTS, ids=lambda s: s.identifier)
+def test_base_classes_agree_with_labels(spi):
+    """The sign and symmetry mixins never contradict the statistic's own traits."""
+    assert ("signed" in spi.labels) == spi.issigned()
+    assert ("unsigned" in spi.labels) == (not spi.issigned())
+    if isinstance(spi, Signed):
+        assert spi.issigned()
+    if isinstance(spi, Unsigned):
+        assert not spi.issigned()
+    if isinstance(spi, Undirected):
+        assert "undirected" in spi.labels
+
+
+@pytest.fixture(scope="module")
+def driven_pair():
+    """Process 1 follows process 0 at lag 2: the extremes of 0 come first."""
+    rng = np.random.default_rng(10)
+    x = rng.standard_t(3, 2000)
+    y = np.roll(x, 2) + 0.3 * rng.standard_t(3, 2000)
+    return np.vstack([x, y])[:, 2:]
+
+
+def test_bundled_es_traits_hold_on_a_driven_pair(driven_pair):
+    """Each bundled ``es_*`` SPI has the symmetry and sign its labels declare."""
+    full = load_spis_from_yaml(resolve_config("full"), quiet=True)
+    es = {k: v for k, v in full.items() if k.startswith("es_")}
+    assert set(es) == {k for k in BUNDLED if k.startswith("es_")}
+    for ident, spi in es.items():
+        A = spi.multivariate(Data(driven_pair, dim_order="ps"))
+        assert np.isfinite(A[0, 1]) and np.isfinite(A[1, 0]), ident
+        if "undirected" in spi.labels:
+            assert A[0, 1] == A[1, 0], ident
+        else:
+            assert "antisymmetric" in spi.labels, ident
+            assert A[0, 1] == -A[1, 0], ident
+        if spi.issigned():
+            assert "signed" in spi.labels, ident
+            assert A[0, 1] > 0 > A[1, 0], ident  # row 0 leads
+        else:
+            assert "unsigned" in spi.labels, ident
+            assert 0 < A[0, 1] <= 1, ident
+        assert not isinstance(spi, Signed) or spi.issigned(), ident
+        assert not isinstance(spi, Unsigned) or not spi.issigned(), ident
+        assert not isinstance(spi, Undirected) or "undirected" in spi.labels, ident
 
 
 @pytest.mark.parametrize("spi", ALL_VARIANTS, ids=lambda s: s.identifier)
