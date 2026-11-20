@@ -271,9 +271,7 @@
       - MXX
     dependencies:
     configs:
-    - metric: euclidean
     - metric: cityblock
-    - metric: cosine
     - metric: chebyshev
     - metric: canberra
     - metric: braycurtis
@@ -416,9 +414,6 @@
       - M09
     - mode: softdtw
       statistic: max
-    - mode: euclidean
-      statistic: mean
-      squared: true
     - mode: euclidean
       statistic: max
       squared: true

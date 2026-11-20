@@ -153,9 +153,7 @@
       - MXX
     dependencies:
     configs:
-      - metric: "euclidean"
       - metric: "cityblock"
-      - metric: "cosine"
       - metric: "chebyshev"
       - metric: "canberra"
       - metric: "braycurtis"
@@ -201,10 +199,6 @@
     configs:
       - mode: euclidean
         statistic: max
-
-      - mode: euclidean
-        statistic: mean
-        squared: True
 
       - mode: euclidean
         statistic: max
