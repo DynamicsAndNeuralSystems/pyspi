@@ -469,18 +469,13 @@
     configs:
     - statistic: mean
     - statistic: max
-    - statistic: diff
     - statistic: mean
       embedding_dimension: 1
     - statistic: max
       embedding_dimension: 1
-    - statistic: diff
-      embedding_dimension: 1
     - statistic: mean
       embedding_dimension: 10
     - statistic: max
-      embedding_dimension: 10
-    - statistic: diff
       embedding_dimension: 10
 
 
