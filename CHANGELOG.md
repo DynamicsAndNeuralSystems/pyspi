@@ -278,7 +278,7 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
   It reports the signed lag of the largest `|r|` (`lag`, antisymmetric), the signed `r` at that lag (`peak`, undirected), and the lead/lag asymmetry `(S_{i->j} - S_{j->i}) / (S_{i->j} + S_{j->i})` with `S_{i->j} = sum_{l=1..L} r_{i->j}(l)^2` (`asym`, antisymmetric, in [-1, 1]).
   `onesided` (directed, signed) is `r_{i->j}(tau)` at one lag shared by both directions of a pair: a fixed `tau` (default 1), or `tau="1e"` for `round(sqrt(l_i l_j))`, where `l_i` is the first lag at which process i's autocorrelation falls below 1/e (hctsa's `CO_f1ecac`), clipped to `1 .. min(T // 10, L)`.
   `onesidedpeak` (directed, unsigned) is the largest `|r_{i->j}(k)|` over `1 <= k <= l_i + l_j`, with the same clipping.
-  `full` bundles `lagcorr_{lag,peak,asym}_L-None`, `lagcorr_onesided_tau-1_L-None`, `lagcorr_onesided_tau-1e_L-None`, `lagcorr_onesidedpeak_L-None` and `lagcorr_{lag,peak,asym}_L-10`; `fast` bundles the first four.
+  `full` bundles `lagcorr_{lag,peak,asym}_L-None`, `lagcorr_onesided_tau-{1,2,3,5,10}_L-None`, `lagcorr_onesided_tau-1e_L-None`, `lagcorr_onesidedpeak_L-None` and `lagcorr_{lag,peak,asym}_L-10` (13); `fast` bundles `lagcorr_{lag,peak,asym}_L-None` and `lagcorr_onesided_tau-1_L-None`.
 - **Symbolic transfer entropy with 3-sample ordinal patterns** (`te_symbolic_k-3`), an amplitude-free directed coupling measure (Staniek & Lehnertz 2008).
   Its bias under independence is about 0.13, 0.03 and 0.01 nats at T = 300, 1000 and 3000.
 

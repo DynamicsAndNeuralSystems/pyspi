@@ -214,6 +214,14 @@
       - statistic: onesided
         tau: 1
       - statistic: onesided
+        tau: 2
+      - statistic: onesided
+        tau: 3
+      - statistic: onesided
+        tau: 5
+      - statistic: onesided
+        tau: 10
+      - statistic: onesided
         tau: "1e"
       - statistic: onesidedpeak
       - statistic: lag

@@ -58,6 +58,10 @@ EXPECTED_IDS = [
     "lagcorr_peak_L-None",
     "lagcorr_asym_L-None",
     "lagcorr_onesided_tau-1_L-None",
+    "lagcorr_onesided_tau-2_L-None",
+    "lagcorr_onesided_tau-3_L-None",
+    "lagcorr_onesided_tau-5_L-None",
+    "lagcorr_onesided_tau-10_L-None",
     "lagcorr_onesided_tau-1e_L-None",
     "lagcorr_onesidedpeak_L-None",
     "lagcorr_lag_L-10",
@@ -66,7 +70,7 @@ EXPECTED_IDS = [
 ]
 # The bundled set plus variants that exercise a short window and a longer tau.
 PARAMS = FULL_CONFIGS + [
-    {"statistic": "onesided", "tau": 3},
+    {"statistic": "onesided", "tau": 4},
     {"statistic": "onesided", "tau": "1e", "max_lag": 4},
     {"statistic": "onesidedpeak", "max_lag": 3},
     {"statistic": "lag", "max_lag": 3},
