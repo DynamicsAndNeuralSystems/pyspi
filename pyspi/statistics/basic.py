@@ -201,7 +201,13 @@ class CrossCorrelation(Undirected, Signed):
         try:
             r_ij = data.xcorr[(i, j)]
         except (KeyError, AttributeError):
-            x, y = data.to_numpy(squeeze=True)[[i, j]]
+            # Computed for (larger, smaller) and reversed for the other
+            # orientation, whichever of (i, j) and (j, i) is asked for first,
+            # so a value does not depend on the order the pairs are visited
+            # in (the FFT of (x, y) and of (y, x) differ in the last bit).
+            # (larger, smaller) is the orientation the stored baselines use.
+            hi, lo = max(i, j), min(i, j)
+            x, y = data.to_numpy(squeeze=True)[[hi, lo]]
 
             # Demeaned, and divided by T (the biased estimator) rather than
             # T - |l|: the result is a correlation, so it stays in [-1, 1], the
@@ -221,15 +227,16 @@ class CrossCorrelation(Undirected, Signed):
             # off-centre window would make `max` depend on the order of the
             # pair, for a measure that is undirected.
             lag_max = T // self._MAX_LAG_FRACTION
-            r_ij = r_full[T - 1 - lag_max: T + lag_max]
+            r_hilo = r_full[T - 1 - lag_max: T + lag_max]
 
             try:
-                data.xcorr[(i, j)] = r_ij
+                data.xcorr[(hi, lo)] = r_hilo
             except AttributeError:
-                data.xcorr = {(i, j): r_ij}
+                data.xcorr = {(hi, lo): r_hilo}
             # r_yx(l) == r_xy(-l), so the opposite orientation is the reversed
             # sequence, not the same one.
-            data.xcorr[(j, i)] = r_ij[::-1]
+            data.xcorr[(lo, hi)] = r_hilo[::-1]
+            r_ij = data.xcorr[(i, j)]
 
         # `sigonly` is a pointwise amplitude threshold, not an inferential
         # test. The name is historical and kept for compatibility: it keeps

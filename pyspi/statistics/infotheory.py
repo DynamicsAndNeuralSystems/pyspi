@@ -1361,7 +1361,13 @@ class InfoTheoryBase(Unsigned):
             data.joint_entropy[key] = np.full((data.n_processes, data.n_processes), -np.inf)
 
         if data.joint_entropy[key][i, j] == -np.inf:
-            x, y = data.to_numpy()[[i, j]]
+            # The pair in one orientation, (larger, smaller), whichever is
+            # asked for first: the value is cached for both, and the
+            # Kozachenko-Leonenko estimate of [x, y] and of [y, x] can differ
+            # in the last bit, so the order the pairs are visited in would
+            # otherwise decide it. (larger, smaller) is the orientation the
+            # stored baselines use.
+            x, y = data.to_numpy()[[max(i, j), min(i, j)]]
             joint = np.concatenate([x, y], axis=1)
             est = self._estimator
 
@@ -1410,19 +1416,6 @@ class InfoTheoryBase(Unsigned):
         if data.entropy[key][i] == -np.inf:
             data.entropy[key][i] = compute()
         return data.entropy[key][i]
-
-    def _upper_triangle_multivariate(self, data):
-        """Each unordered pair once, mirrored.
-
-        Same result as ``Undirected.multivariate``, which evaluates both
-        orders and keeps ``i < j``, at half the cost.
-        """
-        M = data.n_processes
-        A = np.full((M, M), np.nan)
-        pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
-        return fill_pairwise(self.identifier, A, pairs,
-                             lambda i, j: self.bivariate(data, i=i, j=j),
-                             mirror=True)
 
     def _resolve_theiler(self, data, i, j):
         """Theiler/dynamic-correlation-exclusion window for pair (i, j).
@@ -1566,7 +1559,7 @@ class MutualInfo(InfoTheoryBase, Undirected):
                 self.identifier, result, pairs,
                 lambda i, j: _ksg_mi_pair(Z[i], Z[j], k, self._resolve_theiler(data, i, j)),
                 mirror=True)
-        return self._upper_triangle_multivariate(data)
+        return super().multivariate(data)
 
 
 class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
@@ -2097,10 +2090,6 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
             self._compute_conditional_entropy(y[tau:], y[:-tau])))
 
         return H_src + H_targ - H_joint
-
-    @parse_multivariate
-    def multivariate(self, data):
-        return self._upper_triangle_multivariate(data)
 
 
 class IntegratedInformation(Undirected, Unsigned):

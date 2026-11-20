@@ -172,8 +172,8 @@ def test_a_failed_pair_is_error_and_its_message_is_kept(serial):
 
 
 def test_an_undirected_failure_follows_the_mirror(serial):
-    """Undirected copies the upper triangle over the lower one, so an upper
-    failure is two ERROR cells and a lower one is overwritten by a good value."""
+    """Undirected evaluates the upper triangle and mirrors it, so an upper
+    failure is two ERROR cells and a lower one is never evaluated."""
     calc, _ = serial
     upper, lower = "one_pair_raises_undirected_01", "one_pair_raises_undirected_10"
     assert np.array_equal(_q(calc, upper),
@@ -432,9 +432,9 @@ def _execute(spi):
 
 
 def test_an_undirected_lower_failure_is_discarded_with_its_value():
-    """(0, 1) returns NaN and (1, 0) raises: the lower cell is overwritten by
-    the upper one, so its failure is discarded too, and the codes stay
-    symmetric (both NAN), with no pair error and no warning."""
+    """(0, 1) returns NaN and (1, 0) would raise: the lower cell is the mirror
+    of the upper one and is never evaluated, so the codes stay symmetric (both
+    NAN), with no pair error and no warning."""
     res, msgs = _execute(_undirected({(0, 1): np.nan, (1, 0): ValueError("lower")}))
     assert np.array_equal(res.quality, _expected(GOOD, [((0, 1), NAN), ((1, 0), NAN)]))
     assert np.array_equal(res.quality, res.quality.T)
@@ -452,8 +452,8 @@ def test_an_undirected_upper_failure_is_mirrored_and_counted_once():
 
 
 def test_an_undirected_spi_whose_kept_pairs_all_fail_raises():
-    """Only the lower triangle succeeds: none of it is kept, so the SPI fails
-    with the estimator's message."""
+    """Only the lower triangle would succeed, and it is never evaluated, so the
+    SPI fails with the estimator's message."""
     res, _ = _execute(_undirected({(i, j): ValueError("kept pair")
                                    for i in range(M) for j in range(M) if i < j}))
     assert res.err == "ValueError: kept pair"
