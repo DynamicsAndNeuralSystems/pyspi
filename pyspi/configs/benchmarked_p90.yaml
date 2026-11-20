@@ -388,7 +388,6 @@
       - contemporaneous
       - M14
     configs:
-    - estimator: gaussian
     - estimator: kozachenko
     - estimator: kernel
 
@@ -401,7 +400,6 @@
       - contemporaneous
       - M14
     configs:
-    - estimator: gaussian
     - estimator: kozachenko
     - estimator: kernel
 
@@ -424,8 +422,6 @@
       - bivariate
       - MXX
     configs:
-    - estimator: gaussian
-      history_length: 1
     - estimator: kozachenko
       history_length: 1
     - estimator: kernel

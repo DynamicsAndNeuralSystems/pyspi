@@ -149,6 +149,7 @@ OPTIONAL_IN_FULL = frozenset({
     "ccm_E-10_diff",
     "ccm_E-1_diff",
     "ccm_E-None_diff",
+    "ce_gaussian",
     "cov-sq_GraphicalLassoCV",
     "cov_GraphicalLassoCV",
     "ddtf_multitaper_max_fs-1_fmin-0-25_fmax-0-5",
@@ -167,6 +168,7 @@ OPTIONAL_IN_FULL = frozenset({
     "gd_multitaper_delay_fs-1_fmin-0_fmax-0-25",
     "gd_multitaper_delay_fs-1_fmin-0_fmax-0-5",
     "gwtau",
+    "je_gaussian",
     "pcorr_GraphicalLassoCV",
     "prec-sq_EmpiricalCovariance",
     "prec-sq_GraphicalLasso",
@@ -182,6 +184,7 @@ OPTIONAL_IN_FULL = frozenset({
     "prec_MinCovDet",
     "prec_OAS",
     "prec_ShrunkCovariance",
+    "xme_gaussian_k1",
 })
 
 
