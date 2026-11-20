@@ -1,7 +1,7 @@
 # Science/maths/computing tools
 import numpy as np
 import pandas as pd
-import copy, yaml, importlib, time, warnings, os
+import copy, yaml, importlib, importlib.metadata, re, time, warnings, os
 import functools
 import hashlib, json
 from pathlib import Path
@@ -232,7 +232,40 @@ def warn_partial_cache_buckets(spis):
 # computes. They are recorded for provenance and deliberately kept out of
 # `run_digest`, which is a content hash: the same config contents and the same
 # data must digest the same from a checkout, a wheel or a temporary directory.
-_DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({"config", "configfile", "dataset_name"})
+#
+# The version fields are provenance too. `COMPUTATION_VERSION` is hashed into
+# the digest separately; the package and dependency versions are recorded so
+# a saved table states what produced it, without making a checkpoint refuse to
+# resume after an upgrade that changes no computed value.
+_DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({
+    "config", "configfile", "dataset_name",
+    "computation_version", "pyspi_version", "dependency_versions",
+})
+
+
+@functools.cache
+def _installed_versions():
+    """pyspi's version and the installed version of each runtime dependency.
+
+    The dependency list is pyspi's own declared requirements (extras
+    excluded), so it does not drift from `pyproject.toml`. ``None`` marks a
+    package that is not installed or carries no metadata.
+    """
+    def version(name):
+        try:
+            return importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+
+    try:
+        requires = importlib.metadata.requires("pyspi") or []
+    except importlib.metadata.PackageNotFoundError:
+        requires = []
+    deps = sorted({
+        re.match(r"[A-Za-z0-9_.\-]+", req).group(0)
+        for req in requires if "extra ==" not in req
+    }, key=str.lower)
+    return version("pyspi"), {name: version(name) for name in deps}
 
 
 # Bumped whenever the .npz layout changes. Schema 0 means "written before the
@@ -673,6 +706,9 @@ class Calculator:
             "procnames": list(dataset.procnames) if dataset is not None else None,
             "dataset_name": dataset.name if dataset is not None else None,
             "spi_identifiers": sorted(self._spis),
+            "computation_version": _parallel.COMPUTATION_VERSION,
+            "pyspi_version": _installed_versions()[0],
+            "dependency_versions": dict(_installed_versions()[1]),
         }
 
     @property
