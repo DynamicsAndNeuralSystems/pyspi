@@ -99,20 +99,6 @@
       - squared: True
       - squared: False
 
-  # Kendall's rank correlation coefficient
-  KendallTau:
-    labels:
-      - undirected
-      - nonlinear
-      - signed
-      - bivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-      - squared: True
-      - squared: False
-
   # Chatterjee's rank correlation xi
   ChatterjeeXi:
     labels:
