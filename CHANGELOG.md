@@ -276,7 +276,7 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
   `mi` is the modulation index of Tort et al. (2010, J Neurophysiol 104:1195) over 18 phase bins; `mvl` is the normalised mean vector length of Özkurt & Schnitzler (2011, J Neurosci Methods 201:438).
   Both are directed, unsigned and in [0, 1].
   An amplitude band narrower than twice the top phase frequency cannot carry the modulation (Aru et al. 2015, Curr Opin Neurobiol 31:51) and is refused at construction.
-  `full` bundles the band pairs (0.01-0.05, 0.15-0.4) and (0.05-0.1, 0.2-0.45) with both statistics.
+  `full` bundles `mi` at the band pairs (0.01-0.05, 0.15-0.4) and (0.05-0.1, 0.2-0.45); `mvl` is available by name.
 
 ### Dependencies
 

@@ -1387,17 +1387,9 @@
         amp_band: [0.15, 0.4]
         statistic: mi
 
-      - phase_band: [0.01, 0.05]
-        amp_band: [0.15, 0.4]
-        statistic: mvl
-
       - phase_band: [0.05, 0.1]
         amp_band: [0.2, 0.45]
         statistic: mi
-
-      - phase_band: [0.05, 0.1]
-        amp_band: [0.2, 0.45]
-        statistic: mvl
 
 # Miscellaneous statistics
 .statistics.misc:
