@@ -133,6 +133,50 @@ if _TIER not in ("locked", "latest"):
     raise ValueError(f"PYSPI_DRIFT_TIER must be 'locked' or 'latest', got {_TIER!r}")
 
 
+# SPIs whose baseline entries are kept although the SPI may be absent from
+# `full`. A baseline entry is compared only while its SPI is bundled.
+OPTIONAL_IN_FULL = frozenset({
+    "bary-sq_euclidean_mean",
+    "cov-sq_EmpiricalCovariance",
+    "cov-sq_GraphicalLasso",
+    "cov-sq_LedoitWolf",
+    "cov-sq_MinCovDet",
+    "cov-sq_OAS",
+    "cov-sq_ShrunkCovariance",
+    "cov_LedoitWolf",
+    "cov_OAS",
+    "cov_ShrunkCovariance",
+    "gpdcoh_multitaper_max_fs-1_fmin-0-25_fmax-0-5",
+    "gpdcoh_multitaper_max_fs-1_fmin-0_fmax-0-25",
+    "gpdcoh_multitaper_max_fs-1_fmin-0_fmax-0-5",
+    "gpdcoh_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
+    "gpdcoh_multitaper_mean_fs-1_fmin-0_fmax-0-25",
+    "gpdcoh_multitaper_mean_fs-1_fmin-0_fmax-0-5",
+    "kendalltau",
+    "kendalltau-sq",
+    "lmfit_BayesianRidge",
+    "lmfit_Ridge",
+    "lmfit_SGDRegressor",
+    "pdcoh_multitaper_max_fs-1_fmin-0-25_fmax-0-5",
+    "pdcoh_multitaper_max_fs-1_fmin-0_fmax-0-25",
+    "pdcoh_multitaper_max_fs-1_fmin-0_fmax-0-5",
+    "pdcoh_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
+    "pdcoh_multitaper_mean_fs-1_fmin-0_fmax-0-25",
+    "pdcoh_multitaper_mean_fs-1_fmin-0_fmax-0-5",
+    "pdist_cosine",
+    "pdist_euclidean",
+    "phi_Geo_t-1_norm-1",
+    "phi_star_t-1_norm-1",
+    "ppc_multitaper_max_fs-1_fmin-0-25_fmax-0-5",
+    "ppc_multitaper_max_fs-1_fmin-0_fmax-0-25",
+    "ppc_multitaper_max_fs-1_fmin-0_fmax-0-5",
+    "ppc_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
+    "ppc_multitaper_mean_fs-1_fmin-0_fmax-0-25",
+    "ppc_multitaper_mean_fs-1_fmin-0_fmax-0-5",
+    "spearmanr-sq",
+})
+
+
 def _tolerance(spi_key):
     """(atol, rtol) for ``spi_key`` under the selected tier."""
     if _TIER == "latest" and spi_key in LATEST_TIER_SPIS:
@@ -261,11 +305,12 @@ def test_baseline_covers_every_spi(dataset_name, baseline_tables, current_tables
     """The baseline and the current Calculator must expose the same SPI set.
 
     Without this, an SPI that is renamed or newly added is silently untested.
+    Baseline entries listed in `OPTIONAL_IN_FULL` may be absent from `full`.
     """
     baseline = baseline_tables(dataset_name)
     _, spis, _ = current_tables(dataset_name)
     missing_from_baseline = sorted(set(spis) - set(baseline))
-    missing_from_current = sorted(set(baseline) - set(spis))
+    missing_from_current = sorted(set(baseline) - set(spis) - OPTIONAL_IN_FULL)
     assert not missing_from_baseline and not missing_from_current, (
         f"[{dataset_name}] SPI set mismatch. "
         f"No baseline for: {missing_from_baseline}. "
@@ -279,6 +324,8 @@ def test_baseline_drift(dataset_name, spi_key, baseline_tables, current_tables,
     """Hard-fail on shape, NaN-pattern, or excessive numerical drift."""
     ref = baseline_tables(dataset_name)[spi_key]
     tables, spis, _ = current_tables(dataset_name)
+    if spi_key not in tables and spi_key in OPTIONAL_IN_FULL:
+        pytest.skip(f"{spi_key} is not in the full config")
     assert spi_key in tables, (
         f"[{dataset_name}] {spi_key}: present in baseline but not in the current "
         f"Calculator (see test_baseline_covers_every_spi)."
