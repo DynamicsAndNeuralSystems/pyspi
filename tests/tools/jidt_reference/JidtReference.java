@@ -123,7 +123,7 @@ public class JidtReference {
           + " ktau=" + te.getProperty("k_TAU") + " l=" + te.getProperty("l_HISTORY")
           + " ltau=" + te.getProperty("l_TAU")); }
 
-    // Kernel TE (bits). Not reproduced exactly by pyspi; see the test.
+    // Kernel TE (bits), JIDT default (the point itself counted).
     for (int kh : new int[]{1, 2}) {
       TransferEntropyCalculatorKernel te = new TransferEntropyCalculatorKernel();
       te.setProperty("KERNEL_WIDTH", "0.5"); te.setProperty("k_HISTORY", "" + kh);
@@ -155,6 +155,11 @@ public class JidtReference {
         out("te_kernel_bits_k2" + tag, te.computeAverageLocalOfObservations());
       }
     }
+    // Kernel TE at k_history=1 with the point itself excluded (pyspi's default).
+    { TransferEntropyCalculatorKernel te = new TransferEntropyCalculatorKernel();
+      te.setProperty("KERNEL_WIDTH", "0.5"); te.setProperty("DYN_CORR_EXCL", "1");
+      te.initialise(); te.setObservations(x, y);
+      out("te_kernel_bits_k1_W0.5_dce1", te.computeAverageLocalOfObservations()); }
 
     // Symbolic TE (ordinal patterns of length k; bits)
     for (int kh : new int[]{2, 3}) {
