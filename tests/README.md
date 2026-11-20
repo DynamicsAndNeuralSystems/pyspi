@@ -96,10 +96,10 @@ reproduces.
    A session-end summary table lists these failures.
 
 Two further gates run per fixture: no SPI may raise (`calc.errors` must be
-empty) and none may produce an entirely non-finite column. The single
-documented exception lives in `KNOWN_UNESTIMABLE`, shared with the baseline
-generator so the two cannot disagree, and the suite fails if a listed exception
-starts succeeding.
+empty) and none may produce an entirely non-finite column. Documented
+exceptions, each with its statistical reason, live in `KNOWN_UNESTIMABLE`
+(currently none), shared with the baseline generator so the two cannot
+disagree, and the suite fails if a listed exception starts succeeding.
 
 Tolerances default to `1e-9` relative / `1e-12` absolute, including for `causal` and `misc`, whose optimisers and permutation tests reproduce bit-exactly.
 Looser tolerances cover cross-platform BLAS/LAPACK sensitivity only: per SPI in `LOOSE_SPIS` (`anm`) and per estimator family in `LOOSE_PREFIXES`.
