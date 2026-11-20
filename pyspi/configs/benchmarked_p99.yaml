@@ -666,11 +666,7 @@
     dependencies:
     configs:
     - phitype: star
-    - phitype: star
-      normalization: 1
     - phitype: Geo
-    - phitype: Geo
-      normalization: 1
 
 
 .statistics.spectral:

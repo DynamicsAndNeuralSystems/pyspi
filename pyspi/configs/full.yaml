@@ -700,13 +700,7 @@
     configs:
       - phitype: "star"
 
-      - phitype: "star"
-        normalization: 1
-
       - phitype: "Geo"
-
-      - phitype: "Geo"
-        normalization: 1
 
 # Spectral (frequency-domain) statistics (see Schoegl and Supp, 2006)
 .statistics.spectral:
