@@ -201,6 +201,27 @@ def select_order_bic(Z, max_order=DEFAULT_MAX_ORDER):
     return int(np.argmin(bic)) + 1, bic
 
 
+def _parse_order(order, max_order):
+    """``(order, max_order)`` checked for a VAR statistic.
+
+    ``order`` is a positive int or ``"bic"``. With ``"bic"``, ``max_order`` is a
+    positive int, default ``DEFAULT_MAX_ORDER``; with a fixed order it must be
+    ``None`` and is returned as ``None``.
+    """
+    if isinstance(order, str):
+        if order != "bic":
+            raise ValueError(f"order must be a positive int or 'bic', got {order!r}.")
+        return order, require_int(
+            "max_order", DEFAULT_MAX_ORDER if max_order is None else max_order,
+            minimum=1)
+    order = require_int("order", order, minimum=1)
+    if max_order is not None:
+        raise ValueError(
+            f"max_order={max_order!r} is only used by order='bic'; with "
+            f"a fixed order={order} there is nothing to select.")
+    return order, None
+
+
 class ConditionalGrangerCausality(Directed, Unsigned):
     """Conditional (multivariate) Granger causality from one VAR of all processes.
 
@@ -265,19 +286,7 @@ class ConditionalGrangerCausality(Directed, Unsigned):
         return (self._order, self._max_order)
 
     def __init__(self, order="bic", max_order=None, statistic="F"):
-        if isinstance(order, str):
-            if order != "bic":
-                raise ValueError(f"order must be a positive int or 'bic', got {order!r}.")
-            self._max_order = require_int(
-                "max_order", DEFAULT_MAX_ORDER if max_order is None else max_order,
-                minimum=1)
-        else:
-            order = require_int("order", order, minimum=1)
-            if max_order is not None:
-                raise ValueError(
-                    f"max_order={max_order!r} is only used by order='bic'; with "
-                    f"a fixed order={order} there is nothing to select.")
-            self._max_order = None
+        order, self._max_order = _parse_order(order, max_order)
         if statistic not in ("F", "coef"):
             raise ValueError(f"statistic must be 'F' or 'coef', got {statistic!r}.")
         self._order = order
