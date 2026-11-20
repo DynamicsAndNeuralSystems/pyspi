@@ -1039,29 +1039,6 @@
         fmax: 0.5
         statistic: max
 
-  # Group delay
-  GroupDelay:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M01
-    dependencies:
-    configs:
-      - fmin: 0
-        fmax: 0.5
-        statistic: delay
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: delay
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: delay
-
   # Spectral Granger causality
   SpectralGrangerCausality:
     labels:
