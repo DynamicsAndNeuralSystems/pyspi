@@ -21,8 +21,9 @@ from pyspi.statistics.var import (
 
 GC_ID = "gc_gaussian_k-1_kt-1_l-1_lt-1"
 BUNDLED = {"cgc_p-1": dict(order=1), "cgc_p-2": dict(order=2),
-           "cgc_p-bic": dict(order="bic"),
-           "cgc_p-bic_coef": dict(order="bic", statistic="coef")}
+           "cgc_p-bic": dict(order="bic")}
+# The signed coefficient form is a class option, not bundled.
+CONFIGS = {**BUNDLED, "cgc_p-bic_coef": dict(order="bic", statistic="coef")}
 
 
 def _simulate(coefs, T, seed, burn=500):
@@ -413,7 +414,7 @@ def test_results_are_not_the_cache_and_the_cache_follows_the_data():
 def test_calculator_round_trip(tmp_path):
     cfg = {".statistics.var": {"ConditionalGrangerCausality": {
         "labels": ["directed", "linear", "unsigned", "multivariate"],
-        "configs": list(BUNDLED.values())}}}
+        "configs": list(CONFIGS.values())}}}
     path = tmp_path / "cgc.yaml"
     path.write_text(yaml.safe_dump(cfg))
     x = _simulate([_A1, _A2], 500, seed=13)
@@ -421,9 +422,9 @@ def test_calculator_round_trip(tmp_path):
     calc.compute()
 
     assert calc.errors == {}
-    assert set(calc.spis) == set(BUNDLED)
+    assert set(calc.spis) == set(CONFIGS)
     off = _offdiag(4)
-    for ident, kwargs in BUNDLED.items():
+    for ident, kwargs in CONFIGS.items():
         got = calc.table[ident].to_numpy(dtype=float)
         want = CGC(**kwargs).multivariate(_data(x))
         np.testing.assert_allclose(got[off], want[off], rtol=1e-12, atol=1e-14)
@@ -432,8 +433,7 @@ def test_calculator_round_trip(tmp_path):
 
 def test_bundled_configs_construct():
     full = Calculator(config="full").spis
-    assert set(BUNDLED) <= set(full)
-    assert "signed" in full["cgc_p-bic_coef"].labels
+    assert {s for s in full if s.startswith("cgc_")} == set(BUNDLED)
     assert "unsigned" in full["cgc_p-bic"].labels
     fast = Calculator(config="fast").spis
     assert "cgc_p-bic" in fast

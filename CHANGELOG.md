@@ -275,7 +275,8 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
   One OLS VAR(p) is fitted to all processes, and `F[i, j] = ln(var_r / var_f)` compares target j's residual variance with and without the lags of source i (Geweke 1984; Barnett & Seth 2014).
   Conditioning on every other process means an indirect link or a common driver gives about 0.
   It is on Geweke's scale, twice that of `gc_gaussian_*`.
-  Bundled as `cgc_p-1`, `cgc_p-2`, `cgc_p-bic` (order 1-10 chosen by BIC; also in `fast`) and `cgc_p-bic_coef` (signed net lagged coefficient).
+  Bundled as `cgc_p-1`, `cgc_p-2` and `cgc_p-bic` (order 1-10 chosen by BIC; also in `fast`).
+  The signed net lagged coefficient is available as `statistic='coef'` (e.g. `cgc_p-bic_coef`) but is not bundled.
 - **Conditional spectral measures `cpdc_*`, `cgpdc_*`, `cddtf_*` and `pcohmag_*`** (`pyspi/statistics/var.py`), read off the same VAR of all processes as `cgc_*`.
   They are partial directed coherence (Baccalá & Sameshima 2001), generalised PDC (Baccalá et al. 2007), the direct directed transfer function (Korzeniewska et al. 2003) and the squared partial coherence (Dahlhaus 2000), each on the scale of its bivariate counterpart (`pdcoh`, `gpdcoh`, `ddtf`, `cohmag`).
   Unlike those, they condition on every other process, so an indirect link gives about 0.
