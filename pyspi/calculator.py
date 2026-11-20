@@ -928,10 +928,16 @@ class Calculator:
 
     def _rmmin(self):
         """Iterate through all spis and remove the minimum (fixes absolute value errors when correlating)"""
+        self._table = self._min_shifted_table()
+
+    def _min_shifted_table(self):
+        """A copy of the table with each unsigned SPI shifted to a minimum of 0."""
+        table = self.table.copy()
         for spi in self.spis:
-            mpi = self.table[spi]
             if not self.spis[spi].issigned():
-                self.table[spi] = mpi - np.nanmin(mpi)
+                mpi = table[spi]
+                table[spi] = mpi - np.nanmin(mpi)
+        return table
 
     def set_group(self, classes):
         """Assigns a numeric value to this instance based on list of classes.
@@ -993,32 +999,24 @@ class Calculator:
         return {k: v.labels for k, v in zip(self._spis.keys(), self._spis.values())}
 
     def _get_correlation_df(self, with_labels=False, rmmin=False):
-        # Sorts out pesky numerical issues in the unsigned spis
-        if rmmin:
-            self._rmmin()
+        # Sorts out pesky numerical issues in the unsigned spis. On a copy:
+        # shifting `self.table` in place would make a later `save()` write the
+        # shifted values.
+        table = self._min_shifted_table() if rmmin else self.table
 
         # Flatten (get Edge-by-SPI matrix). future_stack=True keeps all-NaN
         # rows, so dropna removes the self-pairs (the SPI diagonals are NaN).
-        edges = self.table.stack(future_stack=True).dropna(how="all")
+        edges = table.stack(future_stack=True).dropna(how="all")
 
-        # Correlate the edge matrix (using pearson and/or spearman correlation)
-        cf = pd.DataFrame(
-            index=[c for c in edges.columns], columns=[c for c in edges.columns]
-        )
-        # Need to iterate through each pair to handle unsigned/signed statistics
-        for i, s0 in enumerate(edges.columns):
-            for j, s1 in enumerate(edges.columns[i + 1 :]):
-
-                if self.spis[s0].issigned() and self.spis[s1].issigned():
-                    # When they're both signed, just take the correlation
-                    cf.iloc[[i, i + j + 1], [i, i + j + 1]] = edges[[s0, s1]].corr(
-                        method="spearman"
-                    )
-                else:
-                    # Otherwise, take the absolute value to make sure we compare like-for-like
-                    cf.iloc[[i, i + j + 1], [i, i + j + 1]] = (
-                        edges[[s0, s1]].abs().corr(method="spearman")
-                    )
+        # Spearman correlation of every SPI pair. Two signed SPIs are compared
+        # as they are; a pair with an unsigned SPI is compared through abs()
+        # so like is compared with like. Both whole matrices use pairwise
+        # complete observations, as the per-pair calls they replace did.
+        signed = np.array([self.spis[s].issigned() for s in edges.columns])
+        cf = edges.abs().corr(method="spearman")
+        if signed.any():
+            cols = edges.columns[signed]
+            cf.loc[cols, cols] = edges[cols].corr(method="spearman")
 
         cf.index.name = "SPI-1"
         cf.columns.name = "SPI-2"
@@ -1153,23 +1151,25 @@ class CalculatorFrame:
 
             for config in yf:
                 try:
-                    file = config["file"]
-                    dim_order = config["dim_order"]
-                    names.append(config["name"])
-                    labels.append(config["labels"])
-                    datasets.append(
-                        Data(
-                            data=file,
-                            dim_order=dim_order,
-                            name=names[-1],
-                            detrend=detrend,
-                            zscore=zscore,
-                            n_processes=n_processes,
-                            n_observations=n_observations,
-                        )
+                    dataset = Data(
+                        data=config["file"],
+                        dim_order=config["dim_order"],
+                        name=config["name"],
+                        detrend=detrend,
+                        zscore=zscore,
+                        n_processes=n_processes,
+                        n_observations=n_observations,
                     )
+                    labels_i = config["labels"]
                 except Exception as err:
                     warnings.warn(f"Loading dataset: {config} failed ({err}).")
+                    continue
+                # Appended together, only once the dataset has loaded, so a
+                # failed entry cannot shift later names and labels onto the
+                # wrong datasets.
+                datasets.append(dataset)
+                names.append(config["name"])
+                labels.append(labels_i)
 
         self.init_from_list(datasets, names, labels, **kwargs)
 

@@ -223,6 +223,11 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **`cds` returned 0, its strongest evidence for `i -> j`, when undefined**; it now returns NaN.
 - **`pec`, `pec_log`, `pec_orth` and `pec_orth_log` are now labelled signed** (a correlation in [-1, 1]), and `Cointegration` is labelled linear.
 - **Smaller fixes with no value changes:** `Covariance`/`Precision` return a copy of the cached array; `SpearmanR` and `LaggedCorrelation(spearman)` handle a constant series in any position; `LaggedCorrelation.bivariate` returns NaN when either direction is undefined, as `multivariate` does; `CrossmapEntropy` and `StochasticInteraction` reject non-positive `history_length`/`delay`; the wavelet PSI frequency floor is in Hz; spectral classes reject a `statistic` they cannot apply.
+- **`CalculatorFrame` and `CorrelationFrame` bookkeeping.**
+  `init_from_yaml` appended a dataset's name and labels before loading it, so after one failed entry every later dataset carried its predecessor's name and labels; they are now appended only once the dataset loads.
+  `get_correlation_df(rmmin=True)` shifted the calculator's table in place, so a later `save()` wrote the shifted values; it now shifts a copy.
+  `CorrelationFrame.ddf` averaged datasets that share a name (including several unnamed ones) into one; it now raises `ValueError`.
+  The SPI-by-SPI correlation is computed as two whole-matrix Spearman correlations instead of one call per pair (identical output, about 60x faster for 163 SPIs).
 
 ### Changed
 
