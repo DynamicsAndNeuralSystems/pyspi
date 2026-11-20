@@ -1375,15 +1375,17 @@ class AdaptivePhaseConsistency(Undirected, Unsigned):
 
     Undirected and unsigned (invariant to the sign and scale of either
     process), in [-1, 1]: about 0 under independence and 1 for a constant
-    phase lag, anti-phase included. A phase difference that drifts steadily
-    across the record gives negative values, down to about -1 at short ``T``,
-    where the lowest bands hold only a few segments. Coupling in a rhythm that
-    stands little above either process's ``1/f`` background gets little
-    weight. It has no parameters: the bands are in cycles per sample,
-    so the value does not depend on the sampling frequency. The first and last
-    5% of samples are left out of every band to avoid filter edge effects, and
-    a band that then holds fewer than three segments is skipped. NaN for a
-    constant process, or when every band is skipped (``T < 23``).
+    phase lag, anti-phase included. Coupling in a rhythm that stands little
+    above either process's ``1/f`` background gets little weight. It has no
+    parameters: the bands are in cycles per sample, so the value does not
+    depend on the sampling frequency. The first and last 5% of samples are
+    left out of every band to avoid filter edge effects, and a band that then
+    holds fewer than six segments is skipped, so the lowest band used is
+    centred at about 13 cycles per record or above and slower rhythms are not
+    seen. Because sample pairs in the same or adjacent segments are left out,
+    a phase difference that drifts by about a cycle across the record reads
+    negative, more so the fewer segments a band holds. NaN for a constant
+    process, or when every band is skipped (``T < 46``).
     """
 
     name = "Spectrally weighted Hilbert phase consistency"
@@ -1393,16 +1395,17 @@ class AdaptivePhaseConsistency(Undirected, Unsigned):
     _FC_MIN = 0.005
     _FC_MAX = 0.4
     _F_TOP = 0.49
+    _MIN_SEGMENTS = 6
 
     def _bands(self, T):
-        """``(sos, lo, hi, L)`` for each band whose trimmed series holds three segments."""
+        """``(sos, lo, hi, L)`` for each band whose trimmed series holds six segments."""
         n = T - 2 * (T // 20)
         bands = []
         fc = max(4 / T, self._FC_MIN)
         while fc <= self._FC_MAX:
             lo, hi = fc / 2, min(1.5 * fc, self._F_TOP)
             L = int(np.ceil(2 / (hi - lo)))
-            if n // L >= 3:
+            if n // L >= self._MIN_SEGMENTS:
                 sos = signal.butter(2, [lo, hi], btype="band", fs=1, output="sos")
                 bands.append((sos, lo, hi, L))
             fc *= np.sqrt(2)

@@ -3,7 +3,8 @@
 The value is checked against an independent reference (a standalone function
 written from the definition, with an explicit sampling frequency) and against
 the properties any implementation must have: about 0 for independent pairs
-whatever their spectra, high for phase-locked oscillators, symmetric,
+whatever their spectra, also at short length with a drifting phase
+difference, high for phase-locked oscillators, symmetric,
 invariant to the sign of either process, free of a sampling-frequency
 parameter, NaN where undefined, and multivariate equal to bivariate.
 """
@@ -56,9 +57,11 @@ def _reference(x, y, fs=1.0):
         sos = signal.butter(2, [lo, hi], btype="band", fs=fs, output="sos")
         px = np.angle(signal.hilbert(signal.sosfiltfilt(sos, x)))
         py = np.angle(signal.hilbert(signal.sosfiltfilt(sos, y)))
-        p = _reference_segment_ppc((px - py)[trim], int(np.ceil(2 * fs / (hi - lo))))
+        dphi = (px - py)[trim]
+        L = int(np.ceil(2 * fs / (hi - lo)))
+        p = _reference_segment_ppc(dphi, L)
         inb = (f >= lo) & (f <= hi)
-        if np.isfinite(p) and inb.any():
+        if dphi.size // L >= 6 and np.isfinite(p) and inb.any():
             w = G[inb].mean()
             num += w * p
             den += w
@@ -116,6 +119,30 @@ def test_independent_pairs_are_near_zero(generator):
     assert np.isfinite(off).all()
     assert abs(off.mean()) < 0.03
     assert np.abs(off).max() < 0.25
+
+
+def test_detuned_oscillators_at_short_length_are_near_zero():
+    """Independent oscillators a little apart in frequency, at T = 100: each
+    pair's phase difference drifts by up to a few cycles across the record."""
+    rng = np.random.default_rng(11)
+    T = 100
+    f0 = np.linspace(0.04, 0.08, 8)
+    phi = (2 * np.pi * f0[:, None] * np.arange(T) + rng.uniform(0, 2 * np.pi, (8, 1))
+           + np.cumsum(0.05 * rng.standard_normal((8, T)), axis=1))
+    z = np.sin(phi) + 0.2 * rng.standard_normal((8, T))
+    off = _off(AdaptivePhaseConsistency().multivariate(_data(z)))
+    assert np.isfinite(off).all()
+    assert abs(off.mean()) < 0.05
+    assert off.min() > -0.45
+
+
+@pytest.mark.parametrize("generator", [_white, _red, _pink])
+def test_independent_pairs_at_short_length_are_near_zero(generator):
+    z = generator(np.random.default_rng(13), 8, 100)
+    off = _off(AdaptivePhaseConsistency().multivariate(_data(z)))
+    assert np.isfinite(off).all()
+    assert abs(off.mean()) < 0.05
+    assert off.min() > -0.2
 
 
 @pytest.mark.parametrize("f0", [0.05, 0.25])
@@ -180,12 +207,12 @@ def test_constant_process_gives_nan(level):
     assert np.isfinite(A[0, 2])
 
 
-@pytest.mark.parametrize("T", [10, 16, 22])
-def test_series_too_short_for_three_segments_gives_nan(T):
+@pytest.mark.parametrize("T", [10, 23, 45])
+def test_series_too_short_for_six_segments_gives_nan(T):
     z = _white(np.random.default_rng(T), 2, T)
     assert np.isnan(AdaptivePhaseConsistency().bivariate(_data(z), i=0, j=1))
 
 
 def test_shortest_defined_series():
-    z = _white(np.random.default_rng(23), 2, 23)
+    z = _white(np.random.default_rng(46), 2, 46)
     assert np.isfinite(AdaptivePhaseConsistency().bivariate(_data(z), i=0, j=1))
