@@ -360,7 +360,9 @@ class EdgeTimeSeries(Undirected, Signed):
     nonstationary coupling from the sampling spread that windowed correlations
     show even when the coupling is stationary (Hindriks et al., 2016). For
     strongly autocorrelated series the finite-sample corrections act on the
-    effective sample size rather than ``T``.
+    effective sample size rather than ``T``. The statistics describe the
+    co-fluctuation structure of the pair's edge time series, not coupling
+    strength.
 
     Conventions: each series is z-scored with ``ddof=1`` (a no-op on data
     z-scored by ``Data``), so ``mean(z^2) = c := (T-1)/T``,
