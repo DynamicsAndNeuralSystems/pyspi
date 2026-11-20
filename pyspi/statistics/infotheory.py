@@ -20,7 +20,7 @@ derive from JIDT. JIDT's copyright notice is retained in
 required), and ``tests/tools/jidt_reference/`` regenerates them. Known
 deviations: kernel TE differs slightly from JIDT (per-column rather than
 whole-series normalisation); Gaussian estimators carry a deterministic
-1e-8 relative ridge; KSG breaks ties with a small seeded jitter (hctsa-style)
+1e-8 relative ridge; KSG breaks every exact tie with a small seeded jitter
 where JIDT adds random noise by default; with a Theiler window, KSG MI takes
 its psi(N) term over the reduced neighbour pool (see _ksg_pool_digamma).
 """
@@ -601,10 +601,12 @@ def _numpy_delay_embedding(x, dim):
 # ---------------------------------------------------------------------------
 
 # JIDT adds random noise (1e-8) to every KSG input and normalises it. pyspi
-# standardises each coordinate (below) but replaces JIDT's noise with the
-# tie-break policy of hctsa's BF_TieBreakNoise (and pyhctsa's
-# bf_tie_break_noise): KSG assumes no ties, so a variable with many repeated
-# values is first given tiny, *deterministic* Gaussian jitter. Tie-free data
+# standardises each coordinate (below) but replaces JIDT's noise with
+# deterministic tie-breaking jitter, as pyhctsa's KSG does: KSG assumes no
+# ties, so the repeated values of a variable are first given tiny Gaussian
+# jitter from a fixed-seed generator. Unlike hctsa's BF_TieBreakNoise, which
+# jitters every value of a series with fewer than 90% unique values, every
+# exact tie is broken and values that occur once are left alone. Tie-free data
 # are returned bit-identically.
 
 # Seeds of the per-variable jitter streams. Variables that are compared with one
@@ -616,21 +618,36 @@ _TIE_SEED_SELECTION = 2
 
 
 def _tie_break(y, seed=0):
-    """Break exact ties in a raw series, as hctsa's ``BF_TieBreakNoise``.
+    """Make every value of a raw series distinct with tiny fixed-seed jitter.
 
-    If fewer than 90% of the values are unique and the std is positive, add
-    Gaussian noise with standard deviation ``1e-10 * std(y, ddof=1)`` drawn from
-    a local generator seeded with ``seed`` (never the global NumPy RNG), so the
-    same input always gives the same output. Otherwise ``y`` is returned
-    untouched. Apply to the raw series *before* delay embedding so that every
-    embedded lag of a sample carries the same perturbation.
+    Each entry whose value occurs more than once gets Gaussian jitter of
+    standard deviation ``1e-10 * std(y, ddof=1)``: entry ``i`` gets the ``i``-th
+    draw of a local generator seeded with ``seed`` (never the global NumPy
+    RNG), so the same input always gives the same output. Jitter this small can
+    land two entries of a large tie block on the same float again, so entries
+    still repeated are jittered again with the next draws of the same generator,
+    for at most 100 passes, until every value is distinct. Values that occur
+    once are not touched, and a series with no repeated value, or with zero
+    std, is returned unchanged. Apply to the raw series *before* delay
+    embedding so that every embedded lag of a sample carries the same
+    perturbation.
     """
     y = np.asarray(y, dtype=np.float64)
     if y.size < 2 or not np.all(np.isfinite(y)):
         return y        # non-finite input is rejected by _knn_condition
     sigma = y.std(ddof=1)
-    if np.unique(y).size < 0.9 * y.size and sigma > 0:
-        y = y + 1e-10 * sigma * np.random.default_rng(seed).standard_normal(y.shape)
+    if not sigma > 0:
+        return y
+    rng = None
+    for _ in range(100):
+        _, inverse, counts = np.unique(y, return_inverse=True, return_counts=True)
+        repeated = counts[inverse.ravel()] > 1
+        if not repeated.any():
+            break
+        if rng is None:
+            rng = np.random.default_rng(seed)
+            y = y.copy()
+        y[repeated] += 1e-10 * sigma * rng.standard_normal(y.shape)[repeated]
     return y
 
 
