@@ -315,10 +315,9 @@ def test_calculator_round_trip(tmp_path):
 
 def test_full_config_constructs_pac_entries():
     spis = Calculator(config="full").spis
-    for ident in IDENTIFIERS:
-        assert ident in spis
-        assert {"directed", "nonlinear", "unsigned", "bivariate",
-                "frequency-dependent"} <= set(spis[ident].labels)
+    bundled = {"pac_mi_excess_p-0-01-0-05_a-0-15-0-4",
+               "pac_mi_excess_p-0-05-0-1_a-0-2-0-45"}
+    assert {k for k in spis if k.startswith("pac_")} == bundled
     assert not any(k.startswith("pac_") for k in Calculator(config="fast").spis)
 
 

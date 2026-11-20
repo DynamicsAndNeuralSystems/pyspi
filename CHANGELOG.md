@@ -280,7 +280,7 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
   `statistic="<stat>_excess"` subtracts the index's mean over `n_surr = 100` circular time shifts of the target's envelope (shifts uniform on `[n/10, 9n/10]` of the `n` retained samples, fixed seed), and `"<stat>_z"` divides that by the surrogates' standard deviation; both are signed.
   The z-score is a significance score, not an effect size: it saturates as the coupling grows, because the surrogates' spread grows with the target's modulation.
   Time-shift surrogates cannot see coupling to a strictly periodic source, and neither normalisation removes the spurious PAC of sharp non-sinusoidal waveforms (Kramer et al. 2008, J Neurosci Methods 170:352).
-  `full` bundles the band pairs (0.01-0.05, 0.15-0.4) and (0.05-0.1, 0.2-0.45) with `mi`, `mvl` and `mi_excess` (six SPIs).
+  `full` bundles `mi_excess` at the band pairs (0.01-0.05, 0.15-0.4) and (0.05-0.1, 0.2-0.45); the other statistics are available by name.
 
 ### Dependencies
 
