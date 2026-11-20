@@ -185,7 +185,7 @@ def warn_partial_cache_buckets(spis):
     the same nudge.
     """
     # Only caches expensive enough for the advice to matter. Warning on the
-    # cheap ones is noise: fabfour deliberately keeps 1 of 32 covariance SPIs.
+    # cheap ones is noise: fabfour deliberately keeps 1 of 26 covariance SPIs.
     EXPENSIVE = {"ccm", "barycenter"}
 
     from collections import defaultdict
