@@ -1011,21 +1011,6 @@
 
 # Miscellaneous statistics
 .statistics.misc:
-  # Linear model regression
-  LinearModel:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-      - model: Ridge
-      - model: SGDRegressor
-      - model: BayesianRidge
-
   # Cointegration
   Cointegration:
     labels:
