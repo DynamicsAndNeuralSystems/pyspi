@@ -63,8 +63,9 @@ class AdditiveNoiseModel(Directed, Unsigned):
     def bivariate(self, data, i=None, j=None):
         """HSIC between x and the residual of a GP fit of y on x.
 
-        cdt's ANM regresses the other way round (cdt PR #155). The HSIC is
-        in `pyspi.lib.pairwise_causal`.
+        This is cdt's ``ANM.anm_score(x, y)``; cdt's ``predict_proba``
+        instead reports the difference between the two directions' scores
+        on standardised data. The HSIC is in `pyspi.lib.pairwise_causal`.
         """
         z = data.to_numpy()
         return _anm_scores(z[i], [z[j]])[0]
