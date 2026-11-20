@@ -1,6 +1,6 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (269 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (272 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
@@ -8,14 +8,14 @@ Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs
 | identifier unchanged | 187 |
 | renamed (same class and parameters; identifier changed) | 23 |
 | removed | 75 |
-| added | 59 |
-| 3.0.0 `full.yaml` | 269 |
+| added | 62 |
+| 3.0.0 `full.yaml` | 272 |
 
-285 - 75 removed + 59 added = 269; 187 + 23 renamed + 59 added = 269.
+285 - 75 removed + 62 added = 272; 187 + 23 renamed + 62 added = 272.
 The 75 removals are 14 made while porting away from JIDT, 24 duplicate, constant or degenerate SPIs, and 37 unbundled because an SPI that stays carries them; all are in the table below.
 The 37 are removed from the bundled configs only: their classes are unchanged, and each can still be computed from a custom config.
 
-## Added (59)
+## Added (62)
 
 | Family | Count | Identifiers |
 |:--|--:|:--|
@@ -27,6 +27,7 @@ The 37 are removed from the bundled configs only: their classes are unchanged, a
 | `DirectedInfo` (KSG/Frenzel-Pompe) | 1 | `di_kraskov_NN-4_n-5` |
 | `PhaseAlignedCorrelation` (Welch, automatic segment length) | 1 | `phasealigned_welch_nperseg-auto` |
 | `TransferEntropy` (symbolic, 3-sample ordinal patterns) | 1 | `te_symbolic_k-3` |
+| `MutualInfo`, `TimeLaggedMutualInfo`, `TransferEntropy` (box kernel with AUTO dynamic correlation exclusion) | 3 | `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO`, `te_kernel_W-0.25_DCE-AUTO_k-1` |
 
 Full list:
 
@@ -89,6 +90,9 @@ Full list:
 - `xi_tau-0`
 - `xi_tau-1`
 - `te_symbolic_k-3`
+- `mi_kernel_W-0.25_DCE-AUTO`
+- `tlmi_kernel_W-0.25_DCE-AUTO`
+- `te_kernel_W-0.25_DCE-AUTO_k-1`
 
 ## Removed (75)
 

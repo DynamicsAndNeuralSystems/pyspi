@@ -85,10 +85,18 @@ Output goes to `pyspi/configs/benchmarked_p<N>.yaml`. Dropped SPIs are left
 out of the YAML and listed with their cost in the `# --- DROPPED ---` footer.
 Pass `--preserve-dropped` to keep them as commented-out blocks instead.
 
-**`benchmarked_p90.yaml` carries a hand edit**: the two `te_kraskov_..._DCE_k-{1,2}`
-variants were added back after the cut for methodological reasons. Re-running
-`cut_config` overwrites it, so re-apply it by hand afterwards (the config's
-header names the two variants).
+**The shipped cuts carry hand edits**, named in each config's header: the two
+`te_kraskov_..._DCE_k-{1,2}` variants were added back to `benchmarked_p90`
+after the cut for methodological reasons, and `xi_tau-{0,1}`, the seven
+`pcorr_<estimator>`, `te_symbolic_k-3` and the three kernel `_DCE-AUTO` SPIs,
+added since the last bench, are in `p90`/`p95`/`p99` untimed. Re-running
+`cut_config` overwrites them, so re-apply them by hand afterwards.
+
+**A new SPI goes into `benchmarked_p90`** (and so `p95` and `p99`, keeping
+the sets nested; `p80` too if it clears that cutoff) unless its cost, timed or
+estimated from a timed sibling at M=16, T=800, exceeds the p90 cutoff. Record
+it as a hand edit in each header. `benchmarked_p90` is the recommended default,
+so an SPI left out of it is rarely computed.
 
 ## Analyse
 
