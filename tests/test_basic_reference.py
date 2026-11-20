@@ -191,9 +191,16 @@ def _full_yaml_configs(cls):
 
 @pytest.mark.parametrize("zscore", [True, False])
 @pytest.mark.parametrize(
-    "params", [{k: v for k, v in c.items() if k != "labels"}
-               for c in _full_yaml_configs("CrossCorrelation")]
-    + [{"statistic": "max", "sigonly": False}],
+    "params", [
+        # The six configurations bundled in 2.0.2 (no longer in `full`).
+        {"statistic": "max"},
+        {"statistic": "max", "squared": True},
+        {"statistic": "mean"},
+        {"statistic": "mean", "squared": True},
+        {"statistic": "mean", "sigonly": False},
+        {"statistic": "mean", "squared": True, "sigonly": False},
+        {"statistic": "max", "sigonly": False},
+    ],
     ids=str)
 def test_cross_correlation_matches_direct_lag_sums(params, zscore):
     X = _series()

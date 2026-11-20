@@ -3,7 +3,7 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 254 of the 296 SPIs benchmarked.
+# Current set: 219 SPIs: 206 of the 296 benchmarked, plus the 13 lagcorr SPIs (timed separately, about 0.03 s in all at M=16 T=800).
 # Cutoff        : fastest kept <= 332.132s ; slowest dropped >= 342.692s.
 #
 .statistics.basic:
@@ -70,167 +70,38 @@
     - squared: true
     - squared: false
 
-  LaggedCorrelation:
+  LagResolvedCorrelation:
     labels:
-      - undirected
+      - directed
       - linear
-      - signed/unsigned
-      - bivariate
-      - time-dependent
-      - MXX
-    dependencies:
-    configs:
-    - estimator: pearson
-      squared: false
-      tau: 1
-    - estimator: pearson
-      squared: false
-      tau: 2
-    - estimator: pearson
-      squared: false
-      tau: 3
-    - estimator: pearson
-      squared: false
-      tau: 4
-    - estimator: pearson
-      squared: false
-      tau: 5
-    - estimator: pearson
-      squared: true
-      tau: 1
-    - estimator: pearson
-      squared: true
-      tau: 2
-    - estimator: pearson
-      squared: true
-      tau: 3
-    - estimator: pearson
-      squared: true
-      tau: 4
-    - estimator: pearson
-      squared: true
-      tau: 5
-    - estimator: pearson
-      tau: 10
-      squared: false
-    - estimator: pearson
-      tau: 10
-      squared: true
-    - estimator: pearson
-      tau: 20
-      squared: false
-    - estimator: pearson
-      tau: 20
-      squared: true
-    - estimator: spearman
-      squared: false
-      tau: 1
-    - estimator: spearman
-      squared: false
-      tau: 2
-    - estimator: spearman
-      squared: false
-      tau: 3
-    - estimator: spearman
-      squared: false
-      tau: 4
-    - estimator: spearman
-      squared: false
-      tau: 5
-    - estimator: spearman
-      squared: true
-      tau: 1
-    - estimator: spearman
-      squared: true
-      tau: 2
-    - estimator: spearman
-      squared: true
-      tau: 3
-    - estimator: spearman
-      squared: true
-      tau: 4
-    - estimator: spearman
-      squared: true
-      tau: 5
-    - estimator: spearman
-      tau: 10
-      squared: false
-    - estimator: spearman
-      tau: 10
-      squared: true
-    - estimator: spearman
-      tau: 20
-      squared: false
-    - estimator: spearman
-      tau: 20
-      squared: true
-    - estimator: kendall
-      squared: false
-      tau: 1
-    - estimator: kendall
-      squared: false
-      tau: 2
-    - estimator: kendall
-      squared: false
-      tau: 3
-    - estimator: kendall
-      squared: false
-      tau: 4
-    - estimator: kendall
-      squared: false
-      tau: 5
-    - estimator: kendall
-      squared: true
-      tau: 1
-    - estimator: kendall
-      squared: true
-      tau: 2
-    - estimator: kendall
-      squared: true
-      tau: 3
-    - estimator: kendall
-      squared: true
-      tau: 4
-    - estimator: kendall
-      squared: true
-      tau: 5
-    - estimator: kendall
-      tau: 10
-      squared: false
-    - estimator: kendall
-      tau: 10
-      squared: true
-    - estimator: kendall
-      tau: 20
-      squared: false
-    - estimator: kendall
-      tau: 20
-      squared: true
-
-  CrossCorrelation:
-    labels:
-      - undirected
-      - linear
-      - signed/unsigned
+      - signed
       - bivariate
       - time-dependent
       - M14
     dependencies:
     configs:
-    - statistic: max
-      labels:
-      - M10
-    - statistic: max
-      squared: true
-    - statistic: mean
-    - statistic: mean
-      squared: true
-    - statistic: mean
-      sigonly: false
-    - statistic: mean
-      squared: true
-      sigonly: false
-
+      - statistic: lag
+      - statistic: peak
+      - statistic: asym
+      - statistic: onesided
+        tau: 1
+      - statistic: onesided
+        tau: 2
+      - statistic: onesided
+        tau: 3
+      - statistic: onesided
+        tau: 5
+      - statistic: onesided
+        tau: 10
+      - statistic: onesided
+        tau: "1e"
+      - statistic: onesidedpeak
+      - statistic: lag
+        max_lag: 10
+      - statistic: peak
+        max_lag: 10
+      - statistic: asym
+        max_lag: 10
 
 .statistics.distance:
   PairwiseDistance:
