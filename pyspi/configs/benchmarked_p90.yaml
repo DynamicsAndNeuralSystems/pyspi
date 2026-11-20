@@ -3,7 +3,7 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 264 / 296 SPIs (including two manual te_kraskov DCE variants).
+# Current set: 264 of the 296 SPIs benchmarked (including two manual te_kraskov DCE variants).
 # Cutoff        : fastest kept <= 5.520s ; slowest dropped >= 6.790s.
 #
 # Manual edit: te_kraskov_NN-4_DCE_k-{1,2}_kt-1_l-1_lt-1 are kept for coverage;
