@@ -406,7 +406,7 @@
         squared: True
 
   # Gromov-Wasserstein distance (GW_tau)
-  GromovWasserstainTau:
+  GromovWassersteinTau:
     labels:
       - unsigned
       - distance

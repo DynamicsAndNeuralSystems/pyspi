@@ -682,7 +682,7 @@ class Barycenter(Undirected, Signed):
         return self._statfn(bc)
 
 
-class GromovWasserstainTau(Undirected, Unsigned):
+class GromovWassersteinTau(Undirected, Unsigned):
     """GW_tau (Kravtsova, McGee & Dawes 2023, Bull. Math. Biol. 85, 71).
 
     Each series becomes the planar trajectory ``(t, x_t)``; ``vec_geo_dist``
@@ -694,8 +694,6 @@ class GromovWasserstainTau(Undirected, Unsigned):
     The distance vector has one entry per point, the first being 0 for the
     start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``; the authors'
     MATLAB omits it, which only rescales the value by a constant).
-
-    The class name keeps its misspelling because configs refer to it.
     """
 
     name = "Gromov-Wasserstein distance (GW_tau)"
@@ -741,9 +739,9 @@ class GromovWasserstainTau(Undirected, Unsigned):
         traji = np.column_stack([timei, xi])
         trajj = np.column_stack([timej, xj])
 
-        vi = GromovWasserstainTau.vec_geo_dist(traji)
-        vj = GromovWasserstainTau.vec_geo_dist(trajj)
-        gw = GromovWasserstainTau.wass_sorted(vi, vj)
+        vi = GromovWassersteinTau.vec_geo_dist(traji)
+        vj = GromovWassersteinTau.vec_geo_dist(trajj)
+        gw = GromovWassersteinTau.wass_sorted(vi, vj)
 
         return gw
 
@@ -752,6 +750,23 @@ class GromovWasserstainTau(Undirected, Unsigned):
         x, y = data.to_numpy()[[i, j]]
         stat = self.gwtau(x, y)
         return stat
+
+
+class GromovWasserstainTau(GromovWassersteinTau):
+    """Deprecated alias for :class:`GromovWassersteinTau`.
+
+    The old name is misspelled. Kept so existing configs and scripts keep
+    working; the identifier (`gwtau`) and the computation are unchanged.
+    """
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "GromovWasserstainTau is deprecated and will be removed in pyspi "
+            "4.0; use GromovWassersteinTau. The identifier and the computed "
+            "values are identical.",
+            DeprecationWarning, stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
 
 # ---------------------------------------------------------------------------
