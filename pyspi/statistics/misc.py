@@ -9,6 +9,7 @@ from sklearn.gaussian_process import kernels, GaussianProcessRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn import linear_model
 from mne_connectivity import envelope_correlation
+from pyspi.utils import fmt_param
 from pyspi.lib.ids.dependence import compute_IDS
 
 from pyspi.base import (
@@ -266,6 +267,12 @@ class InterDependenceScore(Undirected, Unsigned):
         self._num_terms = terms
         self._p_norm = pnorm
         self._bandwidth_term = bandwidth
+        # Every result-affecting parameter must reach the identifier. Only
+        # non-default values are appended, so the bundled `ids` keeps its name.
+        for tag, value, default in (("terms", terms, 6), ("pnorm", pnorm, "max"),
+                                    ("bw", bandwidth, 0.5)):
+            if value != default:
+                self.identifier += f"_{tag}-{fmt_param(value)}".replace(".", "-")
 
 
     @parse_multivariate
