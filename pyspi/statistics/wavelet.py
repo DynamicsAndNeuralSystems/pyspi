@@ -271,9 +271,10 @@ class PhaseSlopeIndex(mne, Undirected):
       interior frequencies (the backend's band is open, so both ends drop out),
       bounded by 7 in magnitude.
 
-    ``mean`` is the time average of ``psi(t)``: positive when ``i`` leads
-    ``j`` and zero in expectation for independent series, with a standard
-    deviation that falls as ``1 / sqrt(T)``. Neighbouring
+    ``mean`` is the time average of ``psi(t)``, zero in expectation for
+    independent series, with a standard deviation that falls as
+    ``1 / sqrt(T)``. For ``mean``, ``A[i, j] = -A[j, i]``; positive means
+    process i leads. Neighbouring
     frequencies are ``df = (fmax - fmin) / 9`` apart, so for a delay longer
     than about ``1 / (2 df)`` samples the sign reverses (about 9 samples at
     fs=1 on [0, 0.5]). The value is not proportional to the delay.

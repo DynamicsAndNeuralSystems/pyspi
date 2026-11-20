@@ -535,9 +535,9 @@ class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
 class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
     """Phase of the coherency, ``arg S_xy(f)``, circular-averaged over the band.
 
-    In radians in ``(-pi, pi]`` and antisymmetric, ``A[i, j] = -A[j, i]``, so
-    the sign says which process leads. Only ``statistic="mean"`` (a circular
-    mean) is supported, since wrapped angles have no ordinary maximum.
+    In radians in ``(-pi, pi]``. ``A[i, j] = -A[j, i]``; positive means the
+    phase of process i leads that of process j. Only ``statistic="mean"`` (a
+    circular mean) is supported, since wrapped angles have no ordinary maximum.
     """
 
     # Antisymmetric in (i, j): phase difference: phi(i,j) = -phi(j,i).
@@ -616,9 +616,9 @@ class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
 
     At each frequency the mean over tapers of ``sign(Im S_ij)``, then the band
     statistic. This is the backend's signed index, not Stam's ``|PLI|``: it is
-    in [-1, 1], antisymmetric (``A[j, i] = -A[i, j]``) and has mean 0 under
-    independence, whereas ``|PLI|`` is biased upwards at a finite number of
-    tapers.
+    in [-1, 1] and has mean 0 under independence, whereas ``|PLI|`` is biased
+    upwards at a finite number of tapers. With ``statistic="mean"``,
+    ``A[i, j] = -A[j, i]``; positive means process i leads.
 
     Each frequency's sign is that of ``sin`` of the cross-spectral phase,
     which a delay of d samples winds by ``2 pi f d``. Where the phase passes
@@ -647,7 +647,8 @@ class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     statistic. Signed, in [-1, 1], antisymmetric and mean 0 under
     independence, like :class:`PhaseLagIndex`, and with the same caveat:
     where the cross-spectral phase passes pi inside the band, the band mean
-    can fall or cancel as coupling grows.
+    can fall or cancel as coupling grows. With ``statistic="mean"``,
+    ``A[i, j] = -A[j, i]``; positive means process i leads.
     """
 
     # Antisymmetric in (i, j): imaginary-coherency weighted sign.
@@ -915,7 +916,8 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     ``Psi_ij = Im sum_f conj(C_ij(f)) C_ij(f + df)`` over the band, with ``C``
     the complex coherency and ``df`` the frequency resolution of its estimate:
     a coherence-weighted phase difference between neighbouring frequencies. It
-    grows with the lag between two processes and its sign says which leads.
+    grows with the lag between two processes. ``A[i, j] = -A[j, i]``; positive
+    means process i leads.
 
     ``df`` is the multitaper bandwidth, ``_FREQUENCY_STEP`` FFT bins: closer
     frequencies share tapers and carry no independent phase. The sign is then
@@ -1015,7 +1017,9 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
     selects ``"delay"`` (the slope converted to samples, positive when the
     row leads the column), ``"slope"`` (radians per unit frequency) or
     ``"rvalue"`` (``|r|`` of the fit). ``delay`` and ``slope`` are
-    antisymmetric and signed, ``rvalue`` symmetric and unsigned. NaN when no run of at least three independent bins is
+    antisymmetric and signed, ``rvalue`` symmetric and unsigned. For ``delay``
+    and ``slope``, ``A[i, j] = -A[j, i]``; positive means process i leads.
+    NaN when no run of at least three independent bins is
     significant; see ``_get_statistic``.
     """
 

@@ -124,8 +124,9 @@ class InformationGeometricCausalInference(Directed, Signed):
     directions' entropies under a reference measure and leverages the asymmetry
     of a deterministic invertible map.
 
-    The score is a *difference* of two entropies, hence exactly antisymmetric:
-    `A[i, j] == -A[j, i]`, verified on the fixtures. Reporting it as unsigned
+    The score is a *difference* of two entropies, ``H(i) - H(j)`` of the
+    standardised series. ``A[i, j] = -A[j, i]``; positive favours process i
+    causing j. Reporting it as unsigned
     was not cosmetic -- `Calculator._rmmin` shifts every column it believes
     unsigned by that column's minimum, which on an antisymmetric matrix moves
     `A[i,j]` and `A[j,i]` by the same amount and destroys the lead/lag the sign
@@ -324,8 +325,8 @@ class ConvergentCrossMapping(Directed, Signed):
     ``table[i, j]`` is the skill with which the shadow manifold of *j*
     recovers *i*, which Sugihara et al. (2012) read as *i* driving *j*; higher
     means more (the opposite polarity to ``anm``/``cds``/``reci``). ``mean``
-    and ``max`` are over library sizes; ``diff`` is ``ccm(i->j) - ccm(j->i)``
-    and antisymmetric.
+    and ``max`` are over library sizes; ``diff`` is ``ccm(i->j) - ccm(j->i)``.
+    For ``diff``, ``A[i, j] = -A[j, i]``; positive means process i drives j.
 
     With ``embedding_dimension=None`` each process gets its own
     simplex-optimal dimension, and each pair uses the larger of its two in
