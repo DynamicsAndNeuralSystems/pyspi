@@ -134,47 +134,10 @@ if _TIER not in ("locked", "latest"):
 
 
 # SPIs whose baseline entries are kept although the SPI may be absent from
-# `full`. A baseline entry is compared only while its SPI is bundled.
-OPTIONAL_IN_FULL = frozenset({
-    "bary-sq_euclidean_mean",
-    "cov-sq_EmpiricalCovariance",
-    "cov-sq_GraphicalLasso",
-    "cov-sq_LedoitWolf",
-    "cov-sq_MinCovDet",
-    "cov-sq_OAS",
-    "cov-sq_ShrunkCovariance",
-    "cov_LedoitWolf",
-    "cov_OAS",
-    "cov_ShrunkCovariance",
-    "gpdcoh_multitaper_max_fs-1_fmin-0-25_fmax-0-5",
-    "gpdcoh_multitaper_max_fs-1_fmin-0_fmax-0-25",
-    "gpdcoh_multitaper_max_fs-1_fmin-0_fmax-0-5",
-    "gpdcoh_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
-    "gpdcoh_multitaper_mean_fs-1_fmin-0_fmax-0-25",
-    "gpdcoh_multitaper_mean_fs-1_fmin-0_fmax-0-5",
-    "kendalltau",
-    "kendalltau-sq",
-    "lmfit_BayesianRidge",
-    "lmfit_Ridge",
-    "lmfit_SGDRegressor",
-    "pdcoh_multitaper_max_fs-1_fmin-0-25_fmax-0-5",
-    "pdcoh_multitaper_max_fs-1_fmin-0_fmax-0-25",
-    "pdcoh_multitaper_max_fs-1_fmin-0_fmax-0-5",
-    "pdcoh_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
-    "pdcoh_multitaper_mean_fs-1_fmin-0_fmax-0-25",
-    "pdcoh_multitaper_mean_fs-1_fmin-0_fmax-0-5",
-    "pdist_cosine",
-    "pdist_euclidean",
-    "phi_Geo_t-1_norm-1",
-    "phi_star_t-1_norm-1",
-    "ppc_multitaper_max_fs-1_fmin-0-25_fmax-0-5",
-    "ppc_multitaper_max_fs-1_fmin-0_fmax-0-25",
-    "ppc_multitaper_max_fs-1_fmin-0_fmax-0-5",
-    "ppc_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
-    "ppc_multitaper_mean_fs-1_fmin-0_fmax-0-25",
-    "ppc_multitaper_mean_fs-1_fmin-0_fmax-0-5",
-    "spearmanr-sq",
-})
+# `full`. A baseline entry is compared only while its SPI is bundled. This lets
+# several PRs that unbundle SPIs land in any order with config-only changes;
+# a follow-up PR then prunes their baseline entries and empties the set.
+OPTIONAL_IN_FULL = frozenset()
 
 
 def _tolerance(spi_key):

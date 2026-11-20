@@ -7,7 +7,7 @@ A major overhaul. The Java/JIDT dependency is gone, the `Calculator` API is simp
 **Upgrading from 2.0.2 (the current PyPI release), at a glance:**
 
 - Python **>= 3.11** (2.0.2: >= 3.8), numpy **>= 2** (2.0.2: `<2`), scikit-learn **>= 1.8**, pyEDM **>= 2.5** (2.0.2: `==1.15.2.0`), mne **>= 1.6** (2.0.2: `==0.23.0`). No Java, `jpype`, `cdt` or `torch`. See [Dependencies](#dependencies).
-- The default `full` set goes from **285 SPIs (2.0.2) to 306**: 59 added, 38 removed, 23 renamed (identifier only), 224 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
+- The default `full` set goes from **285 SPIs (2.0.2) to 269**: 59 added, 75 removed, 23 renamed (identifier only), 187 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
 - The old `Calculator(subset=, configfile=, normalise=)` spellings still work, with a `DeprecationWarning`, until 4.0. See [Breaking changes and deprecations](#breaking-changes-and-deprecations).
 - Results tables written by 2.x (pickle) do not load; six directed spectral SPIs are transposed; many estimator values change (see [Changed](#changed) and the "Values changed" table).
 - The license is **GPL-3.0-or-later** (2.0.2: GPL-3.0), agreed by the maintainer, Ben Fulcher.
@@ -63,7 +63,9 @@ Tie-free series are not changed by pyspi's tie handling (see below), and for tho
 
 - **Java and JIDT** (above): `infodynamics.jar`, `jpype1` and the JVM start-up path.
 - **`cdt` and `torch`** (see Dependencies); `setup.py` and `requirements.txt` (packaging is `pyproject.toml` only); `pyspi/phiconf.yaml`; the 2.x config filenames (see the migration table); pickle and parquet output.
-- **Thirty-eight SPIs** (`full`: 285 to 306 net of 59 additions). See [SPI set changes](#spi-set-changes). Fourteen went with the port: six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`. Twenty-four more are duplicate, constant or degenerate: the four `*_EllipticEnvelope` (equal to `*_MinCovDet`), `lmfit_Lasso` and `lmfit_ElasticNet` (nearly constant at `alpha = 1`), `bary_euclidean_mean` (identically 0), `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` (box kernel in ~10 dimensions), the six `pli`/`wpli` multitaper maxima (saturate at 1), the three `psi_wavelet_max_*` (tend to their bound), and the DTW-type `bary_*_mean` and `bary-sq_*_mean` (six), replaced by `bary_{dtw,sgddtw,softdtw}_corr` (see **Changed**).
+- **Seventy-five SPIs** (`full`: 285 to 269 net of 59 additions). See [SPI set changes](#spi-set-changes). Fourteen went with the port: six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`. Twenty-four more are duplicate, constant or degenerate: the four `*_EllipticEnvelope` (equal to `*_MinCovDet`), `lmfit_Lasso` and `lmfit_ElasticNet` (nearly constant at `alpha = 1`), `bary_euclidean_mean` (identically 0), `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` (box kernel in ~10 dimensions), the six `pli`/`wpli` multitaper maxima (saturate at 1), the three `psi_wavelet_max_*` (tend to their bound), and the DTW-type `bary_*_mean` and `bary-sq_*_mean` (six), replaced by `bary_{dtw,sgddtw,softdtw}_corr` (see **Changed**).
+  Thirty-seven more are unbundled because an SPI that stays carries them: the shrinkage covariances and six squared covariances (9), `lmfit_*` (3), the bivariate `pdcoh_*`/`gpdcoh_*` (12), `ppc_*` (6), `kendalltau` and `kendalltau-sq`, `pdist_cosine`, `pdist_euclidean` and `bary-sq_euclidean_mean`, and `phi_{Geo,star}_t-1_norm-1`.
+  Their classes are unchanged, so each can still be computed from a custom config.
 
 ### Fixed: state, identity, and estimator contracts
 
@@ -258,7 +260,7 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
   The floor is raised from `>=0.6` to `>=0.10` so that a fresh install reproduces the stored baselines, and `COMPUTATION_VERSION` is `3.0.0.r10`.
 - **A parallel run no longer leaves its thread pins in the parent's environment.** `compute(n_jobs>1)` set `NUMBA_NUM_THREADS=1` (and the BLAS equivalents) for its workers and never restored them. If numba had already launched its threads in that process, every later numba compilation there raised, so a serial run after a parallel one failed any SPI whose kernel was not yet compiled. The variables are restored when the pool closes.
 - **Distance correlation and the Kraskov estimators are faster, with identical values.** `dcorr` and `dcorr_biased` evaluated both orders of every pair and discarded one; they now evaluate the retained order only (2.0x at M=8, T=5000). Kraskov MI, time-lagged MI and transfer entropy counted marginal neighbours by materialising a Python list per observation, and with a Theiler window by one tree query per observation; counts now come from one batched query, less the temporally excluded neighbours found inside the ball, one time offset at a time in O(N) memory (3-10x on the seven p90 Kraskov SPIs at T=5000, more with `dyn_corr_excl`). Radii, strict boundaries, the exclusion window and errors are unchanged and every output is bit-identical, so `COMPUTATION_VERSION` does not move.
-- **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (30 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
+- **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (the bundled `dtf`, `dcoh` and `ddtf` are 18 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
 - **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 
 ### Added
@@ -376,24 +378,24 @@ Definitions the corrected measures are checked against:
 | `parse_bivariate` with ambiguous `i`/`j` (built a `Warning` and carried on) | raises `ValueError` |
 | pickled results tables | cannot be loaded; re-save with `Calculator.save()` (`.npz`) and read with `pyspi.load_table()` |
 | `A[i, j]` of `sgc`, `dcoh`, `pdcoh`, `gpdcoh`, `dtf`, `ddtf` (influence of j on i) | transposed: row = source, column = target; transpose saved 2.x results |
-| SPI identifiers in saved 2.x results | 23 renamed, 38 removed, 59 added; see [SPI set changes](#spi-set-changes) |
+| SPI identifiers in saved 2.x results | 23 renamed, 75 removed, 59 added; see [SPI set changes](#spi-set-changes) |
 | `import pyspi` replacing `sys.stdout`/`sys.stderr`, seeding NumPy's global RNG, setting `OMP_NUM_THREADS` | no longer |
 | `phase_multitaper_max_*` | removed; `CoherencePhase(statistic="max")` raises because ordinary maxima of wrapped angles are branch-cut dependent |
 
 ### SPI set changes
 
-**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 306.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
+**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 269.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
 
 | Change | SPIs | Families |
 |:-------|-----:|:---------|
 | 2.0.2 `config.yaml` | 285 | |
-| Unchanged identifier | 224 | (values may still change; see "Values changed") |
+| Unchanged identifier | 187 | (values may still change; see "Values changed") |
 | **Renamed** (identifier only, except DTW) | 23 | `sgc` (11), Kraskov DCE (4), `cce`/`di_gaussian` `n` (4), auto-embedding method (3), DTW Sakoe-Chiba (1) |
-| **Removed** | 38 | multitaper `dspli`/`dswpli` maxima (6), `phase_multitaper_max` (3), symbolic TE (2), `di_kernel`, `di_kozachenko`, `igci`; duplicate, constant or degenerate (24): `*_EllipticEnvelope` (4), `pli`/`wpli` multitaper maxima (6), `psi_wavelet_max_*` (3), `bary_*_mean` and `bary-sq_*_mean` (6), `lmfit_Lasso`, `lmfit_ElasticNet`, `bary_euclidean_mean`, `cce_kernel_W-0.5_n-5`, `xme_kernel_W-0.5_k10` |
+| **Removed** | 75 | multitaper `dspli`/`dswpli` maxima (6), `phase_multitaper_max` (3), symbolic TE (2), `di_kernel`, `di_kozachenko`, `igci`; duplicate, constant or degenerate (24): `*_EllipticEnvelope` (4), `pli`/`wpli` multitaper maxima (6), `psi_wavelet_max_*` (3), `bary_*_mean` and `bary-sq_*_mean` (6), `lmfit_Lasso`, `lmfit_ElasticNet`, `bary_euclidean_mean`, `cce_kernel_W-0.5_n-5`, `xme_kernel_W-0.5_k10`; unbundled as redundant (37): shrinkage `cov_*` and `cov-sq_*` (9), `lmfit_*` (3), `pdcoh_*`/`gpdcoh_*` (12), `ppc_*` (6), `kendalltau`/`kendalltau-sq` (2), `pdist_cosine`/`pdist_euclidean`/`bary-sq_euclidean_mean` (3), `phi_*_t-1_norm-1` (2) |
 | **Added** | 59 | `LaggedCorrelation` (42), `PartialCorrelation` (7), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `ChatterjeeXi` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1), `te_symbolic_k-3` (1) |
-| 3.0.0 `full.yaml` | 306 | 285 − 38 + 59 |
+| 3.0.0 `full.yaml` | 269 | 285 − 75 + 59 |
 
-Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 197, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (291, 278, 264 and 237 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
+Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 163, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (254, 241, 227 and 206 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
 Every removal and rename below is deliberate.
 
@@ -407,9 +409,16 @@ The four `*_EllipticEnvelope` SPIs equal `*_MinCovDet` (`EllipticEnvelope.fit` i
 The `pli`/`wpli` multitaper maxima saturate at 1, as the `dspli`/`dswpli` maxima do; `psi_wavelet_max_*` tends to its bound whatever the data; and `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` are box-kernel estimates in about ten dimensions that do not converge with `T`.
 The DTW-type `bary_*_mean` SPIs are replaced by `bary_*_corr`, of which the squared means are monotone functions.
 Every class remains constructible with these arguments.
-Some kept SPIs are deterministic functions of others (`je_gaussian`/`ce_gaussian` of `mi_gaussian` under z-scoring, `ccm_*_diff` of `ccm_*_mean`, bivariate `pdcoh_*`/`gpdcoh_*` of `dtf_*`/`dcoh_*`), which matters when selecting features.
+Some kept SPIs are deterministic functions of others (`je_gaussian`/`ce_gaussian` of `mi_gaussian` under z-scoring, `ccm_*_diff` of `ccm_*_mean`), which matters when selecting features.
 
-**Removed (38)**
+**Unbundled as redundant (37).**
+Each is an exact function of an SPI that stays bundled, or agrees with one at |ρ| ≥ 0.99 across the 498 datasets of the 3.0 benchmark, and its whole family or setting goes with it.
+On z-scored data the shrinkage covariances are the empirical correlation times one factor per dataset, `pdist_cosine`, `pdist_euclidean` and `bary-sq_euclidean_mean` are functions of Pearson r, `lmfit_*` is a function of r² (carried by `mi_gaussian`), and the `norm-1` integrated-information SPIs are their `norm-0` values divided by a constant.
+Fitted on one pair, PDC equals DTF and gPDC equals DC² at every frequency, and PPC is a function of PLV at every frequency.
+`kendalltau` ranks pairs as `spearmanr` does.
+These are removals from the bundled configs only: the classes are unchanged, and each SPI can still be computed from a custom config.
+
+**Removed (75)**
 
 | SPI | Why |
 |:----|:----|
@@ -428,6 +437,14 @@ Some kept SPIs are deterministic functions of others (`je_gaussian`/`ce_gaussian
 | `psi_wavelet_max_*` (3) | The maximum over time of a bounded instantaneous phase slope tends to its bound whatever the data; `mean` variants kept. |
 | `bary_{dtw,sgddtw,softdtw}_mean` (3) | The barycenter of two zero-mean series has mean close to zero. Replaced by `bary_*_corr`. |
 | `bary-sq_{dtw,sgddtw,softdtw}_mean` (3) | A monotone function of `bary_*_corr`. |
+| `cov_ShrunkCovariance`, `cov_LedoitWolf`, `cov_OAS` (3) | Unbundled. The empirical correlation times one shrinkage factor per dataset, so `cov_EmpiricalCovariance` carries them. |
+| `cov-sq_{EmpiricalCovariance,ShrunkCovariance,GraphicalLasso,LedoitWolf,MinCovDet,OAS}` (6) | Unbundled. The exact square of a covariance SPI. |
+| `lmfit_Ridge`, `lmfit_BayesianRidge`, `lmfit_SGDRegressor` (3) | Unbundled. In-sample error of a linear fit of one z-scored series on another, a function of r² that `mi_gaussian` carries (|ρ| 1.000; `SGDRegressor` is the same fit by a noisier optimiser). |
+| `pdcoh_multitaper_*`, `gpdcoh_multitaper_*` (12) | Unbundled. Fitted on one pair, PDC equals DTF and gPDC equals DC² at every frequency, so `dtf_*` and `dcoh_*` carry them. |
+| `ppc_multitaper_*` (6) | Unbundled. PPC = (N·PLV² − 1)/(N − 1) at every frequency, so `plv_*` carries it. |
+| `kendalltau`, `kendalltau-sq` (2) | Unbundled. Ranks pairs as `spearmanr` does (|ρ| 0.998 within datasets). |
+| `pdist_cosine`, `pdist_euclidean`, `bary-sq_euclidean_mean` (3) | Unbundled. On z-scored series, `1 − r`, `sqrt(2T(1 − r))` and `(1 + r)/2` of the Pearson correlation r. |
+| `phi_Geo_t-1_norm-1`, `phi_star_t-1_norm-1` (2) | Unbundled. The `norm-0` value divided by a constant under z-scoring. |
 
 **Added (59)**
 
@@ -467,11 +484,11 @@ Values for the six directed spectral SPIs listed under **Fixed** are also transp
 | `hsic`, `hsic_biased` | 2 | Each variable's own kernel width. |
 | `mi`, `tlmi` `_kraskov_NN-4_DCE-AUTO` | 2 | Theiler-window digamma term. |
 | `mi`, `tlmi`, `te` `_kraskov_NN-4_DCE-AUTO*` | 5 | AUTO Theiler window capped at `N // 10`. |
-| `phi_Geo_t-1_norm-{0,1}` | 2 | Optimiser runs to a disconnected model. |
-| `dtf_*`, `pdcoh_*`, `gpdcoh_*`, `dcoh_*` | 24 | Closed frequency band. |
+| `phi_Geo_t-1_norm-0` | 1 | Optimiser runs to a disconnected model. |
+| `dtf_*`, `dcoh_*` | 12 | Closed frequency band. |
 | `ddtf_*` | 6 | Closed band; partial coherence in place of `sqrt(PDC)`. |
 | `sgc_parametric_*` | 18 | Yule-Walker VAR fit and corrected frequency labels. |
-| `phase`, `icoh`, `plv`, `ppc`, `pli`, `wpli`, `dspli` `_multitaper_mean_*`; `plv`, `ppc` `_multitaper_max_*` | 27 | Real-valued 0 Hz and Nyquist bins left out of the band (`dspli` also: taper-pair sign products). |
+| `phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli` `_multitaper_mean_*`; `plv_multitaper_max_*` | 21 | Real-valued 0 Hz and Nyquist bins left out of the band (`dspli` also: taper-pair sign products). |
 | `psi_multitaper_mean_*` (half bands) | 2 | Closed band less the real-valued bins. |
 | `gd_multitaper_delay_*` | 3 | Independent frequencies one multitaper bandwidth apart; real-valued bins left out. |
 | `gwtau` | 1 | Constant factor `sqrt((T - 1) / T)`. |

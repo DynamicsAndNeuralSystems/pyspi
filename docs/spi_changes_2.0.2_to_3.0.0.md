@@ -1,18 +1,19 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (306 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (269 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
 | 2.0.2 `config.yaml` | 285 |
-| identifier unchanged | 224 |
+| identifier unchanged | 187 |
 | renamed (same class and parameters; identifier changed) | 23 |
-| removed | 38 |
+| removed | 75 |
 | added | 59 |
-| 3.0.0 `full.yaml` | 306 |
+| 3.0.0 `full.yaml` | 269 |
 
-285 - 38 removed + 59 added = 306; 224 + 23 renamed + 59 added = 306.
-The 38 removals are 14 made while porting away from JIDT and 24 duplicate, constant or degenerate SPIs; all are in the table below.
+285 - 75 removed + 59 added = 269; 187 + 23 renamed + 59 added = 269.
+The 75 removals are 14 made while porting away from JIDT, 24 duplicate, constant or degenerate SPIs, and 37 unbundled because an SPI that stays carries them; all are in the table below.
+The 37 are removed from the bundled configs only: their classes are unchanged, and each can still be computed from a custom config.
 
 ## Added (59)
 
@@ -89,7 +90,7 @@ Full list:
 - `xi_tau-1`
 - `te_symbolic_k-3`
 
-## Removed (38)
+## Removed (75)
 
 | Identifier (2.0.2) | Class | Why |
 |:--|:--|:--|
@@ -119,6 +120,16 @@ Full list:
 | `phase_multitaper_max_fs-1_fmin-0_fmax-0-5` | `CoherencePhase` | Maximum of wrapped phase depends on the branch cut; the constructor now refuses `statistic="max"`. |
 | `te_symbolic_k-10_kt-1_l-1_lt-1` | `TransferEntropy` | `10!` symbols against ~91 usable samples at T=100; unvalidated. |
 | `te_symbolic_k-1_kt-1_l-1_lt-1` | `TransferEntropy` | A length-1 ordinal pattern has one symbol, so TE is identically 0. |
+| `cov_ShrunkCovariance`, `cov_LedoitWolf`, `cov_OAS` | `Covariance` | Unbundled: on z-scored data, the empirical correlation times one shrinkage factor per dataset, so `cov_EmpiricalCovariance` carries them. |
+| `cov-sq_EmpiricalCovariance`, `cov-sq_ShrunkCovariance`, `cov-sq_GraphicalLasso`, `cov-sq_LedoitWolf`, `cov-sq_MinCovDet`, `cov-sq_OAS` | `Covariance` | Unbundled: the exact square of a covariance SPI. |
+| `lmfit_Ridge`, `lmfit_BayesianRidge`, `lmfit_SGDRegressor` | `LinearModel` | Unbundled: a function of r², which `mi_gaussian` carries (|ρ| 1.000; `SGDRegressor` is the same fit by a noisier optimiser). |
+| `pdcoh_multitaper_{mean,max}_*` (6) | `PartialDirectedCoherence` | Unbundled: fitted on one pair, PDC equals DTF at every frequency. |
+| `gpdcoh_multitaper_{mean,max}_*` (6) | `GeneralizedPartialDirectedCoherence` | Unbundled: fitted on one pair, gPDC equals DC² at every frequency. |
+| `ppc_multitaper_{mean,max}_*` (6) | `PairwisePhaseConsistency` | Unbundled: PPC = (N·PLV² − 1)/(N − 1) at every frequency, so `plv_*` carries it. |
+| `kendalltau`, `kendalltau-sq` | `KendallTau` | Unbundled: ranks pairs as `spearmanr` does (|ρ| 0.998 within datasets). |
+| `pdist_cosine`, `pdist_euclidean` | `PairwiseDistance` | Unbundled: on z-scored series, `1 − r` and `sqrt(2T(1 − r))` of the Pearson correlation r. |
+| `bary-sq_euclidean_mean` | `Barycenter` | Unbundled: `(1 + r)/2` on z-scored series. |
+| `phi_Geo_t-1_norm-1`, `phi_star_t-1_norm-1` | `IntegratedInformation` | Unbundled: the `norm-0` value divided by a constant under z-scoring. |
 
 ## Renamed (23)
 
