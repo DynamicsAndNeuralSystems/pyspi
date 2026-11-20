@@ -5,12 +5,14 @@ import copy, yaml, importlib, time, warnings, os
 import functools
 import hashlib, json
 from pathlib import Path
+from typing import NamedTuple, Optional
 from tqdm import tqdm
 
 # From this package
 from .data import Data
 from .utils import convert_mdf_to_ddf, inspect_calc_results, require_int
 from . import _parallel
+from .quality import Quality
 from ._logging import get_logger, configure as _configure_logging
 from ._compat import resolve_zscore, resolve_config_arg, translate_calculator_kwargs
 
@@ -233,18 +235,56 @@ def warn_partial_cache_buckets(spis):
 _DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({"config", "configfile", "dataset_name"})
 
 
-# Bumped whenever the .npz layout changes incompatibly. Schema 0 means "written
-# before the field existed", i.e. a pre-3.0.0 pickled file.
-_NPZ_SCHEMA = 1
+# Bumped whenever the .npz layout changes. Schema 0 means "written before the
+# field existed", i.e. a pre-3.0.0 pickled file. Schema 2 adds `quality`, the
+# per-cell codes, and `pair_errors`; a schema-1 file still loads, with its
+# codes derived from its values and `errors`.
+_NPZ_SCHEMA = 2
 
 
-def load_table(path):
-    """Load a results table written by :meth:`Calculator.save`.
+class Results(NamedTuple):
+    """Everything :meth:`Calculator.save` writes to ``.npz``, as :func:`load_results` returns it.
 
-    Returns the same DataFrame ``Calculator.table`` returns: rows are
-    processes, columns are a ``(spi, process)`` MultiIndex. Only ``.npz``
-    round-trips exactly -- ``.csv`` is a one-way human-readable export.
+    ``table`` is what :func:`load_table` returns. ``quality`` is a ``uint8``
+    DataFrame with the same index and columns, holding one
+    :class:`pyspi.quality.Quality` code per cell (``Calculator.quality``).
+    ``errors`` is the SPI-level ``{identifier: message}`` mapping
+    (``Calculator.errors``), ``run_spec`` the resolved run specification, and
+    ``pair_errors`` the per-pair messages (``Calculator.pair_errors``). A field
+    the file does not record is ``None``.
     """
+    table: pd.DataFrame
+    quality: pd.DataFrame
+    errors: Optional[dict]
+    run_spec: Optional[dict]
+    pair_errors: Optional[dict]
+
+
+def _frame_from_matrices(matrices, spis, procs):
+    """``(n_spis, M, M)`` -> the wide ``M x (n_spis * M)`` frame :attr:`Calculator.table` uses.
+
+    The one builder for :attr:`Calculator.table`, :attr:`Calculator.quality`
+    and what :func:`load_table` / :func:`load_results` return, so their index
+    and columns cannot drift apart. The dtype of ``matrices`` is kept.
+    """
+    spis, procs = list(spis), list(procs)
+    matrices = np.asarray(matrices)
+    n, M = len(spis), len(procs)
+    if matrices.shape != (n, M, M):
+        raise ValueError(f"matrices have shape {matrices.shape}, expected ({n}, {M}, {M})")
+    # Row r is [matrices[0][r], matrices[1][r], ...]: the matrices side by side.
+    data = matrices.transpose(1, 0, 2).reshape(M, n * M).copy()
+    frame = pd.DataFrame(
+        data=data,
+        columns=pd.MultiIndex.from_product([spis, procs], names=["spi", "process"]),
+        index=procs,
+    )
+    frame.columns.name = "process"
+    return frame
+
+
+def _read_npz(path):
+    """Read and validate a ``.npz`` results file; return its parts as a dict."""
     path = Path(path)
     if path.suffix != ".npz":
         raise ValueError(
@@ -267,11 +307,13 @@ def load_table(path):
                 f"understands up to {_NPZ_SCHEMA}. Upgrade pyspi."
             )
         values = f["values"]
+        quality = f["quality"] if "quality" in f.files else None
         spis = [str(s) for s in f["spis"]]
         procs = [str(p) for p in f["processes"]]
-        # Provenance. `save()` writes these three, so a loaded table can report
-        # which SPIs failed, what produced it, and whether it matches a rerun.
-        meta = {name: str(f[name]) for name in ("run_spec", "run_digest", "errors")
+        # Provenance. `save()` writes these, so a loaded table can report which
+        # SPIs (and pairs) failed, what produced it, and whether it matches a rerun.
+        meta = {name: str(f[name])
+                for name in ("run_spec", "run_digest", "errors", "pair_errors")
                 if name in f.files}
 
     # The whole shape, not just `ndim` and axis 0, so a file of the wrong width
@@ -282,25 +324,83 @@ def load_table(path):
             f"{path} is malformed: values has shape {values.shape}, expected "
             f"({len(spis)}, {len(procs)}, {len(procs)})."
         )
-    table = pd.DataFrame(
-        data=np.concatenate(list(values), axis=1),
-        columns=pd.MultiIndex.from_product([spis, procs], names=["spi", "process"]),
-        index=procs,
-    )
-    table.columns.name = "process"
-    # `DataFrame.attrs` rather than a wrapper type: it is pandas' documented
-    # place for exactly this, and it keeps `load_table` returning the same
-    # object `Calculator.table` does.
-    table.attrs["schema"] = schema
-    for name in ("run_spec", "errors"):
+    if quality is not None and quality.shape != values.shape:
+        raise ValueError(
+            f"{path} is malformed: quality has shape {quality.shape}, expected "
+            f"{values.shape}."
+        )
+    parsed = {}
+    for name in ("run_spec", "errors", "pair_errors"):
         if name in meta:
             try:
-                table.attrs[name] = json.loads(meta[name])
+                parsed[name] = json.loads(meta[name])
             except json.JSONDecodeError:
-                table.attrs[name] = meta[name]
-    if "run_digest" in meta:
-        table.attrs["run_digest"] = meta["run_digest"]
+                parsed[name] = meta[name]
+    return dict(schema=schema, values=values, quality=quality, spis=spis,
+                procs=procs, run_digest=meta.get("run_digest"), **parsed)
+
+
+def load_table(path):
+    """Load a results table written by :meth:`Calculator.save`.
+
+    Returns the same DataFrame ``Calculator.table`` returns: rows are
+    processes, columns are a ``(spi, process)`` MultiIndex. Only ``.npz``
+    round-trips exactly -- ``.csv`` is a one-way human-readable export.
+
+    ``table.attrs`` carries the file's small metadata: ``schema``,
+    ``run_spec``, ``run_digest`` and ``errors``. The per-cell quality codes are
+    not among them; use :func:`load_results` for those.
+    """
+    return _table_from_parts(_read_npz(path))
+
+
+def _table_from_parts(parts):
+    table = _frame_from_matrices(parts["values"], parts["spis"], parts["procs"])
+    # `DataFrame.attrs` rather than a wrapper type: it is pandas' documented
+    # place for exactly this, and it keeps `load_table` returning the same
+    # object `Calculator.table` does. Only small values go here: pandas
+    # deep-copies `attrs` on every derived frame and compares them with `==`
+    # in `concat`, so a DataFrame in `attrs` (the quality codes) made slicing
+    # slower and made `pd.concat` of two tables raise.
+    table.attrs["schema"] = parts["schema"]
+    for name in ("run_spec", "errors"):
+        if name in parts:
+            table.attrs[name] = parts[name]
+    if parts["run_digest"] is not None:
+        table.attrs["run_digest"] = parts["run_digest"]
     return table
+
+
+def load_results(path):
+    """Load everything :meth:`Calculator.save` wrote to ``.npz`` as a :class:`Results`.
+
+    ``Results(table, quality, errors, run_spec, pair_errors)``: ``table`` is
+    what :func:`load_table` returns, ``quality`` the matching ``uint8``
+    DataFrame of :class:`pyspi.quality.Quality` codes, and the rest as in
+    :class:`Results`.
+
+    A file written before quality codes existed (schema < 2) has its codes
+    derived from its values and ``errors``: a cell is GOOD, NaN or +/-Inf by its
+    value, the diagonal is NaN, and every non-finite off-diagonal cell of an
+    SPI recorded as failed is ERROR. Pair-level failures were not recorded in
+    those files, so those cells read as NaN and ``pair_errors`` is ``None``.
+    """
+    parts = _read_npz(path)
+    table = _table_from_parts(parts)
+    as_dict = lambda x: x if isinstance(x, dict) else None
+    errors = as_dict(parts.get("errors"))
+    quality = parts["quality"]
+    if quality is None:
+        quality = np.empty(parts["values"].shape, dtype=np.uint8)
+        for n, (key, values) in enumerate(zip(parts["spis"], parts["values"])):
+            quality[n] = _parallel.derive_quality(values, (errors or {}).get(key))
+    quality = _frame_from_matrices(quality.astype(np.uint8, copy=False),
+                                   parts["spis"], parts["procs"])
+    pair_errors = as_dict(parts.get("pair_errors"))
+    if pair_errors is not None:
+        pair_errors = {k: [tuple(p) for p in v] for k, v in pair_errors.items()}
+    return Results(table=table, quality=quality, errors=errors,
+                   run_spec=as_dict(parts.get("run_spec")), pair_errors=pair_errors)
 
 
 def load_spis_from_yaml(configfile, quiet=False):
@@ -436,6 +536,7 @@ class Calculator:
         self._detrend = detrend
         self._timings = {}
         self._errors = {}
+        self._pair_errors = {}
         self._verbose = verbose
 
         # verbose maps to a process-global pyspi logger level (INFO vs WARNING).
@@ -487,8 +588,26 @@ class Calculator:
         A failed SPI still occupies its column in :attr:`table`, filled with
         NaN. Consult this before interpreting a table: a NaN column is
         otherwise indistinguishable from a legitimately undefined statistic.
+        :attr:`quality` says the same per cell.
+
+        An SPI whose every off-diagonal value is undefined (NaN, Inf, ...) is
+        listed too, with ``"ValueError: SPI returned no finite off-diagonal
+        values"``, although its cells keep the codes of what it returned.
+        Failures of single pairs are in :attr:`pair_errors`, not here.
         """
         return dict(self._errors)
+
+    @property
+    def pair_errors(self):
+        """``{identifier: [(source, target, "ExcType: message"), ...]}`` for failed pairs.
+
+        A pair whose computation raised inside an SPI that otherwise succeeded
+        (see :func:`pyspi.base.fill_pairwise`) is NaN in :attr:`table` and
+        ``Quality.ERROR`` in :attr:`quality`; this keeps its message.
+        ``source`` and ``target`` are process names: the row and column of the
+        cell. SPIs with no failed pair are absent.
+        """
+        return {k: list(v) for k, v in self._pair_errors.items()}
 
     @property
     def run_digest(self):
@@ -602,6 +721,26 @@ class Calculator:
 
     @table.setter
     def table(self, a):
+        raise Exception(
+            "Do not set this property externally. Use the compute() method."
+        )
+
+    @property
+    def quality(self):
+        """Per-cell quality codes: a ``uint8`` DataFrame shaped like :attr:`table`.
+
+        Each cell holds a :class:`pyspi.quality.Quality` code. ``GOOD`` (0)
+        means the value in :attr:`table` is a real, finite number; every other
+        code means the value is NaN and says why: ``ERROR`` (the SPI, or that
+        pair, raised), ``NAN`` (the SPI returned NaN: undefined or not
+        appropriate here; also every diagonal cell), ``INF`` / ``NEG_INF``,
+        ``COMPLEX``, or ``NOT_COMPUTED`` (255) before :meth:`compute` reaches
+        the SPI. ``pyspi.quality.quality_labels`` turns the codes into text.
+        """
+        return self._quality
+
+    @quality.setter
+    def quality(self, q):
         raise Exception(
             "Do not set this property externally. Use the compute() method."
         )
@@ -738,28 +877,25 @@ class Calculator:
 
         # Results belong to the dataset that produced them.
         self._errors = {}
+        self._pair_errors = {}
         self._timings = {}
 
-        columns = pd.MultiIndex.from_product(
-            [self.spis.keys(), self._dataset.procnames], names=["spi", "process"]
-        )
-        self._table = pd.DataFrame(
-            data=np.full(
-                (self.dataset.n_processes, self.n_spis * self.dataset.n_processes),
-                np.nan,
-            ),
-            columns=columns,
-            index=self._dataset.procnames,
-        )
-        self._table.columns.name = "process"
+        shape = (self.n_spis, self.dataset.n_processes, self.dataset.n_processes)
+        procs = self._dataset.procnames
+        self._table = _frame_from_matrices(np.full(shape, np.nan), self.spis, procs)
+        self._quality = _frame_from_matrices(
+            np.full(shape, Quality.NOT_COMPUTED, dtype=np.uint8), self.spis, procs)
 
     def save(self, path):
         """Write the results table to ``path``; the format follows the suffix.
 
         ``.npz`` (recommended) stores the results in their natural shape -- an
         ``(n_spis, M, M)`` float array plus the SPI and process names -- and
-        round-trips exactly through :func:`pyspi.load_table`. ``.csv`` is for
-        eyeballing small results; it is impractical for the full SPI set.
+        round-trips exactly through :func:`pyspi.load_table`. It also stores
+        :attr:`quality` as an ``(n_spis, M, M)`` ``uint8`` array, with
+        :attr:`errors`, :attr:`pair_errors` and the run's provenance; all of it
+        comes back from :func:`pyspi.load_results`. ``.csv`` is for eyeballing
+        small results (values only); it is impractical for the full SPI set.
         """
         path = Path(path)
         M = self.dataset.n_processes
@@ -768,8 +904,9 @@ class Calculator:
         elif path.suffix == ".npz":
             keys = list(self.spis)
             values = np.stack([self.table[k].to_numpy(dtype=float) for k in keys])
+            quality = np.stack([self.quality[k].to_numpy(dtype=np.uint8) for k in keys])
             np.savez_compressed(
-                path, values=values,
+                path, values=values, quality=quality,
                 # dtype='U', not object: object arrays are only loadable with
                 # allow_pickle=True, which allows arbitrary code execution on load.
                 spis=np.array(keys, dtype="U"),
@@ -781,6 +918,9 @@ class Calculator:
                 run_digest=np.array(self.run_digest, dtype="U"),
                 errors=np.array(
                     json.dumps(self.errors, sort_keys=True, default=str), dtype="U"
+                ),
+                pair_errors=np.array(
+                    json.dumps(self.pair_errors, sort_keys=True, default=str), dtype="U"
                 ),
             )
         else:
@@ -864,8 +1004,8 @@ class Calculator:
             done, spi_keys = _parallel.load_checkpoints(
                 cp_dir, spi_keys, M, retry_failed=retry_failed
             )
-            for key, (S, err, warns, _t) in done.items():
-                self._record(key, S, err, warns, 0.0)
+            for key, res in done.items():
+                self._record(key, res)
             if done:
                 logger.info("Resumed %d SPI(s) from %s", len(done), cp_dir)
 
@@ -891,8 +1031,8 @@ class Calculator:
                 configfile=self._configfile,
                 config_bytes=self._config_bytes,
             )
-            for key, (S, err, warns, elapsed) in results.items():
-                self._record(key, S, err, warns, elapsed)
+            for key, res in results.items():
+                self._record(key, res)
 
         elapsed = time.perf_counter() - t_start
         logger.info("Calculation complete. Time taken: %.4fs", elapsed)
@@ -906,16 +1046,24 @@ class Calculator:
                 iterable.set_description(f"Processing [{self._name}: {key}]")
             # Same primitive the workers use, so both paths agree on what
             # counts as a failure and on what the caller is shown.
-            S, err, warns, elapsed = _parallel.run_spi(
-                self._spis[key], self.dataset, key, M
-            )
-            self._record(key, S, err, warns, elapsed)
-            _parallel.write_checkpoint(cp_dir, key, S, err)
+            res = _parallel.execute_spi(self._spis[key], self.dataset, key, M)
+            self._record(key, res)
+            _parallel.write_checkpoint(cp_dir, key, res.values, res.err,
+                                       res.quality, res.pair_errors)
 
-    def _record(self, key, S, err, warns, elapsed):
-        """Commit one SPI result, its error, and its warnings."""
+    def _record(self, key, res):
+        """Commit one SPI result (a ``_parallel.SPIResult``): values, quality
+        codes, errors and warnings."""
+        S, err, warns = res.values, res.err, res.warns
         self._table[key] = S
-        self._timings[key] = elapsed
+        self._quality[key] = np.asarray(res.quality, dtype=np.uint8)
+        self._timings[key] = res.elapsed
+        procs = list(self._dataset.procnames)
+        if res.pair_errors:
+            self._pair_errors[key] = [(procs[i], procs[j], msg)
+                                      for i, j, msg in res.pair_errors]
+        else:
+            self._pair_errors.pop(key, None)
         for w in warns:
             warnings.warn(f'SPI "{key}": {w}')
         if err is not None:

@@ -88,9 +88,14 @@ calc.compute()                         # compute every SPI
 calc.table                             # rows = processes, columns = (SPI, process)
 calc.table["cov_EmpiricalCovariance"]  # one SPI's 5x5 matrix
 
+calc.quality                           # one code per cell: 0 good, else why it is NaN
 calc.save("results.npz")               # canonical on-disk format
 pyspi.load_table("results.npz")        # round-trips exactly
+pyspi.load_results("results.npz")      # table, quality codes, errors, run spec
 ```
+
+Every value in `calc.table` is a real, finite number or NaN.
+`calc.quality` says what each cell is, with the codes of `pyspi.Quality` (shared with hctsa and pyhctsa): good, error, NaN (undefined or not appropriate, including every self-pair), +/-Inf, or complex.
 
 Results are stored as an `(n_spis, M, M)` array plus the SPI and process names,
 which is the data's natural shape. `.csv` is also accepted for eyeballing small

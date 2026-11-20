@@ -7,10 +7,15 @@ Design:
   becomes one task assigned to a single worker, so a cache populated lazily on
   the Data object (e.g. data.spectral_bv, data.covariance) is reused across
   every variant in that bucket. SPIs without a tag run as single-SPI tasks.
-- Per-SPI failures yield a NaN matrix; the rest of the run continues.
+- Per-SPI failures yield a NaN matrix; the rest of the run continues. Every
+  result carries a ``uint8`` quality matrix (``pyspi.quality.Quality``) saying
+  what each cell is: good, error, NaN, +/-Inf or complex.
 - If ``checkpoint_dir`` is set, each finished SPI is atomically written to
-  ``<dir>/<identifier>.npy`` (and ``<identifier>.error`` on failure). A
-  subsequent run with ``resume=True`` will load these and skip the SPIs.
+  ``<dir>/<identifier>.npy``, with its quality codes in
+  ``<identifier>.quality``, its pair failures (if any) in
+  ``<identifier>.pairs.json`` and its error (on failure) in
+  ``<identifier>.error``. A subsequent run with ``resume=True`` will load these
+  and skip the SPIs.
 - Progress is per-SPI, not per-bucket: workers post a lightweight event to a
   shared queue after each SPI so the tqdm bar advances one tick per SPI and
   a stuck SPI is visible (the bar stalls). Results themselves still travel
@@ -30,11 +35,12 @@ import warnings
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import NamedTuple, Optional
 
 import numpy as np
 
 from ._logging import get_logger
+from .quality import Quality, quality_from_values
 
 logger = get_logger("pyspi.parallel")
 
@@ -258,7 +264,7 @@ def _run_task(spi_keys, checkpoint_dir):
     """Compute a bucket of SPIs sequentially in this worker.
 
     Posts ``(key, failed)`` to the progress queue after each SPI, and returns
-    the list of ``(key, matrix, error_str_or_None, warnings, elapsed)`` tuples.
+    the list of ``(key, SPIResult)`` pairs.
     """
     data = _WORKER_STATE["data"]
     spis = _WORKER_STATE["spis"]
@@ -266,68 +272,180 @@ def _run_task(spi_keys, checkpoint_dir):
     M = data.n_processes
     out = []
     for key in spi_keys:
-        S, err, warns, elapsed = run_spi(spis[key], data, key, M)
-        write_checkpoint(checkpoint_dir, key, S, err)
+        res = execute_spi(spis[key], data, key, M)
+        write_checkpoint(checkpoint_dir, key, res.values, res.err,
+                         res.quality, res.pair_errors)
         # Warnings travel back to the parent rather than being emitted (and
         # lost) here in the worker process.
-        out.append((key, S, err, warns, elapsed))
+        out.append((key, res))
         if progress_q is not None:
-            progress_q.put((key, err is not None))
+            progress_q.put((key, res.err is not None))
     return out
 
 
-def run_spi(spi, data, key, M):
-    """Compute one SPI, validate it, and capture failures and warnings.
+class SPIResult(NamedTuple):
+    """One SPI's result, as both execution paths and resume produce it.
+
+    ``values`` is the ``(M, M)`` float64 matrix with NaN in every cell whose
+    ``quality`` code is not ``Quality.GOOD``. ``err`` is the SPI-level error
+    (``None`` on success). ``pair_errors`` lists ``(i, j, message)`` for the
+    cells labelled ``Quality.ERROR`` because their pair raised inside
+    ``fill_pairwise``. ``warns`` are formatted warning strings, returned rather
+    than emitted so the parallel path can re-emit them in the parent.
+    """
+    values: np.ndarray
+    quality: np.ndarray
+    err: Optional[str]
+    pair_errors: list
+    warns: list
+    elapsed: float
+
+
+# SPI-level error messages that describe the *values* (every off-diagonal cell
+# undefined) rather than a computation that raised. A result carrying one keeps
+# the quality codes of its values (NaN, Inf, ...); any other error means the
+# computation failed, so its cells are labelled ERROR.
+NO_FINITE_VALUES = "ValueError: SPI returned no finite off-diagonal values"
+_VALUE_ERRORS = (NO_FINITE_VALUES,
+                 "ValueError: checkpoint contains no finite values")
+
+
+def failed_quality(M: int) -> np.ndarray:
+    """Quality codes of an SPI whose computation failed: ERROR off the diagonal."""
+    q = np.full((M, M), Quality.ERROR, dtype=np.uint8)
+    np.fill_diagonal(q, Quality.NAN)
+    return q
+
+
+def derive_quality(values, err) -> np.ndarray:
+    """Quality codes for a stored result that has none (an older file or checkpoint).
+
+    Codes follow the stored values (NaN, +/-Inf, finite), and the diagonal is
+    NaN. If the SPI carries an error that is not one of the value-describing
+    ones in ``_VALUE_ERRORS``, its computation failed, and every off-diagonal
+    cell that is not a finite value is ERROR. Before quality codes existed an
+    Inf anywhere failed the whole SPI, so for those results this is exact. What
+    cannot be recovered is which NaN cells were failed pairs inside
+    ``fill_pairwise``: those read as NaN.
+    """
+    values = np.asarray(values)
+    _, q = quality_from_values(values)
+    if q.ndim == 2 and q.shape[0] == q.shape[1]:
+        np.fill_diagonal(q, Quality.NAN)
+        if err is not None and err not in _VALUE_ERRORS:
+            off = ~np.eye(q.shape[0], dtype=bool)
+            q[off & (q != Quality.GOOD)] = Quality.ERROR
+    return q
+
+
+def execute_spi(spi, data, key, M) -> SPIResult:
+    """Compute one SPI, label every cell with a quality code, and capture failures.
 
     The single execution primitive shared by the serial and parallel paths, so
     both agree on what counts as a failure and on which warnings are captured.
 
-    Returns ``(S, err, warns, elapsed)`` where ``err`` is ``None`` on success
-    and ``warns`` is a list of formatted warning strings raised during the
-    computation (returned rather than emitted, so the parallel path can
-    re-emit them in the parent process).
+    Each cell's code (``pyspi.quality.Quality``) is set as follows:
 
-    A result is a failure if it raises, has the wrong shape, contains an
-    infinity, or is entirely NaN off the diagonal.
+    - The SPI raised, or returned the wrong shape: every off-diagonal cell is
+      ERROR, and ``err`` holds the message.
+    - Otherwise the raw output is classified *before* it is cast to float, so a
+      cell is GOOD, NAN, INF, NEG_INF or COMPLEX (a non-zero imaginary part).
+      Only GOOD cells keep their value; the others are stored as NaN. An Inf
+      does not fail the whole SPI: the finite cells are kept and a warning
+      names the count.
+    - A cell whose pair raised inside ``fill_pairwise``, and which the SPI left
+      NaN, is ERROR, with its message in ``pair_errors``.
+    - The diagonal is NAN: a self-pair is not appropriate by construction.
+
+    If no off-diagonal cell is GOOD, ``err`` is set to ``NO_FINITE_VALUES`` but
+    the cells keep their codes (NAN, INF, ...).
     """
+    from .base import collect_pair_failures
+
     t0 = time.perf_counter()
     err = None
     warns: list[str] = []
+    pair_errors: list = []
     try:
-        with warnings.catch_warnings(record=True) as caught:
+        with warnings.catch_warnings(record=True) as caught, \
+                collect_pair_failures() as failures:
             warnings.simplefilter("always")
-            S = spi.multivariate(data)
+            raw = spi.multivariate(data)
         warns = [f"{w.category.__name__}: {w.message}" for w in caught]
 
-        S = np.array(S, dtype=float, copy=True)
-        if S.shape != (M, M):
-            raise ValueError(f"SPI returned shape {S.shape}, expected ({M},{M})")
-        np.fill_diagonal(S, np.nan)
+        raw = np.asarray(raw)
+        if raw.shape != (M, M):
+            raise ValueError(f"SPI returned shape {raw.shape}, expected ({M},{M})")
+        S, Q = quality_from_values(raw)
 
-        offdiag = S[~np.eye(M, dtype=bool)]
-        if offdiag.size:
-            if np.isinf(offdiag).any():
-                raise ValueError("SPI returned infinite value(s)")
-            if not np.isfinite(offdiag).any():
-                raise ValueError("SPI returned no finite off-diagonal values")
+        # Only cells the SPI left NaN: an SPI may post-process its matrix and
+        # overwrite a failed cell with a value.
+        cells = {}
+        for i, j, msg in failures:
+            if i != j and 0 <= i < M and 0 <= j < M and Q[i, j] == Quality.NAN:
+                cells[(i, j)] = msg
+        for (i, j), msg in sorted(cells.items()):
+            Q[i, j] = Quality.ERROR
+            pair_errors.append((i, j, msg))
+
+        np.fill_diagonal(S, np.nan)
+        np.fill_diagonal(Q, Quality.NAN)
+
+        off = ~np.eye(M, dtype=bool)
+        if off.any():
+            if not (Q[off] == Quality.GOOD).any():
+                err = NO_FINITE_VALUES
+            else:
+                special = {label: int(np.count_nonzero(Q[off] == code))
+                           for label, code in (("Inf", Quality.INF),
+                                               ("-Inf", Quality.NEG_INF),
+                                               ("complex", Quality.COMPLEX))}
+                special = {k: n for k, n in special.items() if n}
+                if special:
+                    counts = ", ".join(f"{n} {k}" for k, n in special.items())
+                    warns.append(f"UserWarning: {counts} value(s) stored as NaN; "
+                                 f"see Calculator.quality")
     except Exception as e:
         S = np.full((M, M), np.nan)
+        Q = failed_quality(M)
+        pair_errors = []
         err = f"{type(e).__name__}: {e}"
 
-    return S, err, warns, time.perf_counter() - t0
+    return SPIResult(S, Q, err, pair_errors, warns, time.perf_counter() - t0)
 
 
-def write_checkpoint(checkpoint_dir, key, S, err):
-    """Persist one SPI result plus its error sidecar, atomically."""
+def write_checkpoint(checkpoint_dir, key, S, err, quality=None, pair_errors=None):
+    """Persist one SPI result plus its sidecars.
+
+    ``<key>.npy`` is the commit point: a key counts as done only once it
+    exists. So any previous ``<key>.npy`` is removed first, the sidecars (error,
+    quality codes, pair failures) are then written or removed, and the values
+    file is replaced last. An interruption at any step leaves no values file,
+    and the key is recomputed rather than resumed with one run's values and
+    another run's sidecars. Each file is replaced atomically.
+    """
     if checkpoint_dir is None:
         return
     d = Path(checkpoint_dir)
-    _atomic_npy_write(d / f"{key}.npy", S)
+    (d / f"{key}.npy").unlink(missing_ok=True)
     err_path = d / f"{key}.error"
     if err is not None:
         err_path.write_text(err)
     elif err_path.exists():
         err_path.unlink()
+    pairs_path = d / f"{key}.pairs.json"
+    if pair_errors:
+        tmp = pairs_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps([list(p) for p in pair_errors]))
+        os.replace(tmp, pairs_path)
+    elif pairs_path.exists():
+        pairs_path.unlink()
+    q_path = d / f"{key}.quality"
+    if quality is not None:
+        _atomic_npy_write(q_path, np.asarray(quality, dtype=np.uint8))
+    elif q_path.exists():
+        q_path.unlink()
+    _atomic_npy_write(d / f"{key}.npy", S)
 
 
 def _atomic_npy_write(path: Path, arr: np.ndarray) -> None:
@@ -510,11 +628,47 @@ def checkpoint_owner_matches(checkpoint_dir: Path, digest: str):
     return True, None
 
 
+def _read_checkpoint_quality(checkpoint_dir: Path, key, arr, err, M):
+    """The stored quality codes for ``key``, or codes derived from its values.
+
+    A quality sidecar is used only if it has the right shape and agrees with
+    the values (GOOD exactly where the value is finite); a checkpoint written
+    before quality codes existed has none, and one that disagrees is stale.
+    """
+    path = checkpoint_dir / f"{key}.quality"
+    if path.exists():
+        try:
+            q = np.load(path)
+            if (q.shape == (M, M) and q.dtype == np.uint8
+                    and np.array_equal(q == Quality.GOOD, np.isfinite(arr))):
+                return q
+        except Exception:
+            pass
+    return derive_quality(arr, err)
+
+
+def _read_checkpoint_pairs(checkpoint_dir: Path, key, quality):
+    """Pair failures for ``key``, kept only for cells still labelled ERROR."""
+    path = checkpoint_dir / f"{key}.pairs.json"
+    if not path.exists():
+        return []
+    try:
+        pairs = [(int(i), int(j), str(msg)) for i, j, msg in json.loads(path.read_text())]
+    except Exception:
+        return []
+    M = quality.shape[0]
+    return [(i, j, m) for i, j, m in pairs
+            if 0 <= i < M and 0 <= j < M and quality[i, j] == Quality.ERROR]
+
+
 def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool = True):
     """Return (done_results, remaining_keys).
 
-    done_results: dict[key] -> (matrix, error_or_None, warns, 0.0).
+    done_results: dict[key] -> SPIResult (no warnings, zero elapsed time).
     A key is considered done if ``<key>.npy`` exists and has shape (M, M).
+    Its quality codes come from ``<key>.quality`` (``.npy`` format); a checkpoint written
+    before those existed has its codes derived from the values and the error
+    sidecar (see :func:`derive_quality`).
 
     A checkpoint carrying an ``.error`` sidecar records a *failed* SPI. By
     default those are retried rather than resumed: a failure is usually caused
@@ -541,13 +695,20 @@ def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool 
         err = err_path.read_text() if err_path.exists() else None
         # Validate *before* the retry decision, so an invalid matrix is retried
         # rather than being marked failed and then kept.
-        off = arr[~np.eye(M, dtype=bool)] if M > 1 else arr.ravel()
-        if off.size and (np.isinf(off).any() or not np.isfinite(off).any()):
+        # As in `execute_spi`: an Inf is a per-cell code, not a failure, and
+        # only a result with no finite off-diagonal value is flagged.
+        off = arr[~np.eye(M, dtype=bool)]
+        if off.size and not np.isfinite(off).any():
             err = err or "ValueError: checkpoint contains no finite values"
         if err is not None and retry_failed:
             remaining.append(key)
             continue
-        done[key] = (arr, err, [], 0.0)
+        q = _read_checkpoint_quality(checkpoint_dir, key, arr, err, M)
+        pairs = _read_checkpoint_pairs(checkpoint_dir, key, q)
+        # Values are stored NaN wherever the code is not GOOD; an older
+        # checkpoint could hold an Inf the codes now label instead.
+        arr = np.where(q == Quality.GOOD, arr, np.nan)
+        done[key] = SPIResult(arr, q, err, pairs, [], 0.0)
     return done, remaining
 
 
@@ -562,7 +723,7 @@ def run_parallel(
     configfile: str,
     config_bytes: bytes | None = None,
 ) -> dict:
-    """Execute ``spi_keys`` across ``n_jobs`` workers; return dict[key] -> (S, err, elapsed)."""
+    """Execute ``spi_keys`` across ``n_jobs`` workers; return dict[key] -> SPIResult."""
     from tqdm import tqdm
 
     # Pin BLAS env before any worker spawns — workers inherit single-threaded
@@ -615,13 +776,14 @@ def run_parallel(
                 for fut in done:
                     task = future_to_task[fut]
                     try:
-                        for key, S, err, warns, elapsed in fut.result():
-                            results[key] = (S, err, warns, elapsed)
+                        for key, res in fut.result():
+                            results[key] = res
                     except Exception as exc:  # worker process died (segfault/OOM)
                         for key in task:
                             results.setdefault(
                                 key,
-                                (np.full((M, M), np.nan), f"worker died: {exc}", [], 0.0),
+                                SPIResult(np.full((M, M), np.nan), failed_quality(M),
+                                          f"worker died: {exc}", [], [], 0.0),
                             )
                 pending -= done
                 if pending:
