@@ -354,8 +354,8 @@ def cache_bucket(spi):
     independent caches -- ``Barycenter`` caches per mode, so ``bary_dtw`` and
     ``bary_softdtw`` share nothing, and the multitaper spectral SPIs cache per
     class and sampling frequency. On the ``full`` config the namespaces divide
-    as: spectral_mv 84 SPIs across 16 independent caches, covariance 32 across
-    8, spectral_bv 30 in one, barycenter 16 across 4, coint 11 across 7,
+    as: spectral_mv 84 SPIs across 16 independent caches, covariance 26 across
+    7, spectral_bv 30 in one, barycenter 16 across 4, coint 11 across 7,
     ccm 9 across 3.
     """
     ns = getattr(type(spi), "_cache_namespace", None)

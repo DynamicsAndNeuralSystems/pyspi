@@ -23,24 +23,8 @@
     - estimator: EmpiricalCovariance
     - estimator: GraphicalLasso
     - estimator: GraphicalLassoCV
-    - estimator: LedoitWolf
     - estimator: MinCovDet
-    - estimator: OAS
-    - estimator: ShrunkCovariance
-    - estimator: EmpiricalCovariance
-      squared: true
-      squared: true
-    - estimator: GraphicalLasso
-      squared: true
     - estimator: GraphicalLassoCV
-      squared: true
-    - estimator: LedoitWolf
-      squared: true
-    - estimator: MinCovDet
-      squared: true
-    - estimator: OAS
-      squared: true
-    - estimator: ShrunkCovariance
       squared: true
 
   Precision:
