@@ -184,6 +184,7 @@ OPTIONAL_IN_FULL = frozenset({
     "prec_MinCovDet",
     "prec_OAS",
     "prec_ShrunkCovariance",
+    "spearmanr-sq",
     "xme_gaussian_k1",
 })
 
