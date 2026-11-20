@@ -13,10 +13,7 @@
     configs:
       - estimator: EmpiricalCovariance
       - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
       - estimator: MinCovDet
-      - estimator: GraphicalLassoCV
-        squared: True
 
   # Precision
   Precision:
@@ -64,7 +61,6 @@
     configs:
       - estimator: EmpiricalCovariance
       - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
       - estimator: LedoitWolf
       - estimator: MinCovDet
       - estimator: OAS

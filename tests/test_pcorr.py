@@ -22,6 +22,8 @@ from pyspi.statistics.basic import Covariance, PartialCorrelation, Precision
 
 ESTIMATORS = ["EmpiricalCovariance", "GraphicalLasso", "GraphicalLassoCV",
               "LedoitWolf", "MinCovDet", "OAS", "ShrunkCovariance"]
+# The estimators bundled in `full` (GraphicalLassoCV is available by name).
+BUNDLED = [e for e in ESTIMATORS if e != "GraphicalLassoCV"]
 
 
 def _series(M=5, T=400, seed=11):
@@ -176,7 +178,7 @@ def test_calculator_round_trip(tmp_path):
 
 def test_full_and_fast_configs_construct():
     full = set(Calculator(config="full").spis)
-    assert {f"pcorr_{e}" for e in ESTIMATORS} <= full
+    assert {f"pcorr_{e}" for e in BUNDLED} <= full
     assert not any(k.startswith("pcorr-sq") for k in full)
     fast = set(Calculator(config="fast").spis)
     assert {"pcorr_EmpiricalCovariance", "pcorr_LedoitWolf"} <= fast
@@ -185,5 +187,5 @@ def test_full_and_fast_configs_construct():
     with open(path) as fh:
         cfg = yaml.safe_load(fh)[".statistics.basic"]
     assert ([c["estimator"] for c in cfg["PartialCorrelation"]["configs"]]
-            == ESTIMATORS)
+            == BUNDLED)
     assert cfg["PartialCorrelation"]["labels"] == cfg["Precision"]["labels"]

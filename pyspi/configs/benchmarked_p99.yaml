@@ -19,10 +19,7 @@
     configs:
     - estimator: EmpiricalCovariance
     - estimator: GraphicalLasso
-    - estimator: GraphicalLassoCV
     - estimator: MinCovDet
-    - estimator: GraphicalLassoCV
-      squared: true
 
   Precision:
     labels:

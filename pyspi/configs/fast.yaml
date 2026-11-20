@@ -13,7 +13,6 @@
     configs:
       - estimator: EmpiricalCovariance
       - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
 
   # Precision
   Precision:
