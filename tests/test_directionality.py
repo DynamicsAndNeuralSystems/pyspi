@@ -640,7 +640,7 @@ def test_directed_spectral_spis_share_one_task_and_one_factorisation_per_pair(mo
                       config="benchmarked_p90", verbose=False)
     keys = [k for k, s in calc.spis.items()
             if isinstance(s, spectral.NonparametricSpectralBivariate)]
-    assert len(keys) == 30 and _parallel.build_tasks(keys, calc.spis) == [keys]
+    assert len(keys) == 18 and _parallel.build_tasks(keys, calc.spis) == [keys]
 
     calls = []
     inner = backend.minimum_phase_decomposition
