@@ -70,19 +70,6 @@
     - squared: true
     - squared: false
 
-  KendallTau:
-    labels:
-      - undirected
-      - nonlinear
-      - signed
-      - bivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-    - squared: true
-    - squared: false
-
   LaggedCorrelation:
     labels:
       - undirected
