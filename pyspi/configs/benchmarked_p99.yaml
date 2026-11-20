@@ -3,13 +3,12 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 304 SPIs; 291 of the 296 SPIs benchmarked, plus 13 untimed (below).
+# Current set: 267 SPIs; 254 of the 296 SPIs benchmarked, plus 13 untimed (below).
 # Cutoff        : fastest kept <= 332.132s ; slowest dropped >= 342.692s.
 #
-# Manual edit: SPIs added after the benchmark, untimed: xi_tau-{0,1}, the seven
-# pcorr_<estimator> (reusing the covariance fits), te_symbolic_k-3, and
-# {mi,tlmi}_kernel_W-0.25_DCE-AUTO and te_kernel_W-0.25_DCE-AUTO_k-1 (estimated
-# 1.2-2.1x their timed no-window variants); re-apply after re-running bench/cut_config.py.
+# Manual edit: added untimed: xi_tau-{0,1}, pcorr_<estimator> (7), te_symbolic_k-3,
+# {mi,tlmi}_kernel_W-0.25_DCE-AUTO and te_kernel_W-0.25_DCE-AUTO_k-1;
+# re-apply after re-running bench/cut_config.py.
 #
 .statistics.basic:
   Covariance:
@@ -25,24 +24,8 @@
     - estimator: EmpiricalCovariance
     - estimator: GraphicalLasso
     - estimator: GraphicalLassoCV
-    - estimator: LedoitWolf
     - estimator: MinCovDet
-    - estimator: OAS
-    - estimator: ShrunkCovariance
-    - estimator: EmpiricalCovariance
-      squared: true
-      squared: true
-    - estimator: GraphicalLasso
-      squared: true
     - estimator: GraphicalLassoCV
-      squared: true
-    - estimator: LedoitWolf
-      squared: true
-    - estimator: MinCovDet
-      squared: true
-    - estimator: OAS
-      squared: true
-    - estimator: ShrunkCovariance
       squared: true
 
   Precision:
@@ -98,19 +81,6 @@
     - estimator: ShrunkCovariance
 
   SpearmanR:
-    labels:
-      - undirected
-      - nonlinear
-      - signed
-      - bivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-    - squared: true
-    - squared: false
-
-  KendallTau:
     labels:
       - undirected
       - nonlinear
@@ -312,9 +282,7 @@
       - MXX
     dependencies:
     configs:
-    - metric: euclidean
     - metric: cityblock
-    - metric: cosine
     - metric: chebyshev
     - metric: canberra
     - metric: braycurtis
@@ -470,9 +438,6 @@
       - M09
     - mode: softdtw
       statistic: max
-    - mode: euclidean
-      statistic: mean
-      squared: true
     - mode: euclidean
       statistic: max
       squared: true
@@ -757,11 +722,7 @@
     dependencies:
     configs:
     - phitype: star
-    - phitype: star
-      normalization: 1
     - phitype: Geo
-    - phitype: Geo
-      normalization: 1
 
 
 .statistics.spectral:
@@ -958,30 +919,6 @@
       labels:
       - M12
 
-  PairwisePhaseConsistency:
-    labels:
-      - undirected
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M12
-    dependencies:
-    configs:
-    - fs: 1
-    - fmin: 0
-      fmax: 0.25
-    - fmin: 0.25
-      fmax: 0.5
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
-
   DirectedTransferFunction:
     labels:
       - directed
@@ -1011,54 +948,6 @@
       - directed
       - linear
       - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-    - fs: 1
-    - fmin: 0
-      fmax: 0.25
-    - fmin: 0.25
-      fmax: 0.5
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
-
-  PartialDirectedCoherence:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-    - fs: 1
-    - fmin: 0
-      fmax: 0.25
-    - fmin: 0.25
-      fmax: 0.5
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
-
-  GeneralizedPartialDirectedCoherence:
-    labels:
-      - unsigned
-      - directed
-      - linear
       - bivariate
       - frequency-dependent
       - M06
@@ -1278,20 +1167,6 @@
 
 
 .statistics.misc:
-  LinearModel:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-    - model: Ridge
-    - model: SGDRegressor
-    - model: BayesianRidge
-
   GPModel:
     labels:
       - directed

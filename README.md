@@ -88,9 +88,14 @@ calc.compute()                         # compute every SPI
 calc.table                             # rows = processes, columns = (SPI, process)
 calc.table["cov_EmpiricalCovariance"]  # one SPI's 5x5 matrix
 
+calc.quality                           # one code per cell: 0 good, else why it is NaN
 calc.save("results.npz")               # canonical on-disk format
 pyspi.load_table("results.npz")        # round-trips exactly
+pyspi.load_results("results.npz")      # table, quality codes, errors, run spec
 ```
+
+Every value in `calc.table` is a real, finite number or NaN.
+`calc.quality` says what each cell is, with the codes of `pyspi.Quality` (shared with hctsa and pyhctsa): good, error, NaN (undefined or not appropriate, including every self-pair), +/-Inf, or complex.
 
 Results are stored as an `(n_spis, M, M)` array plus the SPI and process names,
 which is the data's natural shape. `.csv` is also accepted for eyeballing small
@@ -126,18 +131,18 @@ Walkthrough tutorials in the full documentation:
 
 ## Choosing an SPI set
 
-Computing all 309 SPIs is expensive, and cost grows steeply in both the number
+Computing all 272 SPIs is expensive, and cost grows steeply in both the number
 of processes *M* and the series length *T*. `config=` takes either a bundled
 name or a path to your own YAML:
 
 | `config=` | SPIs | Use when |
 |:----------|-----:|:---------|
-| `"full"` (default) | 309 | You want everything and can afford it. |
-| `"fast"` | 199 | General use; drops the slowest SPIs. |
-| `"benchmarked_p99"` | 304 | Near-complete, with only the worst cost outliers removed. |
-| `"benchmarked_p95"` | 291 | Good coverage/cost trade-off. |
-| `"benchmarked_p90"` | 277 | Recommended default for large batches. |
-| `"benchmarked_p80"` | 237 | Cost-constrained sweeps. |
+| `"full"` (default) | 272 | You want everything and can afford it. |
+| `"fast"` | 165 | General use; drops the slowest SPIs. |
+| `"benchmarked_p99"` | 267 | Near-complete, with only the worst cost outliers removed. |
+| `"benchmarked_p95"` | 254 | Good coverage/cost trade-off. |
+| `"benchmarked_p90"` | 240 | Recommended default for large batches. |
+| `"benchmarked_p80"` | 206 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14). |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |
 
