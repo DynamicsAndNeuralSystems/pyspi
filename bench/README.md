@@ -62,6 +62,9 @@ repeat of the full config is already a multi-day job — so its
 `report.md`) stands in for a within-cell error bar. Raw per-cell JSON is
 machine-specific and intentionally untracked; retain it locally or archive it
 externally if the campaign may need to be reanalysed.
+The reference campaign's cells are not in the repository, so `cut_config` and
+`analyse_cells` cannot be rerun on them from a clone; `report.md`,
+`scaling.csv` and `cell_summary.csv` are the tracked record of that campaign.
 
 ## Cut a benchmarked config
 
@@ -157,7 +160,7 @@ modules to load) — all documented in the script header. Every run is
 `--resume`, so resubmitting skips cells that already have a JSON.
 
 **`bench/physics/run_bench.pbs`** is a worked example to copy and adapt: the
-USYD Physics queue configuration that produced the committed
+USYD Physics queue configuration that produced the (untracked)
 `physics_config_M*_T*_n1.json` cells (full config, `repeats=1`, `n_jobs=1`,
 M={4,8,16,32,64} x T={200,400,800,1600,3200}, one cell per array task). It
 pins those defaults and delegates to `run_benchmark.pbs`.
