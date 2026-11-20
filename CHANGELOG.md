@@ -275,7 +275,8 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
   One OLS VAR(p) is fitted to all processes, and `F[i, j] = ln(var_r / var_f)` compares target j's residual variance with and without the lags of source i (Geweke 1984; Barnett & Seth 2014).
   Conditioning on every other process means an indirect link or a common driver gives about 0.
   It is on Geweke's scale, twice that of `gc_gaussian_*`.
-  Bundled as `cgc_p-1`, `cgc_p-2`, `cgc_p-bic` (order 1-10 chosen by BIC; also in `fast`) and `cgc_p-bic_coef` (signed net lagged coefficient).
+  Bundled as `cgc_p-1`, `cgc_p-2` and `cgc_p-bic` (order 1-10 chosen by BIC; also in `fast`).
+  The signed net lagged coefficient is available as `statistic='coef'` (e.g. `cgc_p-bic_coef`) but is not bundled.
 
 ### Dependencies
 

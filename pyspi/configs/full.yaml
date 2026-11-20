@@ -1532,7 +1532,3 @@
       - order: 1
       - order: 2
       - order: bic
-      - order: bic
-        statistic: coef
-        labels:
-          - signed
