@@ -862,30 +862,6 @@
       labels:
       - M12
 
-  PairwisePhaseConsistency:
-    labels:
-      - undirected
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M12
-    dependencies:
-    configs:
-    - fs: 1
-    - fmin: 0
-      fmax: 0.25
-    - fmin: 0.25
-      fmax: 0.5
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
-
   DirectedTransferFunction:
     labels:
       - directed
