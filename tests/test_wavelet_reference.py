@@ -144,3 +144,162 @@ def test_wavelet_psi_max_is_noise_which_is_why_it_is_not_bundled():
         spis = load_spis_from_yaml(resolve_config(name), quiet=True)
         bundled_max = sorted(k for k in spis if k.startswith("psi_wavelet_max"))
         assert not bundled_max, f"{name} bundles {bundled_max}"
+
+
+# --------------------------------------------------------------------------
+# Epoch-averaged phase-lag measures on the shared 125-frequency grid
+# --------------------------------------------------------------------------
+
+def _morlet(f, n_cycles):
+    """Zero-mean complex Morlet wavelet at fs = 1, out to five standard deviations.
+
+    ``sigma_t = n_cycles / (2 pi f)``; the scale is irrelevant to the phase-lag
+    measures, which depend on the cross-spectrum only through signs and ratios.
+    """
+    sigma_t = n_cycles / (2 * np.pi * f)
+    t = np.arange(0.0, 5.0 * sigma_t)
+    t = np.r_[-t[::-1], t[1:]]
+    oscillation = np.exp(2j * np.pi * f * t) - np.exp(-2 * (np.pi * f * sigma_t) ** 2)
+    return oscillation * np.exp(-t ** 2 / (2 * sigma_t ** 2))
+
+
+def _imag_cross_spectrum(z, i, j, n_cycles=7.0):
+    """``Im(W_i conj(W_j))`` per epoch, frequency and time on the shared grid."""
+    freqs = np.linspace(0.2, 0.5, 125)
+
+    def coef(x):
+        return np.stack([np.convolve(x, _morlet(f, n_cycles), mode="same") for f in freqs])
+
+    S = np.stack([coef(z[i, :, r]) * np.conj(coef(z[j, :, r])) for r in range(z.shape[2])])
+    return freqs, S.imag
+
+
+def _epochs(seed=0, n_epochs=8, t=150):
+    """Three processes over several realisations: y follows x at lag 2, w is independent."""
+    rng = np.random.default_rng(seed)
+    x = rng.standard_normal((n_epochs, t + 2))
+    y = x[:, :-2] + 0.8 * rng.standard_normal((n_epochs, t))
+    w = rng.standard_normal((n_epochs, t))
+    return np.stack([x[:, 2:], y, w]).transpose(0, 2, 1)  # (process, time, epoch)
+
+
+def _analysed(z):
+    """The series the SPI sees: ``Data`` z-scores each process in each realisation."""
+    return Data(z, dim_order="psr").to_numpy()
+
+
+def _wavelet(cls_name, z, **kwargs):
+    import pyspi.statistics.wavelet as wavelet
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        spi = getattr(wavelet, cls_name)(**kwargs)
+        return spi.multivariate(Data(z, dim_order="psr"))
+
+
+# The band stops short of fs/2: at the Nyquist frequency the Morlet coefficients
+# of a real series are real, so Im S there is rounding noise.
+_FMAX = 0.45
+
+
+@pytest.mark.parametrize("cls_name, measure", [
+    ("PhaseLagIndex", "pli"),
+    ("DebiasedSquaredPhaseLagIndex", "dspli"),
+    ("weighted_PhaseLagIndex", "wpli2"),
+])
+def test_wavelet_phase_lag_measures_match_the_definitions_on_seven_cycle_wavelets(cls_name, measure):
+    """Vinck et al. (2011), from 7-cycle Morlet coefficients averaged over epochs.
+
+    ``PLI = |mean sign(Im S)|``; the debiased squared PLI is
+    ``(n PLI^2 - 1) / (n - 1)`` over the ``n`` epochs; the squared weighted PLI
+    is ``(|sum Im S| / sum |Im S|)^2``. Each is averaged over time and the
+    frequencies in the band.
+    """
+    z = _epochs()
+    n = z.shape[2]
+    A = _wavelet(cls_name, z, fmax=_FMAX)
+    for i, j in [(1, 0), (2, 0), (2, 1)]:
+        freqs, im = _imag_cross_spectrum(_analysed(z), i, j)
+        band = freqs <= _FMAX
+        im = im[:, band]
+        pli = np.abs(np.mean(np.sign(im), axis=0))
+        per_ft = {
+            "pli": pli,
+            "dspli": (n * pli ** 2 - 1) / (n - 1),
+            "wpli2": (np.abs(im.sum(axis=0)) / np.abs(im).sum(axis=0)) ** 2,
+        }[measure]
+        expected = np.mean(per_ft)
+        assert A[i, j] == pytest.approx(expected, rel=1e-9, abs=1e-12), (i, j)
+        assert A[j, i] == A[i, j]
+
+
+def test_the_weighted_wavelet_pli_is_the_square_of_the_unsquared_wpli():
+    """``wspli`` squares mne-connectivity's ``wpli`` at each frequency and time."""
+    from mne_connectivity import spectral_connectivity_epochs
+
+    z = _epochs(seed=1)
+    freqs = np.linspace(0.2, 0.5, 125)
+    wpli = spectral_connectivity_epochs(
+        np.moveaxis(_analysed(z), 2, 0), method="wpli", mode="cwt_morlet", sfreq=1,
+        fmin=5 / z.shape[1], fmax=0.5, cwt_freqs=freqs,
+        cwt_n_cycles=np.full(freqs.size, 7.0), verbose=False,
+    ).get_data(output="dense")
+    band = freqs <= _FMAX
+    A = _wavelet("weighted_PhaseLagIndex", z, fmax=_FMAX)
+    assert A[1, 0] == pytest.approx(np.mean(wpli[1, 0, band] ** 2), rel=1e-12)
+    assert A[1, 0] < np.mean(wpli[1, 0, band])
+
+
+def test_wavelet_cycle_count_is_capped_so_the_wavelet_fits_a_short_record():
+    """A 7-cycle wavelet at 0.2 is 55 samples long; a 40-sample record gets fewer cycles.
+
+    The cap is ``0.95 T f / 1.59`` cycles (MNE's Morlet spans about
+    ``1.59 n_cycles / f`` samples), clipped to [1, 7], as for ``PhaseSlopeIndex``.
+    """
+    z = _epochs(t=40)
+    freqs = np.linspace(0.2, 0.5, 125)
+    n_cycles = np.clip(0.95 * 40 * freqs / 1.59, 1.0, 7.0)
+    assert n_cycles[0] < 7 and n_cycles[-1] == 7
+
+    def coef(x):
+        return np.stack([np.convolve(x, _morlet(f, c), mode="same")
+                         for f, c in zip(freqs, n_cycles)])
+
+    zz = _analysed(z)
+    im = np.stack([(coef(zz[1, :, r]) * np.conj(coef(zz[0, :, r]))).imag
+                   for r in range(zz.shape[2])])[:, freqs <= _FMAX]
+    expected = np.mean(np.abs(np.mean(np.sign(im), axis=0)))
+    A = _wavelet("PhaseLagIndex", z, fmax=_FMAX)
+    assert A[1, 0] == pytest.approx(expected, rel=1e-9, abs=1e-12)
+
+
+def test_the_old_wavelet_dspli_class_name_warns_and_gives_identical_values():
+    """``DebiasedSquaredWeightedPhaseLagIndex`` is a deprecated alias.
+
+    The measure is the unweighted debiased squared PLI (identifier ``dspli``);
+    the weighted one is ``debiased_weighted_squared_PhaseLagIndex``.
+    """
+    import pyspi.statistics.wavelet as wavelet
+
+    with pytest.warns(DeprecationWarning, match="DebiasedSquaredPhaseLagIndex"):
+        old = wavelet.DebiasedSquaredWeightedPhaseLagIndex()
+    new = wavelet.DebiasedSquaredPhaseLagIndex()
+    assert isinstance(old, wavelet.DebiasedSquaredPhaseLagIndex)
+    assert old.identifier == new.identifier
+    z = _epochs(seed=2)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        a = old.multivariate(Data(z, dim_order="psr"))
+        b = new.multivariate(Data(z, dim_order="psr"))
+    np.testing.assert_array_equal(a, b)
+
+
+def test_no_bundled_config_uses_the_shared_wavelet_grid():
+    """Only PhaseSlopeIndex, which builds its own grid, is bundled from this module."""
+    import pyspi.statistics.wavelet as wavelet
+    from pyspi.calculator import bundled_configs, load_spis_from_yaml, resolve_config
+
+    for name in bundled_configs():
+        for spi in load_spis_from_yaml(resolve_config(name), quiet=True).values():
+            if isinstance(spi, wavelet.mne):
+                assert isinstance(spi, wavelet.PhaseSlopeIndex), (name, spi.identifier)

@@ -154,6 +154,12 @@ Three group-delay SPIs that shipped as silent all-NaN columns are now recorded f
 
 - **IGCI was misnamed and mislabelled.** It is Information-Geometric Causal *Inference* and tests no conditional independence; `InformationGeometricCausalInference` is the accurate name, with the old one kept as a deprecated alias. Its score is a difference of two entropies and therefore exactly antisymmetric, so reporting it `Unsigned` let `Calculator._rmmin` shift both orientations equally and destroy the sign. It is **not in any bundled config in 3.0**; it was active in 2.0.2's `config.yaml` (as `InformationGeometricConditionalIndependence`, identifier `igci`), so `full` loses that SPI. `AdditiveNoiseModel` was labelled `linear` while fitting a Gaussian process — now `nonlinear`.
 
+- **Three unbundled wavelet classes computed something other than their names.**
+The shared Morlet grid used `cwt_freqs / 7` (0.03 to 0.07) cycles per wavelet instead of 7, so every wavelet SPI except `PhaseSlopeIndex`, which has its own grid, changes value.
+`weighted_PhaseLagIndex` (`wspli`) now squares the weighted PLI, as its name says.
+The wavelet `DebiasedSquaredWeightedPhaseLagIndex` computes the unweighted debiased squared PLI, as its identifier `dspli` says, and is renamed `DebiasedSquaredPhaseLagIndex`, with the old name kept as a deprecated alias.
+None of these is in a bundled config.
+
 - **Structural traits now win over every competing config-declared trait.** The rule removed only `directed`/`undirected`, so an intrinsic `undirected` SPI plus YAML `asymmetric` retained both. The instance's one trait now displaces all of `directed`, `undirected`, `antisymmetric` and `asymmetric`; custom-YAML conflicts are tested in all four directions.
 
 - **Integer parameters no longer advertise values they do not compute.** `ConvergentCrossMapping(embedding_dimension=2.7)` advertised `E-2.7` and later executed `E=2`; lagged-correlation config expansion similarly truncated fractional `max_tau` and accepted booleans/numeric strings. Both now require genuine integers and canonicalise NumPy integer scalars before identifiers and expansion.

@@ -1,3 +1,5 @@
+import warnings
+
 from mne_connectivity import spectral_connectivity_epochs, phase_slope_index
 from pyspi.base import (
     Directed,
@@ -12,6 +14,21 @@ from pyspi.statistics.spectral import _circular_nanmean
 
 
 class mne(Unsigned):
+    """Base for the Morlet-wavelet measures from mne-connectivity.
+
+    ``spectral_connectivity_epochs(mode="cwt_morlet")`` with the realisations
+    as epochs, on a fixed grid of 125 frequencies from 0.2 to 0.5 with 7-cycle
+    wavelets (fewer where a wavelet would not fit the record, as in
+    :class:`PhaseSlopeIndex`). Each measure is an average over epochs at every
+    frequency and time; ``statistic`` (``mean`` or ``max``) reduces it over
+    time and ``fmin <= f <= fmax``, and the connectivity is cached per
+    ``(measure, fs)``. With a single realisation the epoch average has one term,
+    so most of these measures are degenerate (``coh``, ``plv``, ``pli`` and
+    ``wpli`` are 1 everywhere). Apart from :class:`PhaseSlopeIndex`, which
+    overrides this, the subclasses are not in the shipped configs; the
+    multitaper versions are in ``statistics.spectral``.
+    """
+
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean"):
         if fmax is None:
             fmax = fs / 2
@@ -51,7 +68,11 @@ class mne(Unsigned):
             z = np.moveaxis(data.to_numpy(), 2, 0)
 
             cwt_freqs = np.linspace(0.2, 0.5, 125)
-            cwt_n_cycles = cwt_freqs / 7.0
+            # 7-cycle Morlet wavelets. MNE's Morlet spans about
+            # 1.59 * n_cycles / f samples, so cap the cycle count where the
+            # wavelet would not fit the record, as in PhaseSlopeIndex.
+            max_cycles = 0.95 * data.n_observations * cwt_freqs / (1.59 * self._fs)
+            cwt_n_cycles = np.clip(max_cycles, 1.0, 7.0)
             con = spectral_connectivity_epochs(
                 data=z,
                 method=self.measure,
@@ -76,9 +97,14 @@ class mne(Unsigned):
 
         return conn, freq_id
 
+    def _per_frequency(self, conn):
+        """The measure at each frequency and time, from the cached connectivity."""
+        return conn
+
     @parse_multivariate
     def multivariate(self, data):
         adj_freq, freq_id = self._get_cache(data)
+        adj_freq = self._per_frequency(adj_freq)
         try:
             adj = self._statfn(adj_freq[..., freq_id, :], axis=(2, 3))
         except np.AxisError:
@@ -184,7 +210,17 @@ class PhaseLagIndex(mne, Undirected):
         super().__init__(**kwargs)
 
 
-class DebiasedSquaredWeightedPhaseLagIndex(mne, Undirected):
+class DebiasedSquaredPhaseLagIndex(mne, Undirected):
+    """Debiased squared phase lag index (Vinck et al. 2011, NeuroImage 55, 1548-1565), from Morlet wavelets.
+
+    At each frequency and time, ``(n PLI^2 - 1) / (n - 1)`` over the ``n``
+    epochs, with ``PLI = |mean sign(Im S)|`` and ``S = W_i conj(W_j)`` the
+    wavelet cross-spectrum (mne-connectivity's ``pli2_unbiased``). This equals
+    the mean of ``sign(Im S_k) sign(Im S_l)`` over pairs of epochs ``k != l``
+    where no cross-spectrum is real. Undefined for a single realisation. The
+    weighted version is :class:`debiased_weighted_squared_PhaseLagIndex`.
+    """
+
     name = "Debiased squared phase lag index (wavelet)"
     labels = ["unsigned", "wavelet", "undirected"]
 
@@ -194,7 +230,35 @@ class DebiasedSquaredWeightedPhaseLagIndex(mne, Undirected):
         super().__init__(**kwargs)
 
 
+class DebiasedSquaredWeightedPhaseLagIndex(DebiasedSquaredPhaseLagIndex):
+    """Deprecated alias for :class:`DebiasedSquaredPhaseLagIndex`.
+
+    The old name says weighted, but the measure (identifier ``dspli``) is the
+    unweighted debiased squared PLI. Kept so existing configs and scripts keep
+    working; the identifier and the computation are unchanged.
+    """
+
+    def __init__(self, **kwargs):
+        warnings.warn(
+            "wavelet.DebiasedSquaredWeightedPhaseLagIndex is deprecated and "
+            "will be removed in pyspi 4.0; use DebiasedSquaredPhaseLagIndex, "
+            "which computes the same unweighted measure (dspli). The weighted "
+            "one is debiased_weighted_squared_PhaseLagIndex.",
+            DeprecationWarning, stacklevel=2,
+        )
+        super().__init__(**kwargs)
+
+
 class weighted_PhaseLagIndex(mne, Undirected):
+    """Squared weighted phase lag index (Vinck et al. 2011, NeuroImage 55, 1548-1565), from Morlet wavelets.
+
+    At each frequency and time, ``wPLI^2 = (|sum Im S| / sum |Im S|)^2`` over
+    the epochs, with ``S = W_i conj(W_j)`` the wavelet cross-spectrum
+    (mne-connectivity's ``wpli``, squared before the band statistic). Biased
+    upwards for few epochs; :class:`debiased_weighted_squared_PhaseLagIndex`
+    is the debiased estimator of the same quantity.
+    """
+
     name = "Weighted squared phase lag index (wavelet)"
     labels = ["unsigned", "wavelet", "undirected"]
 
@@ -202,6 +266,9 @@ class weighted_PhaseLagIndex(mne, Undirected):
         self.identifier = "wspli"
         self._measure = "wpli"
         super().__init__(**kwargs)
+
+    def _per_frequency(self, conn):
+        return conn ** 2
 
 
 class debiased_weighted_squared_PhaseLagIndex(mne, Undirected):
