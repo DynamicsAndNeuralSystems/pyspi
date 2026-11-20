@@ -186,3 +186,40 @@ def test_auto_window_of_zero_is_no_window(cls, kw):
     auto = cls(estimator="kernel", kernel_width=0.5, dyn_corr_excl="AUTO", **kw)
     none = cls(estimator="kernel", kernel_width=0.5, **kw)
     assert auto.bivariate(data, i=0, j=1) == none.bivariate(data, i=0, j=1)
+
+
+@pytest.mark.parametrize("w", [None, 1])
+@pytest.mark.parametrize("cls, kw", KERNEL_CLASSES)
+def test_no_neighbours_anywhere_is_nan(cls, kw, w):
+    """Every joint box is empty once the point itself is excluded, with or
+    without a window, so there is no estimate; 0 would read as independence."""
+    x = np.vstack([np.arange(12.0), np.arange(12.0)[::-1] ** 2])
+    data = Data(x, dim_order="ps", zscore=False)
+    spi = cls(estimator="kernel", kernel_width=0.01, dyn_corr_excl=w, **kw)
+    assert np.isnan(spi.bivariate(data, i=0, j=1))
+
+
+@pytest.mark.parametrize("cls, kw", KERNEL_CLASSES)
+def test_negative_resolved_window_is_refused(ar_data, cls, kw):
+    """As for kraskov; it must not fall back to the estimator without a window."""
+    data = Data(ar_data.to_numpy(squeeze=True), dim_order="ps", zscore=False)
+    data.theiler = -np.ones((3, 3))
+    spi = cls(estimator="kernel", kernel_width=0.25, dyn_corr_excl="AUTO", **kw)
+    with pytest.raises(ValueError, match="Theiler window must be >= 0"):
+        spi.bivariate(data, i=0, j=1)
+
+
+def test_auto_window_is_at_least_one_from_ten_samples():
+    """2 * <acf_i, acf_j> >= 1 for any two series, so only the N // 10 cap
+    brings the AUTO window to 0."""
+    rng = np.random.default_rng(3)
+    spi = MutualInfo(estimator="kernel", kernel_width=0.5, dyn_corr_excl="AUTO")
+    for T in (10, 25, 200):
+        t = np.arange(T)
+        Z = np.vstack([rng.standard_normal(T), (-1.0) ** t + 0.1 * rng.standard_normal(T),
+                       np.cumsum(rng.standard_normal(T))])
+        data = Data(Z, dim_order="ps")
+        assert min(spi._resolve_theiler(data, i, j)
+                   for i in range(3) for j in range(3) if i != j) >= 1
+    data = Data(rng.standard_normal((2, 9)), dim_order="ps")
+    assert spi._resolve_theiler(data, 0, 1) == 0

@@ -314,12 +314,13 @@ class KernelMICalculator:
 
     MI = mean(log(n_xy * N / (n_x * n_y)))  [nats]
     where n_x, n_y, n_xy are counts within L∞ ball of radius kernel_width.
-    Matches JIDT exactly.
+    Matches JIDT except as noted below.
 
     With JIDT's ``DYN_CORR_EXCL = dce > 0`` the counts exclude
     ``|j - i| < dce`` (see `_kernel_counts`), ``N`` becomes the number of
     samples each point was compared with, and, as in JIDT, a sample with an
-    empty joint box contributes 0 to the mean over all ``N`` samples.
+    empty joint box contributes 0 to the mean over all ``N`` samples. When
+    every joint box is empty the result is NaN (JIDT gives 0).
     """
 
     def __init__(self):
@@ -382,6 +383,9 @@ class KernelMICalculator:
         n_pool = (N - np.minimum(i, dce - 1) - np.minimum(N - 1 - i, dce - 1) - 1)
         # n_xy > 0 implies n_x, n_y > 0; JIDT adds 0 for an empty joint box.
         nz = n_xy > 0
+        if not nz.any():
+            # No sample has a neighbour, so there is nothing to estimate from.
+            return float('nan')
         local = np.zeros(N)
         local[nz] = (np.log(n_xy[nz]) + np.log(n_pool[nz])
                      - np.log(n_x[nz]) - np.log(n_y[nz]))
@@ -393,7 +397,8 @@ class KernelTECalculator:
 
     TE(X→Y) = mean(log(n_yn_yp_x * n_yp / (n_yp_x * n_yn_yp)))  [nats]
     Uses box kernel with L∞ norm, half-width = kernel_width.
-    ``DYN_CORR_EXCL`` excludes neighbours as in `KernelMICalculator`.
+    ``DYN_CORR_EXCL`` excludes neighbours as in `KernelMICalculator`, and the
+    result is NaN when every joint box is empty.
     """
 
     def __init__(self):
@@ -469,6 +474,9 @@ class KernelTECalculator:
         # n_yn_yp_x > 0 implies the other three are > 0. As in JIDT, a sample
         # with an empty joint box adds 0 to the mean over all samples.
         nz = n_yn_yp_x > 0
+        if not nz.any():
+            # No sample has a neighbour, so there is nothing to estimate from.
+            return float('nan')
         local = np.zeros(n_pts)
         local[nz] = (np.log(n_yn_yp_x[nz]) + np.log(n_yp[nz])
                      - np.log(n_yp_x[nz]) - np.log(n_yn_yp[nz]))
@@ -1160,7 +1168,14 @@ class InfoTheoryBase(Unsigned):
     entropies (joint, conditional, causal and cross-map entropy, stochastic
     interaction) have none. A window ``w`` excludes neighbours ``|j - i| <= w``
     for both estimators; with no window (``None`` or 0) both still exclude
-    the point itself.
+    the point itself. An ``AUTO`` window is at least 1 for
+    series of 10 or more samples.
+
+    The ``kernel`` estimator counts points in a box of fixed width, which holds
+    few points in short series: there its transfer entropy is biased upward
+    (independent series give clearly positive values below about a thousand
+    samples), a window can take its MI slightly below zero, and an estimate in
+    which every joint box is empty is NaN (JIDT returns 0).
     """
 
     _AUTO_EMBED_METHOD_PROP_NAME = "AUTO_EMBED_METHOD"
@@ -1393,7 +1408,13 @@ class InfoTheoryBase(Unsigned):
             data.joint_entropy[key] = np.full((data.n_processes, data.n_processes), -np.inf)
 
         if data.joint_entropy[key][i, j] == -np.inf:
-            x, y = data.to_numpy()[[i, j]]
+            # The pair in one orientation, (larger, smaller), whichever is
+            # asked for first: the value is cached for both, and the
+            # Kozachenko-Leonenko estimate of [x, y] and of [y, x] can differ
+            # in the last bit, so the order the pairs are visited in would
+            # otherwise decide it. (larger, smaller) is the orientation the
+            # stored baselines use.
+            x, y = data.to_numpy()[[max(i, j), min(i, j)]]
             joint = np.concatenate([x, y], axis=1)
             est = self._estimator
 
@@ -1443,19 +1464,6 @@ class InfoTheoryBase(Unsigned):
             data.entropy[key][i] = compute()
         return data.entropy[key][i]
 
-    def _upper_triangle_multivariate(self, data):
-        """Each unordered pair once, mirrored.
-
-        Same result as ``Undirected.multivariate``, which evaluates both
-        orders and keeps ``i < j``, at half the cost.
-        """
-        M = data.n_processes
-        A = np.full((M, M), np.nan)
-        pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
-        return fill_pairwise(self.identifier, A, pairs,
-                             lambda i, j: self.bivariate(data, i=i, j=j),
-                             mirror=True)
-
     def _resolve_theiler(self, data, i, j):
         """Theiler/dynamic-correlation-exclusion window for pair (i, j).
 
@@ -1495,7 +1503,10 @@ class InfoTheoryBase(Unsigned):
         window (w = 0) that is the point itself, which kraskov also excludes;
         counting it inflates every estimate (leave-one-out density).
         """
-        return self._resolve_theiler(data, i, j) + 1
+        w = self._resolve_theiler(data, i, j)
+        if w < 0:
+            raise ValueError(f"Theiler window must be >= 0, got w={w}.")
+        return w + 1
 
 
 class JointEntropy(InfoTheoryBase, Undirected):
@@ -1610,7 +1621,7 @@ class MutualInfo(InfoTheoryBase, Undirected):
                 self.identifier, result, pairs,
                 lambda i, j: _ksg_mi_pair(Z[i], Z[j], k, self._resolve_theiler(data, i, j)),
                 mirror=True)
-        return self._upper_triangle_multivariate(data)
+        return super().multivariate(data)
 
 
 class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
@@ -2144,10 +2155,6 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
             self._compute_conditional_entropy(y[tau:], y[:-tau])))
 
         return H_src + H_targ - H_joint
-
-    @parse_multivariate
-    def multivariate(self, data):
-        return self._upper_triangle_multivariate(data)
 
 
 class IntegratedInformation(Undirected, Unsigned):
