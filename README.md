@@ -12,8 +12,7 @@
 <p align="center">
  	<a href="https://zenodo.org/badge/latestdoi/601919618"><img src="https://zenodo.org/badge/601919618.svg" height="20"/></a>
     <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" height="20"/></a>
-    <a href="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml"><img src="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml/badge.svg" height="20"/></a>
-    <a href="https://twitter.com/compTimeSeries"><img src="https://img.shields.io/twitter/url/https/twitter.com/compTimeSeries.svg?style=social&label=Follow%20%40compTimeSeries" height="20"/></a><br>
+    <a href="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml"><img src="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml/badge.svg" height="20"/></a><br>
     <a href="https://www.python.org"><img src="https://img.shields.io/badge/Python-3.11%20|%203.12%20|%203.13-3776AB.svg?style=flat&logo=python&logoColor=white" alt="Python 3.11 | 3.12 | 3.13"></a><br>
     <a href="https://pepy.tech/projects/pyspi"><img src="https://static.pepy.tech/personalized-badge/pyspi?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=BLUE&left_text=downloads" alt="pyspi downloads" height="20"/></a>
 </p>
@@ -70,7 +69,7 @@ uv run pytest -q              # fast test suite
 Optional extras: `.[tsfile]` to load sktime/aeon `.ts` files, `.[bench]` for the
 compute-cost benchmark suite in [`bench/`](bench/).
 
-For a more detailed guide, see the [full documentation](https://time-series-features.gitbook.io/pyspi/installation/installing-pyspi),
+For a more detailed guide, see the [full documentation](https://time-series-features.gitbook.io/pyspi/installing-and-using-pyspi/installation),
 the [troubleshooting guide](https://time-series-features.gitbook.io/pyspi/installation/troubleshooting),
 and [alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options).
 
@@ -221,7 +220,7 @@ In contributing to _pyspi_, all participants are expected to adhere to our [code
 We strive to provide the most comprehensive toolkit of SPIs. If you have ideas for new SPIs or suggestions for improvements to existing ones, we are eager to hear from and collaborate with you! 
 Any pairwise dependence measure, provided it is accompanied by a published research paper, typically falls within the scope for consideration in the 
 _pyspi_ library.
-You can access our SPI wishlist via the [projects tab](https://github.com/DynamicsAndNeuralSystems/pyspi/projects) in this repo to open a request.
+To request an SPI, please [open an issue](https://github.com/DynamicsAndNeuralSystems/pyspi/issues) with a link to the paper that describes it.
 
 ## Acknowledgement 👍
 
@@ -255,7 +254,7 @@ Note that [preprint](https://arxiv.org/abs/2201.11941) and [free-to-read](https:
 ## Other highly comparative toolboxes 🧰
 If you are interested in trying other highly comparative toolboxes like _pyspi_, see the below list:
 
-- [_hctsa_](https://github.com/benfulcher/hctsa), the _highly comparative time-series analysis_ toolkit, computes over 7000 time-series features from univariate time series.
+- [_hctsa_](https://github.com/benfulcher/hctsa), the _highly comparative time-series analysis_ toolkit, computes 6392 time-series features from univariate time series.
 - [_hcga_](https://github.com/barahona-research-group/hcga), a _highly comparative graph analysis_ toolkit, computes several thousands of graph features directly from any given network.
 - [_pyhctsa_](https://github.com/DynamicsAndNeuralSystems/pyhctsa), a python implementation of the _highly comparative time-series analysis_ toolkit.
 
