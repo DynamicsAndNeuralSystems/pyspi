@@ -521,7 +521,6 @@
         embedding_dimension: 1
       - statistic: convergence
         embedding_dimension: 10
-      - statistic: slope
 
   # Lagged convergent cross-mapping
   LaggedConvergentCrossMapping:

@@ -501,9 +501,10 @@ def test_full_config_bundles_the_new_identifiers():
 
     calc = Calculator(config="full")
     new = {"ccm_E-None_convergence", "ccm_E-1_convergence",
-           "ccm_E-10_convergence", "ccm_E-None_slope",
+           "ccm_E-10_convergence",
            "lccm_E-None_k-5_tp", "lccm_E-None_k-5_skill"}
     assert new <= set(calc.spis)
+    assert "ccm_E-None_slope" not in calc.spis   # available, not bundled
     for ident in new:
         spi = calc.spis[ident]
         assert spi.issigned()
