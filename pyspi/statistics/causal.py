@@ -31,14 +31,19 @@ def _anm_scores(x, ys):
     inputs (Rasmussen & Williams 2006, Alg. 2.1), computed with the same
     operations as scikit-learn. The kernel matrix and its Cholesky factor
     depend on the cause x alone, so they are built once and shared by every
-    effect.
+    effect. A pair with a constant cause or effect is NaN.
     """
+    if np.ptp(x) == 0:
+        return [np.nan] * len(ys)
     K = _ANM_KERNEL(x)
     K[np.diag_indices_from(K)] += _ANM_ALPHA
     L = cholesky(K, lower=True, check_finite=False)
     K_trans = _ANM_KERNEL(x, x)
     scores = []
     for y in ys:
+        if np.ptp(y) == 0:
+            scores.append(np.nan)
+            continue
         y_predict = K_trans @ cho_solve((L, True), y, check_finite=False)
         scores.append(normalized_hsic(y_predict.reshape(-1, 1) - y, x))
     return scores
@@ -50,7 +55,7 @@ class AdditiveNoiseModel(Directed, Unsigned):
     Lower is stronger evidence for the row causing the column (a small HSIC
     means the residual of the column regressed on the row is independent of
     the row). ``cds`` and ``reci`` share this polarity; for ``ccm`` and
-    ``igci`` higher means more.
+    ``igci`` higher means more. NaN for a pair involving a constant series.
     """
 
     name = "Additive noise model"
@@ -85,7 +90,8 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
     """CDS score for row (cause) -> column (effect); lower is stronger evidence.
 
     See ``AdditiveNoiseModel`` for the polarity convention across the causal
-    module.
+    module. NaN for a pair involving a constant series, and when fewer than
+    two x-bins can be compared.
     """
 
     name = "Conditional distribution similarity statistic"

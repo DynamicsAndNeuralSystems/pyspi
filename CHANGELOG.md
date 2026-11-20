@@ -221,6 +221,7 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
   The significant coherence run is now thinned to one point per multitaper bandwidth, and the fit leaves out the real-valued bins; at T=100 `gd_*` is often undefined (NaN).
 - **`gwtau` left the start of the trajectory out of its distance vector** (Kravtsova et al. 2023); values change by the constant factor `sqrt((T - 1) / T)`.
 - **`cds` returned 0, its strongest evidence for `i -> j`, when undefined**; it now returns NaN.
+  `anm`, `cds` and `xcorr_*` are NaN for a pair involving a constant series, where they gave 0 (read as independence, or no cross-correlation) or an arbitrary number.
 - **`pec`, `pec_log`, `pec_orth` and `pec_orth_log` are now labelled signed** (a correlation in [-1, 1]), and `Cointegration` is labelled linear.
 - **Smaller fixes with no value changes:** `Covariance`/`Precision` return a copy of the cached array; `SpearmanR` and `LaggedCorrelation(spearman)` handle a constant series in any position; `LaggedCorrelation.bivariate` returns NaN when either direction is undefined, as `multivariate` does; `CrossmapEntropy` and `StochasticInteraction` reject non-positive `history_length`/`delay`; the wavelet PSI frequency floor is in Hz; spectral classes reject a `statistic` they cannot apply.
 
