@@ -177,18 +177,6 @@
         statistic: max
         squared: True
         
-  # Gromov-Wasserstein distance (GW_tau)
-  GromovWasserstainTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
-
 # Causal inference statistics
 .statistics.causal:
   # Additive noise model

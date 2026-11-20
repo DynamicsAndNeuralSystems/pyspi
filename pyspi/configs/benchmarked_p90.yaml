@@ -342,18 +342,6 @@
       statistic: max
       squared: true
 
-  GromovWasserstainTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
-
-
 .statistics.causal:
   ConditionalDistributionSimilarity:
     labels:
