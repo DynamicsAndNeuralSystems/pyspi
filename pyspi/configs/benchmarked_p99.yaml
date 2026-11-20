@@ -1205,20 +1205,6 @@
 
 
 .statistics.misc:
-  LinearModel:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-    - model: Ridge
-    - model: SGDRegressor
-    - model: BayesianRidge
-
   GPModel:
     labels:
       - directed
