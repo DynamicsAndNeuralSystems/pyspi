@@ -288,29 +288,14 @@
       - M14
     dependencies:
     configs:
-    - mode: euclidean
-      statistic: max
     - mode: dtw
       statistic: corr
       labels:
       - M09
-    - mode: dtw
-      statistic: max
     - mode: sgddtw
       statistic: corr
       labels:
       - M09
-    - mode: sgddtw
-      statistic: max
-    - mode: euclidean
-      statistic: max
-      squared: true
-    - mode: dtw
-      statistic: max
-      squared: true
-    - mode: sgddtw
-      statistic: max
-      squared: true
 
   GromovWasserstainTau:
     labels:
