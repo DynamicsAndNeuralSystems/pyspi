@@ -111,7 +111,8 @@ class Cointegration(Directed, Unsigned):
                 self.labels.append("inverted")
         if method == "johansen":
             self.identifier += (
-                f"_{method}_{statistic}_order-{det_order}_ardiff-{k_ar_diff}"
+                f"_{method}_{statistic}_order-{fmt_param(det_order)}"
+                f"_ardiff-{fmt_param(k_ar_diff)}"
             )
             self._det_order = det_order
             self._k_ar_diff = k_ar_diff
@@ -120,7 +121,8 @@ class Cointegration(Directed, Unsigned):
             self._maxlag = maxlag
             self._trend = trend
             self.identifier += (
-                f"_{method}_{statistic}_trend-{trend}_autolag-{autolag}_maxlag-{maxlag}"
+                f"_{method}_{statistic}_trend-{trend}_autolag-{autolag}"
+                f"_maxlag-{fmt_param(maxlag)}"
             )
 
     @property
@@ -568,7 +570,7 @@ class EdgeTimeSeries(Undirected, Signed):
             if not 0.0 < frac < 1.0:
                 raise ValueError(f"frac must lie in (0, 1), got {frac!r}.")
             self._frac = frac
-            self.identifier += "_f-" + f"{frac:g}".replace(".", "-")
+            self.identifier += "_f-" + fmt_param(frac).replace(".", "-")
         elif frac is not None:
             raise ValueError(
                 f"frac applies only to statistic='topshare', not {statistic!r}."

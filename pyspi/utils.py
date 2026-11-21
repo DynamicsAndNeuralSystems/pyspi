@@ -413,8 +413,12 @@ def fmt_param(x):
     Format a parameter value for an SPI identifier, losslessly.
 
     Identifiers name table columns and checkpoint files, so two different
-    values must never format alike. A float is formatted with ``repr``, the
-    shortest string that round-trips; anything else with ``str``.
+    values must never format alike, and two equal ones must always format
+    alike. A numpy scalar is formatted as the equal Python number, so
+    ``np.float64(0.25)`` gives ``0.25`` and ``np.True_`` gives ``True``. An
+    integral float is formatted as the integer, so ``1.0`` gives ``1``, as
+    ``1`` does. Any other float is formatted with ``repr``, the shortest
+    string that round-trips; anything else with ``str``.
 
     Parameters
     ----------
@@ -426,8 +430,16 @@ def fmt_param(x):
     str
         The formatted value.
     """
+    if isinstance(x, (bool, np.bool_)):
+        return str(bool(x))
+    if isinstance(x, np.integer):
+        x = int(x)
+    elif isinstance(x, np.floating):
+        x = float(x)
     if isinstance(x, float):
         if x != x or x in (float("inf"), float("-inf")):
             return str(x)
+        if x.is_integer():
+            return str(int(x))
         return repr(x)
     return str(x)
