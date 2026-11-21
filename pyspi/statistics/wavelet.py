@@ -1,14 +1,7 @@
-from mne_connectivity import spectral_connectivity_epochs, phase_slope_index
-from pyspi.base import (
-    Directed,
-    Undirected,
-    Unsigned,
-    parse_bivariate,
-    parse_multivariate,
-)
+from mne_connectivity import phase_slope_index
+from pyspi.base import Undirected, Unsigned, parse_multivariate
 import numpy as np
 from pyspi.utils import fmt_param
-from pyspi.statistics.spectral import _circular_nanmean
 
 
 class mne(Unsigned):
@@ -16,7 +9,7 @@ class mne(Unsigned):
         if fmax is None:
             fmax = fs / 2
 
-        # fs is passed to mne as sfreq and sets the frequency floor below.
+        # fs is passed to mne as sfreq and sets PhaseSlopeIndex's frequency floor.
         self._fs = fs
         self._fmin = fmin
         self._fmax = fmax
@@ -36,182 +29,6 @@ class mne(Unsigned):
             )
         )
         self.identifier += paramstr
-
-    @property
-    def measure(self):
-        try:
-            return self._measure
-        except AttributeError:
-            raise AttributeError(f"Include measure for {self.identifier}")
-
-    def _get_cache(self, data):
-        try:
-            conn, freq = data.mne[(self.measure, self._fs)]
-        except (KeyError, AttributeError):
-            z = np.moveaxis(data.to_numpy(), 2, 0)
-
-            cwt_freqs = np.linspace(0.2, 0.5, 125)
-            cwt_n_cycles = cwt_freqs / 7.0
-            con = spectral_connectivity_epochs(
-                data=z,
-                method=self.measure,
-                mode="cwt_morlet",
-                sfreq=self._fs,
-                mt_adaptive=True,
-                fmin=5 * self._fs / data.n_observations,
-                fmax=self._fs / 2,
-                cwt_freqs=cwt_freqs,
-                cwt_n_cycles=cwt_n_cycles,
-                verbose=False,
-            )
-            conn = con.get_data(output="dense")
-            freq = np.asarray(con.freqs)
-
-            try:
-                data.mne[(self.measure, self._fs)] = (conn, freq)
-            except AttributeError:
-                data.mne = {(self.measure, self._fs): (conn, freq)}
-
-        freq_id = np.where((freq >= self._fmin) * (freq <= self._fmax))[0]
-
-        return conn, freq_id
-
-    @parse_multivariate
-    def multivariate(self, data):
-        adj_freq, freq_id = self._get_cache(data)
-        try:
-            adj = self._statfn(adj_freq[..., freq_id, :], axis=(2, 3))
-        except np.AxisError:
-            adj = self._statfn(adj_freq[..., freq_id], axis=2)
-        ui = np.triu_indices(data.n_processes, 1)
-        adj[ui] = adj.T[ui]
-        np.fill_diagonal(adj, np.nan)
-        return adj
-
-
-class CoherenceMagnitude(mne, Undirected):
-    name = "Coherence magnitude (wavelet)"
-    labels = ["unsigned", "wavelet", "undirected"]
-
-    def __init__(self, **kwargs):
-        self.identifier = "cohmag"
-        self._measure = "coh"
-        super().__init__(**kwargs)
-
-
-class CoherencePhase(mne, Directed):
-    name = "Coherence phase (wavelet)"
-    labels = ["signed", "wavelet", "antisymmetric"]
-
-    def __init__(self, **kwargs):
-        if kwargs.get("statistic", "mean") != "mean":
-            raise ValueError(
-                "CoherencePhase supports only statistic='mean'. Wrapped phase "
-                "has no branch-cut-independent ordinary maximum; use a "
-                "different circular summary with an explicit interpretation."
-            )
-        self.identifier = "phase"
-        self._measure = "cohy"
-        super().__init__(**kwargs)
-        self.labels = ["signed", "wavelet", "antisymmetric"]
-
-    def issigned(self):
-        return True
-
-    @parse_multivariate
-    def multivariate(self, data):
-        """Reduce the complete signed phase spectrum over the selected band.
-
-        MNE returns one triangle.  Coherency phase obeys
-        ``phase(i, j) = -phase(j, i)``, so reconstruct that triangle before
-        reducing. Wrapped angles are combined with a circular mean.
-        """
-        adj_freq, freq_id = self._get_cache(data)
-        phase = np.angle(adj_freq).copy()
-        ui = np.triu_indices(data.n_processes, 1)
-        phase[ui[0], ui[1], ...] = -phase[ui[1], ui[0], ...]
-        if phase.ndim == 4:
-            adj = _circular_nanmean(phase[..., freq_id, :], axis=(2, 3))
-        elif phase.ndim == 3:
-            adj = _circular_nanmean(phase[..., freq_id], axis=2)
-        else:
-            raise ValueError(
-                f"Expected a 3D or 4D wavelet connectivity tensor, got "
-                f"shape {phase.shape}."
-            )
-        adj[ui] = -adj.T[ui]
-        np.fill_diagonal(adj, np.nan)
-        return adj
-
-
-class ImaginaryCoherence(mne, Undirected):
-    name = "Imaginary coherency (wavelet)"
-    labels = ["unsigned", "wavelet", "undirected"]
-
-    def __init__(self, **kwargs):
-        self.identifier = "icoh"
-        self._measure = "imcoh"
-        super().__init__(**kwargs)
-
-
-class PhaseLockingValue(mne, Undirected):
-    name = "Phase locking value (wavelet)"
-    labels = ["unsigned", "wavelet", "undirected"]
-
-    def __init__(self, **kwargs):
-        self.identifier = "plv"
-        self._measure = "plv"
-        super().__init__(**kwargs)
-
-
-class PairwisePhaseConsistency(mne, Undirected):
-    name = "Pairwise phase consistency (wavelet)"
-    labels = ["unsigned", "wavelet", "undirected"]
-
-    def __init__(self, **kwargs):
-        self.identifier = "ppc"
-        self._measure = "ppc"
-        super().__init__(**kwargs)
-
-
-class PhaseLagIndex(mne, Undirected):
-    name = "Phase lag index (wavelet)"
-    labels = ["unsigned", "wavelet", "undirected"]
-
-    def __init__(self, **kwargs):
-        self.identifier = "pli"
-        self._measure = "pli"
-        super().__init__(**kwargs)
-
-
-class DebiasedSquaredWeightedPhaseLagIndex(mne, Undirected):
-    name = "Debiased squared phase lag index (wavelet)"
-    labels = ["unsigned", "wavelet", "undirected"]
-
-    def __init__(self, **kwargs):
-        self.identifier = "dspli"
-        self._measure = "pli2_unbiased"
-        super().__init__(**kwargs)
-
-
-class weighted_PhaseLagIndex(mne, Undirected):
-    name = "Weighted squared phase lag index (wavelet)"
-    labels = ["unsigned", "wavelet", "undirected"]
-
-    def __init__(self, **kwargs):
-        self.identifier = "wspli"
-        self._measure = "wpli"
-        super().__init__(**kwargs)
-
-
-class debiased_weighted_squared_PhaseLagIndex(mne, Undirected):
-    name = "Debiased weighted squared phase lag index (wavelet)"
-    labels = ["unsigned", "wavelet", "undirected"]
-
-    def __init__(self, **kwargs):
-        self.identifier = "dwspli"
-        self._measure = "wpli2_debiased"
-        super().__init__(**kwargs)
 
 
 class PhaseSlopeIndex(mne, Undirected):

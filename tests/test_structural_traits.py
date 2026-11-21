@@ -222,69 +222,6 @@ def test_circular_nanmean_refuses_unresolved_resultants_and_preserves_wraparound
     assert got == pytest.approx(expected)
 
 
-def test_wavelet_coherence_phase_uses_a_circular_mean_and_negates_orientation():
-    from pyspi.statistics.wavelet import CoherencePhase
-
-    phase = np.zeros((3, 3, 3))
-    phase[1, 0] = [np.pi - 0.1, -np.pi + 0.1, np.pi - 0.05]
-    phase[2, 0] = [0.1, 0.3, 0.5]
-    phase[2, 1] = [-0.4, -0.2, 0.6]
-    lower = np.exp(1j * phase)
-    lower[np.triu_indices(3, 1)] = 0
-    freq = np.array([0.1, 0.2, 0.3])
-
-    spi = CoherencePhase(statistic="mean", fmin=0, fmax=0.5)
-    spi._get_cache = lambda data: (lower, np.arange(freq.size))
-    got = spi.multivariate(Data(data=np.ones((3, 8)), dim_order="ps",
-                                zscore=False))
-
-    for i, j in ((1, 0), (2, 0), (2, 1)):
-        expected = np.angle(np.mean(np.exp(1j * phase[i, j])))
-        assert got[i, j] == pytest.approx(expected)
-        assert got[j, i] == pytest.approx(-expected)
-    assert set(spi.labels) & {"directed", "undirected", "antisymmetric",
-                              "asymmetric"} == {"antisymmetric"}
-    assert "signed" in spi.labels and spi.issigned()
-
-
-def test_wavelet_coherence_phase_is_process_permutation_covariant():
-    from pyspi.statistics.wavelet import CoherencePhase
-
-    full = np.zeros((3, 3, 3))
-    full[1, 0] = [-0.7, 0.2, 0.4]
-    full[2, 0] = [0.1, 0.3, 0.5]
-    full[2, 1] = [-0.4, -0.2, 0.6]
-    full = full - full.transpose(1, 0, 2)
-    data = Data(data=np.ones((3, 8)), dim_order="ps", zscore=False)
-
-    def calculate(order):
-        phase = full[np.ix_(order, order, np.arange(3))]
-        lower = np.exp(1j * phase)
-        lower[np.triu_indices(3, 1)] = 0
-        spi = CoherencePhase(statistic="mean", fmin=0, fmax=0.5)
-        spi._get_cache = lambda unused: (lower, np.arange(3))
-        return spi.multivariate(data)
-
-    order = [2, 0, 1]
-    base = calculate([0, 1, 2])
-    moved = calculate(order)
-    assert np.allclose(base[np.ix_(order, order)], moved, equal_nan=True)
-
-
-def test_wavelet_coherence_phase_refuses_exact_antiphase():
-    from pyspi.statistics.wavelet import CoherencePhase
-
-    phase = np.zeros((2, 2, 3))
-    phase[1, 0] = np.pi
-    lower = np.exp(1j * phase)
-    lower[np.triu_indices(2, 1)] = 0
-    spi = CoherencePhase(statistic="mean", fmin=0, fmax=0.5)
-    spi._get_cache = lambda unused: (lower, np.arange(3))
-    got = spi.multivariate(Data(data=np.ones((2, 8)), dim_order="ps",
-                                zscore=False))
-    assert np.isnan(got[0, 1]) and np.isnan(got[1, 0])
-
-
 def test_spectral_coherence_phase_uses_a_circular_mean_and_is_permutation_covariant():
     from pyspi.statistics.spectral import CoherencePhase
 
@@ -354,12 +291,10 @@ def test_spectral_coherence_phase_actual_backend_refuses_exact_antiphase():
 
 
 def test_coherence_phase_refuses_branch_dependent_maximum():
-    from pyspi.statistics.spectral import CoherencePhase as SpectralPhase
-    from pyspi.statistics.wavelet import CoherencePhase as WaveletPhase
+    from pyspi.statistics.spectral import CoherencePhase
 
-    for cls in (SpectralPhase, WaveletPhase):
-        with pytest.raises(ValueError, match="branch-cut-independent ordinary maximum"):
-            cls(statistic="max")
+    with pytest.raises(ValueError, match="branch-cut-independent ordinary maximum"):
+        CoherencePhase(statistic="max")
 
 @pytest.mark.parametrize("statistic", ["mean", "max"])
 def test_wavelet_psi_is_permutation_invariant(statistic):
