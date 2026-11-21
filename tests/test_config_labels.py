@@ -355,7 +355,7 @@ def test_unbundled_timing_statistics():
         return set(spi.labels) & {"timing", "profile"}
 
     assert flags(GroupDelay(statistic="delay")) == {"timing"}
-    assert flags(GroupDelay(statistic="slope")) == set()
+    assert flags(GroupDelay(statistic="slope")) == {"timing"}
     assert flags(GroupDelay(statistic="rvalue")) == set()
     assert flags(Barycenter(statistic="max_time")) == {"timing"}
     for statistic in ("mean", "max", "corr"):

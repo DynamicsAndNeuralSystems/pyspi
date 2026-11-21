@@ -1465,9 +1465,8 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
                 if l not in ("undirected", "directed")
             ] + ["antisymmetric", "signed"]
             self.issigned = lambda: True
-            # The delay is a time offset.
-            if self._statistic == "delay":
-                self.labels.append("timing")
+            # Both are the same time offset, as a delay or as a phase slope.
+            self.labels.append("timing")
         else:
             # |r| is symmetric by construction and non-negative, so it is
             # neither directed nor signed.
