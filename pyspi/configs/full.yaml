@@ -15,39 +15,6 @@
       - estimator: GraphicalLasso
       - estimator: MinCovDet
 
-  # Precision
-  Precision:
-    labels:
-      - undirected
-      - linear
-      - signed
-      - multivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-      - estimator: EmpiricalCovariance
-      - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
-      - estimator: LedoitWolf
-      - estimator: MinCovDet
-      - estimator: OAS
-      - estimator: ShrunkCovariance
-      - estimator: EmpiricalCovariance
-        squared: True
-      - estimator: GraphicalLasso
-        squared: True
-      - estimator: GraphicalLassoCV
-        squared: True
-      - estimator: LedoitWolf
-        squared: True
-      - estimator: MinCovDet
-        squared: True
-      - estimator: OAS
-        squared: True
-      - estimator: ShrunkCovariance
-        squared: True
-
   # Partial correlation
   PartialCorrelation:
     labels:
@@ -401,18 +368,6 @@
         statistic: max
         squared: True
 
-  # Gromov-Wasserstein distance (GW_tau)
-  GromovWasserstainTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
-
 # Causal inference statistics
 .statistics.causal:
   # Additive noise model
@@ -598,6 +553,10 @@
       - estimator: kernel
         kernel_width: 0.25
 
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
+
   # Time-lagged mutual information
   TimeLaggedMutualInfo:
     labels:
@@ -619,6 +578,10 @@
 
       - estimator: kernel
         kernel_width: 0.25
+
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
 
   # Transfer entropy
   TransferEntropy:
@@ -663,6 +626,13 @@
       - estimator: kernel
         kernel_width: 0.25
         k_history: 1
+        labels:
+          - M14
+
+      - estimator: kernel
+        kernel_width: 0.25
+        k_history: 1
+        dyn_corr_excl: AUTO
         labels:
           - M14
 
