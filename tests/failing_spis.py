@@ -9,7 +9,7 @@ part of the shipped SPI set.
 """
 import numpy as np
 
-from pyspi.base import Directed, Undirected, Unsigned, parse_bivariate
+from pyspi.base import Directed, NotAppropriate, Undirected, Unsigned, parse_bivariate
 
 
 class AlwaysRaises(Undirected, Unsigned):
@@ -144,3 +144,59 @@ class OnePairRaisesUndirected(Undirected, Unsigned):
         if (i, j) == self._bad:
             raise ValueError(f"pair {self._bad} is undefined")
         return float(10 * min(i, j) + max(i, j))
+
+
+# --------------------------------------------------------------------------
+# SPIs whose input cannot support the estimate (tests/test_not_appropriate.py,
+# tests/not_appropriate_config.yaml): NAN with a reason, not ERROR.
+# --------------------------------------------------------------------------
+
+class NeverAppropriate(Directed, Unsigned):
+    """``multivariate`` raises ``NotAppropriate`` for the whole matrix."""
+
+    name = "NeverAppropriate"
+    identifier = "never_appropriate"
+    labels = ["test"]
+
+    def multivariate(self, data):
+        raise NotAppropriate(f"needs more than {data.n_observations} samples")
+
+
+class NoPairAppropriate(Undirected, Unsigned):
+    """``bivariate`` raises ``NotAppropriate`` for every pair."""
+
+    name = "NoPairAppropriate"
+    identifier = "no_pair_appropriate"
+    labels = ["test"]
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        raise NotAppropriate("the series are too short for this lag")
+
+
+class OnePairNotAppropriate(Directed, Unsigned):
+    """``bivariate`` raises ``NotAppropriate`` for the ordered pair (0, 1) only."""
+
+    name = "OnePairNotAppropriate"
+    identifier = "one_pair_not_appropriate"
+    labels = ["test"]
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        if (i, j) == (0, 1):
+            raise NotAppropriate("pair (0, 1) has tied values")
+        return float(10 * i + j)
+
+
+class MixedPairFailures(Directed, Unsigned):
+    """Every pair raises: (0, 1) a ``RuntimeError``, the rest ``NotAppropriate``."""
+
+    name = "MixedPairFailures"
+    identifier = "mixed_pair_failures"
+    labels = ["test"]
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        if (i, j) == (0, 1):
+            raise RuntimeError("deliberate failure of pair (0, 1)")
+        raise NotAppropriate("the series are too short for this lag")

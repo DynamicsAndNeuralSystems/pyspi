@@ -296,8 +296,9 @@ class SPIResult(NamedTuple):
     ``values`` is the ``(M, M)`` float64 matrix with NaN in every cell whose
     ``quality`` code is not ``Quality.GOOD``. ``err`` is the SPI-level error
     (``None`` on success). ``pair_errors`` lists ``(i, j, message)`` for the
-    cells labelled ``Quality.ERROR`` because their pair raised inside
-    ``fill_pairwise``. ``warns`` are formatted warning strings, returned rather
+    cells whose pair raised inside ``fill_pairwise``: labelled
+    ``Quality.ERROR``, or ``Quality.NAN`` for a message starting
+    ``"NotAppropriate: "``. ``warns`` are formatted warning strings, returned rather
     than emitted so the parallel path can re-emit them in the parent.
     """
     values: np.ndarray
@@ -315,6 +316,15 @@ class SPIResult(NamedTuple):
 NO_FINITE_VALUES = "ValueError: SPI returned no finite off-diagonal values"
 _VALUE_ERRORS = (NO_FINITE_VALUES,
                  "ValueError: checkpoint contains no finite values")
+# The prefix of the message of an SPI or pair that raised
+# `pyspi.base.NotAppropriate`: the input cannot support the estimate, so its
+# cells are NAN, not ERROR, and the message is the reason.
+NOT_APPROPRIATE = "NotAppropriate: "
+
+
+def describes_values(msg) -> bool:
+    """Whether an SPI-level message describes undefined values, not a failure."""
+    return msg in _VALUE_ERRORS or str(msg).startswith(NOT_APPROPRIATE)
 
 
 def failed_quality(M: int) -> np.ndarray:
@@ -329,9 +339,9 @@ def derive_quality(values, err) -> np.ndarray:
     Quality codes for a stored result saved without them (a file or checkpoint).
 
     Codes follow the stored values (NaN, +/-Inf, finite), and the diagonal is
-    NaN. If the SPI carries an error that is not one of the value-describing
-    ones in ``_VALUE_ERRORS``, its computation failed, and every off-diagonal
-    cell that is not a finite value is ERROR. Results without codes recorded
+    NaN. If the SPI carries an error that does not describe its values (one
+    of ``_VALUE_ERRORS`` or a ``NotAppropriate`` reason), its computation
+    failed, and every off-diagonal cell that is not a finite value is ERROR. Results without codes recorded
     an Inf anywhere as a failure of the whole SPI, so for them this is exact.
     Which NaN cells were failed pairs inside ``fill_pairwise`` cannot be
     recovered: those read as NaN.
@@ -340,7 +350,7 @@ def derive_quality(values, err) -> np.ndarray:
     _, q = quality_from_values(values)
     if q.ndim == 2 and q.shape[0] == q.shape[1]:
         np.fill_diagonal(q, Quality.NAN)
-        if err is not None and err not in _VALUE_ERRORS:
+        if err is not None and not describes_values(err):
             off = ~np.eye(q.shape[0], dtype=bool)
             q[off & (q != Quality.GOOD)] = Quality.ERROR
     return q
@@ -356,20 +366,24 @@ def execute_spi(spi, data, key, M) -> SPIResult:
     Each cell's code (``pyspi.quality.Quality``) is set as follows:
 
     - The SPI raised, or returned the wrong shape: every off-diagonal cell is
-      ERROR, and ``err`` holds the message.
+      ERROR, and ``err`` holds the message. If it raised
+      ``pyspi.base.NotAppropriate`` (the input cannot support the estimate),
+      every cell is NAN instead, and ``err`` is ``"NotAppropriate: <reason>"``.
     - Otherwise the raw output is classified *before* it is cast to float, so a
       cell is GOOD, NAN, INF, NEG_INF or COMPLEX (a non-zero imaginary part).
       Only GOOD cells keep their value; the others are stored as NaN. An Inf
       does not fail the whole SPI: the finite cells are kept and a warning
       names the count.
     - A cell whose pair raised inside ``fill_pairwise``, and which the SPI left
-      NaN, is ERROR, with its message in ``pair_errors``.
+      NaN, is ERROR, with its message in ``pair_errors``; if the pair raised
+      ``NotAppropriate`` it stays NAN, and its reason, starting
+      ``"NotAppropriate: "``, is in ``pair_errors`` all the same.
     - The diagonal is NAN: a self-pair is not appropriate by construction.
 
     If no off-diagonal cell is GOOD, ``err`` is set to ``NO_FINITE_VALUES`` but
     the cells keep their codes (NAN, INF, ...).
     """
-    from .base import collect_pair_failures
+    from .base import NotAppropriate, collect_pair_failures
 
     t0 = time.perf_counter()
     err = None
@@ -394,7 +408,8 @@ def execute_spi(spi, data, key, M) -> SPIResult:
             if i != j and 0 <= i < M and 0 <= j < M and Q[i, j] == Quality.NAN:
                 cells[(i, j)] = msg
         for (i, j), msg in sorted(cells.items()):
-            Q[i, j] = Quality.ERROR
+            if not msg.startswith(NOT_APPROPRIATE):
+                Q[i, j] = Quality.ERROR
             pair_errors.append((i, j, msg))
 
         np.fill_diagonal(S, np.nan)
@@ -414,6 +429,11 @@ def execute_spi(spi, data, key, M) -> SPIResult:
                     counts = ", ".join(f"{n} {k}" for k, n in special.items())
                     warns.append(f"UserWarning: {counts} value(s) stored as NaN; "
                                  f"see Calculator.quality")
+    except NotAppropriate as e:
+        S = np.full((M, M), np.nan)
+        Q = np.full((M, M), Quality.NAN, dtype=np.uint8)
+        pair_errors = []
+        err = f"{NOT_APPROPRIATE}{e}"
     except Exception as e:
         S = np.full((M, M), np.nan)
         Q = failed_quality(M)
@@ -642,7 +662,12 @@ def _read_checkpoint_quality(checkpoint_dir: Path, key, arr, err, M):
 
 
 def _read_checkpoint_pairs(checkpoint_dir: Path, key, quality):
-    """Pair failures for ``key``, kept only for cells still labelled ERROR."""
+    """
+    Pair failures for ``key``, kept only for cells whose code still fits them.
+
+    A failure is kept for a cell labelled ERROR, and a ``NotAppropriate``
+    reason for a cell labelled NAN.
+    """
     path = checkpoint_dir / f"{key}.pairs.json"
     if not path.exists():
         return []
@@ -652,7 +677,9 @@ def _read_checkpoint_pairs(checkpoint_dir: Path, key, quality):
         return []
     M = quality.shape[0]
     return [(i, j, m) for i, j, m in pairs
-            if 0 <= i < M and 0 <= j < M and quality[i, j] == Quality.ERROR]
+            if 0 <= i < M and 0 <= j < M
+            and quality[i, j] == (Quality.NAN if m.startswith(NOT_APPROPRIATE)
+                                  else Quality.ERROR)]
 
 
 def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool = True):

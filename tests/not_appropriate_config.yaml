@@ -1,0 +1,29 @@
+# SPIs that refuse their input as not appropriate, one that fails, and one
+# healthy SPI. Used by tests/test_not_appropriate.py.
+failing_spis:
+  NeverAppropriate:
+    labels: [test]
+    configs:
+
+  NoPairAppropriate:
+    labels: [test]
+    configs:
+
+  OnePairNotAppropriate:
+    labels: [test]
+    configs:
+
+  MixedPairFailures:
+    labels: [test]
+    configs:
+
+  AlwaysRaises:
+    labels: [test]
+    configs:
+      - message: deliberate test failure
+
+.statistics.basic:
+  Covariance:
+    labels: [undirected, linear, signed]
+    configs:
+      - estimator: EmpiricalCovariance
