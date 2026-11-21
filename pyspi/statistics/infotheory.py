@@ -2,8 +2,8 @@
 
 Attribution. The Kraskov-Stoegbauer-Grassberger (KSG), box-kernel, Gaussian
 and symbolic estimators of mutual information and transfer entropy in this
-module, and the Kozachenko-Leonenko entropy estimator, follow, and were
-validated against, the Java Information Dynamics Toolkit (JIDT):
+module, and the Kozachenko-Leonenko entropy estimator, follow the Java
+Information Dynamics Toolkit (JIDT):
 
     Lizier, J. T. (2014). JIDT: An information-theoretic toolkit for studying
     the dynamics of complex systems. Frontiers in Robotics and AI 1:11.
@@ -14,7 +14,10 @@ The code is an independent NumPy implementation and needs no Java runtime,
 but the estimator definitions, parameter names and default behaviours
 (k_HISTORY, DYN_CORR_EXCL, KERNEL_WIDTH, AUTO_EMBED_METHOD, ...) derive from
 JIDT, whose copyright notice is retained in ``pyspi/lib/LICENSE-jidt.txt``.
-It was validated against JIDT 1.6.1. Known deviations from JIDT: kernel MI,
+KSG MI and TE, Gaussian MI and TE, kernel MI and TE, and symbolic TE are
+checked against values computed by JIDT 1.6.1; the Kozachenko-Leonenko
+estimator is checked against the closed-form entropy and mutual information
+of Gaussian variables. Known deviations from JIDT: kernel MI,
 TLMI and TE exclude the point itself and a Theiler window w, that is JIDT's
 DYN_CORR_EXCL = w + 1 (|j - i| <= w, as for KSG), where JIDT's default counts
 the point itself; Gaussian estimators carry a deterministic 1e-8 relative

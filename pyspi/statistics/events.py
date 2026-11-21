@@ -142,8 +142,9 @@ class EventSynchronisation(Directed):
     it lies exactly midway between two events of the other series, at
     distance ``tau`` from both; each such coincidence counts 1/2 rather than 1
     (the double-counting correction of [2]_, as in pyunicorn), so ``Q`` cannot
-    exceed 1. Such ties are common with integer sample times, so ``Q`` differs
-    slightly from an implementation of [1]_ without the correction.
+    exceed 1. Such ties are common with integer sample times, and where they
+    are, ``Q`` can differ substantially from an implementation of [1]_
+    without the correction.
 
     **Statistics** (``A[i, j]`` with row ``i`` = ``x`` the source and column
     ``j`` = ``y`` the target, the package's directed convention) are

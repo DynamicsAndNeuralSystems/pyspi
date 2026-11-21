@@ -1033,12 +1033,14 @@ class Barycenter(Undirected, Signed):
     ``2 mean(b^2) / e - 1``, where ``e`` is the average of ``mean(x_i^2)``
     and ``mean(x_j^2)``. For the Euclidean barycenter of two zero-mean series
     this is ``2 cov / (var_i + var_j)``, which is Pearson's r when the two
-    variances are equal, as after pyspi's default z-scoring. For the DTW
-    geometries it is the share of the pair's amplitude that survives
-    averaging after optimal alignment, in ``[-1, 1]`` (soft-DTW smooths the
-    barycenter, so identical series give less than 1). The barycenter of two
-    zero-mean series has mean near 0, so ``corr`` is more informative than
-    ``mean``.
+    variances are equal, as after pyspi's default z-scoring, and lies in
+    ``[-1, 1]``. For the DTW geometries it is the share of the pair's
+    amplitude that survives averaging after optimal alignment (soft-DTW
+    smooths the barycenter, so identical series give less than 1). It is at
+    least -1 but not bounded above by 1: a warping path can repeat
+    high-amplitude samples, so ``mean(b^2)`` can exceed ``e``, as for series
+    with sparse large spikes. The barycenter of two zero-mean series has
+    mean near 0, so ``corr`` is more informative than ``mean``.
 
     ``'mean'`` and ``'max'`` are the mean and maximum of ``b`` (of ``b^2``
     with ``squared=True``), and ``'max_time'`` is the index of the maximum.
