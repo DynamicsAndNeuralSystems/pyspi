@@ -178,6 +178,12 @@ class KLEntropyCalculator:
     H = psi(N) - psi(1) + log(c_d) + (d/N) * sum(log(eps_i)), in nats, with
     the L2 norm and k = 1 as in JIDT. Same interface as JIDT's
     EntropyCalculatorMultiVariateKozachenko.
+
+    A repeated observation has a nearest-neighbour distance of zero, whose
+    logarithm is -inf, so tied data raise ``NotAppropriate``. Unlike KSG,
+    which uses neighbour counts and so can break ties with a tiny jitter,
+    this estimator uses the distances themselves: a jitter (JIDT dithers)
+    would set the estimate by its own scale.
     """
     def __init__(self):
         self._d = None
@@ -209,7 +215,8 @@ class KLEntropyCalculator:
                 f"Kozachenko entropy is undefined for tied observations: "
                 f"{n_tied} of {len(eps)} points have a duplicate (zero "
                 f"nearest-neighbour distance). The data is quantised or has "
-                f"repeated values; dither it or use estimator='gaussian'."
+                f"repeated values, and a jitter would set the estimate by its "
+                f"own size; use estimator='gaussian' or 'kernel'."
             )
         log_cd = (d / 2.0) * np.log(np.pi) - gammaln(d / 2.0 + 1)
         return float(
@@ -1537,9 +1544,13 @@ class JointEntropy(InfoTheoryBase, Undirected):
     appropriate (``NotAppropriate``, NaN in a Calculator table) for two
     samples or fewer, where that covariance is singular.
     The ``kozachenko`` estimate is the Kozachenko-Leonenko nearest-neighbour
-    estimator [1]_ (k = 1, Euclidean norm), which is undefined for repeated
-    values. The ``kernel`` estimate counts neighbours in a box kernel, as in
-    JIDT [2]_.
+    estimator [1]_ (k = 1, Euclidean norm). The ``kernel`` estimate counts
+    neighbours in a box kernel, as in JIDT [2]_.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -1595,9 +1606,13 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
     appropriate (``NotAppropriate``, NaN in a Calculator table) for two
     samples or fewer, where that covariance is singular.
     The ``kozachenko`` estimate is the Kozachenko-Leonenko nearest-neighbour
-    estimator [1]_ (k = 1, Euclidean norm), which is undefined for repeated
-    values. The ``kernel`` estimate counts neighbours in a box kernel, as in
-    JIDT [2]_.
+    estimator [1]_ (k = 1, Euclidean norm). The ``kernel`` estimate counts
+    neighbours in a box kernel, as in JIDT [2]_.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -2241,6 +2256,11 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     (``NotAppropriate``, NaN in a Calculator table) when the ``T - k``
     aligned samples do not exceed the joint dimension ``max(k, 2)``
     (``T <= 20`` for ``k = 10``), where the sample covariance is singular.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -2327,6 +2347,11 @@ class CausalEntropy(InfoTheoryBase, Directed):
     (``NotAppropriate``, NaN in a Calculator table) when ``T < 3n``: its
     last term has ``2n`` dimensions over ``T - n + 1`` times, and with no
     more samples than dimensions the sample covariance is singular.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -2421,6 +2446,11 @@ class DirectedInfo(CausalEntropy, Directed):
     estimators compose each term from four joint entropies, estimated as for
     `CausalEntropy`; for ``kozachenko`` and ``kernel`` the estimation biases
     of those entropies, each in its own dimension, do not cancel.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -2548,6 +2578,11 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
     past, where the sample covariance is singular. The ``kernel`` estimate
     is positively biased in short series, so compare pairs within a dataset
     rather than reading the absolute level.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
