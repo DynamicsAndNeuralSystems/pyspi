@@ -74,6 +74,9 @@ dependencies = [
     # for any pyspi computation -- it entered only because cdt eagerly imports
     # its Torch-backed models at package load.
     "tslearn>=0.10",
+    # Direct since the Itakura DTW kernel (statistics/distance.py); tslearn
+    # already requires numba>=0.61.
+    "numba>=0.61",
     "dtaidistance>=2.3",
     # >=2.5 dropped the `import pkg_resources` that previously forced a
     # setuptools<80 pin on every install (pkg_resources was removed in
