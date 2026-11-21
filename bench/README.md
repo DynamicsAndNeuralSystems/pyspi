@@ -84,22 +84,19 @@ Cost model (`--mode`):
 - `raw` — each SPI's own measured walltime. Written to
   `benchmarked_p<N>_raw.yaml` so it never overwrites the shipped amortized cut.
 
-Output goes to `pyspi/configs/benchmarked_p<N>.yaml`. Dropped SPIs are left
-out of the YAML and listed with their cost in the `# --- DROPPED ---` footer.
+Output goes to `pyspi/configs/benchmarked_p<N>.yaml`.
+Dropped SPIs are left out of the YAML and listed with their cost on stderr.
 Pass `--preserve-dropped` to keep them as commented-out blocks instead.
+SPIs of the source config that the JSON did not time are left out.
 
-**The shipped cuts carry hand edits**, named in each config's header: the two
-`te_kraskov_..._DCE_k-{1,2}` variants were added back to `benchmarked_p90`
-after the cut for methodological reasons, and `xi_tau-{0,1}`, the seven
-`pcorr_<estimator>`, `te_symbolic_k-3` and the three kernel `_DCE-AUTO` SPIs,
-added since the last bench, are in `p90`/`p95`/`p99` untimed. Re-running
-`cut_config` overwrites them, so re-apply them by hand afterwards.
+**The shipped cuts carry hand edits.**
+`xi_tau-{0,1}`, the six `pcorr_<estimator>`, `te_symbolic_k-3` and the three kernel `_DCE-AUTO` SPIs were timed separately on the same protocol (M=16, T=800, one core) and placed in each set by that cost.
+`te_kraskov_NN-4_DCE-AUTO_k-{1,2}_kt-1_l-1_lt-1` are in `benchmarked_p90` for coverage, although they cost more than its cutoff.
+Re-running `cut_config` drops these edits, so re-apply them by hand afterwards.
 
-**A new SPI goes into `benchmarked_p90`** (and so `p95` and `p99`, keeping
-the sets nested; `p80` too if it clears that cutoff) unless its cost, timed or
-estimated from a timed sibling at M=16, T=800, exceeds the p90 cutoff. Record
-it as a hand edit in each header. `benchmarked_p90` is the recommended default,
-so an SPI left out of it is rarely computed.
+**SPIs added to `full` after the benchmark are in no `benchmarked_p*` set**, whatever their cost.
+These are the 45 SPIs of the `cgc`, `cpdc`, `cgpdc`, `cddtf`, `pcohmag`, `liang`, `edge`, `es`, `tailasym`, `nli`, `wtc`, `pac`, `lccm`, `ccm_*_convergence`, `di_kraskov`, `phasealigned` and `ppc_hilbert_adaptive` families.
+Placing one in the sets needs its cost on the same protocol.
 
 ## Analyse
 

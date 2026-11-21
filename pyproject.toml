@@ -16,8 +16,8 @@ license = "GPL-3.0-or-later"
 # The vendored notices go in the wheel's licence metadata as well as in
 # package data: `pyspi/lib/ids/` and the four pairwise causal scores in
 # `pyspi/lib/pairwise_causal.py` carry their own (MIT) terms, and
-# `pyspi/statistics/infotheory.py` follows JIDT (GPL-3.0-or-later; the jar is
-# no longer shipped). A redistributor reading only the dist-info should see them.
+# `pyspi/statistics/infotheory.py` follows JIDT (GPL-3.0-or-later). A
+# redistributor reading only the dist-info should see them.
 license-files = ["LICENSE.txt", "pyspi/lib/LICENSE-cdt.txt",
                  "pyspi/lib/LICENSE-jidt.txt", "pyspi/lib/ids/LICENSE.txt"]
 requires-python = ">=3.11"
@@ -45,42 +45,38 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
 dependencies = [
+    # Every floor is a release that installs and runs with NumPy 2 on Python
+    # 3.11; the comments give the reasons that are specific to one package.
     "numpy>=2.0",
-    "scipy>=1.11",
-    # >=2.1 for DataFrame.stack(future_stack=True), the pandas 3 stack semantics.
-    "pandas>=2.1",
+    # 1.13 is the first release that supports NumPy 2.
+    "scipy>=1.13",
+    # 2.2.2 is the first release built against NumPy 2; earlier wheels that do
+    # not cap numpy<2 fail to import under it ("numpy.dtype size changed").
+    "pandas>=2.2.2",
     "scikit-learn>=1.8",
-    "statsmodels>=0.14",
+    # 0.14.2 is the first release built against NumPy 2; earlier wheels fail
+    # to import under it, as for pandas.
+    "statsmodels>=0.14.2",
     "mne>=1.6",
     "mne-connectivity>=0.5",
-    # Upper-bounded on purpose. DirectedCoherence reads two *private*
-    # Connectivity properties (_transfer_function, _noise_covariance) because
-    # the public directed_coherence() is wrong twice over (see
-    # statistics/spectral.py). Supported range is verified end to end against
-    # the oldest published 1.1 (1.1.0) and the locked current release; both
-    # expose the whole surface pyspi uses. 1.1.x lacks transforms.
-    # prepare_time_series (there is a fallback) and returns a 400-point rather
-    # than 401-point frequency grid, so band statistics differ marginally
-    # across the range. A major bump is where a private property may vanish;
-    # tests/test_directionality.py fails loudly if one does.
-    "spectral-connectivity>=1.1,<3",
-    "nitime>=0.10",
-    "hyppo>=0.4",
-    # cdt and torch are gone. pyspi used four functions from
-    # cdt.causality.pairwise (the ANM independence score, CDS, RECI, IGCI);
-    # they are transcribed in pyspi/lib/pairwise_causal.py and produce
-    # bit-identical values (verified against cdt 0.6 before removal, and frozen
-    # in tests/data/fixtures/cdt_pairwise_reference.npz). torch was never used
-    # for any pyspi computation -- it entered only because cdt eagerly imports
-    # its Torch-backed models at package load.
+    # DirectedCoherence reads the private _transfer_function and _noise_covariance
+    # (see statistics/spectral.py); 2.0 is the first release whose frequency grid
+    # includes the Nyquist bin, and <3 guards those private properties.
+    "spectral-connectivity>=2.0,<3",
+    # 0.11 is the first release that supports NumPy 2.
+    "nitime>=0.11",
+    # hyppo imports the `future` package, which 0.5.2 is the first release to
+    # declare as a dependency.
+    "hyppo>=0.5.2",
     "tslearn>=0.10",
     # Used directly by the Itakura DTW kernel (statistics/distance.py);
-    # tslearn already requires numba>=0.61.
+    # tslearn requires the same floor.
     "numba>=0.61",
-    "dtaidistance>=2.3",
-    # >=2.5 dropped the `import pkg_resources` that previously forced a
-    # setuptools<80 pin on every install (pkg_resources was removed in
-    # setuptools 80). Verified: nothing in the dependency tree imports it.
+    # 2.3.12 is the first release whose C library builds on Python 3.11 with
+    # NumPy 2; earlier source distributions fail to build or build without it.
+    "dtaidistance>=2.3.12",
+    # ConvergentCrossMapping reproduces pyEDM 2.5's CCM, including its random
+    # libraries and their seeding.
     "pyEDM>=2.5",
     "pyyaml>=6.0",
     "tqdm>=4.65",
@@ -138,8 +134,7 @@ markers = [
 include = ["pyspi*"]
 
 [tool.setuptools.package-data]
-# Globs, not an enumeration: hand-listing these is what previously let four
-# shipped configs and two datasets go missing from the wheel unnoticed.
+# Globs, so that every bundled config and dataset ships without being listed.
 pyspi = [
     "configs/*.yaml",
     "data/*.npy",

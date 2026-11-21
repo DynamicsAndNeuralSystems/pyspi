@@ -120,7 +120,7 @@ def normalized_hsic(x, y):
 
 
 # ---------------------------------------------------------------------------
-# CDS -- conditional distribution similarity (Fonollosa 2016)
+# CDS -- conditional distribution similarity (Fonollosa 2019)
 # ---------------------------------------------------------------------------
 
 def _count_unique(x):

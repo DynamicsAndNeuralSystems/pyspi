@@ -10,6 +10,7 @@ import nitime.utils as nt_utils
 import numpy as np
 import spectral_connectivity as sc
 from scipy import signal
+from spectral_connectivity.transforms import prepare_time_series
 
 from pyspi.base import (
     Directed,
@@ -25,17 +26,6 @@ from pyspi.utils import (
     require_int,
     require_positive_float,
 )
-
-try:
-    from spectral_connectivity.transforms import prepare_time_series
-except ImportError:
-    def prepare_time_series(time_series, axis="signals"):
-        if axis != "signals":
-            raise ImportError(
-                "spectral_connectivity is missing prepare_time_series; "
-                "upgrade the package or ensure axis='signals'."
-            )
-        return time_series[:, np.newaxis, :]
 
 
 @contextmanager
@@ -1341,8 +1331,9 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
 
     References
     ----------
-    .. [1] G. Nolte et al., "Robustly estimating the flow direction of
-           information in complex physical systems", Phys. Rev. Lett.
+    .. [1] G. Nolte, A. Ziehe, V.V. Nikulin, A. Schlögl, N. Krämer,
+           T. Brismar, K.-R. Müller, "Robustly estimating the flow direction
+           of information in complex physical systems", Phys. Rev. Lett.
            100(23), 234101 (2008).
 
     Parameters

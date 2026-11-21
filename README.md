@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source srcset="img/pyspi_logo_darkmode.png" media="(prefers-color-scheme: dark)">
-    <img src="img/pyspi_logo.png" alt="pyspi logo" height="200"/>
+    <source srcset="https://raw.githubusercontent.com/DynamicsAndNeuralSystems/pyspi/main/img/pyspi_logo_darkmode.png" media="(prefers-color-scheme: dark)">
+    <img src="https://raw.githubusercontent.com/DynamicsAndNeuralSystems/pyspi/main/img/pyspi_logo.png" alt="pyspi logo" height="200"/>
   </picture>
 </p>
 
@@ -11,7 +11,7 @@
 
 <p align="center">
  	<a href="https://zenodo.org/badge/latestdoi/601919618"><img src="https://zenodo.org/badge/601919618.svg" height="20"/></a>
-    <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" height="20"/></a>
+    <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" height="20"/></a>
     <a href="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml"><img src="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml/badge.svg" height="20"/></a><br>
     <a href="https://www.python.org"><img src="https://img.shields.io/badge/Python-3.11%20|%203.12%20|%203.13-3776AB.svg?style=flat&logo=python&logoColor=white" alt="Python 3.11 | 3.12 | 3.13"></a><br>
     <a href="https://pepy.tech/projects/pyspi"><img src="https://static.pepy.tech/personalized-badge/pyspi?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=BLUE&left_text=downloads" alt="pyspi downloads" height="20"/></a>
@@ -19,7 +19,7 @@
 
 _pyspi_ is a comprehensive python library for computing statistics of pairwise interactions (SPIs) from multivariate time-series (MTS) data.
 The toolbox provides easy access to hundreds of methods for evaluating the relationship between pairs of time series, from simple statistics (like correlation) to advanced multi-step algorithms (like Granger causality).
-The code is licensed under the [GNU GPL v3 license](http://www.gnu.org/licenses/gpl-3.0.html) (or later).
+The code is licensed under the [GNU General Public License](https://www.gnu.org/licenses/gpl-3.0), version 3 or any later version (GPL-3.0-or-later).
 
 **Feel free to reach out for help with real-world applications.**
 Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeuralSystems/pyspi/issues), or [pull requests](https://github.com/DynamicsAndNeuralSystems/pyspi/pulls).
@@ -41,9 +41,8 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 
 _pyspi_ requires **Python 3.11 or newer**.
 
-> **Upgrading from 2.x?** Version 3.0 removes the Java/JIDT dependency and
-> changes the `Calculator` API. See [CHANGELOG.md](CHANGELOG.md) for the
-> migration table.
+> **Upgrading from 2.x?** Version 3.0 removes the Java/JIDT dependency and changes the `Calculator` API.
+> See the [CHANGELOG](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/CHANGELOG.md#migrating-from-2x) for the migration table.
 
 ```bash
 pip install pyspi
@@ -66,12 +65,7 @@ uv sync                       # runtime + dev dependencies from uv.lock
 uv run pytest -q              # fast test suite
 ```
 
-Optional extras: `.[tsfile]` to load sktime/aeon `.ts` files, `.[bench]` for the
-compute-cost benchmark suite in [`bench/`](bench/).
-
-For a more detailed guide, see the [full documentation](https://time-series-features.gitbook.io/pyspi/installing-and-using-pyspi/installation),
-the [troubleshooting guide](https://time-series-features.gitbook.io/pyspi/installation/troubleshooting),
-and [alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options).
+Optional extras: `.[tsfile]` to load sktime/aeon `.ts` files, `.[bench]` for the compute-cost benchmark suite in [`bench/`](https://github.com/DynamicsAndNeuralSystems/pyspi/tree/main/bench).
 
 ## Getting Started 🚀
 
@@ -126,14 +120,12 @@ calc = Calculator(dataset=load_dataset("forex"), config="fabfour")
 calc.compute()
 ```
 
-`forex` is quantised: every one of its seven processes contains repeated
-values (24–212 distinct values across 250 observations). Consequently, all
-KSG/`kraskov` variants refuse it under pyspi's continuous, tie-free input
-contract. pyspi does not provide a general discrete MI, TLMI or DI plug-in
-estimator; its symbolic support is TE-specific. Use an external discrete
-estimator when the missing quantities are needed.
+`forex` is quantised: every one of its seven processes contains repeated values (24–212 distinct values across 250 observations).
+The Kozachenko-Leonenko entropy is undefined on tied values, so on `forex` the SPIs built on it (`je_kozachenko`, `ce_kozachenko`, `cce_kozachenko_n-5`, `xme_kozachenko_k1` and `si_kozachenko_k-1`) fail: their values are NaN, with the message in `calc.errors` and the code `Quality.ERROR` in `calc.quality`.
+The KSG (`kraskov`) SPIs run, because they break ties with a tiny fixed-seed jitter.
 
-Walkthrough tutorials in the full documentation:
+The [tutorial notebook](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/pyspi_tutorial.ipynb) walks through the 3.0 API.
+Walkthrough tutorials in the online documentation, written for 2.x:
 [simple demonstration](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/getting-started-a-simple-demonstration) ·
 [finance](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/finance-stock-price-time-series) ·
 [neuroimaging](https://time-series-features.gitbook.io/pyspi/usage/walkthrough-tutorials/neuroimaging-fmri-time-series)
@@ -148,19 +140,17 @@ name or a path to your own YAML:
 |:----------|-----:|:---------|
 | `"full"` (default) | 231 | You want everything and can afford it. |
 | `"fast"` | 138 | General use; drops the slowest SPIs. |
-| `"benchmarked_p99"` | 183 | Near-complete, with only the worst cost outliers removed. |
-| `"benchmarked_p95"` | 173 | Good coverage/cost trade-off. |
-| `"benchmarked_p90"` | 161 | Recommended default for large batches. |
+| `"benchmarked_p99"` | 183 | The benchmarked SPIs without the three slowest (`hhg`, `gpfit_RBF`, `mgcx_maxlag-10`). |
+| `"benchmarked_p95"` | 173 | A coverage/cost trade-off among the benchmarked SPIs. |
+| `"benchmarked_p90"` | 161 | Large batches, when the families listed below are not needed. |
 | `"benchmarked_p80"` | 145 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14); M07 has no bundled SPI, so M14 has two. |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |
 
-The `benchmarked_p<N>` sets keep the fastest *N*% of SPIs by **measured**
-amortized compute cost, so the cut point is the *N*th percentile of the cost
-distribution. They were derived from a benchmark grid spanning *M* ∈ {4..64} and
-*T* ∈ {200..3200}; see [`bench/README.md`](bench/README.md) for the methodology
-and [`bench/results/analysis/report.md`](bench/results/analysis/report.md) for
-the measurements.
+Each `benchmarked_p<N>` set keeps the fastest *N*% of the SPIs timed in pyspi's compute-cost benchmark, ranked by amortized cost (SPIs that share a cache split its cost) at *M* = 16, *T* = 800.
+SPIs added to `full` after that benchmark are in none of these sets, whatever they cost: the conditional Granger and conditional spectral measures (`cgc`, `cpdc`, `cgpdc`, `cddtf`, `pcohmag`), `liang`, `edge`, `es`, `tailasym`, `nli`, `wtc`, `pac`, `lccm`, the three `ccm_*_convergence` SPIs, `di_kraskov`, `phasealigned` and `ppc_hilbert_adaptive`.
+Use `full` when you want those families; `fast` has one SPI from each of `cgc`, `cpdc`, `pcohmag`, `liang`, `edge`, `es`, `tailasym` and `nli`.
+See [`bench/README.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/bench/README.md) for the benchmark's methodology, and [`bench/results/analysis/report.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/bench/results/analysis/report.md) for how cost scales across a grid of *M* ∈ {4..64} and *T* ∈ {200..3200}.
 
 To build your own subset by keyword:
 
@@ -231,14 +221,12 @@ if __name__ == "__main__":
 ## SPI Descriptions 📋
 To access a table with a high-level overview of the _pyspi_ library of SPIs, including their associated identifiers, see the [table of SPIs](https://time-series-features.gitbook.io/pyspi/spis/table-of-spis) in the full documentation.
 For detailed descriptions of each SPI, as well as its associated estimators, we provide a full breakdown in the [SPI descriptions](https://time-series-features.gitbook.io/pyspi/spis/spi-descriptions) page of our documentation. 
+Both pages describe the 2.x set; for 3.0, [`full.yaml`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/pyspi/configs/full.yaml) lists every bundled SPI, each SPI class's docstring describes it, and [`docs/spi_changes_2.0.2_to_3.0.0.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/docs/spi_changes_2.0.2_to_3.0.0.md) lists what was added, removed and renamed.
 
 ## Documentation
-The full documentation is hosted on [GitBooks](https://time-series-features.gitbook.io/pyspi/). 
+The online documentation on [GitBook](https://time-series-features.gitbook.io/pyspi/) describes pyspi 2.x; for 3.0, this README, the [CHANGELOG](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/CHANGELOG.md) (with its [migration table](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/CHANGELOG.md#migrating-from-2x)) and the docstrings are current.
 Use the following links to quickly access some of the key sections:
 
-- [Full installation guide](https://time-series-features.gitbook.io/pyspi/installation)
-- [Troubleshooting](https://time-series-features.gitbook.io/pyspi/installation/troubleshooting)
-- [Alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options)
 - [Usage guide](https://time-series-features.gitbook.io/pyspi/usage)
 - [Distributing _pyspi_ computations](https://time-series-features.gitbook.io/pyspi/usage/advanced-usage/distributing-calculations-on-a-cluster)
 - [Table of SPIs and descriptions](https://time-series-features.gitbook.io/pyspi/spis)
@@ -250,6 +238,7 @@ Use the following links to quickly access some of the key sections:
 Contributions play a vital role in the continual development and enhancement of _pyspi_, a project built and enriched through community collaboration.
 If you would like to contribute to _pyspi_, or explore the many ways in which you can participate in the project, please have a look at our 
 detailed [contribution guidelines](https://time-series-features.gitbook.io/pyspi/development/contributing-to-pyspi) about how to proceed.
+[CONTRIBUTING.md](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/CONTRIBUTING.md) sets out the code and docstring conventions.
 In contributing to _pyspi_, all participants are expected to adhere to our [code of conduct](https://time-series-features.gitbook.io/pyspi/development/code-of-conduct).
 
 ### SPI Wishlist
@@ -305,4 +294,4 @@ Below are some of the leading contributors to _pyspi_:
 </a>
 
 ## License 🧾
-_pyspi_ is released under the [GNU General Public License](https://www.gnu.org/licenses/gpl-3.0).
+_pyspi_ is released under the [GNU General Public License](https://www.gnu.org/licenses/gpl-3.0), version 3 or any later version (GPL-3.0-or-later); see [LICENSE.txt](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/LICENSE.txt).

@@ -169,7 +169,7 @@ def test_cross_distance_statistics_at_lag_zero_are_the_plain_statistic(cross, pl
 def _normalised_hsic(a, b, biased):
     """Normalised HSIC with a Gaussian median-heuristic kernel *per variable*.
 
-    Gretton et al. (2005, 2008) set each variable's kernel width to the median
+    Gretton et al. (2007) set each variable's kernel width to the median
     distance between that variable's samples. hyppo's `Hsic` statistic is
     the kernel analogue of its `Dcorr`: dcorr of the induced distances
     1 - K / max(K), so U-centred and unsquared when unbiased, double-centred

@@ -277,9 +277,10 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
     one sample of ``T`` scalar observations, so time order is ignored.
 
     Unlike hyppo, which applies the first variable's kernel width to both,
-    each variable gets its own median-heuristic width (the median distance
-    between its own samples), so the value is symmetric in the pair. A zero
-    median (mostly tied samples) falls back to width 1, as in hyppo.
+    each variable gets its own median-heuristic width [2]_ (the median
+    distance between its own samples), so the value is symmetric in the
+    pair. A zero median (mostly tied samples) falls back to width 1, as in
+    hyppo.
 
     Undirected and unsigned. With ``biased=False`` the value is the U-centred
     estimate of the squared statistic and can be slightly negative under
@@ -290,8 +291,8 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
     ----------
     .. [1] A. Gretton, O. Bousquet, A. Smola, B. Schölkopf, "Measuring
            statistical dependence with Hilbert-Schmidt norms", Algorithmic
-           Learning Theory (ALT 2005), Lecture Notes in Computer Science,
-           63-77 (2005).
+           Learning Theory (ALT 2005), Lecture Notes in Computer Science
+           3734, 63-77 (2005).
     .. [2] A. Gretton, K. Fukumizu, C. H. Teo, L. Song, B. Schölkopf,
            A. J. Smola, "A kernel statistical test of independence", Advances
            in Neural Information Processing Systems 20, 585-592 (2007).
