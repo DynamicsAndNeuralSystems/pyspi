@@ -21,6 +21,8 @@ from pyspi.statistics.events import (
     _half_gaps,
 )
 
+from unchecked_data import unchecked_data
+
 
 # --------------------------------------------------------------------------
 # Event synchronisation: brute-force reference
@@ -441,10 +443,10 @@ def test_invariant_to_increasing_transforms(spi, heavy_data):
 def test_constant_series_gives_nan_for_its_pairs_only(spi, heavy_data):
     Z = heavy_data[:3].copy()
     Z[1] = 2.0
-    A = spi.multivariate(Data(Z, dim_order="ps", zscore=False))
+    A = spi.multivariate(unchecked_data(Z))
     assert np.isnan(A[1]).all() and np.isnan(A[:, 1]).all()
     assert np.isfinite(A[0, 2]) and np.isfinite(A[2, 0])
-    assert np.isnan(spi.bivariate(Data(Z, dim_order="ps", zscore=False), i=0, j=1))
+    assert np.isnan(spi.bivariate(unchecked_data(Z), i=0, j=1))
 
 
 @pytest.mark.parametrize("statistic", ["strength", "asym"])

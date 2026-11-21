@@ -18,6 +18,8 @@ from scipy import signal
 from pyspi.data import Data
 from pyspi.statistics.spectral import AdaptivePhaseConsistency
 
+from unchecked_data import unchecked_data
+
 
 # Reference implementation, kept independent of the SPI: bands in Hz with an
 # explicit sampling frequency, the backend's default tapers, and one pass per
@@ -202,7 +204,7 @@ def test_has_no_sampling_frequency():
 def test_constant_process_gives_nan(level):
     z = _white(np.random.default_rng(5), 3, 500)
     z[1] = level
-    A = AdaptivePhaseConsistency().multivariate(_data(z))
+    A = AdaptivePhaseConsistency().multivariate(unchecked_data(z))
     assert np.isnan(A[1]).all() and np.isnan(A[:, 1]).all()
     assert np.isfinite(A[0, 2])
 

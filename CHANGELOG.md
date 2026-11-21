@@ -91,6 +91,9 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Importing pyspi reseeded NumPy's global RNG** (`pyspi.lib.ids` called `np.random.seed(1717)` at import), overriding the caller's seed.
 - **Process names** are coerced to `str` and must be unique; `Data(procnames=...)` was validated and then discarded, so custom names never reached the results table.
   `Data.add_process()` no longer creates a duplicate name.
+- **A constant process** was refused with `zscore=True` under a misleading "non-finite values" error, and accepted with `zscore=False`, where many SPIs then gave it a number instead of NaN.
+  `Data` now raises `ValueError` naming each constant process, including one that is exactly linear when `detrend=True`, whatever `zscore` is.
+  `python -m pyspi compute` prints such input errors and exits 1, without a traceback.
 - **`CalculatorFrame.compute()` accepted no arguments**; it now forwards to `Calculator.compute`.
 - **`CorrelationFrame` reported invalid p-values.**
   It used each time series' length as the F-test sample size, but the observations are edges, and edges sharing a node are dependent.

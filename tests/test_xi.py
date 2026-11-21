@@ -14,6 +14,8 @@ from pyspi.calculator import Calculator
 from pyspi.data import Data
 from pyspi.statistics.basic import ChatterjeeXi
 
+from unchecked_data import unchecked_data
+
 
 def _data(arr, zscore=False):
     return Data(data=np.asarray(arr, dtype=float), dim_order="ps", zscore=zscore)
@@ -168,7 +170,7 @@ def test_constant_target_is_undefined():
     rng = np.random.default_rng(9)
     z = np.vstack([rng.standard_normal(50), np.ones(50), rng.standard_normal(50)])
     spi = ChatterjeeXi()
-    data = _data(z)
+    data = unchecked_data(z)
     A = spi.multivariate(data)
     assert np.isnan(A[0, 1]) and np.isnan(A[2, 1])
     assert np.isfinite(A[1, 0]) and np.isfinite(A[0, 2])

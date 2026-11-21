@@ -20,6 +20,8 @@ import pytest
 
 from pyspi.data import Data
 
+from unchecked_data import unchecked_data
+
 # Process 0 drives process 1 at lag 1, with no feedback. Long enough that the
 # estimators resolve the asymmetry well clear of their noise floor.
 T = 2000
@@ -442,8 +444,7 @@ def test_spectral_gc_nan_mask_is_in_the_same_orientation_as_the_values():
     spi._get_cache = lambda data: (F, freq)
 
     with pytest.warns(UserWarning, match="NaN values"):
-        result = spi.multivariate(Data(data=np.zeros((M, 8)), dim_order="ps",
-                                       zscore=False))
+        result = spi.multivariate(unchecked_data(np.zeros((M, 8))))
 
     # Backend [0, 2] is pyspi [2, 0].
     assert np.isnan(result[2, 0])

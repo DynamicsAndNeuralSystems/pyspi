@@ -27,6 +27,8 @@ from pyspi.calculator import load_spis_from_yaml, resolve_config
 from pyspi.data import Data
 from pyspi.statistics.misc import Cointegration
 
+from unchecked_data import unchecked_data
+
 BASELINE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "data", "baselines", "var1_M3_T100.npz"
 )
@@ -231,7 +233,7 @@ def test_spectral_coherence_phase_uses_a_circular_mean_and_is_permutation_covari
     full[:, 2, 1] = [-0.4, -0.2, 0.6]
     full = full - full.transpose(0, 2, 1)
     freq = np.array([0.1, 0.2, 0.3])
-    data = Data(data=np.ones((3, 8)), dim_order="ps", zscore=False)
+    data = unchecked_data(np.ones((3, 8)))
 
     def calculate(order):
         phase = full[:, order][:, :, order]
