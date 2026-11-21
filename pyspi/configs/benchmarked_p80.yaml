@@ -317,7 +317,6 @@
       - contemporaneous
       - M14
     configs:
-    - estimator: gaussian
     - estimator: kozachenko
     - estimator: kernel
 
@@ -330,7 +329,6 @@
       - contemporaneous
       - M14
     configs:
-    - estimator: gaussian
     - estimator: kozachenko
     - estimator: kernel
 
