@@ -419,6 +419,11 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`ppc_hilbert_adaptive`: spectrally weighted Hilbert phase consistency** (`AdaptivePhaseConsistency` in `pyspi/statistics/spectral.py`), the pairwise phase consistency (Vinck et al. 2010) of band-passed Hilbert phases, averaged over log-spaced bands with weights from the rhythmic power the two processes share above their `1/f` backgrounds, so no band has to be chosen in advance.
   It is undirected and unsigned, about 0 under independence and 1 for a constant phase lag, and has no parameters (bands are in cycles per sample).
   In `full` only; not in `fast` or the `benchmarked_p*` sets until it has been timed.
+- **Wavelet coherence `wtc_wavelet_mean_*`** (class `WaveletCoherence` in `pyspi/statistics/wavelet.py`, in `full` only): Morlet wavelet coherence smoothed in time and scale (Torrence and Webster 1999; Grinsted et al. 2004), averaged over time outside the cone of influence and over the bands `[0, 0.5]`, `[0, 0.25]` and `[0.25, 0.5]`.
+  It is undirected and unsigned, in [0, 1].
+  Because the coherence is estimated locally in time, it detects coupling that is transient or that changes sign or phase lag during the record, which whole-record multitaper coherence averages away.
+  The defaults (6 cycles, a Gaussian time window of twice the wavelet's width, a 1.2-octave scale window) smooth twice as widely as the minimal windows of Torrence and Webster; `n_cycles`, `time_smoothing`, `scale_smoothing` and `coi` can be changed and are then named in the identifier.
+  The local estimate is biased upwards, so independent series give values well above zero.
 - **The multitaper bandwidth is a parameter.**
   Every multitaper SPI in `pyspi/statistics/spectral.py` (the coherence and phase measures, `psi`, `gd`, the directed measures and nonparametric `sgc`) takes `time_halfbandwidth_product` (`NW`, default 3, the value every bundled SPI uses).
   A larger `NW` averages more tapers (`floor(2 NW) - 1`), which lowers the variance and the upward bias of coherence-type measures, at the cost of frequency resolution.

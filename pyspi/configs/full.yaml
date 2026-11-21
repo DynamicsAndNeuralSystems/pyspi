@@ -1181,6 +1181,25 @@
       - fmin: 0.25
         fmax: 0.5
 
+  # Wavelet coherence
+  WaveletCoherence:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - time/frequency dependent
+      - MXX
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
 # Cross-frequency statistics
 .statistics.crossfreq:
   # Phase-amplitude coupling

@@ -120,6 +120,7 @@ class Data:
         "spectral_mv",
         "theiler",
         "var",
+        "wavelet_coherence",
         "xcorr",
     )
 
