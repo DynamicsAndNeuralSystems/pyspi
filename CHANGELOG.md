@@ -124,7 +124,8 @@ A second pass, driven by a suite of red tests, closed a set of defects that prod
 - **Gaussian joint/conditional entropy used two different regularisations.** The vectorised multivariate path clipped `r^2` while the scalar path applied a ridge, so `bivariate()` and `multivariate()` disagreed by 8.4 nats on singular data. Both now share one primitive.
 
 - **SPI metadata (no value changes).**
-  `InterDependenceScore` left `terms`, `pnorm` and `bandwidth` out of its identifier, and `SpectralGrangerCausality` left out `max_order` (when the order is selected), `ignore_nan` and `nan_threshold`, so two parameterisations of one class could share a table column and a checkpoint file. Non-default values are now appended (e.g. `ids_bw-0-25`, `..._order-None_maxorder-20`); every bundled identifier is unchanged.
+  `InterDependenceScore` left `terms`, `pnorm` and `bandwidth` out of its identifier, and `SpectralGrangerCausality` left out `max_order` (when the order is selected), `ignore_nan` and `nan_threshold`, so two parameterisations of one class could share a table column and a checkpoint file.
+  Non-default values are now appended (e.g. `ids_bw-0-25`, `..._order-None_maxorder-20`); every bundled identifier is unchanged.
   `bary-sq_*` (and `statistic="max_time"`) now report unsigned: a squared barycenter and an argmax index are non-negative.
   `IntegratedInformation` rejects an unknown `phitype`, a `normalization` other than 0 or 1 and a non-integer `delay` at construction, and no longer turns every exception into a NaN logged at error level: a failed pair is NaN with a warning, and a failure on every pair is recorded in `Calculator.errors`.
 

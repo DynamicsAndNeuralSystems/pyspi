@@ -1102,9 +1102,8 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             # order is selected rather than given.
             if order is None and max_order != 50:
                 paramstr += f"_maxorder-{max_order}"
-        # Non-default NaN handling changes the value (np.mean propagates a NaN
-        # that np.nanmean skips; the threshold decides which cells are blanked),
-        # so it is named. Defaults are not, so bundled identifiers are unchanged.
+        # Non-default NaN handling changes the value, so it is named; defaults
+        # are not, so bundled identifiers are unchanged.
         if not ignore_nan:
             paramstr += "_ignorenan-False"
         if nan_threshold != 0.5:
