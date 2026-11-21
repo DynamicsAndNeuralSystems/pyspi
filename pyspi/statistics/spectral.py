@@ -1247,9 +1247,10 @@ class GeneralizedPartialDirectedCoherence(NonparametricSpectralBivariate, Direct
     :class:`PartialDirectedCoherence` with each target weighted by its
     innovation variance: the band statistic of
     ``(|A_ji(f)|^2 / sigma_j^2) / sum_k (|A_ki(f)|^2 / sigma_k^2)`` for source
-    ``i`` (row) and target ``j`` (column), which makes it invariant to
-    rescaling either process. The squared magnitude, as the backend reports
-    it. Directed and unsigned, in [0, 1].
+    ``i`` (row) and target ``j`` (column), with ``sigma_k^2`` the innovation
+    variance of process ``k``. The weighting makes it invariant to rescaling
+    either process. The squared magnitude, as the backend reports it.
+    Directed and unsigned, in [0, 1].
 
     References
     ----------
@@ -1296,9 +1297,10 @@ class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
     magnitude, as the backend reports it. Directed and unsigned, in [0, 1].
 
     It is not weighted by the innovation variances, so on a pair it is about
-    ``DC^2 sigma_j / sigma_i`` for weak coupling, with ``DC`` the directed
-    coherence and ``sigma`` the innovation standard deviations: its direction
-    follows which process is less predictable as well as the coupling.
+    ``DC^2 sigma_jj / sigma_ii`` for weak coupling, with ``DC`` the directed
+    coherence and ``sigma_kk`` the innovation variance of process ``k``: its
+    direction follows which process is less predictable as well as the
+    coupling.
     :class:`DirectedCoherence` applies that weighting.
 
     References
