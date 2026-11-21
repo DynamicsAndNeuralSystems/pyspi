@@ -138,6 +138,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   **Every `kraskov` SPI's values can change**: 2.x ran JIDT with its seeded random dither, which 3.0 does not reproduce.
 - **KSG refuses inputs it cannot estimate from**: `k` too large for the effective sample, and negative Theiler windows; the auto-embedding search skips candidates it cannot support.
 - **Kozachenko entropy returned `-inf` on tied data** (a nearest neighbour at distance zero); it now raises with the cause named.
+- **Gaussian estimates from too few samples returned values set by the ridge.**
+  A Gaussian information-theoretic SPI whose aligned samples do not exceed the dimension of its largest covariance block (for example `xme_gaussian_k10` at T ≤ 20 or `di_gaussian_n-5` at T ≤ 15) is now NaN, labelled not appropriate, with the cause recorded.
 - **Six measures advertised `kraskov` and ran Gaussian.**
   Joint, conditional, cross-map and causal entropy, directed information and stochastic interaction are composed from marginal entropies and have no KSG estimator; `estimator="kraskov"` is now refused for them.
 - **`MutualInfo`, `TimeLaggedMutualInfo` and `TransferEntropy` returned NaN** for `estimator="kozachenko"`; they now raise `NotImplementedError` at construction (use `"kraskov"`).
