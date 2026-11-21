@@ -8,6 +8,7 @@ hand-written configs.
 import numpy as np
 import pytest
 
+from pyspi.base import NotAppropriate
 from pyspi.data import Data
 from pyspi.statistics import infotheory as it
 
@@ -600,7 +601,7 @@ def test_kozachenko_entropy_refuses_tied_data_rather_than_dithering():
         warnings.simplefilter("always")
         try:
             A = spi.multivariate(data)
-        except ValueError as err:
+        except NotAppropriate as err:
             assert "tied observations" in str(err)
         else:
             msgs = [str(w.message) for w in caught if "tied observations" in str(w.message)]

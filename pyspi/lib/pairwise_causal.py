@@ -10,8 +10,11 @@ here because cdt imports its Torch-backed models at package load.
 Each function is a transcription of the cdt 0.6 implementation, close enough
 that the values are bit-identical on continuous data. Where cdt's code was
 itself a transcription of the original author's (CDS is Fonollosa's), the
-original attribution is kept. The differences from cdt are NaN results where
-cdt returns 0, noted at each function.
+original attribution is kept. The differences from cdt, noted at each
+function, are NaN results where cdt returns 0, and the sign of the IGCI
+slope-based (integral) estimator, which is ``b - a`` where cdt returns
+``a - b``, so that a positive score favours x -> y as for the entropy
+estimator and the paper's criterion.
 
 Derived from the Causal Discovery Toolbox, Copyright (c) 2018 Diviyan
 Kalainathan, MIT licence (a copy is in ``pyspi/lib/LICENSE-cdt.txt``).

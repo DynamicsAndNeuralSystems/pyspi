@@ -2,8 +2,8 @@
 
 Attribution. The Kraskov-Stoegbauer-Grassberger (KSG), box-kernel, Gaussian
 and symbolic estimators of mutual information and transfer entropy in this
-module, and the Kozachenko-Leonenko entropy estimator, follow, and were
-validated against, the Java Information Dynamics Toolkit (JIDT):
+module, and the Kozachenko-Leonenko entropy estimator, follow the Java
+Information Dynamics Toolkit (JIDT):
 
     Lizier, J. T. (2014). JIDT: An information-theoretic toolkit for studying
     the dynamics of complex systems. Frontiers in Robotics and AI 1:11.
@@ -14,7 +14,10 @@ The code is an independent NumPy implementation and needs no Java runtime,
 but the estimator definitions, parameter names and default behaviours
 (k_HISTORY, DYN_CORR_EXCL, KERNEL_WIDTH, AUTO_EMBED_METHOD, ...) derive from
 JIDT, whose copyright notice is retained in ``pyspi/lib/LICENSE-jidt.txt``.
-It was validated against JIDT 1.6.1. Known deviations from JIDT: kernel MI,
+KSG MI and TE, Gaussian MI and TE, kernel MI and TE, and symbolic TE are
+checked against values computed by JIDT 1.6.1; the Kozachenko-Leonenko
+estimator is checked against the closed-form entropy and mutual information
+of Gaussian variables. Known deviations from JIDT: kernel MI,
 TLMI and TE exclude the point itself and a Theiler window w, that is JIDT's
 DYN_CORR_EXCL = w + 1 (|j - i| <= w, as for KSG), where JIDT's default counts
 the point itself; Gaussian estimators carry a deterministic 1e-8 relative
@@ -33,7 +36,9 @@ from scipy.spatial import cKDTree
 from scipy.special import digamma, gammaln
 
 from pyspi import utils
-from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_bivariate, parse_multivariate, fill_pairwise
+from pyspi.base import (
+    Directed, NotAppropriate, Undirected, Unsigned, fill_pairwise,
+    parse_bivariate, parse_multivariate, parse_univariate)
 
 # ---------------------------------------------------------------------------
 # Entropy calculators (with the interface of JIDT's calculators)
@@ -114,6 +119,27 @@ def _gaussian_log_det(cov, ridge_rel=GAUSSIAN_RIDGE):
     return float(log_det)
 
 
+def _require_gaussian_samples(n, d, measure, setting):
+    """
+    Refuse unless ``n`` samples exceed the dimension ``d`` of a covariance.
+
+    A sample covariance of ``n`` observations (``ddof=1``) has rank at most
+    ``n - 1``, so with ``n <= d`` it is singular for any data and its
+    log-determinant is set by the ridge, not by the data. ``n = d + 1`` is
+    the smallest sample with a full-rank covariance and is accepted.
+    ``setting`` names what sets ``d`` (a history length, say). Raises
+    ``NotAppropriate``, so the Calculator stores NaN with the reason.
+    """
+    if n <= d:
+        raise NotAppropriate(
+            f"The Gaussian {measure} needs more aligned samples than the "
+            f"dimension of its largest covariance block: n = {n} samples for "
+            f"d = {d} ({setting}). With n <= d the sample covariance is "
+            f"singular, so the estimate would be set by the ridge, not by the "
+            f"data. Use a longer series or a smaller embedding."
+        )
+
+
 class GaussianEntropyCalculator:
     """
     Multivariate Gaussian entropy calculator.
@@ -140,6 +166,7 @@ class GaussianEntropyCalculator:
     def computeAverageLocalOfObservations(self):
         X = self._obs
         N, d = X.shape
+        _require_gaussian_samples(N, d, "entropy", f"{d} variables")
         cov = np.cov(X, rowvar=False, ddof=1)
         log_det = _gaussian_log_det(cov)
         if not np.isfinite(log_det):
@@ -154,6 +181,12 @@ class KLEntropyCalculator:
     H = psi(N) - psi(1) + log(c_d) + (d/N) * sum(log(eps_i)), in nats, with
     the L2 norm and k = 1 as in JIDT. Same interface as JIDT's
     EntropyCalculatorMultiVariateKozachenko.
+
+    A repeated observation has a nearest-neighbour distance of zero, whose
+    logarithm is -inf, so tied data raise ``NotAppropriate``. Unlike KSG,
+    which uses neighbour counts and so can break ties with a tiny jitter,
+    this estimator uses the distances themselves: a jitter (JIDT dithers)
+    would set the estimate by its own scale.
     """
     def __init__(self):
         self._d = None
@@ -181,11 +214,12 @@ class KLEntropyCalculator:
         # entropy to -inf (common in quantised data), so fail with the cause.
         if not np.all(eps > 0):
             n_tied = int(np.sum(eps == 0))
-            raise ValueError(
+            raise NotAppropriate(
                 f"Kozachenko entropy is undefined for tied observations: "
                 f"{n_tied} of {len(eps)} points have a duplicate (zero "
                 f"nearest-neighbour distance). The data is quantised or has "
-                f"repeated values; dither it or use estimator='gaussian'."
+                f"repeated values, and a jitter would set the estimate by its "
+                f"own size; use estimator='gaussian' or 'kernel'."
             )
         log_cd = (d / 2.0) * np.log(np.pi) - gammaln(d / 2.0 + 1)
         return float(
@@ -198,9 +232,12 @@ def _gaussian_entropy_from_data(data_2d):
     Gaussian entropy of an (N, d) array, in nats.
 
     NaN (not -inf) when the covariance is singular after the ridge, so a
-    difference such as H(X,Y) - H(Y) is NaN rather than infinite.
+    difference such as H(X,Y) - H(Y) is NaN rather than infinite. Not
+    appropriate when there are no more rows than columns
+    (``_require_gaussian_samples``).
     """
     N, d = data_2d.shape
+    _require_gaussian_samples(N, d, "entropy", f"{d} variables")
     cov = np.cov(data_2d, rowvar=False, ddof=1)
     log_det = _gaussian_log_det(cov)
     if not np.isfinite(log_det):
@@ -292,7 +329,7 @@ def _kernel_counts(tree, pts, width, dce):
                                                 return_length=True),
                           dtype=np.float64)
     if len(pts) < 2 * dce:
-        raise ValueError(
+        raise NotAppropriate(
             f"Kernel Theiler window {dce - 1} (excluding |j - i| <= "
             f"{dce - 1}) leaves no comparison points among N={len(pts)} "
             f"observations; it needs N >= {2 * dce}.")
@@ -654,6 +691,12 @@ def _tie_break(y, seed=0):
     std, is returned unchanged. Apply to the raw series *before* delay
     embedding so that every embedded lag of a sample carries the same
     perturbation.
+
+    Values far from zero relative to their spread (``|y| / std`` above about
+    1e5, possible only without z-scoring) have a floating-point resolution
+    coarser than the jitter, so the ties survive every pass; the estimate is
+    then not appropriate (``NotAppropriate``), and centring or z-scoring the
+    series resolves it.
     """
     y = np.asarray(y, dtype=np.float64)
     if y.size < 2 or not np.all(np.isfinite(y)):
@@ -666,11 +709,20 @@ def _tie_break(y, seed=0):
         _, inverse, counts = np.unique(y, return_inverse=True, return_counts=True)
         repeated = counts[inverse.ravel()] > 1
         if not repeated.any():
-            break
+            return y
         if rng is None:
             rng = np.random.default_rng(seed)
             y = y.copy()
         y[repeated] += 1e-10 * sigma * rng.standard_normal(y.shape)[repeated]
+    if len(np.unique(y)) < y.size:
+        raise NotAppropriate(
+            f"KSG could not break the ties in a series with "
+            f"{y.size - len(np.unique(y))} repeated value(s): the tie-breaking "
+            f"jitter (1e-10 of the standard deviation, {1e-10 * sigma:.3g}) is "
+            f"below the floating-point resolution of values of this magnitude "
+            f"(largest |value| {np.max(np.abs(y)):.3g}). Centre or z-score the "
+            f"series."
+        )
     return y
 
 
@@ -718,14 +770,15 @@ def _validate_ksg_sample(N, k, w, context=""):
     """
     effective = N - (2 * w + 1) if w else N - 1
     where = f" ({context})" if context else ""
-    if N < 2:
-        raise ValueError(f"KSG needs at least 2 observations, got {N}{where}.")
     if k < 1:
         raise ValueError(f"KSG needs k >= 1, got k={k}{where}.")
     if w < 0:
         raise ValueError(f"Theiler window must be >= 0, got w={w}{where}.")
+    # The series cannot support the estimate: not appropriate, not an error.
+    if N < 2:
+        raise NotAppropriate(f"KSG needs at least 2 observations, got {N}{where}.")
     if k > effective:
-        raise ValueError(
+        raise NotAppropriate(
             f"KSG k={k} exceeds the {effective} usable neighbour(s) for "
             f"N={N} observations with Theiler window w={w}{where}. Reduce k, "
             f"lengthen the series, or narrow the Theiler window."
@@ -954,6 +1007,8 @@ def _gaussian_ais(targ, k, tau):
     Y_p = np.column_stack([targ[start - i * tau: end - i * tau] for i in range(k)])
     YfYp = np.concatenate([Y_f, Y_p], axis=1)
     N = Y_f.shape[0]
+    _require_gaussian_samples(N, k + 1, "active information storage",
+                              f"1 + k with k = {k}")
 
     def _slogdet(arr):
         return _gaussian_log_det(np.cov(arr, rowvar=False, ddof=1))
@@ -991,7 +1046,13 @@ def _ais_scorer(estimator, k_nn=None, w=0):
     transfer entropy measures.
     """
     if estimator == "gaussian":
-        return lambda series, dim, delay: _gaussian_ais(series, dim, delay)
+        def score(series, dim, delay):
+            # A candidate with no more aligned samples than its covariance
+            # dimension (1 + dim) is skipped, as the kraskov scorer does.
+            if len(series) - 1 - (dim - 1) * delay <= dim + 1:
+                return -np.inf
+            return _gaussian_ais(series, dim, delay)
+        return score
     if estimator == "kraskov":
         def score(series, dim, delay):
             # `_ksg_ais` spends one sample on the one-step-ahead future as
@@ -999,7 +1060,7 @@ def _ais_scorer(estimator, k_nn=None, w=0):
             n_eff = len(series) - 1 - (dim - 1) * delay
             try:
                 _validate_ksg_sample(n_eff, k_nn, w)
-            except ValueError:
+            except NotAppropriate:
                 # Unsupported candidates are skipped, so a valid smaller
                 # embedding is chosen when one exists.
                 return -np.inf
@@ -1028,7 +1089,7 @@ def _select_embedding(series, scorer, dim_max, tau_max):
             if np.isfinite(score) and score > best[2]:
                 best = (dim, delay, score)
     if best[0] is None:
-        raise ValueError(
+        raise NotAppropriate(
             f"No (dimension, delay) in 1..{dim_max} x 1..{tau_max} can be "
             f"scored on a series of {len(series)} observations: every "
             f"candidate leaves too few aligned samples for the estimator. "
@@ -1038,7 +1099,19 @@ def _select_embedding(series, scorer, dim_max, tau_max):
 
 
 def _gaussian_te_bivariate(src, targ, k_history, k_tau, l_history, l_tau):
-    """Gaussian TE via log-determinant ratio."""
+    """
+    Gaussian TE via log-determinant ratio.
+
+    Not appropriate when the aligned sample count, ``len(targ) - 1`` less
+    the longer lookback, does not exceed the joint dimension
+    ``1 + k_history + l_history``.
+    """
+    lookback = max((k_history - 1) * k_tau, (l_history - 1) * l_tau)
+    _require_gaussian_samples(
+        len(targ) - 1 - lookback, 1 + k_history + l_history,
+        "transfer entropy",
+        f"1 + k_history + l_history with k_history = {k_history}, "
+        f"l_history = {l_history}")
     Y_f, Y_p, X_p = _te_build_embeddings(src, targ, k_history, k_tau, l_history, l_tau)
     if Y_f is None:
         return np.nan
@@ -1373,6 +1446,8 @@ class InfoTheoryBase(Unsigned):
             est = self._estimator
 
             if est in ('gaussian', 'kraskov'):
+                _require_gaussian_samples(joint.shape[0], 2, "joint entropy",
+                                          "the two processes")
                 val = _gaussian_entropy_from_data(joint)
             else:
                 # kozachenko or kernel
@@ -1471,11 +1546,17 @@ class JointEntropy(InfoTheoryBase, Undirected):
     marginals it is lower when the pair is more dependent.
 
     The ``gaussian`` estimate is the entropy of a Gaussian with the sample
-    covariance (with a relative ridge of 1e-8 on its diagonal). The
-    ``kozachenko`` estimate is the Kozachenko-Leonenko nearest-neighbour
-    estimator [1]_ (k = 1, Euclidean norm), which is undefined for repeated
-    values. The ``kernel`` estimate counts neighbours in a box kernel, as in
-    JIDT [2]_.
+    covariance (with a relative ridge of 1e-8 on its diagonal); it is not
+    appropriate (``NotAppropriate``, NaN in a Calculator table) for two
+    samples or fewer, where that covariance is singular.
+    The ``kozachenko`` estimate is the Kozachenko-Leonenko nearest-neighbour
+    estimator [1]_ (k = 1, Euclidean norm). The ``kernel`` estimate counts
+    neighbours in a box kernel, as in JIDT [2]_.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -1509,6 +1590,8 @@ class JointEntropy(InfoTheoryBase, Undirected):
     @parse_multivariate
     def multivariate(self, data):
         if self._estimator == 'gaussian':
+            _require_gaussian_samples(data.n_observations, 2, "joint entropy",
+                                      "the two processes")
             JE = _gaussian_pairwise_joint_entropy(data.to_numpy(squeeze=True))
             np.fill_diagonal(JE, np.nan)
             return JE
@@ -1528,11 +1611,17 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
     about the column.
 
     The ``gaussian`` estimate is the entropy of a Gaussian with the sample
-    covariance (with a relative ridge of 1e-8 on its diagonal). The
-    ``kozachenko`` estimate is the Kozachenko-Leonenko nearest-neighbour
-    estimator [1]_ (k = 1, Euclidean norm), which is undefined for repeated
-    values. The ``kernel`` estimate counts neighbours in a box kernel, as in
-    JIDT [2]_.
+    covariance (with a relative ridge of 1e-8 on its diagonal); it is not
+    appropriate (``NotAppropriate``, NaN in a Calculator table) for two
+    samples or fewer, where that covariance is singular.
+    The ``kozachenko`` estimate is the Kozachenko-Leonenko nearest-neighbour
+    estimator [1]_ (k = 1, Euclidean norm). The ``kernel`` estimate counts
+    neighbours in a box kernel, as in JIDT [2]_.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -1571,6 +1660,8 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
     def multivariate(self, data):
         if self._estimator == 'gaussian':
             Z = data.to_numpy(squeeze=True)
+            _require_gaussian_samples(Z.shape[1], 2, "conditional entropy",
+                                      "the two processes")
             variances = np.var(Z, axis=1, ddof=1)
             # Marginal entropy uses the same ridge as the scalar path.
             H_marginal = 0.5 * np.log(2 * np.pi * np.e * (variances + 1e-8 * variances))
@@ -1590,13 +1681,16 @@ class MutualInfo(InfoTheoryBase, Undirected):
 
     The ``gaussian`` estimate is ``-0.5 ln(1 - r^2)`` of the Pearson
     correlation ``r`` (with a relative ridge of 1e-8, which bounds it at about
-    8.86 nats). The ``kraskov`` estimate is the KSG nearest-neighbour
-    estimator 1 [1]_ on standardised series, with repeated values first broken
-    by tiny fixed-seed jitter, so it is deterministic. The ``kernel`` estimate
-    counts neighbours in a box kernel, as in JIDT [2]_, excluding the point
-    itself. The ``kraskov`` estimate, and the ``kernel`` estimate with a
-    Theiler window, can fall slightly below zero for independent processes;
-    a kernel estimate in which every joint box is empty is NaN.
+    8.86 nats); it is not appropriate (``NotAppropriate``, NaN in a
+    Calculator table) for two samples or fewer, where the pair's sample
+    covariance is singular. The ``kraskov`` estimate is the KSG
+    nearest-neighbour estimator 1 [1]_ on standardised series, with repeated
+    values first broken by tiny fixed-seed jitter, so it is deterministic.
+    The ``kernel`` estimate counts neighbours in a box kernel, as in JIDT
+    [2]_, excluding the point itself. The ``kraskov`` estimate, and the
+    ``kernel`` estimate with a Theiler window, can fall slightly below zero
+    for independent processes; a kernel estimate in which every joint box is
+    empty is NaN.
 
     References
     ----------
@@ -1640,6 +1734,8 @@ class MutualInfo(InfoTheoryBase, Undirected):
         if self._estimator in ('gaussian', 'kraskov'):
             z = data.to_numpy(squeeze=True)
             if self._estimator == 'gaussian':
+                _require_gaussian_samples(z.shape[1], 2, "mutual information",
+                                          "the two processes")
                 return float(_gaussian_mi_from_r(np.corrcoef(z[i], z[j])[0, 1]))
             else:
                 # kraskov bivariate
@@ -1663,6 +1759,8 @@ class MutualInfo(InfoTheoryBase, Undirected):
     def multivariate(self, data):
         if self._estimator == 'gaussian':
             Z = data.to_numpy(squeeze=True)
+            _require_gaussian_samples(Z.shape[1], 2, "mutual information",
+                                      "the two processes")
             MI = _gaussian_mi_from_r(np.corrcoef(Z))
             np.fill_diagonal(MI, np.nan)
             return MI
@@ -1690,13 +1788,16 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
 
     The ``gaussian`` estimate is ``-0.5 ln(1 - r^2)`` of the Pearson
     correlation ``r`` (with a relative ridge of 1e-8, which bounds it at about
-    8.86 nats). The ``kraskov`` estimate is the KSG nearest-neighbour
-    estimator 1 [1]_ on standardised series, with repeated values first broken
-    by tiny fixed-seed jitter, so it is deterministic. The ``kernel`` estimate
-    counts neighbours in a box kernel, as in JIDT [2]_, excluding the point
-    itself. The ``kraskov`` estimate, and the ``kernel`` estimate with a
-    Theiler window, can fall slightly below zero for independent processes;
-    a kernel estimate in which every joint box is empty is NaN.
+    8.86 nats); it is not appropriate (``NotAppropriate``, NaN in a
+    Calculator table) for three samples or fewer, which leave two or fewer
+    lagged pairs and a singular sample covariance. The ``kraskov`` estimate
+    is the KSG nearest-neighbour estimator 1 [1]_ on standardised series,
+    with repeated values first broken by tiny fixed-seed jitter, so it is
+    deterministic. The ``kernel`` estimate counts neighbours in a box kernel,
+    as in JIDT [2]_, excluding the point itself. The ``kraskov`` estimate,
+    and the ``kernel`` estimate with a Theiler window, can fall slightly
+    below zero for independent processes; a kernel estimate in which every
+    joint box is empty is NaN.
 
     References
     ----------
@@ -1741,6 +1842,9 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
             src = z[i][:-1]
             tgt = z[j][1:]
             if self._estimator == 'gaussian':
+                _require_gaussian_samples(
+                    src.size, 2, "time-lagged mutual information",
+                    "the source and the target one sample later")
                 return float(_gaussian_mi_from_r(np.corrcoef(src, tgt)[0, 1]))
             else:
                 k = int(self._prop_k)
@@ -1765,6 +1869,9 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
         if self._estimator == 'gaussian':
             Z = data.to_numpy(squeeze=True)
             M, T = Z.shape
+            _require_gaussian_samples(
+                T - 1, 2, "time-lagged mutual information",
+                "the source and the target one sample later")
             Z_src = Z[:, :-1]
             Z_tgt = Z[:, 1:]
             stacked = np.vstack([Z_src, Z_tgt])
@@ -1803,7 +1910,11 @@ class TransferEntropy(InfoTheoryBase, Directed):
     target's residual variances when it is predicted from its own past alone
     and together with the source's past: half of Geweke's linear feedback
     measure [2]_, since Granger causality and transfer entropy are equivalent
-    for Gaussian variables [3]_. The ``kraskov`` estimator computes the
+    for Gaussian variables [3]_. It is not appropriate (``NotAppropriate``,
+    NaN in a Calculator table) when the aligned sample count
+    ``T - 1 - max((k_history - 1) * k_tau, (l_history - 1) * l_tau)`` does
+    not exceed ``1 + k_history + l_history``, where the sample covariance is
+    singular. The ``kraskov`` estimator computes the
     conditional mutual information directly with the Frenzel-Pompe
     nearest-neighbour estimator [4]_ [5]_, after repeated values are broken
     by tiny fixed-seed jitter. The ``kernel`` estimator counts neighbours in
@@ -1820,7 +1931,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
     storage [8]_ over dimensions ``1, ..., k_search_max`` and delays
     ``1, ..., tau_search_max``: JIDT's ``MAX_CORR_AIS`` criterion [6]_, which
     follows [9]_. Ties go to the smaller dimension, then the smaller delay.
-    The ``gaussian`` criterion subtracts the AIS bias ``k / (2N)``, and the
+    The ``gaussian`` criterion subtracts the AIS bias ``k / (2N)`` and skips
+    a candidate whose ``N`` aligned samples do not exceed ``1 + k``, and the
     ``kraskov`` criterion uses the KSG estimator with the same ``prop_k`` and
     Theiler window. A pair is NaN when no candidate embedding leaves enough
     samples.
@@ -2152,7 +2264,15 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     covariance (with a relative ridge of 1e-8 on its diagonal), the
     ``kozachenko`` estimate the Kozachenko-Leonenko nearest-neighbour
     estimator [1]_ (k = 1, Euclidean norm), and the ``kernel`` estimate a box
-    kernel, as in JIDT [2]_.
+    kernel, as in JIDT [2]_. The ``gaussian`` estimate is not appropriate
+    (``NotAppropriate``, NaN in a Calculator table) when the ``T - k``
+    aligned samples do not exceed the joint dimension ``max(k, 2)``
+    (``T <= 20`` for ``k = 10``), where the sample covariance is singular.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -2190,6 +2310,11 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     def bivariate(self, data, i=None, j=None):
         src, targ = data.to_numpy(squeeze=True)[[i, j]]
         k = self._history_length
+        if self._estimator == "gaussian":
+            # The joint block [source lags, target] has max(k, 2) columns.
+            _require_gaussian_samples(
+                targ.size - k, max(k, 2), "cross-map entropy",
+                f"max(history_length, 2) with history_length = {k}")
         targ_future = targ[k:]
         src_past = np.expand_dims(src[k - 1 : -1], axis=1)
         for idx in range(2, k):
@@ -2233,7 +2358,15 @@ class CausalEntropy(InfoTheoryBase, Directed):
     covariance (with a relative ridge of 1e-8 on its diagonal), the
     ``kozachenko`` estimate the Kozachenko-Leonenko nearest-neighbour
     estimator [2]_ (k = 1, Euclidean norm), and the ``kernel`` estimate a box
-    kernel, as in JIDT [3]_.
+    kernel, as in JIDT [3]_. The ``gaussian`` estimate is not appropriate
+    (``NotAppropriate``, NaN in a Calculator table) when ``T < 3n``: its
+    last term has ``2n`` dimensions over ``T - n + 1`` times, and with no
+    more samples than dimensions the sample covariance is singular.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -2271,6 +2404,12 @@ class CausalEntropy(InfoTheoryBase, Directed):
     def _compute_causal_entropy(self, src, targ):
         src = np.squeeze(src)
         targ = np.squeeze(targ)
+        if self._estimator == "gaussian":
+            # The last term (m = n) has the largest block, [y_t, n - 1 target
+            # lags, n source samples], over the fewest times, T - n + 1.
+            _require_gaussian_samples(
+                targ.size - self._n + 1, 2 * self._n,
+                "causally conditioned entropy", f"2 * n with n = {self._n}")
 
         causal_entropy = 0
         for i in range(1, self._n + 1):
@@ -2310,7 +2449,12 @@ class DirectedInfo(CausalEntropy, Directed):
     y_{t-1}, ..., y_{t-m+1})`` in nats over a horizon of ``n`` samples.
     Every term is estimated over one common window of times
     ``t = n, ..., T - 1``, and the source terms include the current sample
-    ``x_t``. NaN when the series has ``n + 1`` samples or fewer.
+    ``x_t``. The ``gaussian`` estimate is not appropriate
+    (``NotAppropriate``, NaN in a Calculator table) when ``T <= 3n``, since
+    its largest term has ``2n`` dimensions over ``T - n`` times and with no
+    more samples than dimensions the sample covariance is singular; the
+    other estimators give NaN when the series has ``n + 1`` samples or
+    fewer.
 
     The ``kraskov`` estimator computes each conditional mutual information
     directly with the Frenzel-Pompe nearest-neighbour estimator [2]_ [3]_,
@@ -2318,6 +2462,11 @@ class DirectedInfo(CausalEntropy, Directed):
     estimators compose each term from four joint entropies, estimated as for
     `CausalEntropy`; for ``kozachenko`` and ``kernel`` the estimation biases
     of those entropies, each in its own dimension, do not cancel.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -2384,6 +2533,11 @@ class DirectedInfo(CausalEntropy, Directed):
             targ = _tie_break(targ, _TIE_SEED_TARGET)
         n = self._n
         T = targ.size
+        if self._estimator == "gaussian":
+            # The largest block, [y_t, n - 1 target lags, n source samples],
+            # over the common window of T - n times.
+            _require_gaussian_samples(T - n, 2 * n, "directed information",
+                                      f"2 * n with n = {n}")
         if T <= n + 1:
             return np.nan
 
@@ -2434,9 +2588,17 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
     covariance (with a relative ridge of 1e-8 on its diagonal), the
     ``kozachenko`` estimate the Kozachenko-Leonenko nearest-neighbour
     estimator [2]_ (k = 1, Euclidean norm), and the ``kernel`` estimate a box
-    kernel, as in JIDT [3]_. The ``kernel`` estimate is positively biased in
-    short series, so compare pairs within a dataset rather than reading the
-    absolute level.
+    kernel, as in JIDT [3]_. The ``gaussian`` estimate is not appropriate
+    (``NotAppropriate``, NaN in a Calculator table) when the ``T - d``
+    aligned samples do not exceed the four dimensions of the pair and its
+    past, where the sample covariance is singular. The ``kernel`` estimate
+    is positively biased in short series, so compare pairs within a dataset
+    rather than reading the absolute level.
+    A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
+    repeated value, as in quantised data: it averages the logarithms of
+    nearest-neighbour distances, which are zero for a repeated value, so a
+    jitter would set the answer by its own size (KSG, which counts
+    neighbours, can break ties this way).
 
     References
     ----------
@@ -2475,6 +2637,10 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
         x, y = data.to_numpy()[[i, j]]
         xy = np.concatenate([x, y], axis=1)
         tau = self._delay
+        if self._estimator == "gaussian":
+            _require_gaussian_samples(
+                xy.shape[0] - tau, 4, "stochastic interaction",
+                f"both processes now and at delay = {tau}")
 
         H_joint = self._compute_conditional_entropy(xy[tau:], xy[:-tau])
         # H(X_t | X_{t-tau}) depends on one series: computed once per process.

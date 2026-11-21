@@ -115,8 +115,9 @@ A note on where pyspi differs from an upstream implementation is worth keeping.
 
 - **Orientation:** the output is an `M x M` matrix with row = source and column = target.
   The class's base (`Directed` or `Undirected`, `Signed` or `Unsigned`) and its config labels must agree with what it returns; `Signed` classes carry the `signed` label.
-- **Input it can't handle:** a constant series, too few samples or a fit that doesn't exist gives NaN, not an exception.
-  Raise an exception only for invalid arguments.
+- **Input it can't handle:** too few samples or a fit that doesn't exist gives NaN, not an ordinary exception.
+  Where the reason is worth keeping (the series is too short for the embedding, ties cannot be broken), raise `pyspi.base.NotAppropriate` with a message that names the numbers: the Calculator stores NaN with `Quality.NAN` and records the message as the reason.
+  Raise an ordinary exception only for invalid arguments, at construction, or for a bug: the Calculator labels those `Quality.ERROR`.
 - **Randomness:** any random draw uses a fixed seed, so every value is reproducible.
 - **Identifiers:** an SPI's identifier names its table column and its checkpoint files, so every configuration must have a unique one.
   Parameters are appended as `_<name>-<value>`, formatted with `pyspi.utils.fmt_param` and with dots written as dashes (`_nw-2-5`).

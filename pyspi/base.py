@@ -99,11 +99,24 @@ def parse_multivariate(function):
 
     return parsed_function
 
+class NotAppropriate(ValueError):
+    """
+    The quantity is undefined, or cannot be estimated, for this input.
+
+    Raised by an SPI or estimator when the data cannot support the estimate
+    (too few samples for the dimension, ties that cannot be broken), not when
+    an argument is invalid. It is not a failure of the computation: the
+    Calculator stores the cell, or the SPI, as NaN with ``Quality.NAN`` and
+    keeps the message as the reason. A subclass of ``ValueError``.
+    """
+
+
 # Pair-level failures of the SPI being computed: `fill_pairwise` appends
 # `(i, j, message)` for each cell whose computation raised, so the Calculator
-# can label it `Quality.ERROR` rather than NaN. A ContextVar, not a return
-# value, because the public `multivariate` returns only the matrix. Outside a
-# collector (an SPI called directly) nothing is recorded.
+# can label it (`Quality.ERROR`, or `Quality.NAN` for `NotAppropriate`) and
+# keep its message. A ContextVar, not a return value, because the public
+# `multivariate` returns only the matrix. Outside a collector (an SPI called
+# directly) nothing is recorded.
 _PAIR_FAILURES: ContextVar = ContextVar("pyspi_pair_failures", default=None)
 
 
@@ -126,7 +139,10 @@ def collect_pair_failures():
 def _report_pair_failure(i, j, err):
     failures = _PAIR_FAILURES.get()
     if failures is not None:
-        failures.append((int(i), int(j), f"{type(err).__name__}: {err}"))
+        # Every NotAppropriate, subclasses included, carries the one prefix
+        # the Calculator reads as "not appropriate" rather than "failed".
+        kind = "NotAppropriate" if isinstance(err, NotAppropriate) else type(err).__name__
+        failures.append((int(i), int(j), f"{kind}: {err}"))
 
 
 def fill_pairwise(identifier, A, pairs, compute, mirror=False):
@@ -136,12 +152,16 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     A pair whose estimate is undefined (e.g., tied observations for a
     Kozachenko-Leonenko entropy, or a singular fit) raises inside ``compute``.
     That pair alone is set to NaN, and the failures are reported in one
-    warning. If every pair fails, the first exception is re-raised so the SPI
-    is recorded as failed with the estimator's own message.
+    warning. If every pair fails, an exception is re-raised so the SPI is
+    recorded with the estimator's own message: the first that is not
+    :class:`NotAppropriate`, or the first of all when every pair is not
+    appropriate.
 
     Each failed cell is also reported to the collector opened by
-    :func:`collect_pair_failures`, if one is open, so the Calculator labels it
-    ``Quality.ERROR`` and keeps its message in ``Calculator.pair_errors``.
+    :func:`collect_pair_failures`, if one is open, and the Calculator keeps
+    its message in ``Calculator.pair_errors``. It labels the cell
+    ``Quality.NAN`` when the pair raised :class:`NotAppropriate` (the message
+    then starts ``"NotAppropriate: "``) and ``Quality.ERROR`` otherwise.
 
     With ``mirror=True`` each value is also written to ``A[j, i]``, and a
     failure is reported for both cells but counted once, as one pair.
@@ -157,7 +177,8 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
         if mirror:
             A[j, i] = value
     if failures and len(failures) == len(pairs):
-        raise failures[0][1]
+        errors = [e for _, e in failures if not isinstance(e, NotAppropriate)]
+        raise errors[0] if errors else failures[0][1]
     for (i, j), err in failures:
         _report_pair_failure(i, j, err)
         if mirror:

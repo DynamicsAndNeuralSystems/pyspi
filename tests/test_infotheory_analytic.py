@@ -25,6 +25,7 @@ assembled from several entropies cannot cancel below that order.
 import numpy as np
 import pytest
 
+from pyspi.base import NotAppropriate
 from pyspi.data import Data
 from pyspi.statistics.infotheory import (
     CausalEntropy,
@@ -896,7 +897,7 @@ def test_ksg_radius_and_counts_match_brute_force(w, k, chunk, monkeypatch):
     if w == "largest":
         w = (n - k - 1) // 2
         it._validate_ksg_sample(n, k, w)
-        with pytest.raises(ValueError, match="usable neighbour"):
+        with pytest.raises(NotAppropriate, match="usable neighbour"):
             it._validate_ksg_sample(n, k, w + 1)
 
     radius = it._ksg_radius(cKDTree(series), series, k, w)
@@ -1035,7 +1036,7 @@ def test_ksg_refuses_constant_and_short_inputs(w):
     assert np.isfinite(_ksg_mi_pair(x, tied, 4, w))   # ties are jittered, not refused
     for fn in (_ksg_mi_pair, _ksg_mi_general):
         short = 4 + 2 * w          # one observation too few for k=4
-        with pytest.raises(ValueError, match="usable neighbour"):
+        with pytest.raises(NotAppropriate, match="usable neighbour"):
             fn(x[:short], x[::-1][:short], 4, w)
         assert np.isfinite(fn(x[:short + 1], x[::-1][:short + 1], 4, w))
 
@@ -1111,7 +1112,7 @@ def test_ais_scorer_rejects_a_candidate_that_leaves_too_few_samples():
     assert _ais_scorer("kraskov", 4, 0)(series, 1, 1) == -np.inf
 
     # The general path refuses the same input on its own account.
-    with pytest.raises(ValueError, match="usable neighbour"):
+    with pytest.raises(NotAppropriate, match="usable neighbour"):
         _ksg_mi_general(rng.standard_normal((4, 1)), rng.standard_normal((4, 1)),
                         4, 0)
 
@@ -1122,6 +1123,6 @@ def test_embedding_selection_raises_when_no_candidate_is_scorable():
     from pyspi.statistics.infotheory import _ais_scorer, _select_embedding
 
     rng = np.random.default_rng(14)
-    with pytest.raises(ValueError, match="can be scored"):
+    with pytest.raises(NotAppropriate, match="can be scored"):
         _select_embedding(rng.standard_normal(5), _ais_scorer("kraskov", 4, 0),
                           3, 2)
