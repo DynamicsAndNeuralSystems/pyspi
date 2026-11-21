@@ -441,6 +441,11 @@ class Data:
         if n_observations is not None:
             data = data[:, :n_observations]
 
+        # One memory layout whatever the input's: a reduction over a
+        # Fortran-ordered or strided array can differ from the C-ordered one
+        # in the last bit, and equal values must give equal results.
+        data = np.ascontiguousarray(data)
+
         if not stated and data.shape[0] > data.shape[1]:
             warnings.warn(
                 f"Data of shape {shape}, read with the default dim_order='ps', "

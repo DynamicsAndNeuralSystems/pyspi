@@ -76,6 +76,16 @@ def test_sp_reads_the_transposed_array_identically():
                                   Data(X).to_numpy())
 
 
+def test_memory_layout_does_not_change_the_preprocessed_values():
+    """Equal values give bit-identical data whatever array layout holds them."""
+    expected = Data(X).to_numpy()
+    for same_values in (np.asfortranarray(X), np.ascontiguousarray(X.T).T,
+                        np.repeat(X, 2, axis=1)[:, ::2]):
+        np.testing.assert_array_equal(Data(same_values).to_numpy(), expected)
+    np.testing.assert_array_equal(
+        Data(np.ascontiguousarray(X.T), dim_order="sp").to_numpy(), expected)
+
+
 @pytest.mark.parametrize("dim_order, frame", [
     ("ps", pd.DataFrame(X, index=NAMES)),
     ("sp", pd.DataFrame(X.T, columns=NAMES)),
