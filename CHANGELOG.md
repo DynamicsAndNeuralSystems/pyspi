@@ -64,10 +64,9 @@ Tie-free series are not changed by pyspi's tie handling (see below), and for tho
 
 - **Java and JIDT** (above): `infodynamics.jar`, `jpype1` and the JVM start-up path.
 - **`cdt` and `torch`** (see Dependencies); `setup.py` and `requirements.txt` (packaging is `pyproject.toml` only); `pyspi/phiconf.yaml`; the 2.x config filenames (see the migration table); pickle and parquet output.
-- **128 SPIs** (`full`: 285 to 231 net of 74 additions). See [SPI set changes](#spi-set-changes). Fourteen went with the port: six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`. Twenty-four more are duplicate, constant or degenerate: the four `*_EllipticEnvelope` (equal to `*_MinCovDet`), `lmfit_Lasso` and `lmfit_ElasticNet` (nearly constant at `alpha = 1`), `bary_euclidean_mean` (identically 0), `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` (box kernel in ~10 dimensions), the six `pli`/`wpli` multitaper maxima (saturate at 1), the three `psi_wavelet_max_*` (tend to their bound), and the DTW-type `bary_*_mean` and `bary-sq_*_mean` (six), replaced by `bary_{dtw,sgddtw,softdtw}_corr` (see **Changed**).
-  Thirty-seven more are unbundled because an SPI that stays carries them: the shrinkage covariances and six squared covariances (9), `lmfit_*` (3), the bivariate `pdcoh_*`/`gpdcoh_*` (12), `ppc_*` (6), `kendalltau` and `kendalltau-sq`, `pdist_cosine`, `pdist_euclidean` and `bary-sq_euclidean_mean`, and `phi_{Geo,star}_t-1_norm-1`.
-  The six `xcorr_*` are unbundled in favour of the directed `lagcorr_*` (see **Added**), which read the same cross-correlation profile.
-  Their classes are unchanged, so each can still be computed from a custom config.
+- **128 SPIs** from `full` (285 to 231, with 74 added): 30 duplicate, constant or degenerate, 63 carried by an SPI that stays bundled, 27 that track something other than coupling, and 8 other estimators.
+  All but four can still be computed from a custom config.
+  See [SPI set changes](#spi-set-changes).
 - **Nine wavelet classes that were never in a bundled config**: `statistics.wavelet`'s `CoherenceMagnitude`, `CoherencePhase`, `ImaginaryCoherence`, `PhaseLockingValue`, `PairwisePhaseConsistency`, `PhaseLagIndex`, `weighted_PhaseLagIndex`, `DebiasedSquaredWeightedPhaseLagIndex` and `debiased_weighted_squared_PhaseLagIndex`. Their shared estimate passed `cwt_n_cycles = cwt_freqs / 7` (about 0.03 cycles), a wavelet about one sample wide, and averaged the cross-spectrum over epochs only, of which pyspi passes one. The coherency was then exactly `1 + 0j` at every frequency and time, so a custom config got `cohmag` and `plv` of 1, `icoh` and `dwspli` of 0, `pli` and `wspli` near 1, `ppc` and `dspli` of `-inf`, and `phase` of 0 or NaN, whatever the data. The multitaper classes of the same names in `statistics.spectral` are unaffected; the wavelet `PhaseSlopeIndex` has its own estimate and is unchanged.
 
 ### Fixed: state, identity, and estimator contracts
@@ -559,114 +558,93 @@ Definitions the corrected measures are checked against:
 | `parse_bivariate` with ambiguous `i`/`j` (built a `Warning` and carried on) | raises `ValueError` |
 | pickled results tables | cannot be loaded; re-save with `Calculator.save()` (`.npz`) and read with `pyspi.load_table()` |
 | `A[i, j]` of `sgc`, `dcoh`, `pdcoh`, `gpdcoh`, `dtf`, `ddtf` (influence of j on i) | transposed: row = source, column = target; transpose saved 2.x results |
-| SPI identifiers in saved 2.x results | 22 renamed, 128 removed, 71 added; see [SPI set changes](#spi-set-changes) |
+| SPI identifiers in saved 2.x results | 22 renamed, 128 removed, 74 added; see [SPI set changes](#spi-set-changes) |
 | `import pyspi` replacing `sys.stdout`/`sys.stderr`, seeding NumPy's global RNG, setting `OMP_NUM_THREADS` | no longer |
 | `phase_multitaper_max_*` | removed; `CoherencePhase(statistic="max")` raises because ordinary maxima of wrapped angles are branch-cut dependent |
 
 ### SPI set changes
 
-**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 231.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
+**Relative to pyspi 2.0.2, `full` goes from 285 SPIs to 231.**
+The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
 
 | Change | SPIs | Families |
 |:-------|-----:|:---------|
 | 2.0.2 `config.yaml` | 285 | |
-| Unchanged identifier | 135 | (values may still change; see "Values changed") |
-| **Renamed** (identifier only, except DTW) | 22 | `sgc` (11), Kraskov DCE (4), `cce`/`di_gaussian` `n` (4), auto-embedding method (3), DTW Sakoe-Chiba (1) |
-| **Removed** | 128 | multitaper `dspli`/`dswpli` maxima (6), `phase_multitaper_max` (3), symbolic TE (2), `di_kernel`, `di_kozachenko`, `igci`; duplicate, constant or degenerate (24): `*_EllipticEnvelope` (4), `pli`/`wpli` multitaper maxima (6), `psi_wavelet_max_*` (3), `bary_*_mean` and `bary-sq_*_mean` (6), `lmfit_Lasso`, `lmfit_ElasticNet`, `bary_euclidean_mean`, `cce_kernel_W-0.5_n-5`, `xme_kernel_W-0.5_k10`; unbundled as redundant (37): shrinkage `cov_*` and `cov-sq_*` (9), `lmfit_*` (3), `pdcoh_*`/`gpdcoh_*` (12), `ppc_*` (6), `kendalltau`/`kendalltau-sq` (2), `pdist_cosine`/`pdist_euclidean`/`bary-sq_euclidean_mean` (3), `phi_*_t-1_norm-1` (2); replaced by `lagcorr_*`: `xcorr_*` (6) |
-| **Added** | 74 | `LagResolvedCorrelation` (13), `PartialCorrelation` (7), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `ChatterjeeXi` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1), `te_symbolic_k-3` (1), kernel MI/TLMI/TE with dynamic correlation exclusion (3), wavelet coherence `wtc_wavelet_mean_*` (3) |
+| Unchanged identifier | 135 | (values may still change; see "Further value changes") |
+| **Renamed** (identifier only, except DTW) | 22 | `sgc` (11), Kraskov DCE (4), `cce`/`di_gaussian` `n` (3), auto-embedding method (3), DTW Sakoe-Chiba (1) |
+| **Removed** | 128 | duplicate, constant or degenerate (30); carried by an SPI that stays bundled (63); tracking something other than coupling (27); other estimators not bundled (8) |
+| **Added** | 74 | `LagResolvedCorrelation` (13), conditional spectral measures (12), `PartialCorrelation` (6), `NonlinearInterdependence` (4), `LiangInformationFlow` (4), `EventSynchronisation` (4), `ConvergentCrossMapping` convergence (3), `ConditionalGrangerCausality` (3), `EdgeTimeSeries` (3), kernel MI/TLMI/TE with dynamic correlation exclusion (3), `WaveletCoherence` (3), `ChatterjeeXi` (2), `CrossPairwiseDistance` (2), `Barycenter` correlation (2), `LaggedConvergentCrossMapping` (2), `PhaseAmplitudeCoupling` (2), `TailDependenceAsymmetry` (2), and one each of `di_kraskov`, `te_symbolic_k-3`, `PhaseAlignedCorrelation` and `AdaptivePhaseConsistency` |
 | 3.0.0 `full.yaml` | 231 | 285 − 128 + 74 |
 
-Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 138, `fabfour` (4) keeps its size, with `spearmanr` in place of `spearmanr-sq` (no squared rank correlation is bundled), and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`).
+Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 138.
+`fabfour` keeps its 4, with `spearmanr` in place of `spearmanr-sq` (no squared rank correlation is bundled).
+`sonnet` keeps its 14, with two substitutions (`pli_multitaper_max_fs-1_fmin-0_fmax-0-5` becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`) and three renamed identifiers.
 The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (183, 173, 161 and 145 SPIs).
 The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
-Every removal and rename below is deliberate.
-
-The unsupported coherence-phase maxima are removed from shipped configs. Other disabled variants (including `InformationGeometricCausalInference`, active as `igci` in 2.0.2) remain commented with the evidence for switching them off and the condition that would justify switching them back on.
-
-**Removed: the multitaper `dspli`/`dswpli` maxima (6).** The `dspli_multitaper_max_*` and `dswpli_multitaper_max_*` variants (bands 0-0.25, 0.25-0.5 and 0-0.5) return exactly 1.0 for essentially any input, including white noise at T=100, 1,000 and 10,000, and coupled AR processes. With a single recording the debiased statistics are estimated across only a few tapers, so at any frequency where the tapers agree in sign the value is exactly 1 (28 of 501 frequency bins in a T=1000 noise test), and the maximum over frequencies is 1. The `mean` variants are kept. (Counts: `full` 322 to 316, `fast` 213 to 207, `benchmarked_p99` 318 to 312, `p95` 305 to 299, `p90` 289 to 283, `p80` 261 to 255.)
-
-**Removed as duplicate, constant or degenerate (24).**
-The four `*_EllipticEnvelope` SPIs equal `*_MinCovDet` (`EllipticEnvelope.fit` is `MinCovDet.fit` plus an outlier threshold).
-`lmfit_Lasso` and `lmfit_ElasticNet` are nearly constant at sklearn's `alpha = 1` on z-scored data, and `bary_euclidean_mean` is identically 0.
-The `pli`/`wpli` multitaper maxima saturate at 1, as the `dspli`/`dswpli` maxima do; `psi_wavelet_max_*` tends to its bound whatever the data; and `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` are box-kernel estimates in about ten dimensions that do not converge with `T`.
-The DTW-type `bary_*_mean` SPIs are replaced by `bary_*_corr`, of which the squared means are monotone functions.
-Every class remains constructible with these arguments.
-Some kept SPIs are deterministic functions of others (`je_gaussian`/`ce_gaussian` of `mi_gaussian` under z-scoring, `ccm_*_diff` of `ccm_*_mean`), which matters when selecting features.
-
-**Unbundled as redundant (37).**
-Each is an exact function of an SPI that stays bundled, or agrees with one at |ρ| ≥ 0.99 across the 498 datasets of the 3.0 benchmark, and its whole family or setting goes with it.
-On z-scored data the shrinkage covariances are the empirical correlation times one factor per dataset, `pdist_cosine`, `pdist_euclidean` and `bary-sq_euclidean_mean` are functions of Pearson r, `lmfit_*` is a function of r² (carried by `mi_gaussian`), and the `norm-1` integrated-information SPIs are their `norm-0` values divided by a constant.
-Fitted on one pair, PDC equals DTF and gPDC equals DC² at every frequency, and PPC is a function of PLV at every frequency.
-`kendalltau` ranks pairs as `spearmanr` does.
-These are removals from the bundled configs only: the classes are unchanged, and each SPI can still be computed from a custom config.
-
-**Replaced by `lagcorr_*` (6).**
-The six `xcorr_*` SPIs summarise the cross-correlation profile over all lags by its maximum or mean, which says nothing about which series leads.
-The `lagcorr_*` SPIs read the same cached profile and report the lag, the peak, the lead/lag asymmetry and the directed correlation at set lags.
+Every removal except `phase_multitaper_max_*` and `te_symbolic_k-1_kt-1_l-1_lt-1` is from the bundled configs only: the classes accept those parameters, so each SPI can still be computed from a custom config.
+An SPI counts as carried by another when it is an exact function of an SPI that stays bundled, or agrees with one at Spearman |ρ| ≥ 0.99 on simulated multivariate systems of coupled processes.
 
 **Removed (128)**
 
 | SPI | Why |
 |:----|:----|
-| `te_symbolic_k-1` | A length-1 ordinal pattern has one symbol, so TE is identically zero. |
-| `te_symbolic_k-10` | Severely undersampled and unvalidated at `T=100`: `10!` symbols against ~91 usable samples. On var1 and cml every joint count is 1, so the value tracks sample size rather than dependence; that does not hold universally (kuramoto: 3 of 42 pairs). Still constructible, and defensible for long series. |
-| `di_kernel_W-0.5` | ~3.8-4.4 on independent data at every `T` from 100 to 8000. |
-| `di_kozachenko` | Negative values, for a nonnegative quantity. |
-| `phase_multitaper_max_*` (3) | Ordinary maxima of wrapped phase depend on the branch cut and were exactly π off-diagonal on the VAR fixture. The constructors now refuse this statistic. |
-| `dspli_multitaper_max_*`, `dswpli_multitaper_max_*` (6) | Constant 1.0 on essentially any input (above). |
-| `igci` | Active in 2.0.2's `config.yaml`; removed from `full.yaml` as a disabled heuristic. The class remains as `InformationGeometricCausalInference`. |
+| `dspli_multitaper_max_*`, `dswpli_multitaper_max_*` (6) | Constant 1.0 on essentially any input: with one recording the debiased statistics are estimated across a few tapers, so the band maximum is 1. `mean` variants kept. |
+| `phase_multitaper_max_*` (3) | The maximum of a wrapped phase depends on the branch cut. `CoherencePhase` refuses `statistic="max"`. |
+| `te_symbolic_k-1_kt-1_l-1_lt-1` | A length-1 ordinal pattern has one symbol, so TE is identically zero; `k_history=1` is refused. |
+| `te_symbolic_k-10_kt-1_l-1_lt-1` | `10!` symbols against about 90 usable samples at T=100. Still available as `te_symbolic_k-10` for long series. |
+| `di_kernel_W-0.5`, `di_kozachenko` (2) | Composed from separately estimated entropies whose biases do not cancel: 3.8-4.4 on independent data at every T (kernel), and negative values (Kozachenko). `di_kraskov_NN-4_n-5` replaces them. |
+| `igci` | Not bundled; the class remains as `InformationGeometricCausalInference`. |
 | `cov_EllipticEnvelope`, `cov-sq_EllipticEnvelope`, `prec_EllipticEnvelope`, `prec-sq_EllipticEnvelope` (4) | Equal to the `*_MinCovDet` SPIs (`EllipticEnvelope.fit` is `MinCovDet.fit` plus an outlier threshold). |
-| `lmfit_Lasso`, `lmfit_ElasticNet` (2) | Constant `(T - 1) / T` (Lasso, always; ElasticNet unless `|r| > 0.5`) at sklearn's `alpha = 1` on z-scored data. |
+| `lmfit_Lasso`, `lmfit_ElasticNet` (2) | Constant `(T - 1) / T` (Lasso always; ElasticNet unless `|r| > 0.5`) at sklearn's `alpha = 1` on z-scored data. |
 | `bary_euclidean_mean` | Identically 0: the Euclidean barycenter of two zero-mean series has mean 0. |
-| `cce_kernel_W-0.5_n-5`, `xme_kernel_W-0.5_k10` (2) | Fixed-width box kernel in ten to eleven dimensions; the bias does not shrink with `T`. `xme_kernel_W-0.5_k1` stays. |
-| `pli_multitaper_max_*`, `wpli_multitaper_max_*` (6) | Saturate at 1 for every pair at `T >= 1000`, as the `dspli` maxima do; `mean` variants kept. |
+| `cce_kernel_W-0.5`, `xme_kernel_W-0.5_k10` (2) | Fixed-width box kernel in ten to eleven dimensions; the bias does not shrink with T. `xme_kernel_W-0.5_k1` stays. |
+| `pli_multitaper_max_*`, `wpli_multitaper_max_*` (6) | Saturate at 1 for every pair at T >= 1000, as the `dspli` maxima do; `mean` variants kept. |
 | `psi_wavelet_max_*` (3) | The maximum over time of a bounded instantaneous phase slope tends to its bound whatever the data; `mean` variants kept. |
 | `bary_{dtw,sgddtw,softdtw}_mean` (3) | The barycenter of two zero-mean series has mean close to zero. Replaced by `bary_*_corr`. |
 | `bary-sq_{dtw,sgddtw,softdtw}_mean` (3) | A monotone function of `bary_*_corr`. |
-| `cov_ShrunkCovariance`, `cov_LedoitWolf`, `cov_OAS` (3) | Unbundled. The empirical correlation times one shrinkage factor per dataset, so `cov_EmpiricalCovariance` carries them. |
-| `cov-sq_{EmpiricalCovariance,ShrunkCovariance,GraphicalLasso,LedoitWolf,MinCovDet,OAS}` (6) | Unbundled. The exact square of a covariance SPI. |
-| `lmfit_Ridge`, `lmfit_BayesianRidge`, `lmfit_SGDRegressor` (3) | Unbundled. In-sample error of a linear fit of one z-scored series on another, a function of r² that `mi_gaussian` carries (|ρ| 1.000; `SGDRegressor` is the same fit by a noisier optimiser). |
-| `pdcoh_multitaper_*`, `gpdcoh_multitaper_*` (12) | Unbundled. Fitted on one pair, PDC equals DTF and gPDC equals DC² at every frequency, so `dtf_*` and `dcoh_*` carry them. |
-| `ppc_multitaper_*` (6) | Unbundled. PPC = (N·PLV² − 1)/(N − 1) at every frequency, so `plv_*` carries it. |
-| `kendalltau`, `kendalltau-sq` (2) | Unbundled. Ranks pairs as `spearmanr` does (|ρ| 0.998 within datasets). |
-| `pdist_cosine`, `pdist_euclidean`, `bary-sq_euclidean_mean` (3) | Unbundled. On z-scored series, `1 − r`, `sqrt(2T(1 − r))` and `(1 + r)/2` of the Pearson correlation r. |
-| `phi_Geo_t-1_norm-1`, `phi_star_t-1_norm-1` (2) | Unbundled. The `norm-0` value divided by a constant under z-scoring. |
-| `xcorr_max_sig-True`, `xcorr_mean_sig-{True,False}` and their `xcorr-sq_*` forms (6) | Unbundled. Replaced by the directed `lagcorr_*`, which read the same cross-correlation profile. |
+| `cov_ShrunkCovariance`, `cov_LedoitWolf`, `cov_OAS` (3) | On z-scored data, the empirical correlation times one shrinkage factor per dataset, so `cov_EmpiricalCovariance` carries them. |
+| `cov_GraphicalLasso` | At `alpha = 0.01` the penalty barely moves the covariance, so `cov_EmpiricalCovariance` carries it. `pcorr_GraphicalLasso` stays. |
+| `cov-sq_{EmpiricalCovariance,ShrunkCovariance,GraphicalLasso,LedoitWolf,MinCovDet,OAS}` (6) | The exact square of a covariance SPI. |
+| `prec{,-sq}_{EmpiricalCovariance,GraphicalLasso,LedoitWolf,MinCovDet,OAS,ShrunkCovariance}` (12) | `pcorr_<estimator>` is the same precision entry rescaled to [-1, 1], and replaces them. |
+| `{cov,cov-sq,prec,prec-sq}_GraphicalLassoCV` (4) | The cross-validated penalty can set every off-diagonal entry to exactly 0, and the empirical and fixed-penalty estimators detect coupling as well at a small fraction of the cost. |
+| `spearmanr-sq` | The exact square of `spearmanr`. |
+| `kendalltau`, `kendalltau-sq` (2) | Ranks pairs as `spearmanr` does. |
+| `je_gaussian`, `ce_gaussian` (2) | On z-scored data, a constant minus `mi_gaussian`. |
+| `lmfit_Ridge`, `lmfit_BayesianRidge`, `lmfit_SGDRegressor` (3) | In-sample error of a linear fit of one z-scored series on another, a function of r² that `mi_gaussian` carries (`SGDRegressor` is the same fit by a noisier optimiser). |
+| `pdist_cosine`, `pdist_euclidean`, `bary-sq_euclidean_mean` (3) | On z-scored series, `1 − r`, `sqrt(2T(1 − r))` and `(1 + r)/2` of the Pearson correlation r. |
+| `phi_Geo_t-1_norm-1`, `phi_star_t-1_norm-1` (2) | The `norm-0` value divided by a constant under z-scoring. |
+| `pdcoh_multitaper_*`, `gpdcoh_multitaper_*` (12) | Fitted on one pair, PDC equals DTF and gPDC equals DC² at every frequency. |
+| `ppc_multitaper_*` (6) | PPC = (N·PLV² − 1)/(N − 1) at every frequency, so `plv_*` carries it. |
+| `xcorr_max_sig-True`, `xcorr_mean_sig-{True,False}` and their `xcorr-sq_*` forms (6) | The directed `lagcorr_*` SPIs read the same cross-correlation profile and replace them. |
+| `dtf_multitaper_*`, `ddtf_multitaper_*` (12) | Fitted on one pair, DTF's direction follows which process is less predictable rather than which drives the other. `dcoh_*` is the bundled directed spectral family. |
+| `gd_multitaper_delay_*` (3) | NaN unless a run of significant coherence spans three independent frequencies, which most pairs lack; `lagcorr_lag_*` carries the lead/lag. |
+| `bary{,-sq}_{euclidean,dtw,sgddtw,softdtw}_max` (8) | On z-scored input the barycenter's maximum is `sqrt((1 + corr) / 2)` times its crest factor, which follows the two marginals more than their coupling. |
+| `ccm_E-{None,1,10}_diff` (3) | Has the wrong sign under stochastic coupling. `lccm_E-None_k-5_tp` is the directed CCM statistic. |
+| `gwtau` | On z-scored series it mostly tracks the difference between the two lag-1 autocorrelations rather than the coupling. |
 
-**Added (71)**
+**Added (74)**: see the new SPIs under **Added**.
 
-| SPI | Why |
-|:----|:----|
-| `lagcorr_{lag,peak,asym}_L-{None,10}`, `lagcorr_onesided_tau-{1,2,3,5,10,1e}_L-None`, `lagcorr_onesidedpeak_L-None` (13) | `LagResolvedCorrelation`: directed, lag-resolved cross-correlation; see Added above. Replaces `xcorr_*`. |
-| `pcorr_<estimator>` (7) | `PartialCorrelation`: `-P_ij / sqrt(P_ii P_jj)` from the precision matrix of each bundled covariance estimator; see Added above. |
-| `xi_tau-{0,1}` (2) | `ChatterjeeXi`: Chatterjee's rank correlation xi, directed; see Added above. |
-| `xpdist_euclidean_tau-1_{mean,min}_rmse` (2) | `CrossPairwiseDistance`: shifted-path Euclidean upper bound on DTW. |
-| `bary_{dtw,sgddtw,softdtw}_corr` (3) | `Barycenter`: alignment-adjusted correlation `2 mean(b^2) / mean_energy - 1` of the DBA, subgradient-DBA and soft-DTW barycenters; replaces the `mean` statistic. |
-| `di_kraskov_NN-4_n-5` (1) | Direct KSG/Frenzel-Pompe conditional-MI estimate of directed information; the validated nonlinear replacement for the two dropped variants. Not in the `benchmarked_p*` sets until it has been timed. |
-| `phasealigned_welch_nperseg-auto` (1) | `PhaseAlignedCorrelation`: zero-lag correlation maximised over all-pass (phase-only) filtering of one process, `sum_f w_f |S_jk(f)| / sqrt(sum_f w_f S_jj(f) sum_f w_f S_kk(f))` from Hann-window Welch cross-spectra. Completes the ladder `r <= max xcorr <= P`; a pure delay gives `max xcorr == P`. Undirected, unsigned, in [0, 1], with a null floor of about `sqrt(pi / (4K))` for `K` segments; `nperseg` defaults to the largest power of two not above `T / 8` within [8, 256], refusing `T < 20`. Not in the `benchmarked_p*` sets until it has been timed. |
-| `te_symbolic_k-3` (1) | Symbolic (ordinal-pattern) transfer entropy with 3-sample patterns (6 symbols), populated from a few hundred samples; positively biased at short T. |
-| `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO`, `te_kernel_W-0.25_DCE-AUTO_k-1` (3) | Box-kernel MI, time-lagged MI and TE with the AUTO dynamic correlation exclusion window; see Added above. In `benchmarked_p90`/`p95`/`p99`; MI and TLMI are also in `fast`. |
-
-**Renamed (23)** — no value change, except the DTW row. In every case a parameter that changes the measure was absent from, or misreported by, the identifier.
+**Renamed (22)**: no value change, except the DTW row.
+In every case a parameter that changes the measure was absent from, or misreported by, the identifier.
 
 | Was | Is | Why |
 |:----|:---|:----|
-| `sgc_*_fmin-0_*` (11) | `sgc_*_fmin-1e-05_*` | Spectral GC is undefined at zero frequency, so `fmin=0` is overridden — but the identifier was built from the argument. |
+| `sgc_*_fmin-0_*` (11) | `sgc_*_fmin-1e-05_*` | Spectral GC is undefined at zero frequency, so `fmin=0` is overridden, but the identifier was built from the argument. |
 | `mi_kraskov_NN-4_DCE`, `tlmi_kraskov_NN-4_DCE`, `te_kraskov_NN-4_DCE_k-1_...`, `te_kraskov_NN-4_DCE_k-2_...` (4) | `..._DCE-AUTO...` | The Theiler window's value, not just its presence: 5, 10 and `"AUTO"` shared one name. |
-| `cce_gaussian`, `cce_kernel_W-0.5`, `cce_kozachenko`, `di_gaussian` (4) | `..._n-5` | `n` changes the measure. |
-| `te_kraskov_NN-4_DCE_k-max-10_tau-max-4`, `te_kraskov_NN-4_k-max-10_tau-max-4`, `gc_gaussian_k-max-10_tau-max-2` (3) | `..._MAX-CORR-AIS_k-max-*` (the first also `DCE` to `DCE-AUTO`) | The auto-embedding method changes what is computed. Values are those of 2.0.2's search (it already selected the source embedding too). |
-| `dtw_constraint-sakoe-chiba` (1) | `dtw_constraint-sakoe-chiba_radius-auto` | The radius is now chosen from the series length instead of tslearn's default of 1. **Values change** (up to 8.5 versus 2.0.1). |
+| `cce_gaussian`, `cce_kozachenko`, `di_gaussian` (3) | `..._n-5` | `n` changes the measure. |
+| `te_kraskov_NN-4_DCE_k-max-10_tau-max-4`, `te_kraskov_NN-4_k-max-10_tau-max-4`, `gc_gaussian_k-max-10_tau-max-2` (3) | `..._MAX-CORR-AIS_k-max-*` (the first also `DCE` to `DCE-AUTO`) | The auto-embedding method changes what is computed. Values are those of 2.0.2's search, which selects the source embedding too. |
+| `dtw_constraint-sakoe-chiba` (1) | `dtw_constraint-sakoe-chiba_radius-auto` | The radius is chosen from the series length instead of tslearn's default of 1. **Values change** (by up to 8.5). |
 
-Symbolic transfer entropy identifiers also lose the three embedding parameters the estimator never applied: `te_symbolic_k-<k>_kt-1_l-1_lt-1` → `te_symbolic_k-<k>`. Neither 2.0.2 symbolic variant is still shipped (both are removed above); `te_symbolic_k-3` is new.
+Symbolic transfer entropy identifiers also lose the three embedding parameters the estimator never applied: `te_symbolic_k-<k>_kt-1_l-1_lt-1` → `te_symbolic_k-<k>`.
 
-Values for the six directed spectral SPIs listed under **Fixed** are also transposed relative to 2.x.
+Values for the directed spectral classes listed under **Fixed** are also transposed relative to 2.x.
 
 **Further value changes** (beyond those above, relative to 2.0.2; see **Fixed** and **Changed**):
 
 | SPIs | Count | Cause |
 |:-----|------:|:------|
-| `ccm_E-{None,1,10}_{mean,max,diff}` | 9 | Transposed to source-by-target; library sizes reach the largest library. |
+| `ccm_E-{None,1,10}_{mean,max}` | 6 | Transposed to source-by-target; library sizes reach the largest library. |
 | `softdtw_constraint-{sakoe-chiba,itakura}` | 2 | The constraint is applied. |
 | `dcorrx_maxlag-{1,10}`, `mgcx_maxlag-{1,10}` | 4 | Transposed; lagged terms follow the published definition. |
 | `coint_aeg_tstat_*` | 3 | Transposed: the column is regressed on the row. |
@@ -674,11 +652,8 @@ Values for the six directed spectral SPIs listed under **Fixed** are also transp
 | `mi`, `tlmi` `_kraskov_NN-4_DCE-AUTO` | 2 | Theiler-window digamma term. |
 | `mi`, `tlmi`, `te` `_kraskov_NN-4_DCE-AUTO*` | 5 | AUTO Theiler window capped at `N // 10`. |
 | `phi_Geo_t-1_norm-0` | 1 | Optimiser runs to a disconnected model. |
-| `dtf_*`, `dcoh_*` | 12 | Closed frequency band. |
-| `ddtf_*` | 6 | Closed band; partial coherence in place of `sqrt(PDC)`. |
+| `dcoh_*` | 6 | Closed frequency band. |
 | `sgc_parametric_*` | 18 | Yule-Walker VAR fit and corrected frequency labels. |
 | `phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli` `_multitaper_mean_*`; `plv_multitaper_max_*` | 21 | Real-valued 0 Hz and Nyquist bins left out of the band (`dspli` also: taper-pair sign products). |
 | `psi_multitaper_mean_*` (half bands) | 2 | Closed band less the real-valued bins. |
-| `gd_multitaper_delay_*` | 3 | Independent frequencies one multitaper bandwidth apart; real-valued bins left out. |
-| `gwtau` | 1 | Constant factor `sqrt((T - 1) / T)`. |
 | `gpfit_DotProduct`, `gpfit_RBF` | 2 | Leave-one-out MSE. |
