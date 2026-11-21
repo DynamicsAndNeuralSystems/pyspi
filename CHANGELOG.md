@@ -170,7 +170,9 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   pyEDM 2.5 starts its pools with forkserver or spawn, which re-import the caller's `__main__`, so from a script without an `if __name__ == "__main__":` guard every `ccm_*` SPI came back as NaN.
   pyspi now calls pyEDM without its process pools (3.6x faster on a 7-process example); parallelism comes from `compute(n_jobs=...)`.
 - **Spectral factorisation failures are reported.**
-  Wilson's algorithm logs non-convergence through `logging` and returns the unconverged factor, so every Wilson-derived measure (`dcoh`, `dtf`, `ddtf`, `pdcoh`, `gpdcoh`, nonparametric `sgc`) reached the table silently; the warning now lands in the SPI's record.
+  Wilson's algorithm logs non-convergence through `logging` and returns the unconverged factor, so every Wilson-derived measure (`dcoh`, `dtf`, `ddtf`, `pdcoh`, `gpdcoh`, nonparametric `sgc`) reached the table silently.
+  Every SPI that reads a factorisation that did not converge now warns under its own identifier, naming the ordered pairs (for nonparametric `sgc`, the number of pairs).
+  The values are unchanged.
 - **Group delay (`GroupDelay`) returned no finite value on any input**: the backend's one-sample coherence test takes the square root of a negative number.
   pyspi computes the standard one-sample test `(arctanh|C| − b)/sqrt(b)`, `b = 1/(2n − 2)` (Enochson & Goodman 1965; Bokil et al. 2007), applies Benjamini-Hochberg over the band, thins the longest significant run to one point per multitaper bandwidth, and fits the unwrapped phase against frequency.
   The delay is in samples (it was in seconds), and `rvalue` is `|r|`, undirected and not signed.
