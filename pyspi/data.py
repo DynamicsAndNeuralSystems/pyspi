@@ -110,6 +110,7 @@ class Data:
         "entropy",
         "events",
         "joint_entropy",
+        "liang",
         "mne",
         "mne_psi",
         "nli",

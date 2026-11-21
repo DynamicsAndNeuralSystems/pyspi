@@ -183,6 +183,22 @@
         tau: 1
         k: 5
 
+  # Liang-Kleeman information flow
+  LiangInformationFlow:
+    labels:
+      - directed
+      - linear
+      - signed
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - k: 1
+        conditional: False
+        statistic: normalised
+        labels:
+          - bivariate
+
 # Information-theoretic statistics
 .statistics.infotheory:
   # Joint entropy

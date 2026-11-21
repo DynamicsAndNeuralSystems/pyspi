@@ -380,6 +380,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   Each measures how well close delay vectors (dimension `m`, delay `tau`) of the column process map onto close delay vectors of the row process, using `k` nearest neighbours and a Theiler window (default `m * tau`).
   It is directed with `A[i, j] = A(x_i | x_j)`, read as `i -> j` (row = source); only the asymmetry `A[i, j] - A[j, i]` indicates direction.
   `full` bundles `nli_L_m-5_tau-1_k-5`, `nli_N_m-5_tau-1_k-5`, `nli_H_m-5_tau-1_k-5` and `nli_L_m-3_tau-1_k-5`, and `fast` bundles `nli_L_m-5_tau-1_k-5`.
+- **`LiangInformationFlow`: the Liang-Kleeman rate of information flow** (`liang_rate_k-1`, `liang_norm_k-1`, `liang-cond_rate_k-1`, `liang-cond_norm_k-1`; `liang_norm_k-1` also in `fast`).
+  It is the closed-form maximum-likelihood estimator of the flow from source to target under a linear stochastic model, in nats per sample and signed: positive means the source makes the target more uncertain, negative that it stabilises it.
+  `liang_*` is the pairwise estimator of Liang (2014, *Phys. Rev. E* 90, 052150), `liang-cond_*` the multivariate one of Liang (2021, *Entropy* 23, 679), which conditions on every other series, and `*_norm_*` divides by the target's entropy budget (Liang 2015, *Phys. Rev. E* 92, 022126) to give a share in [-1, 1].
 
 ### Dependencies
 
