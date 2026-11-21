@@ -577,7 +577,9 @@ SCHEMA_VERSION = 1
 #   r12 -- coint_aeg, gd, the phase measures' band, psi_multitaper, gwtau and
 #         gpfit.
 #   r13 -- the AUTO Theiler window is capped at N // 10.
-COMPUTATION_VERSION = "3.0.0.r13"
+#   r14 -- kernel MI, TLMI and TE exclude the point itself from its counts.
+#   r15 -- KSG breaks every exact tie, not only in series under 90% unique.
+COMPUTATION_VERSION = "3.0.0.r15"
 
 
 def read_manifest(checkpoint_dir: Path):

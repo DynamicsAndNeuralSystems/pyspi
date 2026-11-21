@@ -18,13 +18,13 @@ derive from JIDT. JIDT's copyright notice is retained in
 ``pyspi/lib/LICENSE-jidt.txt``. The version used for validation was JIDT 1.6.1;
 ``tests/test_jidt_reference.py`` pins JIDT's outputs on a fixed dataset (no Java
 required), and ``tests/tools/jidt_reference/`` regenerates them. Known
-deviations: kernel TE differs slightly from JIDT (per-column rather than
-whole-series normalisation); a kernel Theiler window w is JIDT's
-DYN_CORR_EXCL = w + 1, so it excludes |j - i| <= w as the KSG window does;
-Gaussian estimators carry a deterministic 1e-8 relative ridge; KSG breaks
-ties with a small seeded jitter (hctsa-style) where JIDT adds random noise
-by default; with a Theiler window, KSG MI takes
-its psi(N) term over the reduced neighbour pool (see _ksg_pool_digamma).
+deviations: kernel MI, TLMI and TE exclude the point itself and a Theiler
+window w, i.e. JIDT's DYN_CORR_EXCL = w + 1 (|j - i| <= w, as for KSG),
+where JIDT's default counts the point itself; Gaussian estimators carry a
+deterministic 1e-8 relative ridge; KSG breaks every exact tie with a small
+seeded jitter where JIDT adds random noise by default; with a Theiler
+window, KSG MI takes its psi(N) term over the reduced neighbour pool (see
+_ksg_pool_digamma).
 """
 
 import math
@@ -282,9 +282,10 @@ class KernelEntropyCalculator:
                      + d * np.log(2.0 * w) + log_std_total)
 
 
-def _unit_std(data):
-    """Columns divided by their sample std (JIDT's NORMALISE); constant ones kept."""
-    stds = np.std(data, axis=0, ddof=1)
+def _unit_std(data, ref=None):
+    """Columns divided by the sample std of ``ref`` (default: themselves), as
+    JIDT's NORMALISE does; constant columns are kept."""
+    stds = np.std(data if ref is None else ref, axis=0, ddof=1)
     stds = np.where(stds > 0, stds, 1.0)
     return data / stds[None, :]
 
@@ -440,8 +441,10 @@ class KernelTECalculator:
         x_t = src[k - 1: T - 1].reshape(-1, 1)
 
         if self._normalise:
+            # As in JIDT, the next value is scaled like the most recent past
+            # value (the same series), not by its own std.
+            y_next = _unit_std(y_next, y_past[:, :1])
             y_past = _unit_std(y_past)
-            y_next = _unit_std(y_next)
             x_t = _unit_std(x_t)
 
         # Joint spaces
@@ -628,10 +631,12 @@ def _numpy_delay_embedding(x, dim):
 # ---------------------------------------------------------------------------
 
 # JIDT adds random noise (1e-8) to every KSG input and normalises it. pyspi
-# standardises each coordinate (below) but replaces JIDT's noise with the
-# tie-break policy of hctsa's BF_TieBreakNoise (and pyhctsa's
-# bf_tie_break_noise): KSG assumes no ties, so a variable with many repeated
-# values is first given tiny, *deterministic* Gaussian jitter. Tie-free data
+# standardises each coordinate (below) but replaces JIDT's noise with
+# deterministic tie-breaking jitter, as pyhctsa's KSG does: KSG assumes no
+# ties, so the repeated values of a variable are first given tiny Gaussian
+# jitter from a fixed-seed generator. Unlike hctsa's BF_TieBreakNoise, which
+# jitters every value of a series with fewer than 90% unique values, every
+# exact tie is broken and values that occur once are left alone. Tie-free data
 # are returned bit-identically.
 
 # Seeds of the per-variable jitter streams. Variables that are compared with one
@@ -643,21 +648,36 @@ _TIE_SEED_SELECTION = 2
 
 
 def _tie_break(y, seed=0):
-    """Break exact ties in a raw series, as hctsa's ``BF_TieBreakNoise``.
+    """Make every value of a raw series distinct with tiny fixed-seed jitter.
 
-    If fewer than 90% of the values are unique and the std is positive, add
-    Gaussian noise with standard deviation ``1e-10 * std(y, ddof=1)`` drawn from
-    a local generator seeded with ``seed`` (never the global NumPy RNG), so the
-    same input always gives the same output. Otherwise ``y`` is returned
-    untouched. Apply to the raw series *before* delay embedding so that every
-    embedded lag of a sample carries the same perturbation.
+    Each entry whose value occurs more than once gets Gaussian jitter of
+    standard deviation ``1e-10 * std(y, ddof=1)``: entry ``i`` gets the ``i``-th
+    draw of a local generator seeded with ``seed`` (never the global NumPy
+    RNG), so the same input always gives the same output. Jitter this small can
+    land two entries of a large tie block on the same float again, so entries
+    still repeated are jittered again with the next draws of the same generator,
+    for at most 100 passes, until every value is distinct. Values that occur
+    once are not touched, and a series with no repeated value, or with zero
+    std, is returned unchanged. Apply to the raw series *before* delay
+    embedding so that every embedded lag of a sample carries the same
+    perturbation.
     """
     y = np.asarray(y, dtype=np.float64)
     if y.size < 2 or not np.all(np.isfinite(y)):
         return y        # non-finite input is rejected by _knn_condition
     sigma = y.std(ddof=1)
-    if np.unique(y).size < 0.9 * y.size and sigma > 0:
-        y = y + 1e-10 * sigma * np.random.default_rng(seed).standard_normal(y.shape)
+    if not sigma > 0:
+        return y
+    rng = None
+    for _ in range(100):
+        _, inverse, counts = np.unique(y, return_inverse=True, return_counts=True)
+        repeated = counts[inverse.ravel()] > 1
+        if not repeated.any():
+            break
+        if rng is None:
+            rng = np.random.default_rng(seed)
+            y = y.copy()
+        y[repeated] += 1e-10 * sigma * rng.standard_normal(y.shape)[repeated]
     return y
 
 
@@ -1164,9 +1184,15 @@ class InfoTheoryBase(Unsigned):
     ``kraskov`` directed information), so the measures composed from marginal
     entropies (joint, conditional, causal and cross-map entropy, stochastic
     interaction) have none. A window ``w`` excludes neighbours ``|j - i| <= w``
-    for both estimators; 0 means none. An ``AUTO`` window is at least 1 for
-    series of 10 or more samples. For shorter series it is 0, which for the
-    kernel estimators still excludes the point itself, as KSG always does.
+    for both estimators; with no window (``None`` or 0) both still exclude
+    the point itself. An ``AUTO`` window is at least 1 for
+    series of 10 or more samples.
+
+    The ``kernel`` estimator counts points in a box of fixed width, which holds
+    few points in short series: there its transfer entropy is biased upward
+    (independent series give clearly positive values below about a thousand
+    samples), a window can take its MI slightly below zero, and an estimate in
+    which every joint box is empty is NaN (JIDT returns 0).
     """
 
     _AUTO_EMBED_METHOD_PROP_NAME = "AUTO_EMBED_METHOD"
@@ -1487,13 +1513,13 @@ class InfoTheoryBase(Unsigned):
         return int(raw_w)
 
     def _kernel_window(self, data, i, j):
-        """JIDT's kernel ``DYN_CORR_EXCL`` for pair (i, j); 0 without a window.
+        """JIDT's kernel ``DYN_CORR_EXCL`` for pair (i, j).
 
         JIDT's kernel estimators exclude ``|j - i| < DYN_CORR_EXCL``, so
-        ``w + 1`` excludes ``|j - i| <= w``, the kraskov window.
+        ``w + 1`` excludes ``|j - i| <= w``, the kraskov window. Without a
+        window (w = 0) that is the point itself, which kraskov also excludes;
+        counting it inflates every estimate (leave-one-out density).
         """
-        if not self._dyn_corr_excl:
-            return 0
         w = self._resolve_theiler(data, i, j)
         if w < 0:
             raise ValueError(f"Theiler window must be >= 0, got w={w}.")
@@ -1616,6 +1642,13 @@ class MutualInfo(InfoTheoryBase, Undirected):
 
 
 class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
+    """Time-lagged mutual information from the row (source) to the column (target).
+
+    ``I(x_i(t); x_j(t + 1))`` in nats: the source one sample ahead of the
+    target. The lag is fixed at one sample, so coupling that acts only at a
+    longer lag is seen only through the source's own autocorrelation.
+    """
+
     name = "Time-lagged mutual information"
     identifier = "tlmi"
     labels = ["unsigned", "infotheory", "temporal", "directed"]
@@ -1687,6 +1720,12 @@ class TransferEntropy(InfoTheoryBase, Directed):
     ``0.5 * ln(var_restricted / var_full)`` in nats (Barnett, Barrett & Seth
     2009): half of Geweke's (1982) Granger causality as reported by
     ``statsmodels``.
+
+    With a source history of one sample at a source-target delay of one, the
+    source enters only at lag 1, so coupling at a longer lag from a weakly
+    autocorrelated source is missed. The auto-embedded variants choose the
+    source embedding from the source's own active information storage, which
+    stays short for such a source, so they share this limit.
     """
 
     name = "Transfer entropy"
@@ -2155,6 +2194,11 @@ class IntegratedInformation(Undirected, Unsigned):
     labels = ["linear", "unsigned", "infotheory", "temporal", "undirected"]
 
     def __init__(self, phitype="star", delay=1, normalization=0):
+        if phitype not in ("star", "Geo"):
+            raise ValueError(f"Unknown phitype {phitype!r}; use 'star' or 'Geo'.")
+        if normalization not in (0, 1):
+            raise ValueError(f"normalization must be 0 or 1, got {normalization!r}.")
+        delay = utils.require_int("delay", delay, minimum=1)
         self._phitype = phitype
         self._delay = delay
         self._normalization = normalization
@@ -2162,21 +2206,18 @@ class IntegratedInformation(Undirected, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        try:
-            from pyspi.lib.phi_native import phi_comp
+        # Not caught here: `fill_pairwise` sets a failed pair to NaN with a
+        # warning, and a failure on every pair reaches `Calculator.errors`.
+        from pyspi.lib.phi_native import phi_comp
 
-            P = np.array([1, 2])
-            X = data.to_numpy(squeeze=True)[[i, j]]
+        P = np.array([1, 2])
+        X = data.to_numpy(squeeze=True)[[i, j]]
 
-            params = {"tau": self._delay}
-            options = {
-                "type_of_phi": self._phitype,
-                "type_of_dist": "Gauss",
-                "normalization": self._normalization
-            }
+        params = {"tau": self._delay}
+        options = {
+            "type_of_phi": self._phitype,
+            "type_of_dist": "Gauss",
+            "normalization": self._normalization
+        }
 
-            return phi_comp(X, P, params, options)
-
-        except Exception as e:
-            logging.error(f"Integrated information computation failed: {e}")
-            return np.nan
+        return phi_comp(X, P, params, options)

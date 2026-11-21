@@ -14,6 +14,7 @@ Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs
 285 - 75 removed + 62 added = 272; 187 + 23 renamed + 62 added = 272.
 The 75 removals are 14 made while porting away from JIDT, 24 duplicate, constant or degenerate SPIs, and 37 unbundled because an SPI that stays carries them; all are in the table below.
 The 37 are removed from the bundled configs only: their classes are unchanged, and each can still be computed from a custom config.
+The default kernel SPIs `mi_kernel_W-0.25`, `tlmi_kernel_W-0.25` and `te_kernel_W-0.25_k-1` keep their identifiers, but their values differ from 2.0.2: each point is now left out of its own neighbour counts.
 
 ## Added (62)
 

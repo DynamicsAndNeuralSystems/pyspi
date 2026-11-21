@@ -1098,6 +1098,16 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                         f"_fmax-{fmt_param(fmax)}_order-{order}").replace(
                 ".", "-"
             )
+            # max_order bounds the order search, so it matters only when the
+            # order is selected rather than given.
+            if order is None and max_order != 50:
+                paramstr += f"_maxorder-{max_order}"
+        # Non-default NaN handling changes the value, so it is named; defaults
+        # are not, so bundled identifiers are unchanged.
+        if not ignore_nan:
+            paramstr += "_ignorenan-False"
+        if nan_threshold != 0.5:
+            paramstr += f"_nanthr-{fmt_param(nan_threshold)}".replace(".", "-")
 
         self.identifier = self.identifier + paramstr
 
