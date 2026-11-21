@@ -330,7 +330,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `tau > 0` pairs `x_i[:-tau]` with `x_j[tau:]`.
   Ties in the source are broken by a fixed seeded permutation, so values are deterministic.
   `xi_tau-0` is also in `fast`.
-- `benchmarked_p90`, `p95` and `p99` also include, untimed, `xi_tau-{0,1}`, the `pcorr_<estimator>` SPIs, `te_symbolic_k-3` and the three kernel `_DCE-AUTO` SPIs below.
+- The `benchmarked_p*` sets include the SPIs added after the benchmark that time within their cutoffs on the benchmark's protocol: `xi_tau-{0,1}`, the `pcorr_<estimator>` SPIs, `te_symbolic_k-3` and the kernel `_DCE-AUTO` MI and TLMI from `p80` up, and `te_kernel_W-0.25_DCE-AUTO_k-1` from `p90` up.
   `di_kraskov_NN-4_n-5` and `phasealigned_welch_nperseg-auto` are not in them.
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
@@ -465,7 +465,7 @@ Definitions the corrected measures are checked against:
 | **Added** | 62 | `LaggedCorrelation` (42), `PartialCorrelation` (7), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `ChatterjeeXi` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1), `te_symbolic_k-3` (1), kernel MI/TLMI/TE with dynamic correlation exclusion (3) |
 | 3.0.0 `full.yaml` | 272 | 285 − 75 + 62 |
 
-Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 165, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (267, 254, 240 and 206 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
+Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 165, `fabfour` (4) keeps its size, and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`). The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (266, 253, 239 and 217 SPIs). The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
 Every removal and rename below is deliberate.
 
