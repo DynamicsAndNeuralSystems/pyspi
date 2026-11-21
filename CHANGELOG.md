@@ -419,6 +419,11 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`ppc_hilbert_adaptive`: spectrally weighted Hilbert phase consistency** (`AdaptivePhaseConsistency` in `pyspi/statistics/spectral.py`), the pairwise phase consistency (Vinck et al. 2010) of band-passed Hilbert phases, averaged over log-spaced bands with weights from the rhythmic power the two processes share above their `1/f` backgrounds, so no band has to be chosen in advance.
   It is undirected and unsigned, about 0 under independence and 1 for a constant phase lag, and has no parameters (bands are in cycles per sample).
   In `full` only; not in `fast` or the `benchmarked_p*` sets until it has been timed.
+- **The multitaper bandwidth is a parameter.**
+  Every multitaper SPI in `pyspi/statistics/spectral.py` (the coherence and phase measures, `psi`, `gd`, the directed measures and nonparametric `sgc`) takes `time_halfbandwidth_product` (`NW`, default 3, the value every bundled SPI uses).
+  A larger `NW` averages more tapers (`floor(2 NW) - 1`), which lowers the variance and the upward bias of coherence-type measures, at the cost of frequency resolution.
+  A value other than 3 is appended to the identifier as `_nw-<value>`, with dots written as dashes (e.g. `cohmag_multitaper_mean_fs-1_fmin-0_fmax-0-5_nw-8`).
+  No bundled identifier or value changes.
 
 ### Dependencies
 

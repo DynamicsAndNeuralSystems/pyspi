@@ -178,3 +178,28 @@ def test_infotheory_per_process_caches_key_on_every_parameter():
             want = np.asarray(make().multivariate(fresh()), float)
             assert np.array_equal(got, want, equal_nan=True), (
                 f"{spi.identifier}: stale per-process cache on pass {step + 1}")
+
+
+def test_spectral_caches_distinguish_the_time_halfbandwidth_product():
+    """Alternating NW on one Data must match a fresh Data at every step.
+
+    Covers the shared multivariate cache, the per-pair bivariate cache (with its
+    module-level taper cache) and spectral Granger causality's own cache.
+    """
+    from pyspi.statistics.spectral import (DirectedTransferFunction,
+                                           SpectralGrangerCausality)
+
+    makers = [
+        lambda nw: CoherenceMagnitude(time_halfbandwidth_product=nw, **BAND),
+        lambda nw: DirectedTransferFunction(time_halfbandwidth_product=nw),
+        lambda nw: SpectralGrangerCausality(time_halfbandwidth_product=nw),
+    ]
+    for make in makers:
+        truth = {nw: np.asarray(make(nw).multivariate(_fixture_data()), float)
+                 for nw in (3, 8)}
+        assert not np.allclose(truth[3][0, 1], truth[8][0, 1]), "vacuous"
+        data = _fixture_data()
+        for step, nw in enumerate((3, 8, 3, 8), start=1):
+            got = np.asarray(make(nw).multivariate(data), float)
+            assert np.array_equal(got, truth[nw], equal_nan=True), (
+                f"{make(nw).identifier}: stale cache at call {step}")

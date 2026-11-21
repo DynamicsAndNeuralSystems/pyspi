@@ -380,7 +380,7 @@ def test_phase_slope_index_uses_the_closed_band_less_the_real_bins(fmin, fmax):
     C = sc.Connectivity.from_multitaper(sc.Multitaper(z, sampling_frequency=1))
     freq = np.asarray(C.frequencies)
     keep = np.flatnonzero((freq >= fmin) & (freq <= fmax) & ~_real_valued_bins(freq, 1))
-    thinned = keep[::PhaseSlopeIndex._FREQUENCY_STEP]
+    thinned = keep[::PhaseSlopeIndex()._frequency_step]
     coh = np.asarray(C.coherency())[0, thinned, 0, 1]
     want = np.imag(np.sum(np.conj(coh[:-1]) * coh[1:]))
 
@@ -413,3 +413,26 @@ def test_group_delay_fit_leaves_out_the_real_valued_bins():
     assert np.isfinite(full[0, 1])
     assert full[0, 1] == pytest.approx(interior[0, 1], rel=1e-12)
     assert full[0, 1] == pytest.approx(lag, abs=0.5)
+
+
+def test_time_halfbandwidth_product_sets_the_tapers_and_the_phase_slope_step():
+    """NW reaches the backend: floor(2 NW) - 1 tapers, so independent series
+    give smaller coherence, and the phase slope index steps 2 NW bins."""
+    import spectral_connectivity as sc
+
+    from pyspi.statistics.spectral import CoherenceMagnitude, PhaseSlopeIndex
+
+    data = Data(np.random.default_rng(7).standard_normal((4, 1000)), dim_order="ps")
+    off = ~np.eye(4, dtype=bool)
+    bias = {nw: CoherenceMagnitude(time_halfbandwidth_product=nw)
+            .multivariate(data)[off].mean() for nw in (2, 3, 8)}
+    # Mean coherence of independent series is about 1 / K for K tapers.
+    for nw, k in ((2, 3), (3, 5), (8, 15)):
+        assert bias[nw] == pytest.approx(1 / k, rel=0.2), (nw, bias[nw])
+
+    z = np.transpose(data.to_numpy(squeeze=True))[:, None, :]
+    m = sc.Multitaper(z, sampling_frequency=1, time_halfbandwidth_product=8)
+    conn = sc.Connectivity.from_multitaper(m)
+    bin_width = conn.frequencies[1] - conn.frequencies[0]
+    step = PhaseSlopeIndex(time_halfbandwidth_product=8)._frequency_step
+    assert step == 16 == pytest.approx(m.frequency_resolution / bin_width)
