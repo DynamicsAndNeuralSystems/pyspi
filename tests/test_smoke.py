@@ -198,66 +198,88 @@ def test_transfer_entropy():
             assert te_01 > 0.01, f"Gaussian TE(0→1) too small: {te_01}"
 
 
-def test_joint_conditional_entropy():
-    """JE and CE produce finite values for kernel estimator."""
+def _seeded_coupled_ar1(seed, M, T, coupling=0.4, noise_std=0.3):
+    """``generate_coupled_ar1`` drawn from a local generator, not the global RNG."""
+    rng = np.random.default_rng(seed)
+    X = np.zeros((M, T))
+    X[:, 0] = rng.standard_normal(M)
+    for t in range(1, T):
+        X[0, t] = 0.8 * X[0, t - 1] + noise_std * rng.standard_normal()
+        for i in range(1, M):
+            X[i, t] = (0.5 * X[i, t - 1]
+                       + coupling * X[i - 1, t - 1]
+                       + noise_std * rng.standard_normal())
+    return X
+
+
+def _assert_finite_through_calculator(X, config, tmp_path):
+    """Direct calls and the Calculator: every off-diagonal value finite, no errors.
+
+    ``config`` maps a module to ``{class name: [kwargs, ...]}``.
+    """
+    import importlib
+    import warnings
+
+    import yaml
+
+    from pyspi.calculator import Calculator
     from pyspi.data import Data
-    from pyspi.statistics.infotheory import JointEntropy, ConditionalEntropy
+    from pyspi.quality import Quality
 
-    X = generate_coupled_ar1(M=3, T=300)
+    M = X.shape[0]
+    off = ~np.eye(M, dtype=bool)
     data = Data(X, zscore=True)
+    for module, classes in config.items():
+        mod = importlib.import_module("pyspi" + module)
+        for cls_name, configs in classes.items():
+            for kwargs in configs:
+                result = getattr(mod, cls_name)(**kwargs).multivariate(data)
+                name = f"{cls_name}{kwargs}"
+                assert result.shape == (M, M), f"{name} shape: {result.shape}"
+                assert np.all(np.isfinite(result[off])), (
+                    f"{name} has non-finite off-diagonal values:\n{result}")
 
-    for est in ('gaussian', 'kernel', 'kozachenko'):
-        je = JointEntropy(estimator=est)
-        result_je = je.multivariate(data)
-        assert result_je.shape == (3, 3)
-        off = ~np.isnan(result_je)
-        assert np.all(np.isfinite(result_je[off])), f"{est} JE has non-finite values"
-
-        ce = ConditionalEntropy(estimator=est)
-        result_ce = ce.multivariate(data)
-        assert result_ce.shape == (3, 3)
-        off = ~np.isnan(result_ce)
-        assert np.all(np.isfinite(result_ce[off])), f"{est} CE has non-finite values"
-
-
-def test_basic_spis():
-    """Basic SPIs (correlation, DTW, etc.) produce finite values."""
-    from pyspi.data import Data
-    from pyspi.statistics.basic import (
-        Covariance, SpearmanR, KendallTau, CrossCorrelation, LaggedCorrelation,
-    )
-    from pyspi.statistics.distance import DynamicTimeWarping
-
-    X = generate_coupled_ar1(M=3, T=200)
-    data = Data(X, zscore=True)
-
-    for SPI, kwargs in [
-        (Covariance, {}),
-        (SpearmanR, {}),
-        (KendallTau, {}),
-        (CrossCorrelation, {}),
-        (LaggedCorrelation, {"tau": 1}),
-        (LaggedCorrelation, {"tau": 3, "estimator": "spearman"}),
-        (DynamicTimeWarping, {}),
-    ]:
-        name = SPI.__name__ + str(kwargs)
-        spi = SPI(**kwargs)
-        result = spi.multivariate(data)
-        assert result.shape == (3, 3), f"{name} shape: {result.shape}"
-        off = ~np.isnan(result)
-        assert np.all(np.isfinite(result[off])), f"{name} has non-finite values"
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump({
+        module: {cls_name: {"labels": ["test"], "configs": configs}
+                 for cls_name, configs in classes.items()}
+        for module, classes in config.items()}))
+    calc = Calculator(dataset=X, config=str(path), verbose=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        calc.compute(progress=False)
+    assert calc.errors == {}, calc.errors
+    assert calc.pair_errors == {}, calc.pair_errors
+    for key in calc.spis:
+        q = calc.quality[key].to_numpy()
+        assert (q[off] == Quality.GOOD).all(), f"{key} quality:\n{q}"
 
 
-def test_spectral_spis():
-    """Spectral SPIs produce finite values."""
-    from pyspi.data import Data
-    from pyspi.statistics.spectral import CoherenceMagnitude
+def test_joint_conditional_entropy(tmp_path):
+    """JE and CE give finite values for every estimator, and none fails."""
+    X = _seeded_coupled_ar1(1, M=3, T=300)
+    estimators = [{"estimator": est} for est in ("gaussian", "kernel", "kozachenko")]
+    _assert_finite_through_calculator(X, {".statistics.infotheory": {
+        "JointEntropy": estimators, "ConditionalEntropy": estimators}}, tmp_path)
 
-    X = generate_coupled_ar1(M=3, T=200)
-    data = Data(X, zscore=True)
 
-    spi = CoherenceMagnitude()
-    result = spi.multivariate(data)
-    assert result.shape == (3, 3)
-    off = ~np.isnan(result)
-    assert np.all(np.isfinite(result[off])), "CoherenceMagnitude has non-finite values"
+def test_basic_spis(tmp_path):
+    """Basic SPIs (correlation, DTW, etc.) give finite values, and none fails."""
+    X = _seeded_coupled_ar1(2, M=3, T=200)
+    _assert_finite_through_calculator(X, {
+        ".statistics.basic": {
+            "Covariance": [{}],
+            "SpearmanR": [{}],
+            "KendallTau": [{}],
+            "CrossCorrelation": [{}],
+            "LaggedCorrelation": [{"tau": 1}, {"tau": 3, "estimator": "spearman"}],
+        },
+        ".statistics.distance": {"DynamicTimeWarping": [{}]},
+    }, tmp_path)
+
+
+def test_spectral_spis(tmp_path):
+    """A spectral SPI gives finite values, and does not fail."""
+    X = _seeded_coupled_ar1(3, M=3, T=200)
+    _assert_finite_through_calculator(
+        X, {".statistics.spectral": {"CoherenceMagnitude": [{}]}}, tmp_path)
