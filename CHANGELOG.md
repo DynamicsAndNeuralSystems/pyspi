@@ -346,6 +346,15 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`run_spec` records the versions that produced a result**: `computation_version` (`COMPUTATION_VERSION`), `pyspi_version` and `dependency_versions` (the installed version of each runtime requirement).
   They are saved with every `.npz` and returned by `load_table` in `attrs["run_spec"]`, so a corpus can be checked for mixed computation versions from the files alone.
   They are kept out of `run_digest`, which already hashes `COMPUTATION_VERSION`, so existing checkpoints still resume.
+- **`ccm_E-{None,1,10}_convergence`: CCM convergence** (`ConvergentCrossMapping(statistic="convergence")`; Sugihara et al. 2012, Science 338:496).
+  `convergence` is `rho(L_max) - rho(L_min)`, the cross-map skill at the largest library size minus the skill at the smallest.
+  `statistic="slope"`, the least-squares slope of skill against `ln L` over the finite library sizes, is available but not bundled.
+  Both are signed and directed (negative when skill falls with L) and are read off the cached CCM skill curve.
+  `ConvergentCrossMapping` also has a `bivariate` method.
+- **`lccm_E-None_k-5_{tp,skill}`: lagged convergent cross-mapping** (`LaggedConvergentCrossMapping`, Ye et al. 2015, Sci. Rep. 5:14750).
+  For each ordered pair and each prediction horizon `Tp` in `[-k, k]` it computes the cross-map skill at the largest library size, with the target's shadow manifold at time t estimating the source at `t + Tp`.
+  `tp` is the horizon of peak skill: negative for a causal row -> column link (the target's manifold recovers the source's past), `>= 0` under synchrony.
+  `skill` is the peak skill.
 
 ### Dependencies
 
