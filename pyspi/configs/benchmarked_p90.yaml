@@ -260,7 +260,7 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
+      - signed
       - bivariate
       - contemporaneous
       - M14
@@ -272,7 +272,7 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
+      - signed
       - bivariate
       - contemporaneous
       - M14
@@ -283,7 +283,7 @@
   CausalEntropy:
     labels:
       - directed
-      - unsigned
+      - signed
       - bivariate
       - time-dependent
       - M03
@@ -292,7 +292,7 @@
     - estimator: kozachenko
   CrossmapEntropy:
     labels:
-      - unsigned
+      - signed
       - directed
       - time-dependent
       - bivariate

@@ -268,7 +268,7 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
+      - signed
       - bivariate
       - time-dependent
       - M10
@@ -459,7 +459,7 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
+      - signed
       - bivariate
       - contemporaneous
       - M14
@@ -472,7 +472,7 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
+      - signed
       - bivariate
       - contemporaneous
       - M14
@@ -484,7 +484,7 @@
   CausalEntropy:
     labels:
       - directed
-      - unsigned
+      - signed
       - bivariate
       - time-dependent
       - M03
@@ -495,7 +495,7 @@
   # Cross-map entropy
   CrossmapEntropy:
     labels:
-      - unsigned
+      - signed
       - directed
       - time-dependent
       - bivariate

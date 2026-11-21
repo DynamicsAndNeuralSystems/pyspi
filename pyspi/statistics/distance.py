@@ -664,16 +664,17 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
         return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)
 
 
-class TimeWarping(Undirected, Unsigned):
+class TimeWarping(Undirected):
     """
     Base for the elastic alignment measures (DTW, soft-DTW, LCSS).
 
-    A subclass sets ``_simfn(x, y, global_constraint=...)``. A
-    ``global_constraint`` other than None is appended to the identifier as
-    ``_constraint-sakoe-chiba`` or ``_constraint-itakura``.
+    A subclass sets ``_simfn(x, y, global_constraint=...)`` and its sign
+    (``Signed`` or ``Unsigned``). A ``global_constraint`` other than None is
+    appended to the identifier as ``_constraint-sakoe-chiba`` or
+    ``_constraint-itakura``.
     """
 
-    labels =["unsigned", "distance", "temporal", "undirected", "nonlinear"]
+    labels = ["distance", "temporal", "undirected", "nonlinear"]
 
     def __init__(self, global_constraint=None):
         gcstr = global_constraint
@@ -697,7 +698,7 @@ class TimeWarping(Undirected, Unsigned):
         return self._simfn(z[i], z[j], global_constraint=self._global_constraint)
 
 
-class DynamicTimeWarping(TimeWarping):
+class DynamicTimeWarping(TimeWarping, Unsigned):
     """
     Dynamic time warping (DTW) distance [1]_.
 
@@ -752,6 +753,7 @@ class DynamicTimeWarping(TimeWarping):
 
     name = "Dynamic time warping"
     identifier = "dtw"
+    labels = ["unsigned", "distance", "temporal", "undirected", "nonlinear"]
 
     def __init__(
         self,
@@ -939,7 +941,7 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
     return prev[-1] / min(n, m)
 
 
-class LongestCommonSubsequence(TimeWarping):
+class LongestCommonSubsequence(TimeWarping, Unsigned):
     """
     Longest common subsequence (LCSS) similarity [1]_.
 
@@ -970,23 +972,25 @@ class LongestCommonSubsequence(TimeWarping):
 
     name = "Longest common subsequence"
     identifier = "lcss"
+    labels = ["unsigned", "distance", "temporal", "undirected", "nonlinear"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._simfn = _banded_lcss
 
 
-class SoftDynamicTimeWarping(TimeWarping):
+class SoftDynamicTimeWarping(TimeWarping, Signed):
     """
     Soft dynamic time warping (soft-DTW) [1]_.
 
     tslearn's ``soft_dtw`` at its default ``gamma = 1``: the DTW recursion
     on squared differences with the minimum replaced by the soft minimum
     ``-gamma log sum exp(-a / gamma)``, so every warping path contributes.
-    Undirected.
+    Undirected and signed; lower means more alike.
 
     This is the raw soft-minimum alignment cost, which is not a distance: it
-    can be negative, and ``softdtw(x, x)`` is not 0. It is not the
+    can be negative (it is negative for most pairs of z-scored series), and
+    ``softdtw(x, x)`` is not 0. It is not the
     non-negative soft-DTW divergence ``D(x, y) - (D(x, x) + D(y, y)) / 2``
     of [2]_.
 
@@ -1012,6 +1016,7 @@ class SoftDynamicTimeWarping(TimeWarping):
 
     name = "Soft dynamic time warping"
     identifier = "softdtw"
+    labels = ["signed", "distance", "temporal", "undirected", "nonlinear"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
