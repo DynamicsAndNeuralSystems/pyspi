@@ -7,7 +7,9 @@
         --n-jobs 4 \
         --checkpoint-dir results/
 
-If ``--config`` is omitted, the bundled ``full`` config is used. If
+The data file holds one row per process; pass ``--dim-order sp`` for one
+column per process. If ``--config`` is omitted, the bundled ``full`` config
+is used. If
 ``--output`` is omitted, the result table is written next to the data file as
 ``<data-stem>.spi.npz``. The format follows the extension: ``.npz``
 (round-trips via ``pyspi.load_table``) or ``.csv`` (human-readable, one-way).
@@ -43,7 +45,11 @@ def main(argv=None) -> int:
 
     cp = sub.add_parser("compute", help="Compute SPIs on a saved dataset.")
     cp.add_argument("--data", type=Path, required=True,
-                    help="Path to time series array (.npy/.csv/.txt). Shape (processes, observations).")
+                    help="Path to time series array (.npy/.csv/.txt). Shape (processes, "
+                         "observations), or (observations, processes) with --dim-order sp.")
+    cp.add_argument("--dim-order", choices=["ps", "sp"], default="ps",
+                    help="Layout of the data: ps = one row per process (default), "
+                         "sp = one column per process.")
     cp.add_argument("--config", default="full",
                     help="Bundled config name or path to your own YAML (default: full). "
                          "Bundled: " + ", ".join(bundled_configs()) + ".")
@@ -91,11 +97,13 @@ def main(argv=None) -> int:
 
     arr = _load_array(args.data)
     if arr.ndim != 2:
-        raise SystemExit(f"Data must be 2D (processes x observations); got shape {arr.shape}")
+        raise SystemExit(f"Data must be 2D (processes x observations, or observations x "
+                         f"processes with --dim-order sp); got shape {arr.shape}")
 
     calc = Calculator(
         dataset=arr,
         config=args.config,
+        dim_order=args.dim_order,
         zscore=not args.no_zscore,
         verbose=not args.quiet,
     )

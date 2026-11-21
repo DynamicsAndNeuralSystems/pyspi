@@ -53,3 +53,17 @@ def test_cli_honours_pyspi_n_jobs(monkeypatch, data_file):
     assert cli.main(["compute", "--data", str(data_file), "--config", "fabfour",
                      "--quiet"]) == 0
     assert seen["n_jobs"] is None  # left to the library, which reads PYSPI_N_JOBS
+
+
+def test_dim_order_sp_reads_one_column_per_process(tmp_path):
+    import pyspi
+
+    X = np.random.default_rng(0).standard_normal((3, 60))
+    np.save(tmp_path / "ps.npy", X)
+    np.save(tmp_path / "sp.npy", X.T)
+    cli.main(["compute", "--data", str(tmp_path / "ps.npy"), "--config", "fabfour",
+              "--output", str(tmp_path / "ps.npz"), "--quiet"])
+    cli.main(["compute", "--data", str(tmp_path / "sp.npy"), "--config", "fabfour",
+              "--dim-order", "sp", "--output", str(tmp_path / "sp.npz"), "--quiet"])
+    assert pyspi.load_table(tmp_path / "sp.npz").equals(
+        pyspi.load_table(tmp_path / "ps.npz"))

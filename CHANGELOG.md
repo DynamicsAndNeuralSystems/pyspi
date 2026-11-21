@@ -356,6 +356,10 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   Every multitaper SPI in `pyspi/statistics/spectral.py` takes `time_halfbandwidth_product` (`NW`, default 3, the value every bundled SPI uses).
   A larger `NW` averages more tapers (`floor(2 NW) - 1`), lowering the variance and upward bias of coherence-type measures at the cost of frequency resolution.
   A value other than 3 is appended to the identifier as `_nw-<value>`, with dots written as dashes.
+- **Input with time along rows.**
+  `Calculator(dim_order=...)`, `Calculator.load_dataset(..., dim_order=...)` and the command line's `--dim-order` pass the layout to `Data`, so `dim_order="sp"` reads a `(T, M)` array or a DataFrame with one column per process; the default stays `"ps"`, `(M, T)`.
+  `Data` warns when it reads more processes than observations, the usual sign of the other layout, which 2.0.2 accepted silently.
+  A DataFrame's index (`"ps"`) or columns (`"sp"`) name the processes, unless they are a `RangeIndex`; 2.0.2 dropped them.
 - **Feature vectors.**
   `Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature: only `i < j` for `undirected` and `antisymmetric` SPIs, both orientations for `directed` and `asymmetric` ones.
   Self-pairs are dropped unless `include_self=True`, and NaNs are kept, so the length and order depend only on the config and `M`.

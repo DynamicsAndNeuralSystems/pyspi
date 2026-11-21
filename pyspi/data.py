@@ -4,6 +4,8 @@ Adapted from the ``Data`` class of Patricia Wollstadt's IDTxl
 (https://github.com/pwollstadt/IDTxl).
 """
 import os
+import sys
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -43,6 +45,31 @@ def _validate_procnames(procnames, n_processes):
     return names
 
 
+def _frame_procnames(data, dim_order):
+    """
+    The process names a DataFrame carries, or None.
+
+    Under ``"ps"`` processes are rows, named by the index; under ``"sp"`` they
+    are columns. A RangeIndex holds positions, not names, so it gives None.
+    """
+    if not isinstance(data, pd.DataFrame) or dim_order not in ("ps", "sp"):
+        return None
+    labels = data.index if dim_order == "ps" else data.columns
+    if isinstance(labels, pd.RangeIndex):
+        return None
+    return list(labels)
+
+
+def _outside_pyspi_stacklevel():
+    """``stacklevel`` for a warning raised by the caller, pointing at the first frame outside pyspi."""
+    package = os.path.dirname(os.path.abspath(__file__))
+    frame, level = sys._getframe(1), 1
+    while frame is not None and os.path.abspath(
+            frame.f_code.co_filename).startswith(package + os.sep):
+        frame, level = frame.f_back, level + 1
+    return level
+
+
 class Data:
     """
     A multivariate time series: processes x observations x replications.
@@ -63,7 +90,11 @@ class Data:
     dim_order : str, optional
         The order of the dimensions of ``data``, one character per dimension:
         ``'p'`` for processes, ``'s'`` for observations (samples) and ``'r'``
-        for replications. Default: ``'ps'``.
+        for replications. ``'ps'`` reads an ``(M, T)`` array, one row per
+        process; ``'sp'`` reads a ``(T, M)`` array or a DataFrame with one
+        column per process. A ``UserWarning`` says when the data are read as
+        more processes than observations, which usually means the other
+        order was meant. Default: ``'ps'``.
     detrend : bool, optional
         Remove the least-squares line from each process. Default: False.
     zscore : bool or None, optional
@@ -75,7 +106,9 @@ class Data:
         Name of the dataset. Default: None (``"N/A"``).
     procnames : list or None, optional
         One unique name per process, converted to strings. Default: None,
-        which gives ``proc-0``, ``proc-1``, ...
+        which takes the names of a DataFrame's processes (its index under
+        ``'ps'``, its columns under ``'sp'``, unless they are a
+        ``RangeIndex``) and otherwise gives ``proc-0``, ``proc-1``, ...
     n_processes : int or None, optional
         Keep only the first ``n_processes`` processes. Default: None (all).
     n_observations : int or None, optional
@@ -146,6 +179,10 @@ class Data:
         # _name and _procnames are set only once there is data.
 
         if data is not None:
+            if procnames is None:
+                procnames = _frame_procnames(data, dim_order)
+                if procnames is not None and n_processes is not None:
+                    procnames = procnames[:n_processes]
             dat = self.convert_to_numpy(data)
             self.set_data(
                 dat,
@@ -350,7 +387,8 @@ class Data:
         truncated, preprocessed with this instance's ``detrend`` and ``zscore``
         settings and checked for non-finite values. Every statistic cache is
         dropped, and process names are kept only if the number of processes
-        is unchanged.
+        is unchanged. A ``UserWarning`` says when the result has more
+        processes than observations.
 
         Parameters
         ----------
@@ -389,13 +427,24 @@ class Data:
         if len(set(dim_order)) != len(dim_order):
             raise ValueError(f"dim_order has repeated symbols: {dim_order!r}.")
 
-        # Bring data into the order processes x observations in a pandas dataframe.
+        shape = data.shape
+        # Bring data into the order processes x observations x replications.
         data = self._reorder_data(data, dim_order)
 
         if n_processes is not None:
             data = data[:n_processes]
         if n_observations is not None:
             data = data[:, :n_observations]
+
+        if data.shape[0] > data.shape[1]:
+            swapped = dim_order.translate(str.maketrans("ps", "sp"))
+            warnings.warn(
+                f"Data of shape {shape} read with dim_order={dim_order!r} has "
+                f"{data.shape[0]} processes of {data.shape[1]} observations. "
+                f"If time runs along the other axis, pass "
+                f"dim_order={swapped!r}.",
+                UserWarning, stacklevel=_outside_pyspi_stacklevel(),
+            )
 
         data = self._apply_preprocessing(data, log=True)
 
