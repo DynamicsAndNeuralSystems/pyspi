@@ -336,3 +336,28 @@ def test_parametric_sgc_frequency_axis_is_where_the_spectrum_was_evaluated(fs):
         f"fs={fs}: values differ from Geweke at their labelled frequencies by "
         f"{err:.3g}; last label {freq[-1]!r}"
     )
+
+
+@pytest.mark.parametrize("method", ["nonparametric", "parametric"])
+def test_sgc_default_band_runs_to_the_nyquist_frequency_of_fs(method):
+    """``fmax=None`` is ``fs / 2``, so the default band is the whole spectrum at any ``fs``."""
+    from pyspi.statistics.spectral import SpectralGrangerCausality
+
+    kw = dict(method=method, order=1) if method == "parametric" else {}
+    data = Data(data=_driven_pair(T=400), dim_order="ps")
+    default = SpectralGrangerCausality(fs=100, **kw)
+    explicit = SpectralGrangerCausality(fs=100, fmax=50, **kw)
+    assert default.identifier == explicit.identifier
+    assert "_fmax-50" in default.identifier
+    np.testing.assert_array_equal(default.multivariate(data),
+                                  explicit.multivariate(data))
+    # At fs = 1 the default band and identifier are the bundled ones.
+    assert (SpectralGrangerCausality(**kw).identifier
+            == SpectralGrangerCausality(fmax=0.5, **kw).identifier)
+
+
+def test_sgc_refuses_an_unknown_method():
+    from pyspi.statistics.spectral import SpectralGrangerCausality
+
+    with pytest.raises(ValueError, match="method must be"):
+        SpectralGrangerCausality(method="nonparametic")

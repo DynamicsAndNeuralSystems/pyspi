@@ -94,19 +94,21 @@ pyspi.load_table("results.npz")        # round-trips exactly
 pyspi.load_results("results.npz")      # table, quality codes, errors, run spec
 ```
 
+The dataset is `(M, T)`, one row per process; for a `(T, M)` array or a DataFrame with one column per process, pass `dim_order="sp"` (`--dim-order sp` on the command line), and a DataFrame's labels become the process names.
+With more processes than observations and no `dim_order`, pyspi warns; pass `dim_order="ps"` to state that the layout is intended.
+
 Every value in `calc.table` is a real, finite number or NaN.
 `calc.quality` says what each cell is, with the codes of `pyspi.Quality` (shared with hctsa and pyhctsa): good, error, NaN (undefined or not appropriate, including every self-pair), +/-Inf, or complex.
 
-Results are stored as an `(n_spis, M, M)` array plus the SPI and process names,
-which is the data's natural shape. `.csv` is also accepted for eyeballing small
-results, but it is one-way and impractical for the full SPI set.
+Results are stored as an `(n_spis, M, M)` array, the data's natural shape, plus the SPI and process names and each SPI's symmetry trait.
+`.csv` is also accepted for eyeballing small results, but it is one-way and impractical for the full SPI set.
 
 `feature_vector()` turns a table into features for classification or regression, one value per independent pair.
 Undirected SPIs store each pair twice (the lower triangle mirrors the upper), and antisymmetric SPIs such as `phase`, `pli`, `wpli`, `psi` and `es_asym` store it twice with the sign flipped.
 For these the vector keeps only the pairs `(i, j)` with `i < j`, and a positive antisymmetric value means process `i` leads process `j`.
 Directed SPIs keep both orientations.
 Self-pairs are dropped unless `include_self=True`.
-`pyspi.feature_vector(pyspi.load_table("results.npz"))` does the same for a saved table.
+`pyspi.feature_vector(pyspi.load_table("results.npz"))` does the same for a saved table, using the symmetry traits saved with it.
 
 Or from the command line, writing a results table next to your data:
 

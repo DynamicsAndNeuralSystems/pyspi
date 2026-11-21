@@ -4,6 +4,8 @@ Adapted from the ``Data`` class of Patricia Wollstadt's IDTxl
 (https://github.com/pwollstadt/IDTxl).
 """
 import os
+import sys
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -43,6 +45,31 @@ def _validate_procnames(procnames, n_processes):
     return names
 
 
+def _frame_procnames(data, dim_order):
+    """
+    The process names a DataFrame carries, or None.
+
+    Under ``"ps"`` processes are rows, named by the index; under ``"sp"`` they
+    are columns. A RangeIndex holds positions, not names, so it gives None.
+    """
+    if not isinstance(data, pd.DataFrame) or dim_order not in ("ps", "sp"):
+        return None
+    labels = data.index if dim_order == "ps" else data.columns
+    if isinstance(labels, pd.RangeIndex):
+        return None
+    return list(labels)
+
+
+def _outside_pyspi_stacklevel():
+    """``stacklevel`` for a warning raised by the caller, pointing at the first frame outside pyspi."""
+    package = os.path.dirname(os.path.abspath(__file__))
+    frame, level = sys._getframe(1), 1
+    while frame is not None and os.path.abspath(
+            frame.f_code.co_filename).startswith(package + os.sep):
+        frame, level = frame.f_back, level + 1
+    return level
+
+
 class Data:
     """
     A multivariate time series: processes x observations x replications.
@@ -60,10 +87,15 @@ class Data:
         The time series: a numpy array, a pandas DataFrame, or the path of a
         ``.npy``, ``.txt``, ``.csv`` or ``.ts`` file (``.ts`` needs aeon).
         Default: None, an empty ``Data`` to fill with ``add_process``.
-    dim_order : str, optional
+    dim_order : str or None, optional
         The order of the dimensions of ``data``, one character per dimension:
         ``'p'`` for processes, ``'s'`` for observations (samples) and ``'r'``
-        for replications. Default: ``'ps'``.
+        for replications. ``'ps'`` reads an ``(M, T)`` array, one row per
+        process; ``'sp'`` reads a ``(T, M)`` array or a DataFrame with one
+        column per process. None reads ``'ps'`` and warns (``UserWarning``)
+        when that gives more processes than observations, which often means
+        the other order was meant; a ``dim_order`` passed explicitly states
+        the layout and never warns. Default: None.
     detrend : bool, optional
         Remove the least-squares line from each process. Default: False.
     zscore : bool or None, optional
@@ -75,7 +107,9 @@ class Data:
         Name of the dataset. Default: None (``"N/A"``).
     procnames : list or None, optional
         One unique name per process, converted to strings. Default: None,
-        which gives ``proc-0``, ``proc-1``, ...
+        which takes the names of a DataFrame's processes (its index under
+        ``'ps'``, its columns under ``'sp'``, unless they are a
+        ``RangeIndex``) and otherwise gives ``proc-0``, ``proc-1``, ...
     n_processes : int or None, optional
         Keep only the first ``n_processes`` processes. Default: None (all).
     n_observations : int or None, optional
@@ -126,7 +160,7 @@ class Data:
     def __init__(
         self,
         data=None,
-        dim_order="ps",
+        dim_order=None,
         detrend=False,
         zscore=None,
         name=None,
@@ -146,6 +180,10 @@ class Data:
         # _name and _procnames are set only once there is data.
 
         if data is not None:
+            if procnames is None:
+                procnames = _frame_procnames(data, dim_order or "ps")
+                if procnames is not None and n_processes is not None:
+                    procnames = procnames[:n_processes]
             dat = self.convert_to_numpy(data)
             self.set_data(
                 dat,
@@ -337,7 +375,7 @@ class Data:
     def set_data(
         self,
         data,
-        dim_order="ps",
+        dim_order=None,
         name=None,
         n_processes=None,
         n_observations=None,
@@ -356,10 +394,12 @@ class Data:
         ----------
         data : numpy.ndarray
             Array of one to three dimensions.
-        dim_order : str, optional
+        dim_order : str or None, optional
             The order of the dimensions of ``data``, one character per
             dimension: ``'p'`` (processes), ``'s'`` (observations) or ``'r'``
-            (replications). Default: ``'ps'``.
+            (replications). None reads ``'ps'`` and warns if that gives more
+            processes than observations; an explicit value never warns.
+            Default: None.
         name : str or None, optional
             New name of the dataset; None keeps the current one.
             Default: None.
@@ -371,6 +411,9 @@ class Data:
         verbose : bool, optional
             Log the new size. Default: False.
         """
+        stated = dim_order is not None
+        if not stated:
+            dim_order = "ps"
         if len(dim_order) > 3:
             raise RuntimeError("dim_order can not have more than two " "entries")
         if len(dim_order) != data.ndim:
@@ -389,13 +432,28 @@ class Data:
         if len(set(dim_order)) != len(dim_order):
             raise ValueError(f"dim_order has repeated symbols: {dim_order!r}.")
 
-        # Bring data into the order processes x observations in a pandas dataframe.
+        shape = data.shape
+        # Bring data into the order processes x observations x replications.
         data = self._reorder_data(data, dim_order)
 
         if n_processes is not None:
             data = data[:n_processes]
         if n_observations is not None:
             data = data[:, :n_observations]
+
+        # C order whatever the input's layout: a reduction over a
+        # Fortran-ordered or strided array can differ in the last bit.
+        data = np.ascontiguousarray(data)
+
+        if not stated and data.shape[0] > data.shape[1]:
+            warnings.warn(
+                f"Data of shape {shape}, read with the default dim_order='ps', "
+                f"has {data.shape[0]} processes of {data.shape[1]} "
+                f"observations. Pass dim_order='sp' if time runs along the "
+                f"first axis, or dim_order='ps' to state that this layout is "
+                f"intended.",
+                UserWarning, stacklevel=_outside_pyspi_stacklevel(),
+            )
 
         data = self._apply_preprocessing(data, log=True)
 
