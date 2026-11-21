@@ -91,8 +91,8 @@ class PairwiseDistance(Undirected, Unsigned):
 def _itakura_mask(n, m, max_slope=2.0):
     """``tslearn.metrics.itakura_mask(n, m, max_slope)``, vectorised.
 
-    The same arithmetic, column by column, as tslearn's numba version, whose
-    compile costs about 1 s in every new process.
+    The same arithmetic, column by column, as tslearn's numba version, without
+    its per-process compilation.
     """
     min_slope = 1 / float(max_slope)
     max_slope = max_slope * (float(n) / float(m))
