@@ -95,6 +95,15 @@ def swap_chars(s, i_1, i_2):
     return ''.join([s[0:i_1], s[i_2], s[i_1+1:i_2], s[i_1], s[i_2+1:]])
 
 def convert_mdf_to_ddf(df):
+    # pivot_table averages duplicate keys, so two datasets sharing a name
+    # would silently become one averaged dataset.
+    dup = df.index[df.index.duplicated()]
+    if len(dup):
+        names = sorted({str(k[0]) for k in dup})
+        raise ValueError(
+            f"Dataset names must be unique; duplicated: {', '.join(names)}. "
+            "Give each dataset its own name (e.g. via `names=` or `calc.name`)."
+        )
     ddf = pd.pivot_table(data=df.stack(future_stack=True).reset_index(),index='Dataset',columns=['SPI-1', 'SPI-2'],dropna=False).T.droplevel(0)
     return ddf
 

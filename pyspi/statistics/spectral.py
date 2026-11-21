@@ -732,6 +732,21 @@ class GeneralizedPartialDirectedCoherence(NonparametricSpectralBivariate, Direct
 
 
 class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
+    """Directed transfer function (Kaminski & Blinowska 1991, Biol Cybern 65, 203-210).
+
+    ``DTF_ij(f) = |H_ji(f)|^2 / sum_k |H_jk(f)|^2`` from the transfer function
+    ``H`` of the Wilson factorisation of the pair's multitaper cross-spectrum;
+    ``table[i, j]`` is the flow from row ``i`` (source) to column ``j``
+    (target).
+
+    It is not weighted by the innovation variances, so on a pair it is about
+    ``DC^2 * sigma_j / sigma_i`` for weak coupling, with ``DC`` the directed
+    coherence and ``sigma`` the innovation standard deviations: its direction
+    follows which process is less predictable as well as the coupling, and on
+    an uncoupled pair it changes when only one process's own dynamics change.
+    :class:`DirectedCoherence` applies that weighting.
+    """
+
     name = "Directed transfer function"
     labels = ["unsigned", "spectral", "directed", "lagged"]
 
@@ -756,6 +771,10 @@ class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
     backend's ``direct_directed_transfer_function()`` uses ``sqrt(PDC)`` in
     place of the partial coherence, so it is not used.) On a pair, ``P`` is
     the ordinary coherency.
+
+    Its full-frequency DTF factor is not weighted by the innovation variances,
+    so on a pair its direction follows which process is less predictable as
+    well as the coupling (see :class:`DirectedTransferFunction`).
     """
 
     name = "Direct directed transfer function"
@@ -1098,6 +1117,16 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                         f"_fmax-{fmt_param(fmax)}_order-{order}").replace(
                 ".", "-"
             )
+            # max_order bounds the order search, so it matters only when the
+            # order is selected rather than given.
+            if order is None and max_order != 50:
+                paramstr += f"_maxorder-{max_order}"
+        # Non-default NaN handling changes the value, so it is named; defaults
+        # are not, so bundled identifiers are unchanged.
+        if not ignore_nan:
+            paramstr += "_ignorenan-False"
+        if nan_threshold != 0.5:
+            paramstr += f"_nanthr-{fmt_param(nan_threshold)}".replace(".", "-")
 
         self.identifier = self.identifier + paramstr
 
