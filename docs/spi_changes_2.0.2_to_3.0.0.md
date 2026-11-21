@@ -1,28 +1,34 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (296 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (272 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
 | 2.0.2 `config.yaml` | 285 |
-| identifier unchanged | 224 |
+| identifier unchanged | 187 |
 | renamed (same class and parameters; identifier changed) | 23 |
-| removed | 38 |
-| added | 49 |
-| 3.0.0 `full.yaml` | 296 |
+| removed | 75 |
+| added | 62 |
+| 3.0.0 `full.yaml` | 272 |
 
-285 - 38 removed + 49 added = 296; 224 + 23 renamed + 49 added = 296.
-The 38 removals are 14 made while porting away from JIDT and 24 duplicate, constant or degenerate SPIs; all are in the table below.
+285 - 75 removed + 62 added = 272; 187 + 23 renamed + 62 added = 272.
+The 75 removals are 14 made while porting away from JIDT, 24 duplicate, constant or degenerate SPIs, and 37 unbundled because an SPI that stays carries them; all are in the table below.
+The 37 are removed from the bundled configs only: their classes are unchanged, and each can still be computed from a custom config.
+The default kernel SPIs `mi_kernel_W-0.25`, `tlmi_kernel_W-0.25` and `te_kernel_W-0.25_k-1` keep their identifiers, but their values differ from 2.0.2: each point is now left out of its own neighbour counts.
 
-## Added (49)
+## Added (62)
 
 | Family | Count | Identifiers |
 |:--|--:|:--|
 | `LaggedCorrelation` (Pearson, Spearman, Kendall at lags 1, 2, 3, 4, 5, 10, 20; each plain and squared) | 42 | `corr_{pearson,spearman,kendall}_tau-{1,2,3,4,5,10,20}[-sq]` |
+| `PartialCorrelation` (`-P_ij / sqrt(P_ii P_jj)` from each bundled covariance estimator's precision matrix) | 7 | `pcorr_{EmpiricalCovariance,GraphicalLasso,GraphicalLassoCV,LedoitWolf,MinCovDet,OAS,ShrunkCovariance}` |
+| `ChatterjeeXi` (Chatterjee's rank correlation xi at lags 0 and 1) | 2 | `xi_tau-0`, `xi_tau-1` |
 | `CrossPairwiseDistance` | 2 | `xpdist_euclidean_tau-1_mean_rmse`, `xpdist_euclidean_tau-1_min_rmse` |
 | `Barycenter` (alignment-adjusted correlation `2 mean(b^2) / mean_energy - 1`; replaces the `mean` statistic) | 3 | `bary_dtw_corr`, `bary_sgddtw_corr`, `bary_softdtw_corr` |
 | `DirectedInfo` (KSG/Frenzel-Pompe) | 1 | `di_kraskov_NN-4_n-5` |
 | `PhaseAlignedCorrelation` (Welch, automatic segment length) | 1 | `phasealigned_welch_nperseg-auto` |
+| `TransferEntropy` (symbolic, 3-sample ordinal patterns) | 1 | `te_symbolic_k-3` |
+| `MutualInfo`, `TimeLaggedMutualInfo`, `TransferEntropy` (box kernel with AUTO dynamic correlation exclusion) | 3 | `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO`, `te_kernel_W-0.25_DCE-AUTO_k-1` |
 
 Full list:
 
@@ -75,8 +81,21 @@ Full list:
 - `bary_softdtw_corr`
 - `xpdist_euclidean_tau-1_mean_rmse`
 - `xpdist_euclidean_tau-1_min_rmse`
+- `pcorr_EmpiricalCovariance`
+- `pcorr_GraphicalLasso`
+- `pcorr_GraphicalLassoCV`
+- `pcorr_LedoitWolf`
+- `pcorr_MinCovDet`
+- `pcorr_OAS`
+- `pcorr_ShrunkCovariance`
+- `xi_tau-0`
+- `xi_tau-1`
+- `te_symbolic_k-3`
+- `mi_kernel_W-0.25_DCE-AUTO`
+- `tlmi_kernel_W-0.25_DCE-AUTO`
+- `te_kernel_W-0.25_DCE-AUTO_k-1`
 
-## Removed (38)
+## Removed (75)
 
 | Identifier (2.0.2) | Class | Why |
 |:--|:--|:--|
@@ -106,6 +125,16 @@ Full list:
 | `phase_multitaper_max_fs-1_fmin-0_fmax-0-5` | `CoherencePhase` | Maximum of wrapped phase depends on the branch cut; the constructor now refuses `statistic="max"`. |
 | `te_symbolic_k-10_kt-1_l-1_lt-1` | `TransferEntropy` | `10!` symbols against ~91 usable samples at T=100; unvalidated. |
 | `te_symbolic_k-1_kt-1_l-1_lt-1` | `TransferEntropy` | A length-1 ordinal pattern has one symbol, so TE is identically 0. |
+| `cov_ShrunkCovariance`, `cov_LedoitWolf`, `cov_OAS` | `Covariance` | Unbundled: on z-scored data, the empirical correlation times one shrinkage factor per dataset, so `cov_EmpiricalCovariance` carries them. |
+| `cov-sq_EmpiricalCovariance`, `cov-sq_ShrunkCovariance`, `cov-sq_GraphicalLasso`, `cov-sq_LedoitWolf`, `cov-sq_MinCovDet`, `cov-sq_OAS` | `Covariance` | Unbundled: the exact square of a covariance SPI. |
+| `lmfit_Ridge`, `lmfit_BayesianRidge`, `lmfit_SGDRegressor` | `LinearModel` | Unbundled: a function of r², which `mi_gaussian` carries (|ρ| 1.000; `SGDRegressor` is the same fit by a noisier optimiser). |
+| `pdcoh_multitaper_{mean,max}_*` (6) | `PartialDirectedCoherence` | Unbundled: fitted on one pair, PDC equals DTF at every frequency. |
+| `gpdcoh_multitaper_{mean,max}_*` (6) | `GeneralizedPartialDirectedCoherence` | Unbundled: fitted on one pair, gPDC equals DC² at every frequency. |
+| `ppc_multitaper_{mean,max}_*` (6) | `PairwisePhaseConsistency` | Unbundled: PPC = (N·PLV² − 1)/(N − 1) at every frequency, so `plv_*` carries it. |
+| `kendalltau`, `kendalltau-sq` | `KendallTau` | Unbundled: ranks pairs as `spearmanr` does (|ρ| 0.998 within datasets). |
+| `pdist_cosine`, `pdist_euclidean` | `PairwiseDistance` | Unbundled: on z-scored series, `1 − r` and `sqrt(2T(1 − r))` of the Pearson correlation r. |
+| `bary-sq_euclidean_mean` | `Barycenter` | Unbundled: `(1 + r)/2` on z-scored series. |
+| `phi_Geo_t-1_norm-1`, `phi_star_t-1_norm-1` | `IntegratedInformation` | Unbundled: the `norm-0` value divided by a constant under z-scoring. |
 
 ## Renamed (23)
 

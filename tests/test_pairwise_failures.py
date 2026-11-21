@@ -41,7 +41,7 @@ def _expected(spi):
 
 @pytest.mark.parametrize("spi", [
     ConditionalEntropy(estimator="kozachenko"),   # Directed.multivariate loop
-    StochasticInteraction(estimator="kozachenko"),  # the upper-triangle loop
+    StochasticInteraction(estimator="kozachenko"),  # Undirected.multivariate loop
 ], ids=lambda x: x.identifier)
 def test_undefined_pairs_are_nan_and_the_rest_keep_their_values(spi):
     undefined, defined = _expected(spi)
