@@ -201,8 +201,8 @@ def filter_spis(keywords, output_name = None, configfile= None):
     -------
     None
         A ``ValueError`` is raised if ``keywords`` is not a non-empty list of
-        strings, includes ``'unsigned'`` (not a label) or no SPI matches, and a ``FileNotFoundError`` if the config
-        is not found.
+        strings, includes ``'unsigned'`` (not a label) or no SPI matches,
+        and a ``FileNotFoundError`` if the config is not found.
     """
     # handle invalid keyword input
     if not keywords:

@@ -230,9 +230,9 @@ class NonparametricSpectral(Unsigned):
                 l for l in self.labels
                 if l not in ("undirected", "directed")
             ] + [trait, "signed"]
-            # Signed in behaviour too: `Calculator._rmmin` shifts unsigned SPIs
-            # by their minimum and `set_group` takes their abs(), and either
-            # would destroy the lead/lag sign.
+            # Signed in behaviour too: `Calculator._rmmin` shifts SPIs that are
+            # not signed by their minimum, which would destroy the lead/lag
+            # sign.
             self.issigned = lambda: True
 
         paramstr = (

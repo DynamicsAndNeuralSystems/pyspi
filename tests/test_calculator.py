@@ -702,7 +702,7 @@ def test_correlation_compares_signed_with_unsigned_through_strength():
 class _SignStub:
     def __init__(self, signed):
         self._signed = signed
-        self.labels = ["signed" if signed else "unsigned"]
+        self.labels = ["signed"] if signed else []
 
     def issigned(self):
         return self._signed

@@ -91,12 +91,9 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
             if label not in ("linear", "nonlinear") or label == own_lin[0]
         ]
 
-    # `signed` is a flag, set from the SPI's own issigned(); an SPI without it
-    # is one-ended. `unsigned` is not a label (configs written for pyspi 2.x
-    # use it) and is dropped. issigned() is not just a label: `Calculator._rmmin`
-    # shifts SPIs that are not signed, which would destroy a lead/lag sign,
-    # and the SPI-SPI correlations take the absolute value of a signed SPI
-    # compared with one that is not.
+    # `signed` is set from issigned(), which `_rmmin` and the SPI-SPI
+    # correlations also read; an `unsigned` (written by configs for pyspi 2.x)
+    # is dropped.
     merged = [label for label in merged if label != "unsigned"]
     issigned = getattr(spi, "issigned", None)
     if issigned is not None:
@@ -1827,8 +1824,7 @@ class CalculatorFrame:
         For each dataset, every pair of SPIs is correlated across the pairs of
         processes: on their values when both are signed or neither is, and on
         the signed SPI's absolute value against the other SPI's value
-        otherwise. An unnamed
-        dataset is named ``dataset_<i>`` by its position.
+        otherwise. An unnamed dataset is named ``dataset_<i>`` by its position.
 
         Parameters
         ----------

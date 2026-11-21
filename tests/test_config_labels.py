@@ -401,3 +401,20 @@ def test_unbundled_inverted_statistics():
     for statistic in ("trace_stat", "max_eig_stat"):
         assert "inverted" not in Cointegration(method="johansen",
                                                statistic=statistic).labels
+
+
+def test_no_label_is_listed_twice(entries_by_config):
+    """In a config's own label lists, and after merging with the class."""
+    bad = []
+    for name in bundled_configs():
+        for module_spis in load_config_yaml(resolve_config(name)).values():
+            for fcn, entry in module_spis.items():
+                lists = [list(entry.get("labels") or [])] + [
+                    list((params or {}).get("labels") or [])
+                    for params in entry.get("configs") or []]
+                bad += [f"{name}/{fcn}: {l}" for l in lists if len(l) != len(set(l))]
+    for config, entries in entries_by_config.items():
+        bad += [f"{config}/{merged.identifier}: {merged.labels}"
+                for _, _, merged in entries
+                if len(merged.labels) != len(set(merged.labels))]
+    assert not bad, "\n".join(bad)
