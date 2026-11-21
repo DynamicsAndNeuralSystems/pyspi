@@ -174,6 +174,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   **The three `phase_multitaper_mean_*` values change.**
 - **Spectral Granger causality ignored `fs`** in its parametric branch and mis-oriented its NaN mask, so an estimable cell could be blanked; no value changes at the shipped `fs=1`.
   Eleven `sgc_*` identifiers named `fmin=0`, which is overridden to 1e-5 because spectral GC is undefined at zero frequency: **`sgc_*_fmin-0_*` is renamed `sgc_*_fmin-1e-05_*`** (values unchanged).
+  Its default `fmax` was 0.5 whatever `fs` was, so at `fs=100` the default band was 0 to 0.5 Hz; it is now `fs / 2`, as for every other spectral SPI (no change at `fs=1`).
+  An unknown `method` raises `ValueError`; any value other than `"nonparametric"` ran the parametric method.
 - **Parametric spectral Granger causality (`sgc_parametric_*`) was fitted on an indefinite autocovariance.**
   The VAR is now fitted on the Yule-Walker autocovariance, which is positive semidefinite, the band uses the frequencies the model is evaluated at, and the automatic order search terminates.
 - **Directed spectral measures used an open frequency band.**
