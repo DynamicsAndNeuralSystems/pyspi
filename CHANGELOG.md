@@ -37,12 +37,11 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 
 **Deprecated, not removed.** These 2.x spellings still work in 3.x with a `DeprecationWarning` and will be removed in 4.0:
 
-- `subset="all"` becomes `config="full"`; other `subset` names are unchanged.
+- `subset="all"` becomes `config="full"`; other `subset` names are unchanged, and `config="all"` raises `ValueError` naming `config="full"`.
 - `configfile=p` becomes `config=p`.
 - `normalise=` becomes `zscore=`, on `Calculator`, `Data` and `CalculatorFrame`.
 - The SPI class `GromovWasserstainTau` (misspelled) becomes `GromovWassersteinTau`, in Python and in YAML configs; the identifier `gwtau` and its values are unchanged.
 - Passing both an old and a new form raises `TypeError`.
-- `config="all"` raises `ValueError` naming `config="full"`.
 
 **Breaking, with no shim:**
 

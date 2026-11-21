@@ -9,10 +9,10 @@
 
 The data file holds one row per process; pass ``--dim-order sp`` for one
 column per process. If ``--config`` is omitted, the bundled ``full`` config
-is used. If
-``--output`` is omitted, the result table is written next to the data file as
-``<data-stem>.spi.npz``. The format follows the extension: ``.npz``
-(round-trips via ``pyspi.load_table``) or ``.csv`` (human-readable, one-way).
+is used. If ``--output`` is omitted, the result table is written next to the
+data file as ``<data-stem>.spi.npz``. The format follows the extension:
+``.npz`` (round-trips via ``pyspi.load_table``) or ``.csv`` (human-readable,
+one-way).
 """
 
 from __future__ import annotations
