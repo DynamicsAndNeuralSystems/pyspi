@@ -108,6 +108,7 @@ class Data:
         "coint",
         "covariance",
         "entropy",
+        "events",
         "joint_entropy",
         "mne",
         "mne_psi",
@@ -116,6 +117,7 @@ class Data:
         "spectral_gc",
         "spectral_mv",
         "theiler",
+        "var",
         "xcorr",
     )
 
