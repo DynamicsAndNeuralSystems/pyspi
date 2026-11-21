@@ -239,3 +239,42 @@ def test_checkpoint_rejects_a_different_computation_version(tmp_path):
 
     with pytest.raises(ValueError, match="different run"):
         calc.compute(checkpoint_dir=tmp_path, progress=False)
+
+
+def test_run_spec_records_versions(tmp_path):
+    """A saved table states which computation, pyspi and dependencies made it.
+
+    So results can be checked for mixed `COMPUTATION_VERSION`s from the
+    saved files alone.
+    """
+    import json
+    from pyspi import _parallel
+
+    calc = Calculator(dataset=_data(seed=13), config=CONFIG, verbose=False)
+    spec = calc.run_spec
+    assert spec["computation_version"] == _parallel.COMPUTATION_VERSION
+    assert spec["pyspi_version"]
+    assert {"numpy", "scipy"} <= set(spec["dependency_versions"])
+    assert spec["dependency_versions"]["numpy"] == np.__version__
+
+    calc.compute(progress=False)
+    out = calc.save(tmp_path / "t.npz")
+    with np.load(out, allow_pickle=False) as f:
+        saved = json.loads(str(f["run_spec"]))
+    assert saved["computation_version"] == _parallel.COMPUTATION_VERSION
+    assert saved["dependency_versions"] == spec["dependency_versions"]
+
+
+def test_run_digest_ignores_package_versions(monkeypatch):
+    """An upgrade that changes no computed value must not block a resume.
+
+    `COMPUTATION_VERSION` is what keys the algorithm; it is hashed separately.
+    """
+    from pyspi import calculator
+
+    calc = Calculator(dataset=_data(seed=14), config=CONFIG, verbose=False)
+    before = calc.run_digest
+    monkeypatch.setattr(calculator, "_installed_versions",
+                        lambda: ("0.0.0", {"numpy": "0.0"}))
+    assert calc.run_spec["pyspi_version"] == "0.0.0"
+    assert calc.run_digest == before

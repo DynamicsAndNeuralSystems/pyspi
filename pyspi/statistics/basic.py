@@ -183,8 +183,11 @@ def _xcorr_profile(data, i, j):
     except (KeyError, AttributeError):
         pass
 
+    # Computed for (larger, smaller) and reversed for the other orientation,
+    # so a value does not depend on the order the pairs are visited in.
     T = data.n_observations
-    x, y = data.to_numpy(squeeze=True)[[i, j]]
+    hi, lo = max(i, j), min(i, j)
+    x, y = data.to_numpy(squeeze=True)[[hi, lo]]
 
     # Biased estimator (demeaned, divided by T, as statsmodels'
     # `ccf(adjusted=False)`): |r| <= 1 and the zero lag is Pearson's r.
@@ -198,15 +201,15 @@ def _xcorr_profile(data, i, j):
     # correlate(x, y, "full")[T - 1 + l] == sum_t x[t + l] * y[t], so the
     # zero lag sits at T - 1.
     lag_max = T // _XCORR_MAX_LAG_FRACTION
-    r_ij = r_full[T - 1 - lag_max: T + lag_max]
+    r_hilo = r_full[T - 1 - lag_max: T + lag_max]
 
     try:
-        data.xcorr[(i, j)] = r_ij
+        data.xcorr[(hi, lo)] = r_hilo
     except AttributeError:
-        data.xcorr = {(i, j): r_ij}
+        data.xcorr = {(hi, lo): r_hilo}
     # r_yx(l) == r_xy(-l): the opposite orientation is the reversed sequence.
-    data.xcorr[(j, i)] = r_ij[::-1]
-    return r_ij
+    data.xcorr[(lo, hi)] = r_hilo[::-1]
+    return data.xcorr[(i, j)]
 
 
 class CrossCorrelation(Undirected, Signed):
