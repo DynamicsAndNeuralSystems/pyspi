@@ -448,8 +448,9 @@ def feature_vector(table, directedness=None, include_self=False):
     Returns a ``pandas.Series`` named ``"value"`` indexed by
     ``(spi, source, target)``, in table column order and then row-major pair
     order, so vectors from datasets with the same processes and config line up
-    element for element. NaNs are kept so the length is fixed; a failed SPI
-    contributes NaN features (see :attr:`Calculator.errors`).
+    element for element. NaNs are kept so the length is fixed; a feature is
+    NaN wherever its cell in :attr:`Calculator.quality` is not ``GOOD``, and
+    that code says why.
 
     Args:
         table (pandas.DataFrame):

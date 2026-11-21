@@ -221,10 +221,29 @@ def test_calculator_feature_vector_loses_nothing(computed):
 
 
 def test_saved_table_gives_the_same_vector(computed, tmp_path):
-    """``load_table`` keeps the config in ``attrs``; the traits are rebuilt from it."""
+    """``load_table`` and ``load_results`` keep the config in ``attrs``; the traits are rebuilt from it."""
     path = computed.save(tmp_path / "fv.npz")
     loaded = pyspi.load_table(path)
     direct = computed.feature_vector()
     via_file = pyspi.feature_vector(loaded)
     assert via_file.index.equals(direct.index)
     np.testing.assert_array_equal(via_file.to_numpy(), direct.to_numpy())
+    via_results = pyspi.feature_vector(pyspi.load_results(path).table)
+    assert via_results.equals(via_file)
+
+
+def test_a_feature_is_nan_exactly_where_its_cell_is_not_good(tmp_path):
+    """NaN features line up with the non-GOOD cells of ``Calculator.quality``."""
+    from pyspi.quality import Quality
+
+    configfile = tmp_path / "fv.yaml"
+    configfile.write_text(CONFIG, encoding="utf-8")
+    X = np.random.default_rng(0).standard_normal((4, 300))
+    X[2] = 1.0     # a constant process: its conditional entropies are undefined
+    calc = Calculator(dataset=X, config=str(configfile), zscore=False, verbose=False)
+    calc.compute()
+    v = calc.feature_vector(include_self=True)
+    assert v.isna().any() and v.notna().any()
+    for (spi, s, t), val in v.items():
+        good = calc.quality[spi].loc[s, t] == Quality.GOOD
+        assert np.isnan(val) != good, (spi, s, t)
