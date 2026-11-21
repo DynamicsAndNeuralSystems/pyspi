@@ -70,6 +70,12 @@ for _stat in ("Q", "q"):
         "fewer than two collapsed exceedance events per process at the 0.95 "
         "quantile with T=100")
 
+# The PAC modulation index needs all 18 phase bins occupied; the 50 samples kept
+# at T=100 leave a bin empty for every source of cml_M5_T100.
+KNOWN_UNESTIMABLE.setdefault("cml_M5_T100", {})["pac_mi_p-0-01-0-05_a-0-15-0-4"] = (
+    "the 50 samples kept at T=100 leave a phase bin of the 0.01-0.05 band "
+    "empty for every source")
+
 
 def build_tables(dataset_name, config="full", seed=42):
     """Compute every SPI on ``dataset_name`` and return ``{spi_key: MxM array}``."""

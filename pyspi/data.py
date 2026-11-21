@@ -107,6 +107,7 @@ class Data:
         "ccm",
         "coint",
         "covariance",
+        "crossfreq",
         "entropy",
         "events",
         "joint_entropy",
