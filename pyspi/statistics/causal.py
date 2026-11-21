@@ -91,7 +91,7 @@ class AdditiveNoiseModel(Directed, Unsigned):
     name = "Additive noise model"
     identifier = "anm"
     # Not `linear`: a Gaussian-process fit and an RBF-kernel HSIC.
-    labels = ["causal", "unordered", "nonlinear", "directed"]
+    labels = ["causal", "unordered", "nonlinear", "directed", "inverted"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
@@ -145,7 +145,7 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
 
     name = "Conditional distribution similarity statistic"
     identifier = "cds"
-    labels = ["causal", "unordered", "nonlinear", "directed"]
+    labels = ["causal", "unordered", "nonlinear", "directed", "inverted"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
@@ -178,7 +178,7 @@ class RegressionErrorCausalInference(Directed, Unsigned):
 
     name = "Regression error-based causal inference"
     identifier = "reci"
-    labels = ["causal", "unordered", "nonlinear", "directed"]
+    labels = ["causal", "unordered", "nonlinear", "directed", "inverted"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):

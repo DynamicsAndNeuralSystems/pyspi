@@ -88,6 +88,7 @@
       - undirected
       - bivariate
       - contemporaneous
+      - inverted
       - MXX
     dependencies:
     configs:
@@ -131,6 +132,7 @@
       - nonlinear
       - bivariate
       - contemporaneous
+      - inverted
       - M02
     dependencies:
     configs:
@@ -142,6 +144,7 @@
       - nonlinear
       - bivariate
       - contemporaneous
+      - inverted
       - M02
     dependencies:
     configs:
@@ -153,6 +156,7 @@
       - nonlinear
       - bivariate
       - contemporaneous
+      - inverted
       - M14
     dependencies:
     configs:
@@ -197,6 +201,7 @@
       - nonlinear
       - bivariate
       - contemporaneous
+      - inverted
       - M14
     configs:
       - estimator: kozachenko
@@ -209,6 +214,7 @@
       - nonlinear
       - bivariate
       - contemporaneous
+      - inverted
       - M14
     configs:
     - estimator: kernel
@@ -219,6 +225,7 @@
       - directed
       - time-dependent
       - bivariate
+      - inverted
       - MXX
     configs:
       - estimator: gaussian
@@ -828,6 +835,7 @@
         trend: c
         labels:
           - directed
+          - inverted
 
       - method: aeg
         statistic: tstat
@@ -836,6 +844,7 @@
         trend: ct
         labels:
           - directed
+          - inverted
 
       - method: aeg
         statistic: tstat
@@ -844,6 +853,7 @@
         trend: ct
         labels:
           - directed
+          - inverted
 
   # Power envelope correlation
   PowerEnvelopeCorrelation:

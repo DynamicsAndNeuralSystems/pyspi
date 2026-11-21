@@ -6,8 +6,8 @@ vocabulary of CONTRIBUTING.md (which catches typos such as ``sigend``, a
 stray ``directed,`` or a compound such as ``linear/nonlinear``), and every
 SPI carries exactly one label from each axis of that vocabulary.
 ``signed`` is a flag, carried exactly when ``issigned()`` is true; ``unsigned``
-is not a label, and one in a config is dropped. ``timing`` and ``profile`` are
-flags set by the class, on a fixed set of bundled SPIs.
+is not a label, and one in a config is dropped. ``timing``, ``profile`` and
+``inverted`` are flags set by the class, on fixed sets of bundled SPIs.
 The labels a config writes for an SPI must also agree with the SPI itself:
 its sign with ``issigned()``, its directedness with the class trait, its
 linearity with the class where the class declares one, and each SPI carries
@@ -37,8 +37,8 @@ CONTRADICTORY = (
     ("directed", "undirected"),
 )
 # The label vocabulary of CONTRIBUTING.md: each SPI carries exactly one
-# label from each axis, and the flags ``signed``, ``timing`` and ``profile``
-# where they apply.
+# label from each axis, and the flags ``signed``, ``timing``, ``profile`` and
+# ``inverted`` where they apply.
 LABEL_AXES = {
     "directedness": {"directed", "undirected", "antisymmetric"},
     "linearity": {"linear", "nonlinear"},
@@ -52,7 +52,7 @@ DESCRIPTIVE_TAGS = {
     "normal", "rank", "spectral", "symbolic", "temporal", "unordered",
     "wavelet",
 }
-FLAGS = {"signed", "timing", "profile"}
+FLAGS = {"signed", "timing", "profile", "inverted"}
 VOCABULARY = set().union(*LABEL_AXES.values()) | DESCRIPTIVE_TAGS | FLAGS
 # The SPIs of `full` whose value is an offset (timing) or describes how the
 # dependence is distributed (profile).
@@ -65,6 +65,25 @@ TIMING_IN_FULL = {
 PROFILE_IN_FULL = {
     "edge_excessvar", "edge_topshare_f-0-05", "edge_acf1",
     "tailasym_q-0-95", "tailasym_q-0-9",
+}
+# One-ended SPIs whose scale runs the other way: lower means stronger.
+INVERTED_IN_FULL = {
+    # distances and dissimilarities
+    "dtw", "dtw_constraint-itakura", "dtw_constraint-sakoe-chiba_radius-auto",
+    "softdtw", "softdtw_constraint-itakura", "softdtw_constraint-sakoe-chiba",
+    "pdist_cityblock", "pdist_chebyshev", "pdist_canberra", "pdist_braycurtis",
+    "xpdist_euclidean_tau-1_min_rmse", "xpdist_euclidean_tau-1_mean_rmse",
+    # entropies
+    "je_kozachenko", "je_kernel_W-0.5", "ce_kozachenko", "ce_kernel_W-0.5",
+    "cce_gaussian_n-5", "cce_kozachenko_n-5", "xme_gaussian_k1",
+    "xme_kozachenko_k1", "xme_kernel_W-0.5_k1", "xme_gaussian_k10",
+    "xme_kozachenko_k10",
+    # Engle-Granger t-statistic: more negative is stronger evidence
+    "coint_aeg_tstat_trend-c_autolag-aic_maxlag-10",
+    "coint_aeg_tstat_trend-ct_autolag-aic_maxlag-10",
+    "coint_aeg_tstat_trend-ct_autolag-bic_maxlag-10",
+    # causal scores and prediction errors: lower is stronger evidence
+    "anm", "cds", "reci", "gpfit_DotProduct", "gpfit_RBF",
 }
 
 
@@ -320,7 +339,8 @@ def test_filter_spis_explains_that_unsigned_is_not_a_label(tmp_path, monkeypatch
 
 
 @pytest.mark.parametrize("flag,expected", [("timing", TIMING_IN_FULL),
-                                           ("profile", PROFILE_IN_FULL)])
+                                           ("profile", PROFILE_IN_FULL),
+                                           ("inverted", INVERTED_IN_FULL)])
 def test_value_flags_in_full(labels_by_config, flag, expected):
     full = labels_by_config["full"]
     assert {ident for ident, labels in full.items() if flag in labels} == expected
@@ -340,7 +360,7 @@ def test_config_value_flags_agree_with_the_class(entries_by_config):
     bad = []
     for config, entries in entries_by_config.items():
         for written, spi, merged in entries:
-            for flag in ("timing", "profile"):
+            for flag in ("timing", "profile", "inverted"):
                 if (flag in written) != (flag in spi.labels):
                     bad.append(f"{config}/{merged.identifier}: {flag}")
     assert not bad, "\n".join(bad)
@@ -362,3 +382,22 @@ def test_unbundled_timing_statistics():
         assert flags(Barycenter(mode="dtw", statistic=statistic)) == set()
     assert flags(TailDependenceAsymmetry(statistic="upper")) == set()
     assert flags(TailDependenceAsymmetry(statistic="lower")) == set()
+
+
+def test_inverted_is_only_on_one_ended_spis(labels_by_config):
+    bad = [f"{config}/{ident}" for config, spis in labels_by_config.items()
+           for ident, labels in spis.items()
+           if "inverted" in labels and {"signed", "timing", "profile"} & set(labels)]
+    assert not bad, bad
+
+
+def test_unbundled_inverted_statistics():
+    from pyspi.statistics.distance import GromovWassersteinTau, LongestCommonSubsequence
+    from pyspi.statistics.misc import Cointegration, LinearModel
+
+    assert "inverted" in GromovWassersteinTau().labels
+    assert "inverted" in LinearModel("Ridge").labels
+    assert "inverted" not in LongestCommonSubsequence().labels
+    for statistic in ("trace_stat", "max_eig_stat"):
+        assert "inverted" not in Cointegration(method="johansen",
+                                               statistic=statistic).labels

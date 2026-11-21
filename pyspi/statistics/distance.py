@@ -55,7 +55,7 @@ class PairwiseDistance(Undirected, Unsigned):
 
     ``A[i, j]`` is ``d(x_i, x_j)`` for the chosen ``metric``, computed with
     scikit-learn's ``pairwise_distances``. Undirected and unsigned (zero for
-    identical series).
+    identical series); a distance, so lower means more alike.
 
     ``normalise=True`` divides by ``sqrt(T)`` and appends ``_rmse`` to the
     identifier. For the Euclidean metric that is the root mean square
@@ -77,7 +77,8 @@ class PairwiseDistance(Undirected, Unsigned):
 
     name = "Pairwise distance"
     identifier = "pdist"
-    labels = ["distance", "unordered", "nonlinear", "undirected"]
+    # A distance: lower means more alike.
+    labels = ["distance", "unordered", "nonlinear", "undirected", "inverted"]
 
     def __init__(self, metric="euclidean", normalise=False, **kwargs):
         self._metric = metric
@@ -705,7 +706,7 @@ class DynamicTimeWarping(TimeWarping):
     minimum over warping paths ``pi`` (monotone, continuous, matched
     endpoints) of the accumulated squared difference, square-rooted as in
     tslearn and dtaidistance. Undirected and unsigned; zero for identical
-    series.
+    series, and lower means more alike.
 
     ``global_constraint`` restricts the paths to a band around the diagonal:
     a Sakoe-Chiba band of fixed radius [1]_ or an Itakura parallelogram of
@@ -752,6 +753,7 @@ class DynamicTimeWarping(TimeWarping):
 
     name = "Dynamic time warping"
     identifier = "dtw"
+    labels = TimeWarping.labels + ["inverted"]
 
     def __init__(
         self,
@@ -1013,6 +1015,7 @@ class SoftDynamicTimeWarping(TimeWarping):
 
     name = "Soft dynamic time warping"
     identifier = "softdtw"
+    labels = TimeWarping.labels + ["inverted"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
@@ -1172,7 +1175,8 @@ class GromovWassersteinTau(Undirected, Unsigned):
     trajectory's start, and ``wass_sorted`` the closed-form 2-Wasserstein
     distance between the two sorted vectors (Proposition 1(e) of [1]_:
     ``sqrt(mean((sorted v_i - sorted v_j)^2))`` at equal lengths).
-    Undirected and unsigned; zero for identical series.
+    Undirected and unsigned; zero for identical series, and lower means more
+    alike.
 
     The distance vector has one entry per point, the first being 0 for the
     start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``). The
@@ -1195,7 +1199,7 @@ class GromovWassersteinTau(Undirected, Unsigned):
 
     name = "Gromov-Wasserstein distance (GW_tau)"
     identifier = "gwtau"
-    labels = ["distance", "unordered", "nonlinear", "undirected"]
+    labels = ["distance", "unordered", "nonlinear", "undirected", "inverted"]
 
     @staticmethod
     def vec_geo_dist(x):
@@ -1281,7 +1285,7 @@ class CrossPairwiseDistance(Undirected, Unsigned):
     The smaller of the forward and backward shifts is kept, so the value is
     symmetric in the pair, and ``statistic`` then takes the minimum or the
     mean over ``t = 0..tau`` (lags of ``T`` or more are skipped by the mean).
-    Undirected and unsigned.
+    Undirected and unsigned; a distance, so lower means more alike.
 
     Each shifted pairing is a valid DTW warping path, so the value is never
     below the unconstrained DTW distance with ``normalise=True``. At
@@ -1301,7 +1305,7 @@ class CrossPairwiseDistance(Undirected, Unsigned):
         Default: ``'min'``.
     """
     name = "Cross pairwise distance"
-    labels = ["distance", "nonlinear", "undirected", "temporal"]
+    labels = ["distance", "nonlinear", "undirected", "temporal", "inverted"]
 
     def __init__(self, metric="euclidean", tau=1, statistic="min"):
         if metric != "euclidean":

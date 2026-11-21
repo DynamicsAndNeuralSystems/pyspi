@@ -316,9 +316,11 @@ class Unsigned:
     """
     Mixin for every SPI that is not signed, which carries no sign label.
 
-    By default its value is a one-ended strength of dependence (or, with the
-    flag ``timing`` or ``profile``, an offset or a description of how the
-    dependence is distributed), whatever values it takes: it can be negative
+    By default its value is a one-ended strength of dependence, higher meaning
+    stronger (with the flag ``inverted``, lower meaning stronger, as for a
+    distance or an entropy; with ``timing`` or ``profile``, an offset or a
+    description of how the dependence is distributed), whatever values it
+    takes: it can be negative
     through estimator bias, a floor that is not 0 (soft-DTW, a differential
     entropy) or an inverted scale (the Engle-Granger t-statistic, more
     negative for stronger evidence).

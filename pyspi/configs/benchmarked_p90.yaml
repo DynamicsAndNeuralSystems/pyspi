@@ -153,6 +153,7 @@
       - undirected
       - bivariate
       - contemporaneous
+      - inverted
       - MXX
     dependencies:
     configs:
@@ -179,6 +180,7 @@
       - nonlinear
       - bivariate
       - time-dependent
+      - inverted
       - M10
     dependencies:
     configs:
@@ -192,6 +194,7 @@
       - nonlinear
       - bivariate
       - time-dependent
+      - inverted
       - MXX
     dependencies:
     configs:
@@ -236,6 +239,7 @@
       - nonlinear
       - bivariate
       - contemporaneous
+      - inverted
       - M02
     dependencies:
     configs:
@@ -246,6 +250,7 @@
       - nonlinear
       - bivariate
       - contemporaneous
+      - inverted
       - M14
     dependencies:
     configs:
@@ -258,6 +263,7 @@
       - nonlinear
       - bivariate
       - contemporaneous
+      - inverted
       - M14
     configs:
     - estimator: kozachenko
@@ -269,6 +275,7 @@
       - nonlinear
       - bivariate
       - contemporaneous
+      - inverted
       - M14
     configs:
     - estimator: kozachenko
@@ -279,6 +286,7 @@
       - directed
       - bivariate
       - time-dependent
+      - inverted
       - M03
     configs:
     - estimator: gaussian
@@ -288,6 +296,7 @@
       - directed
       - time-dependent
       - bivariate
+      - inverted
       - MXX
     configs:
     - estimator: gaussian
@@ -853,6 +862,7 @@
       trend: c
       labels:
         - directed
+        - inverted
     - method: aeg
       statistic: tstat
       autolag: aic
@@ -860,6 +870,7 @@
       trend: ct
       labels:
         - directed
+        - inverted
     - method: aeg
       statistic: tstat
       autolag: bic
@@ -867,6 +878,7 @@
       trend: ct
       labels:
         - directed
+        - inverted
 
   PowerEnvelopeCorrelation:
     labels:

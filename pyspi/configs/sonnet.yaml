@@ -22,6 +22,7 @@
       - nonlinear
       - bivariate
       - time-dependent
+      - inverted
       - M10
     dependencies:
     configs:
@@ -52,6 +53,7 @@
       - nonlinear
       - bivariate
       - contemporaneous
+      - inverted
       - M02
     dependencies:
     configs:
@@ -190,6 +192,8 @@
         autolag: aic
         maxlag: 10
         trend: ct
+        labels:
+          - inverted
 
   # Power envelope correlation
   PowerEnvelopeCorrelation:

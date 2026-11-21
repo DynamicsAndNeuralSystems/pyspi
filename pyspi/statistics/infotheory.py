@@ -1465,7 +1465,8 @@ class JointEntropy(InfoTheoryBase, Undirected):
 
     The differential entropy of the pair's joint distribution at lag 0,
     treating the samples as independent draws. Undirected and unsigned,
-    though like any differential entropy its value can be negative.
+    though like any differential entropy its value can be negative; for given
+    marginals it is lower when the pair is more dependent.
 
     The ``gaussian`` estimate is the entropy of a Gaussian with the sample
     covariance (with a relative ridge of 1e-8 on its diagonal). The
@@ -1493,7 +1494,7 @@ class JointEntropy(InfoTheoryBase, Undirected):
 
     name = "Joint entropy"
     identifier = "je"
-    labels = ["infotheory", "unordered", "undirected"]
+    labels = ["infotheory", "unordered", "undirected", "inverted"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1520,7 +1521,8 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
     row process is known. Directed, since ``H(x_j | x_i)`` and
     ``H(x_i | x_j)`` differ unless the marginal entropies are equal (the
     ``gaussian`` estimate is symmetric for z-scored data). Unsigned, though
-    a differential entropy can be negative.
+    a differential entropy can be negative; lower means the row tells more
+    about the column.
 
     The ``gaussian`` estimate is the entropy of a Gaussian with the sample
     covariance (with a relative ridge of 1e-8 on its diagonal). The
@@ -1550,7 +1552,7 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
     identifier = "ce"
     # Directed because H(X|Y) != H(Y|X) in general, even though the Gaussian
     # form is symmetric for z-scored data.
-    labels = ["infotheory", "unordered", "directed"]
+    labels = ["infotheory", "unordered", "directed", "inverted"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -2139,7 +2141,8 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     lag 1, so it gives the same quantity as ``history_length=2``. Cross-map
     entropy has no canonical published definition; this is the convention
     pyspi uses. ``A[i, j]`` conditions the column process on the row's past.
-    Unsigned, though a differential entropy can be negative.
+    Unsigned, though a differential entropy can be negative; lower means
+    the row's past tells more about the column.
 
     The ``gaussian`` estimate uses the entropy of a Gaussian with the sample
     covariance (with a relative ridge of 1e-8 on its diagonal), the
@@ -2169,7 +2172,7 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
 
     name = "Cross-map entropy"
     identifier = "xme"
-    labels = ["infotheory", "temporal", "directed"]
+    labels = ["infotheory", "temporal", "directed", "inverted"]
 
     def __init__(self, history_length=10, **kwargs):
         super().__init__(**kwargs)
@@ -2218,7 +2221,8 @@ class CausalEntropy(InfoTheoryBase, Directed):
     on the row process up to and including the current sample. An entropy,
     not a dependence: it is also low for a column that is predictable from
     its own past (`DirectedInfo` measures the dependence). Unsigned, though a
-    sum of differential entropies can be negative.
+    sum of differential entropies can be negative; lower means the column is
+    more predictable.
 
     The ``gaussian`` estimate uses the entropy of a Gaussian with the sample
     covariance (with a relative ridge of 1e-8 on its diagonal), the
@@ -2250,7 +2254,7 @@ class CausalEntropy(InfoTheoryBase, Directed):
 
     name = "Causally conditioned entropy"
     identifier = "cce"
-    labels = ["infotheory", "temporal", "directed"]
+    labels = ["infotheory", "temporal", "directed", "inverted"]
 
     def __init__(self, n=5, **kwargs):
         super().__init__(**kwargs)

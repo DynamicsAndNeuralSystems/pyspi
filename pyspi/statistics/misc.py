@@ -106,6 +106,9 @@ class Cointegration(Directed, Unsigned):
         # aeg is not.
         if method == "aeg":
             self.labels = [l for l in self.labels if l != "undirected"] + ["directed"]
+            # More negative is stronger evidence of cointegration.
+            if statistic == "tstat":
+                self.labels.append("inverted")
         if method == "johansen":
             self.identifier += (
                 f"_{method}_{statistic}_order-{det_order}_ardiff-{k_ar_diff}"
@@ -195,7 +198,7 @@ class LinearModel(Directed, Unsigned):
 
     name = "Linear model regression"
     identifier = "lmfit"
-    labels = ["misc", "unordered", "normal", "linear", "directed"]
+    labels = ["misc", "unordered", "normal", "linear", "directed", "inverted"]
 
     def __init__(self, model):
         self.identifier += f"_{model}"
@@ -245,7 +248,7 @@ class GPModel(Directed, Unsigned):
 
     name = "Gaussian process regression"
     identifier = "gpfit"
-    labels = ["misc", "unordered", "normal", "nonlinear", "directed"]
+    labels = ["misc", "unordered", "normal", "nonlinear", "directed", "inverted"]
 
     def __init__(self, kernel="RBF"):
         self.identifier += f"_{kernel}"

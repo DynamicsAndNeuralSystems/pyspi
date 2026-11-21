@@ -134,6 +134,7 @@ By default, with no flag, the value is a one-ended strength of dependence, whate
 `timing` marks a value that is a time or phase offset, such as a lag in samples or a phase in radians, not a strength: it answers "when".
 `profile` marks a value that describes how the dependence is distributed, over time or over the range of values, not how strong it is.
 `signed` marks a value for which zero has a special meaning (no relationship, or no lead) and the sign says which of two opposite cases holds, so that its absolute value is the size of the effect, as for a covariance; it combines with the default, with `timing` (a lag whose sign says which process leads) and with `profile`.
+`inverted` marks a one-ended strength whose scale runs the other way, so that lower means stronger dependence or stronger evidence, as for a distance, an entropy or the Engle-Granger t-statistic; it never combines with `signed`, `timing` or `profile`.
 An SPI carries at most one of `timing` and `profile`, and `unsigned` is not a label.
 `timing` says what the value is; `time-dependent` and the descriptive tag `lagged` say how the SPI is computed.
 A class may also carry descriptive tags: `basic`, `causal`, `distance`, `embedding`, `infotheory`, `lagged`, `misc`, `normal`, `rank`, `spectral`, `symbolic`, `temporal`, `unordered` and `wavelet`.
