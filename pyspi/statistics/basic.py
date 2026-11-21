@@ -544,6 +544,9 @@ class LagResolvedCorrelation(Directed, Signed):
         self._tau = tau
         self._max_lag = (None if max_lag is None
                          else require_int("max_lag", max_lag, minimum=1))
+        if (statistic == "onesided" and tau != "1e"
+                and self._max_lag is not None and tau > self._max_lag):
+            raise ValueError(f"tau = {tau} exceeds max_lag = {self._max_lag}.")
 
         if statistic in self._UNSIGNED:
             self.issigned = lambda: False
@@ -581,7 +584,8 @@ class LagResolvedCorrelation(Directed, Signed):
             if self._tau > L:
                 raise NotAppropriate(
                     f"tau = {self._tau} is outside the lag window "
-                    f"L = min(max_lag, T // 4) = {L}.")
+                    f"L = min(max_lag, T // 4) = {L} for T = "
+                    f"{data.n_observations}.")
             return lambda i, j: self._tau
         if stat not in ("onesided", "onesidedpeak"):
             return None

@@ -495,9 +495,8 @@ def test_tau_outside_the_window_raises():
         spi.bivariate(_data(X), i=0, j=1)
     with pytest.raises(ValueError, match="outside the lag window"):
         spi.multivariate(_data(X))
-    with pytest.raises(ValueError, match="outside the lag window"):
-        LagResolvedCorrelation("onesided", tau=4, max_lag=3).bivariate(
-            _data(X), i=0, j=1)
+    with pytest.raises(ValueError, match="exceeds max_lag"):
+        LagResolvedCorrelation("onesided", tau=4, max_lag=3)
 
 
 def test_too_short_for_any_lag_raises():

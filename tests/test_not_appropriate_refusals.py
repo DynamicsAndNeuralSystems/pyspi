@@ -172,3 +172,13 @@ def test_a_bad_parameter_is_still_an_ordinary_error():
     with pytest.raises(ValueError) as info:
         ConditionalGrangerCausality(order="aic")
     assert not isinstance(info.value, NotAppropriate)
+
+
+def test_a_onesided_lag_beyond_max_lag_is_an_error_at_construction():
+    """tau > max_lag holds at every series length: a bad parameter, not data."""
+    from pyspi.statistics.basic import LagResolvedCorrelation
+    with pytest.raises(ValueError, match="exceeds max_lag") as info:
+        LagResolvedCorrelation(statistic="onesided", tau=5, max_lag=3)
+    assert not isinstance(info.value, NotAppropriate)
+    LagResolvedCorrelation(statistic="onesided", tau="1e", max_lag=3)
+    LagResolvedCorrelation(statistic="onesided", tau=5)
