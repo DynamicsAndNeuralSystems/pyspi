@@ -1,0 +1,6 @@
+# Extra files for the source distribution; the wheel is unaffected.
+# The test suite ships whole, with the baselines, fixtures and configs it reads,
+# so `pytest` runs from an unpacked sdist.
+graft tests
+include CHANGELOG.md CITATION.cff
+global-exclude *.py[cod] .DS_Store
