@@ -92,8 +92,8 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
         ]
 
     # Likewise the SPI's own issigned() decides signed/unsigned. It is not just
-    # a label: `Calculator._rmmin` shifts unsigned SPIs and `set_group`
-    # correlates them through abs(), which would destroy a lead/lag sign.
+    # a label: `Calculator._rmmin` shifts unsigned SPIs and the SPI-SPI
+    # correlations take their abs(), which would destroy a lead/lag sign.
     issigned = getattr(spi, "issigned", None)
     if issigned is not None:
         actual = "signed" if issigned() else "unsigned"

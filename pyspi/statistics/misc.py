@@ -106,7 +106,8 @@ class Cointegration(Directed, Unsigned):
         if method == "aeg":
             self.labels = [l for l in self.labels if l != "undirected"] + ["directed"]
             if statistic == "tstat":
-                # Signed, so `Calculator._rmmin` and `set_group` keep the sign.
+                # Signed, so `Calculator._rmmin` and the SPI-SPI correlations
+                # keep the sign.
                 self.issigned = lambda: True
         if method == "johansen":
             self.identifier += (
