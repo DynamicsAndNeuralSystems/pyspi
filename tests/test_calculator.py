@@ -3,7 +3,9 @@ from pyspi.calculator import (Calculator, Data, CalculatorFrame, CorrelationFram
                               bundled_configs)
 from pyspi.data import available_datasets, load_dataset
 import numpy as np
+import itertools
 import os
+import re
 import pytest
 
 ############################# Test Calculator Object ########################
@@ -208,6 +210,17 @@ def test_bundled_config_is_a_subset_of_full(name, full_spis):
     """An SPI removed from `full` is removed from every smaller set too."""
     extra = set(Calculator(config=name).spis) - full_spis
     assert not extra, f"'{name}' has SPIs that are not in 'full': {sorted(extra)}"
+
+@pytest.mark.parametrize("name", [c for c in EXPECTED_CONFIGS if c.startswith("benchmarked_p")])
+def test_benchmarked_config_header_states_its_spi_count(name):
+    """The header's `# Current set: N SPIs` line matches the SPIs the config builds."""
+    with open(resolve_config(name)) as f:
+        header = list(itertools.takewhile(lambda line: line.startswith("#"), f))
+    stated = [int(m.group(1)) for line in header
+              if (m := re.match(r"# Current set: (\d+) SPIs", line))]
+    assert len(stated) == 1, f"'{name}' header has no single 'Current set: N SPIs' line."
+    n_spis = Calculator(config=name).n_spis
+    assert stated[0] == n_spis, f"'{name}' header says {stated[0]} SPIs; the config builds {n_spis}."
 
 def test_unknown_config_name_raises():
     with pytest.raises(ValueError, match="Unknown config"):

@@ -140,19 +140,17 @@ name or a path to your own YAML:
 |:----------|-----:|:---------|
 | `"full"` (default) | 231 | You want everything and can afford it. |
 | `"fast"` | 138 | General use; drops the slowest SPIs. |
-| `"benchmarked_p99"` | 183 | Near-complete, with only the worst cost outliers removed. |
-| `"benchmarked_p95"` | 173 | Good coverage/cost trade-off. |
-| `"benchmarked_p90"` | 161 | Recommended default for large batches. |
+| `"benchmarked_p99"` | 183 | The benchmarked SPIs without the three slowest (`hhg`, `gpfit_RBF`, `mgcx_maxlag-10`). |
+| `"benchmarked_p95"` | 173 | A coverage/cost trade-off among the benchmarked SPIs. |
+| `"benchmarked_p90"` | 161 | Large batches, when the families listed below are not needed. |
 | `"benchmarked_p80"` | 145 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14); M07 has no bundled SPI, so M14 has two. |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |
 
-The `benchmarked_p<N>` sets keep the fastest *N*% of SPIs by **measured**
-amortized compute cost, so the cut point is the *N*th percentile of the cost
-distribution. They were derived from a benchmark grid spanning *M* ∈ {4..64} and
-*T* ∈ {200..3200}; see [`bench/README.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/bench/README.md) for the methodology
-and [`bench/results/analysis/report.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/bench/results/analysis/report.md) for
-the measurements.
+Each `benchmarked_p<N>` set keeps the fastest *N*% of the SPIs timed in pyspi's compute-cost benchmark, ranked by amortized cost (SPIs that share a cache split its cost) at *M* = 16, *T* = 800.
+SPIs added to `full` after that benchmark are in none of these sets, whatever they cost: the conditional Granger and conditional spectral measures (`cgc`, `cpdc`, `cgpdc`, `cddtf`, `pcohmag`), `liang`, `edge`, `es`, `tailasym`, `nli`, `wtc`, `pac`, `lccm`, the three `ccm_*_convergence` SPIs, `di_kraskov`, `phasealigned` and `ppc_hilbert_adaptive`.
+Use `full` when you want those families; `fast` has one SPI from each of `cgc`, `cpdc`, `pcohmag`, `liang`, `edge`, `es`, `tailasym` and `nli`.
+See [`bench/README.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/bench/README.md) for the benchmark's methodology, and [`bench/results/analysis/report.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/bench/results/analysis/report.md) for how cost scales across a grid of *M* ∈ {4..64} and *T* ∈ {200..3200}.
 
 To build your own subset by keyword:
 
