@@ -1,6 +1,6 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (228 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (231 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
@@ -8,15 +8,15 @@ Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs
 | identifier unchanged | 135 |
 | renamed (same class and parameters; identifier changed) | 22 |
 | removed | 128 |
-| added | 71 |
-| 3.0.0 `full.yaml` | 228 |
+| added | 74 |
+| 3.0.0 `full.yaml` | 231 |
 
-285 - 128 removed + 71 added = 228; 135 + 22 renamed + 71 added = 228.
+285 - 128 removed + 74 added = 231; 135 + 22 renamed + 74 added = 231.
 The removals include 14 made while porting away from JIDT, 24 duplicate, constant or degenerate SPIs, 37 unbundled because an SPI that stays carries them, and the 6 `xcorr` SPIs, replaced by the directed `lagcorr` SPIs.
 The last 43 are removed from the bundled configs only: their classes are unchanged, and each can still be computed from a custom config.
 The default kernel SPIs `mi_kernel_W-0.25`, `tlmi_kernel_W-0.25` and `te_kernel_W-0.25_k-1` keep their identifiers, but their values differ from 2.0.2: each point is now left out of its own neighbour counts.
 
-## Added (71)
+## Added (74)
 
 | Family | Count | Identifiers |
 |:--|--:|:--|
@@ -29,6 +29,7 @@ The default kernel SPIs `mi_kernel_W-0.25`, `tlmi_kernel_W-0.25` and `te_kernel_
 | `PhaseAlignedCorrelation` (Welch, automatic segment length) | 1 | `phasealigned_welch_nperseg-auto` |
 | `TransferEntropy` (symbolic, 3-sample ordinal patterns) | 1 | `te_symbolic_k-3` |
 | `MutualInfo`, `TimeLaggedMutualInfo`, `TransferEntropy` (box kernel with AUTO dynamic correlation exclusion) | 3 | `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO`, `te_kernel_W-0.25_DCE-AUTO_k-1` |
+| `WaveletCoherence` (Morlet coherence smoothed in time and scale, three bands) | 3 | `wtc_wavelet_mean_fs-1_fmin-0_fmax-0-5`, `wtc_wavelet_mean_fs-1_fmin-0_fmax-0-25`, `wtc_wavelet_mean_fs-1_fmin-0-25_fmax-0-5` |
 
 Full list:
 
@@ -65,6 +66,9 @@ Full list:
 - `mi_kernel_W-0.25_DCE-AUTO`
 - `tlmi_kernel_W-0.25_DCE-AUTO`
 - `te_kernel_W-0.25_DCE-AUTO_k-1`
+- `wtc_wavelet_mean_fs-1_fmin-0_fmax-0-5`
+- `wtc_wavelet_mean_fs-1_fmin-0_fmax-0-25`
+- `wtc_wavelet_mean_fs-1_fmin-0-25_fmax-0-5`
 
 ## Removed (128)
 

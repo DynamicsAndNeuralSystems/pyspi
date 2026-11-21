@@ -1855,7 +1855,7 @@ def test_multitaper_phase_slope_index_is_the_adjacent_frequency_sum(monkeypatch)
     conn = sc.Connectivity.from_multitaper(multitaper)
     coherency, freq = conn.coherency()[0], conn.frequencies
     assert multitaper.frequency_resolution / (freq[1] - freq[0]) == pytest.approx(
-        PhaseSlopeIndex._FREQUENCY_STEP)
+        PhaseSlopeIndex()._frequency_step)
 
     for fmin, fmax in ((0, 0.5), (0, 0.25), (0.25, 0.5)):
         # The phase rule: closed band less the real-valued bins 0 and fs/2.

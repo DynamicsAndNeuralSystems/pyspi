@@ -7,7 +7,7 @@ A major overhaul. The Java/JIDT dependency is gone, the `Calculator` API is simp
 **Upgrading from 2.0.2 (the current PyPI release), at a glance:**
 
 - Python **>= 3.11** (2.0.2: >= 3.8), numpy **>= 2** (2.0.2: `<2`), scikit-learn **>= 1.8**, pyEDM **>= 2.5** (2.0.2: `==1.15.2.0`), mne **>= 1.6** (2.0.2: `==0.23.0`). No Java, `jpype`, `cdt` or `torch`. See [Dependencies](#dependencies).
-- The default `full` set goes from **285 SPIs (2.0.2) to 228**: 71 added, 128 removed, 22 renamed (identifier only), 135 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
+- The default `full` set goes from **285 SPIs (2.0.2) to 231**: 74 added, 128 removed, 22 renamed (identifier only), 135 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
 - The old `Calculator(subset=, configfile=, normalise=)` spellings still work, with a `DeprecationWarning`, until 4.0. See [Breaking changes and deprecations](#breaking-changes-and-deprecations).
 - Results tables written by 2.x (pickle) do not load; six directed spectral SPIs are transposed; many estimator values change (see [Changed](#changed) and the "Values changed" table).
 - The license is **GPL-3.0-or-later** (2.0.2: GPL-3.0), agreed by the maintainer, Ben Fulcher.
@@ -64,7 +64,7 @@ Tie-free series are not changed by pyspi's tie handling (see below), and for tho
 
 - **Java and JIDT** (above): `infodynamics.jar`, `jpype1` and the JVM start-up path.
 - **`cdt` and `torch`** (see Dependencies); `setup.py` and `requirements.txt` (packaging is `pyproject.toml` only); `pyspi/phiconf.yaml`; the 2.x config filenames (see the migration table); pickle and parquet output.
-- **128 SPIs** (`full`: 285 to 228 net of 71 additions). See [SPI set changes](#spi-set-changes). Fourteen went with the port: six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`. Twenty-four more are duplicate, constant or degenerate: the four `*_EllipticEnvelope` (equal to `*_MinCovDet`), `lmfit_Lasso` and `lmfit_ElasticNet` (nearly constant at `alpha = 1`), `bary_euclidean_mean` (identically 0), `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` (box kernel in ~10 dimensions), the six `pli`/`wpli` multitaper maxima (saturate at 1), the three `psi_wavelet_max_*` (tend to their bound), and the DTW-type `bary_*_mean` and `bary-sq_*_mean` (six), replaced by `bary_{dtw,sgddtw,softdtw}_corr` (see **Changed**).
+- **128 SPIs** (`full`: 285 to 231 net of 74 additions). See [SPI set changes](#spi-set-changes). Fourteen went with the port: six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`. Twenty-four more are duplicate, constant or degenerate: the four `*_EllipticEnvelope` (equal to `*_MinCovDet`), `lmfit_Lasso` and `lmfit_ElasticNet` (nearly constant at `alpha = 1`), `bary_euclidean_mean` (identically 0), `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` (box kernel in ~10 dimensions), the six `pli`/`wpli` multitaper maxima (saturate at 1), the three `psi_wavelet_max_*` (tend to their bound), and the DTW-type `bary_*_mean` and `bary-sq_*_mean` (six), replaced by `bary_{dtw,sgddtw,softdtw}_corr` (see **Changed**).
   Thirty-seven more are unbundled because an SPI that stays carries them: the shrinkage covariances and six squared covariances (9), `lmfit_*` (3), the bivariate `pdcoh_*`/`gpdcoh_*` (12), `ppc_*` (6), `kendalltau` and `kendalltau-sq`, `pdist_cosine`, `pdist_euclidean` and `bary-sq_euclidean_mean`, and `phi_{Geo,star}_t-1_norm-1`.
   The six `xcorr_*` are unbundled in favour of the directed `lagcorr_*` (see **Added**), which read the same cross-correlation profile.
   Their classes are unchanged, so each can still be computed from a custom config.
@@ -429,6 +429,16 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`ppc_hilbert_adaptive`: spectrally weighted Hilbert phase consistency** (`AdaptivePhaseConsistency` in `pyspi/statistics/spectral.py`), the pairwise phase consistency (Vinck et al. 2010) of band-passed Hilbert phases, averaged over log-spaced bands with weights from the rhythmic power the two processes share above their `1/f` backgrounds, so no band has to be chosen in advance.
   It is undirected and unsigned, about 0 under independence and 1 for a constant phase lag, and has no parameters (bands are in cycles per sample).
   In `full` only; not in `fast` or the `benchmarked_p*` sets until it has been timed.
+- **Wavelet coherence `wtc_wavelet_mean_*`** (class `WaveletCoherence` in `pyspi/statistics/wavelet.py`, in `full` only): Morlet wavelet coherence smoothed in time and scale (Torrence and Webster 1999; Grinsted et al. 2004), averaged over time outside the cone of influence and over the bands `[0, 0.5]`, `[0, 0.25]` and `[0.25, 0.5]`.
+  It is undirected and unsigned, in [0, 1].
+  Because the coherence is estimated locally in time, it detects coupling that is transient or that changes sign or phase lag during the record, which whole-record multitaper coherence averages away.
+  The defaults (6 cycles, a Gaussian time window of twice the wavelet's width, a 1.2-octave scale window) smooth twice as widely as the minimal windows of Torrence and Webster; `n_cycles`, `time_smoothing`, `scale_smoothing` and `coi` can be changed and are then named in the identifier.
+  The local estimate is biased upwards, so independent series give values well above zero.
+- **The multitaper bandwidth is a parameter.**
+  Every multitaper SPI in `pyspi/statistics/spectral.py` (the coherence and phase measures, `psi`, `gd`, the directed measures and nonparametric `sgc`) takes `time_halfbandwidth_product` (`NW`, default 3, the value every bundled SPI uses).
+  A larger `NW` averages more tapers (`floor(2 NW) - 1`), which lowers the variance and the upward bias of coherence-type measures, at the cost of frequency resolution.
+  A value other than 3 is appended to the identifier as `_nw-<value>`, with dots written as dashes (e.g. `cohmag_multitaper_mean_fs-1_fmin-0_fmax-0-5_nw-8`).
+  No bundled identifier or value changes.
 - **`Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature.**
   The table holds every SPI as a full `M x M` matrix.
   For an `undirected` SPI the lower triangle copies the upper one, and for an `antisymmetric` SPI (`phase`, `pli`, `wpli`, `psi`, `es_q`) it is the negation, so the vector keeps only the pairs `(i, j)` with `i < j` for these.
@@ -550,7 +560,7 @@ Definitions the corrected measures are checked against:
 
 ### SPI set changes
 
-**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 228.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
+**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 231.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
 
 | Change | SPIs | Families |
 |:-------|-----:|:---------|
@@ -558,8 +568,8 @@ Definitions the corrected measures are checked against:
 | Unchanged identifier | 135 | (values may still change; see "Values changed") |
 | **Renamed** (identifier only, except DTW) | 22 | `sgc` (11), Kraskov DCE (4), `cce`/`di_gaussian` `n` (4), auto-embedding method (3), DTW Sakoe-Chiba (1) |
 | **Removed** | 128 | multitaper `dspli`/`dswpli` maxima (6), `phase_multitaper_max` (3), symbolic TE (2), `di_kernel`, `di_kozachenko`, `igci`; duplicate, constant or degenerate (24): `*_EllipticEnvelope` (4), `pli`/`wpli` multitaper maxima (6), `psi_wavelet_max_*` (3), `bary_*_mean` and `bary-sq_*_mean` (6), `lmfit_Lasso`, `lmfit_ElasticNet`, `bary_euclidean_mean`, `cce_kernel_W-0.5_n-5`, `xme_kernel_W-0.5_k10`; unbundled as redundant (37): shrinkage `cov_*` and `cov-sq_*` (9), `lmfit_*` (3), `pdcoh_*`/`gpdcoh_*` (12), `ppc_*` (6), `kendalltau`/`kendalltau-sq` (2), `pdist_cosine`/`pdist_euclidean`/`bary-sq_euclidean_mean` (3), `phi_*_t-1_norm-1` (2); replaced by `lagcorr_*`: `xcorr_*` (6) |
-| **Added** | 71 | `LagResolvedCorrelation` (13), `PartialCorrelation` (7), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `ChatterjeeXi` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1), `te_symbolic_k-3` (1), kernel MI/TLMI/TE with dynamic correlation exclusion (3) |
-| 3.0.0 `full.yaml` | 228 | 285 − 128 + 71 |
+| **Added** | 74 | `LagResolvedCorrelation` (13), `PartialCorrelation` (7), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `ChatterjeeXi` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1), `te_symbolic_k-3` (1), kernel MI/TLMI/TE with dynamic correlation exclusion (3), wavelet coherence `wtc_wavelet_mean_*` (3) |
+| 3.0.0 `full.yaml` | 231 | 285 − 128 + 74 |
 
 Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 138, `fabfour` (4) keeps its size, with `spearmanr` in place of `spearmanr-sq` (no squared rank correlation is bundled), and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`).
 The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (183, 173, 161 and 145 SPIs).
