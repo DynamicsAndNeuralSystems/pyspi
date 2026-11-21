@@ -1433,6 +1433,16 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     sums over all pairs of frequencies rather than neighbouring ones and
     whose definition differs between releases.
 
+    With a fixed ``time_halfbandwidth_product``, each frequency's estimate
+    averages the same number of tapers at any length ``T`` while ``df``
+    shrinks as ``1 / T``, so the index for a given lag stays about the same
+    as the series lengthens but its spread between independent series grows
+    with the number of frequencies summed: a longer series does not make a
+    lag easier to detect, and a long one makes it harder. For long series,
+    raise ``time_halfbandwidth_product`` in proportion to ``T`` (a fixed
+    bandwidth ``2 NW / T``), or use the wavelet ``PhaseSlopeIndex``, whose
+    time averaging gains from length.
+
     References
     ----------
     .. [1] G. Nolte et al., "Robustly estimating the flow direction of
