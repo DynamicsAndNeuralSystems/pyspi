@@ -95,7 +95,7 @@ class PhaseSlopeIndex(mne, Undirected):
     """
 
     name = "Phase slope index (wavelet)"
-    labels = ["unsigned", "wavelet"]
+    labels = ["wavelet"]
 
     def __init__(self, **kwargs):
         self.identifier = "psi"
@@ -104,7 +104,7 @@ class PhaseSlopeIndex(mne, Undirected):
         # antisymmetric: mean does, max does not.
         trait = "antisymmetric" if self._statistic == "mean" else "asymmetric"
         self.labels = [l for l in self.labels
-                       if l not in ("undirected", "directed", "unsigned")
+                       if l not in ("undirected", "directed")
                        ] + [trait, "signed"]
         # Signed in behaviour too, as in spectral.NonparametricSpectral:
         # `_rmmin` would shift an unsigned SPI and destroy the antisymmetry.
@@ -276,7 +276,7 @@ class WaveletCoherence(Unsigned, Undirected):
     """
 
     name = "Wavelet coherence"
-    labels = ["unsigned", "wavelet", "undirected"]
+    labels = ["wavelet", "undirected"]
     _cache_namespace = "wavelet_coherence"
 
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean", n_cycles=6,

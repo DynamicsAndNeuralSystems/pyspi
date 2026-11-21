@@ -32,7 +32,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M03

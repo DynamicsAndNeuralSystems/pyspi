@@ -212,9 +212,9 @@ class EventSynchronisation(Directed):
             None if max_delay is None
             else require_int("max_delay", max_delay, minimum=1)
         )
-        # Q is symmetric and unsigned, q antisymmetric and signed: each
-        # statistic sets its own structural trait and sign.
-        traits = ["undirected", "unsigned"] if statistic == "strength" else ["antisymmetric", "signed"]
+        # Q is symmetric and one-ended, q antisymmetric and signed: each
+        # statistic sets its own structural trait and sign flag.
+        traits = ["undirected"] if statistic == "strength" else ["antisymmetric", "signed"]
         self.labels = EventSynchronisation.labels + traits
         self.identifier = (
             f"{EventSynchronisation.identifier}_{statistic}"
@@ -339,9 +339,10 @@ class TailDependenceAsymmetry(Undirected):
             raise ValueError(f"statistic must be one of {self._STATISTICS}, got {statistic!r}.")
         self._statistic = statistic
         self._quantile = _require_level("quantile", quantile, 0.5, 1.0)
-        # The asymmetry is signed; the upper and lower coefficients are not.
-        sign = "signed" if statistic == "asymmetry" else "unsigned"
-        self.labels = TailDependenceAsymmetry.labels + [sign]
+        # The asymmetry says which tail the dependence sits in (a profile);
+        # the upper and lower coefficients are strengths in one tail.
+        extra = ["signed", "profile"] if statistic == "asymmetry" else []
+        self.labels = TailDependenceAsymmetry.labels + extra
         stat = "" if statistic == "asymmetry" else f"_{statistic}"
         self.identifier = (
             f"{TailDependenceAsymmetry.identifier}{stat}"

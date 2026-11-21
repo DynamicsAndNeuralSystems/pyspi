@@ -41,8 +41,8 @@ class Cointegration(Directed, Unsigned):
     ``A[i, j]`` regresses process ``j`` on process ``i`` (regressor on the row,
     as for ``lmfit``) and is the unit-root t-statistic of the residuals. It is
     not symmetric, and each orientation is reported as computed (directed).
-    It is signed: more negative is stronger evidence of cointegration, and a
-    positive value means none.
+    It is unsigned, a strength on an inverted scale: more negative is
+    stronger evidence of cointegration.
 
     References
     ----------
@@ -80,7 +80,7 @@ class Cointegration(Directed, Unsigned):
     name = "Cointegration"
     identifier = "coint"
     # Johansen fits a VECM and Engle-Granger an OLS regression.
-    labels = ["misc", "unsigned", "temporal", "undirected", "linear"]
+    labels = ["misc", "temporal", "undirected", "linear"]
     _cache_namespace = "coint"
 
     @property
@@ -106,11 +106,9 @@ class Cointegration(Directed, Unsigned):
         # aeg is not.
         if method == "aeg":
             self.labels = [l for l in self.labels if l != "undirected"] + ["directed"]
+            # More negative is stronger evidence of cointegration.
             if statistic == "tstat":
-                # Signed, so `Calculator._rmmin` and the SPI-SPI correlations
-                # keep the sign.
-                self.labels = [l for l in self.labels if l != "unsigned"] + ["signed"]
-                self.issigned = lambda: True
+                self.labels.append("inverted")
         if method == "johansen":
             self.identifier += (
                 f"_{method}_{statistic}_order-{fmt_param(det_order)}"
@@ -202,7 +200,7 @@ class LinearModel(Directed, Unsigned):
 
     name = "Linear model regression"
     identifier = "lmfit"
-    labels = ["misc", "unsigned", "unordered", "normal", "linear", "directed"]
+    labels = ["misc", "unordered", "normal", "linear", "directed", "inverted"]
 
     def __init__(self, model):
         self.identifier += f"_{model}"
@@ -252,7 +250,7 @@ class GPModel(Directed, Unsigned):
 
     name = "Gaussian process regression"
     identifier = "gpfit"
-    labels = ["misc", "unsigned", "unordered", "normal", "nonlinear", "directed"]
+    labels = ["misc", "unordered", "normal", "nonlinear", "directed", "inverted"]
 
     def __init__(self, kernel="RBF"):
         self.identifier += f"_{kernel}"
@@ -311,7 +309,7 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
 
     name = "Power envelope correlation"
     identifier = "pec"
-    labels = ["unsigned", "misc", "undirected"]
+    labels = ["misc", "undirected"]
 
     def __init__(self, orth=False, log=False, absolute=False):
         self._orth = False
@@ -327,7 +325,7 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
         # Only the orthogonalised variant with `absolute` is non-negative
         # (MNE ignores `absolute` otherwise).
         if not (self._orth and absolute):
-            self.labels = [l for l in self.labels if l != "unsigned"] + ["signed"]
+            self.labels = self.labels + ["signed"]
             self.issigned = lambda: True
 
     @parse_multivariate
@@ -367,7 +365,7 @@ class InterDependenceScore(Undirected, Unsigned):
 
     name = "Interdependence score"
     identifier = "ids"
-    labels = ["unsigned", "misc", "undirected", "nonlinear"]
+    labels = ["misc", "undirected", "nonlinear"]
 
     def __init__(
             self,
@@ -555,7 +553,8 @@ class EdgeTimeSeries(Undirected, Signed):
 
     name = "Edge time series (coupling nonstationarity)"
     identifier = "edge"
-    labels = ["misc", "undirected", "nonlinear", "signed"]
+    # Each statistic describes how the co-fluctuation is spread over time.
+    labels = ["misc", "undirected", "nonlinear", "signed", "profile"]
 
     _STATISTICS = ("excessvar", "topshare", "acf1")
 

@@ -20,9 +20,9 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
+      - inverted
       - M10
     dependencies:
     configs:
@@ -51,9 +51,9 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
+      - inverted
       - M02
     dependencies:
     configs:
@@ -66,7 +66,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M03
@@ -78,7 +77,6 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
       - M04
@@ -96,7 +94,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M05
@@ -112,7 +109,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - M12
@@ -124,7 +120,7 @@
   PhaseSlopeIndex:
     labels:
       - antisymmetric
-      - linear/nonlinear
+      - linear
       - signed
       - bivariate
       - frequency-dependent
@@ -154,7 +150,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - M06
@@ -171,8 +166,9 @@
   PhaseSlopeIndex:
     labels:
       - antisymmetric
+      - linear
       - signed
-      - time/frequency dependent
+      - frequency-dependent
       - bivariate
       - M08
     dependencies:
@@ -186,7 +182,6 @@
     labels:
       - directed
       - linear
-      - signed
       - bivariate
       - time-dependent
       - M13
@@ -197,6 +192,8 @@
         autolag: aic
         maxlag: 10
         trend: ct
+        labels:
+          - inverted
 
   # Power envelope correlation
   PowerEnvelopeCorrelation:

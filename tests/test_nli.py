@@ -199,7 +199,8 @@ def test_identifier_parameters_and_labels():
     assert spi._theiler == 6
     assert NonlinearInterdependence("H", theiler=10).identifier == \
         "nli_H_m-5_tau-1_k-5_theiler-10"
-    assert {"directed", "nonlinear", "unsigned"} <= set(spi.labels)
+    assert {"directed", "nonlinear"} <= set(spi.labels)
+    assert "signed" not in spi.labels
     assert not spi.issigned()
     # The four statistics share one cache; the parameters split it.
     assert (NonlinearInterdependence("S")._cache_subkey
@@ -314,5 +315,6 @@ def test_full_and_fast_configs_construct_nli_entries():
         assert isinstance(spi, NonlinearInterdependence)
         assert (spi._statistic, spi._m, spi._tau, spi._k, spi._theiler) == \
             (stat, m, 1, 5, m)
-        assert {"directed", "time-dependent", "unsigned"} <= set(spi.labels)
+        assert {"directed", "time-dependent"} <= set(spi.labels)
+        assert "signed" not in spi.labels
     assert "nli_L_m-5_tau-1_k-5" in Calculator(config="fast").spis

@@ -218,11 +218,11 @@ class NonparametricSpectral(Unsigned):
             trait = "antisymmetric" if statistic == "mean" else "asymmetric"
             self.labels = [
                 l for l in self.labels
-                if l not in ("undirected", "directed", "unsigned")
+                if l not in ("undirected", "directed")
             ] + [trait, "signed"]
-            # Signed in behaviour too: `Calculator._rmmin` shifts unsigned SPIs
-            # by their minimum and `set_group` takes their abs(), and either
-            # would destroy the lead/lag sign.
+            # Signed in behaviour too: `Calculator._rmmin` shifts SPIs that are
+            # not signed by their minimum, which would destroy the lead/lag
+            # sign.
             self.issigned = lambda: True
 
         paramstr = (
@@ -554,7 +554,7 @@ class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
     """
 
     name = "Magnitude-squared coherence"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
 
     def __init__(self, **kwargs):
         self.identifier = "cohmag"
@@ -601,7 +601,7 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
     _antisymmetric_spectrum = True
     _phase_based = True
     name = "Coherence phase"
-    labels = ["signed", "spectral", "antisymmetric"]
+    labels = ["signed", "timing", "spectral", "antisymmetric"]
 
     def __init__(self, **kwargs):
         if kwargs.get("statistic", "mean") != "mean":
@@ -612,7 +612,7 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
             )
         self.identifier = "phase"
         super().__init__(**kwargs)
-        self.labels = ["signed", "spectral", "antisymmetric"]
+        self.labels = ["signed", "timing", "spectral", "antisymmetric"]
         self._measure = "coherence_phase"
 
     @parse_multivariate
@@ -667,7 +667,7 @@ class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
 
     _phase_based = True
     name = "Imaginary coherence"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
 
     def __init__(self, **kwargs):
         self.identifier = "icoh"
@@ -712,7 +712,7 @@ class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
 
     _phase_based = True
     name = "Phase locking value"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
 
     def __init__(self, **kwargs):
         self.identifier = "plv"
@@ -770,7 +770,7 @@ class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     _antisymmetric_spectrum = True
     _phase_based = True
     name = "Phase lag index"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
 
     def __init__(self, **kwargs):
         self.identifier = "pli"
@@ -820,7 +820,7 @@ class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     _antisymmetric_spectrum = True
     _phase_based = True
     name = "Weighted phase lag index"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
 
     def __init__(self, **kwargs):
         self.identifier = "wpli"
@@ -870,7 +870,7 @@ class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected
 
     _phase_based = True
     name = "Debiased squared phase lag index"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
 
     def __init__(self, **kwargs):
         self.identifier = "dspli"
@@ -928,7 +928,7 @@ class DebiasedSquaredWeightedPhaseLagIndex(
 
     _phase_based = True
     name = "Debiased squared weighted phase-lag index"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
 
     def __init__(self, **kwargs):
         self.identifier = "dswpli"
@@ -973,7 +973,7 @@ class PairwisePhaseConsistency(NonparametricSpectralMultivariate, Undirected):
 
     _phase_based = True
     name = "Pairwise phase consistency"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
 
     def __init__(self, **kwargs):
         self.identifier = "ppc"
@@ -1037,7 +1037,7 @@ class DirectedCoherence(NonparametricSpectralBivariate, Directed):
     """
 
     name = "Directed coherence"
-    labels = ["unsigned", "spectral", "directed"]
+    labels = ["spectral", "directed"]
 
     def __init__(self, **kwargs):
         self.identifier = "dcoh"
@@ -1095,7 +1095,7 @@ class PartialDirectedCoherence(NonparametricSpectralBivariate, Directed):
     """
 
     name = "Partial directed coherence"
-    labels = ["unsigned", "spectral", "directed"]
+    labels = ["spectral", "directed"]
 
     def __init__(self, **kwargs):
         self.identifier = "pdcoh"
@@ -1139,7 +1139,7 @@ class GeneralizedPartialDirectedCoherence(NonparametricSpectralBivariate, Direct
     """
 
     name = "Generalized partial directed coherence"
-    labels = ["unsigned", "spectral", "directed"]
+    labels = ["spectral", "directed"]
 
     def __init__(self, **kwargs):
         self.identifier = "gpdcoh"
@@ -1188,7 +1188,7 @@ class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
     """
 
     name = "Directed transfer function"
-    labels = ["unsigned", "spectral", "directed", "lagged"]
+    labels = ["spectral", "directed", "lagged"]
 
     def __init__(self, **kwargs):
         self.identifier = "dtf"
@@ -1244,7 +1244,7 @@ class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
     """
 
     name = "Direct directed transfer function"
-    labels = ["unsigned", "spectral", "directed", "lagged"]
+    labels = ["spectral", "directed", "lagged"]
 
     def __init__(self, **kwargs):
         self.identifier = "ddtf"
@@ -1319,7 +1319,7 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     # Antisymmetric in (i, j): slope of the phase spectrum.
     _antisymmetric_spectrum = True
     name = "Phase slope index"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
     # A sum over the band, not a band statistic; `mean` is the name the
     # identifiers carry.
     _statistics = ("mean",)
@@ -1441,7 +1441,7 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
     """
 
     name = "Group delay"
-    labels = ["unsigned", "spectral", "directed", "lagged"]
+    labels = ["spectral", "directed", "lagged"]
     _statistics = ("delay", "slope", "rvalue")
 
     def __init__(self, **kwargs):
@@ -1453,9 +1453,11 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         if self._statistic in ("delay", "slope"):
             self.labels = [
                 l for l in self.labels
-                if l not in ("undirected", "directed", "unsigned")
+                if l not in ("undirected", "directed")
             ] + ["antisymmetric", "signed"]
             self.issigned = lambda: True
+            # Both are the same time offset, as a delay or as a phase slope.
+            self.labels.append("timing")
         else:
             # |r| is symmetric by construction and non-negative, so it is
             # neither directed nor signed.
@@ -1644,7 +1646,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
 
     name = "Spectral Granger causality"
     identifier = "sgc"
-    labels = ["unsigned", "embedding", "spectral", "directed", "lagged"]
+    labels = ["embedding", "spectral", "directed", "lagged"]
 
     def __init__(
         self,
@@ -1881,7 +1883,7 @@ class PhaseAlignedCorrelation(Undirected, Unsigned):
 
     name = "Phase-aligned correlation"
     identifier = "phasealigned"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
 
     _MAX_AUTO_NPERSEG = 256
     _MIN_AUTO_NPERSEG = 8
@@ -2016,7 +2018,7 @@ class AdaptivePhaseConsistency(Undirected, Unsigned):
 
     name = "Spectrally weighted Hilbert phase consistency"
     identifier = "ppc_hilbert_adaptive"
-    labels = ["unsigned", "spectral", "undirected"]
+    labels = ["spectral", "undirected"]
 
     _FC_MIN = 0.005
     _FC_MAX = 0.4
