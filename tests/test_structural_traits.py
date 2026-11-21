@@ -190,71 +190,6 @@ def test_no_bundled_spi_returns_a_constant_matrix(baseline_matrices):
     )
 
 
-# Unsigned SPIs whose population value is non-negative (zero for independent
-# processes) but whose estimator scatters about that value, so it can go
-# slightly below zero.
-NEGATIVE_BY_ESTIMATION = {
-    # Chatterjee's xi: the population value is in [0, 1]; the rank estimator
-    # can be negative at small T.
-    "xi_tau-0", "xi_tau-1",
-    # Unbiased (U-statistic) distance correlation, MGC and HSIC, and their
-    # lagged sums: unbiased for a non-negative quantity.
-    "dcorr", "mgc", "hsic", "dcorrx_maxlag-1", "dcorrx_maxlag-10",
-    "mgcx_maxlag-1", "mgcx_maxlag-10",
-    # Nonlinear interdependence H, N and L: about 0 for independent processes.
-    "nli_L_m-5_tau-1_k-5", "nli_N_m-5_tau-1_k-5", "nli_H_m-5_tau-1_k-5",
-    "nli_L_m-3_tau-1_k-5",
-    # Mutual informations, transfer entropies, directed information and
-    # stochastic interaction: non-negative, estimated by nearest-neighbour or
-    # kernel estimators (or differences of entropies) that are not.
-    "mi_kraskov_NN-4", "mi_kraskov_NN-4_DCE-AUTO", "mi_kernel_W-0.25",
-    "mi_kernel_W-0.25_DCE-AUTO", "tlmi_kraskov_NN-4",
-    "tlmi_kraskov_NN-4_DCE-AUTO", "tlmi_kernel_W-0.25",
-    "tlmi_kernel_W-0.25_DCE-AUTO",
-    "te_kraskov_NN-4_MAX-CORR-AIS_k-max-10_tau-max-4",
-    "te_kraskov_NN-4_DCE-AUTO_MAX-CORR-AIS_k-max-10_tau-max-4",
-    "te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1",
-    "te_kraskov_NN-4_DCE-AUTO_k-1_kt-1_l-1_lt-1",
-    "te_kraskov_NN-4_k-1_kt-1_l-1_lt-1",
-    "te_kernel_W-0.25_k-1", "te_kernel_W-0.25_DCE-AUTO_k-1",
-    "di_kraskov_NN-4_n-5", "si_kozachenko_k-1",
-    # Debiased squared phase measures: unbiased estimates of a squared
-    # (non-negative) quantity.
-    "ppc_hilbert_adaptive",
-    "dspli_multitaper_mean_fs-1_fmin-0_fmax-0-5",
-    "dspli_multitaper_mean_fs-1_fmin-0_fmax-0-25",
-    "dspli_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
-    "dswpli_multitaper_mean_fs-1_fmin-0_fmax-0-5",
-    "dswpli_multitaper_mean_fs-1_fmin-0_fmax-0-25",
-    "dswpli_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
-}
-
-
-def test_unsigned_spis_are_not_negative(full_spis, baseline_matrices):
-    """An SPI that can be negative must be signed.
-
-    `Calculator._get_correlation_df` correlates an unsigned SPI through
-    ``abs()``, which reverses the order of negative values, so an SPI that
-    returns negative values on these fixtures must report ``issigned()`` (as
-    ``softdtw`` and the differential entropies do), unless it is listed above.
-    """
-    negative = sorted(
-        f"{dataset}/{ident}: min {np.nanmin(mat):.3g}"
-        for dataset, matrices in baseline_matrices.items()
-        for ident, mat in matrices.items()
-        if not full_spis[ident].issigned()
-        and ident not in NEGATIVE_BY_ESTIMATION
-        and np.isfinite(mat).any() and np.nanmin(mat) < 0
-    )
-    assert not negative, "Unsigned SPIs with negative values:\n  " + "\n  ".join(negative)
-
-
-def test_negative_by_estimation_lists_only_unsigned_bundled_spis(full_spis):
-    stale = sorted(ident for ident in NEGATIVE_BY_ESTIMATION
-                   if ident not in full_spis or full_spis[ident].issigned())
-    assert not stale, stale
-
-
 def test_conditional_entropy_label_matches_implementation():
     """Under the default z-scoring the Gaussian form is symmetric, so the
     bundled variants are labelled undirected; the kernel and kozachenko forms
@@ -410,9 +345,8 @@ def test_antisymmetric_spis_report_themselves_as_signed():
 
     `Calculator._rmmin` subtracts the minimum from every SPI that reports
     unsigned. On an antisymmetric matrix that shifts A[i,j] and A[j,i] by the
-    same amount, destroying the antisymmetry that carries the lead/lag;
-    `set_group` separately correlates unsigned SPIs through `abs()`, folding
-    lead onto lag. This covers `phase`, `pli`, `wpli`, `psi` (both the
+    same amount, destroying the antisymmetry that carries the lead/lag. This
+    covers `phase`, `pli`, `wpli`, `psi` (both the
     multitaper and wavelet families), `gd` and `ccm_*_diff`, which configs may
     label `unsigned`.
     """

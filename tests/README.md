@@ -30,7 +30,7 @@ corrupt baseline can never break collection of unrelated tests.
 | `test_execution_parity.py` | Serial and parallel must agree on *failure* semantics, not only on numbers. Uses `failing_spis.py` + `parity_failure_config.yaml`. |
 | `test_quality.py` | Per-cell quality codes (`calc.quality`) for each kind of misbehaving SPI, serial/parallel parity of the codes, checkpoint resume, `.npz` round-trip, and loading files written before the codes existed. Uses the stubs in `failing_spis.py` + `quality_config.yaml`. |
 | `test_estimator_contracts.py` | An SPI must compute the estimator it advertises, or refuse. Symbolic/KSG preconditions. |
-| `test_structural_traits.py` | Declared symmetry and sign labels vs the baseline matrices of every SPI in `full` on all three fixtures (no unsigned SPI is negative, apart from a listed set of estimators of non-negative quantities); AEG process-order dependence. |
+| `test_structural_traits.py` | Declared symmetry labels vs the baseline matrices of every SPI in `full` on all three fixtures; sign traits agree with `issigned()`; AEG process-order dependence. |
 | `test_config_labels.py` | Every SPI in every bundled config carries one label from each axis of the fixed vocabulary in `CONTRIBUTING.md`, the same labels in every config, and labels that agree with the class. |
 | `test_undirected_pairs.py` | `Undirected.multivariate` evaluates each unordered pair once (call counts for a stub and for every bundled undirected SPI), mirrors values, codes and pair errors, raises when every pair fails, and matches the old both-orders loop bit for bit, including the SPIs that cache the opposite orientation. |
 
