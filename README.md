@@ -174,7 +174,8 @@ To define bands in Hz, set `fs`, `fmin` and `fmax` on the multitaper and wavelet
 ```
 
 The conditional VAR (`cpdc`, `cgpdc`, `cddtf`, `pcohmag`) and phase-amplitude coupling (`pac`) entries take cycles per sample only, so divide their band edges by `fs`.
-A band outside `[0, fs / 2]` is refused when the config is loaded, and one that holds no frequency of the series' frequency grid, which depends on its length, fails with its reason in `calc.errors`.
+A band outside `[0, fs / 2]` is refused when the config is loaded.
+A band that holds no frequency of the series' frequency grid, which depends on its length, gives NaN labelled not appropriate, with its reason in `calc.errors`.
 
 ## Running at scale
 

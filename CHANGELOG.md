@@ -201,11 +201,14 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli`, `dswpli`, `ppc` and `psi_multitaper_*` leave those bins out of the band; amplitude measures keep the closed band.
 - **Frequency bands were not checked.**
   In 2.0.2 a band above `fs / 2`, with `fmin > fmax`, or holding no frequency of the series' grid gave NaN, or a value under an identifier that named a different band (`fmax=0.9` at `fs=1` gave the full-band value).
-  Every multitaper and wavelet SPI, and spectral GC, now raises `ValueError` at construction unless `fs` is positive and finite and `0 <= fmin <= fmax <= fs / 2` (`fmin < fmax` for the wavelet `psi`), and the message says that the band is in the units of `fs`, which defaults to 1.
+  Every multitaper and wavelet SPI, and spectral GC, now raises `ValueError` at construction unless `fs` is positive and finite and `0 <= fmin <= fmax <= fs / 2` (`fmin < fmax` for both `psi` classes), and the message says that the band is in the units of `fs`, which defaults to 1.
+  A phase measure's band of zero width at 0 or `fs / 2`, which holds nothing but a real-valued bin at any length, is refused at construction too.
   A band with no frequency of the series' grid gives NaN when computed, labelled not appropriate, with the cause recorded in `Calculator.errors`; parametric `sgc`, whose grid does not depend on the series, refuses such a band with `ValueError` at construction.
   An unknown `statistic` raises `ValueError` rather than `NameError`.
   The README's *Frequency bands* section explains the units and how to give bands in Hz.
-- **Spectral and wavelet SPIs on a series too short for them are NaN, labelled not appropriate, with the cause recorded**: parametric `sgc` with fewer observations than the largest order it fits (with automatic order selection, `T < 50`, which raised a NumPy shape error) or whose order selection is still improving at `max_order`, multitaper `psi` with fewer than two independent frequencies in its band, `phasealigned` with too few samples for its segments, `ppc_hilbert_adaptive` at `T < 46`, and `wtc` too short for its wavelets.
+- **Spectral SPIs on a series too short for them are NaN, labelled not appropriate, with the cause recorded.**
+  Parametric `sgc` is refused with fewer observations than the largest order it fits (with automatic order selection and the default `max_order=50`, `T < 50`, where 2.0.2 usually returned a value), or when its order selection is still improving at `max_order`.
+  Multitaper `psi` is refused with fewer than two independent frequencies in its band.
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
   Neither warns now; for spectral GC `fmin=0` means the lowest positive frequency, 1e-5, as its identifier states.
@@ -364,6 +367,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   - **Kernel MI, TLMI and TE with dynamic correlation exclusion** (3): `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO` and `te_kernel_W-0.25_DCE-AUTO_k-1` (all three in `benchmarked_p90`, `p95` and `p99`; MI and TLMI also in `p80` and `fast`).
   - **`WaveletCoherence`** (3): `wtc_wavelet_mean_*` over the bands [0, 0.5], [0, 0.25] and [0.25, 0.5], Morlet wavelet coherence smoothed in time and scale (Torrence and Webster 1999; Grinsted et al. 2004), averaged over time outside the cone of influence.
     It detects coupling that is transient or changes phase lag during the record; the local estimate is biased upwards, so independent series give values well above zero.
+    A band holding none of its 64 grid frequencies is refused at construction; a series too short for its wavelets, or a band that the cone of influence leaves empty, gives NaN, labelled not appropriate, with the cause recorded.
   - **`ChatterjeeXi`** (2): `xi_tau-{0,1}`, Chatterjee's rank correlation xi (Chatterjee 2021), directed, tending to 1 iff the column process is a measurable function of the row process and to 0 iff they are independent (both in the `benchmarked_p*` sets; `xi_tau-0` in `fast`).
   - **`CrossPairwiseDistance`** (2): `xpdist_euclidean_tau-1_{mean,min}_rmse`, a shifted-path Euclidean upper bound on DTW (in the `benchmarked_p*` sets).
   - **`Barycenter`** (2): `bary_dtw_corr` and `bary_softdtw_corr` (see **Changed**) (`bary_dtw_corr` in the `benchmarked_p*` sets and `sonnet`; `bary_softdtw_corr` in `p95` and `p99`).
@@ -373,7 +377,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   - **`di_kraskov_NN-4_n-5`** (1): directed information from the KSG/Frenzel-Pompe conditional-MI estimator (see **Fixed**).
   - **`te_symbolic_k-3`** (1): symbolic transfer entropy with 3-sample ordinal patterns (Staniek & Lehnertz 2008), with a bias under independence of about 0.13, 0.03 and 0.01 nats at T = 300, 1000 and 3000 (in the `benchmarked_p*` sets).
   - **`phasealigned_welch_nperseg-auto`** (1): the zero-lag correlation maximised over all-pass (phase-only) filtering of one process, `sum_f w_f |S_jk(f)| / sqrt(sum_f w_f S_jj(f) sum_f w_f S_kk(f))` from Welch cross-spectra, undirected and in [0, 1], with a null floor of about `sqrt(pi / (4K))` for `K` segments.
+    A series too short for its segments (`T < 20` for the automatic length) gives NaN, labelled not appropriate, with the cause recorded.
   - **`ppc_hilbert_adaptive`** (1): the pairwise phase consistency (Vinck et al. 2010) of band-passed Hilbert phases, averaged over log-spaced bands weighted by the rhythmic power the two processes share above their `1/f` backgrounds, so no band has to be chosen.
+    On a series shorter than 46 samples it is NaN, labelled not appropriate, with the cause recorded.
 - **Statistics available by name but not bundled:** `LaggedCorrelation` (`corr_{pearson,spearman,kendall}_tau-<k>[-sq]`), the undirected average of the two one-sided lag-k correlations (`linear` for Pearson, `nonlinear` for Spearman and Kendall); `ConvergentCrossMapping(statistic="slope")`, the slope of skill against `ln L`; `ConditionalGrangerCausality(statistic="coef")`, the signed net lagged coefficient; and the `PhaseAmplitudeCoupling` statistics above.
 - **Dynamic correlation exclusion for the kernel estimators** of MI, time-lagged MI and TE: `dyn_corr_excl` (an integer or `"AUTO"`) applies to `estimator="kernel"` as well as `"kraskov"`, with the same `_DCE-<value>` suffix.
   As in JIDT (`DYN_CORR_EXCL = w + 1`), each probability is normalised by the number of samples compared and an empty joint box contributes 0; if every joint box is empty the result is NaN (JIDT gives 0).
