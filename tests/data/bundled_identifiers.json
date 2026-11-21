@@ -812,7 +812,7 @@
   "cgc_p-bic",
   "cpdc_p-bic_mean_fmin-0_fmax-0-5",
   "pcohmag_p-bic_mean_fmin-0_fmax-0-5",
-  "es_q_q-0-95",
+  "es_asym_q-0-95",
   "tailasym_q-0-95"
  ],
  "full": [
@@ -1041,10 +1041,10 @@
   "pcohmag_p-bic_mean_fmin-0_fmax-0-5",
   "pcohmag_p-bic_mean_fmin-0_fmax-0-25",
   "pcohmag_p-bic_mean_fmin-0-25_fmax-0-5",
-  "es_Q_q-0-95",
-  "es_q_q-0-95",
-  "es_Q_q-0-9",
-  "es_q_q-0-9",
+  "es_strength_q-0-95",
+  "es_asym_q-0-95",
+  "es_strength_q-0-9",
+  "es_asym_q-0-9",
   "tailasym_q-0-95",
   "tailasym_q-0-9"
  ],
