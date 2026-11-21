@@ -1716,34 +1716,41 @@ def _fit_bivariate_var(x, order=None, max_order=50):
     nitime's ``autocov_vector`` (normalised by ``T - k``, not demeaned) need
     not be.
 
-    ``max_order`` is the largest order tried. Returns ``(coef, ecov)`` in
-    nitime's convention, ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
+    ``max_order`` is the largest order tried, capped at ``T - 1``: the sample
+    autocovariance at lag ``k`` sums ``T - k`` products, so ``T - 1`` is the
+    largest lag it has data for. If BIC is still improving at the cap, the
+    order cannot be selected and ``NotAppropriate`` is raised. An explicit
+    ``order`` above ``T`` is refused before the fit. Returns ``(coef, ecov)``
+    in nitime's convention, ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
     """
     x = x - x.mean(axis=-1, keepdims=True)
     n_obs = x.shape[-1]
-    n_lags = (max_order if order is None else order) + 1
-    # An autocovariance at a lag beyond the record does not exist.
-    if n_lags - 1 > n_obs:
-        tried = (f"automatic order selection tries orders 0 to {max_order}"
-                 if order is None else f"order {order}")
+    if order is not None and order > n_obs:
         raise NotAppropriate(
-            f"Parametric spectral Granger causality: {tried}, which needs "
-            f"autocovariances up to lag {n_lags - 1}, but the series has "
-            f"{n_obs} observations. Set a lower `order` or `max_order`, or use "
-            f"a longer series.")
+            f"Parametric spectral Granger causality: order {order} needs "
+            f"autocovariances up to lag {order}, but the series has {n_obs} "
+            f"observations. Set a lower `order`, or use a longer series.")
+    largest = order if order is not None else min(max_order, n_obs - 1)
     # R[k] = (1/T) sum_t x(t+k) x(t)^T: nitime's lag orientation.
-    R = np.stack([x[:, k:] @ x[:, :n_obs - k].T for k in range(n_lags)]) / n_obs
+    R = np.stack([x[:, k:] @ x[:, :n_obs - k].T
+                  for k in range(largest + 1)]) / n_obs
     if order is not None:
         return nt_alg.lwr_recursion(R)
 
     best = None
-    for p in range(max_order + 1):
+    for p in range(largest + 1):
         coef, ecov = nt_alg.lwr_recursion(R[: p + 1])
         # nitime's criterion and arguments: (ecov, n_process, order, n_process * T).
         crit = nt_utils.bayesian_information_criterion(ecov, 2, p, 2 * n_obs)
         if best is not None and crit > best[0]:
             return best[1:]
         best = (crit, coef, ecov)
+    if largest < max_order:
+        raise NotAppropriate(
+            f"Parametric spectral Granger causality: automatic AR order "
+            f"selection was still improving at order {largest}, the largest "
+            f"that {n_obs} observations support. Set an explicit `order`, or "
+            f"use a longer series.")
     raise NotAppropriate(
         f"Model estimation order did not converge at max_order = {max_order}"
     )
@@ -1783,9 +1790,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     Wilson's factorisation of a pair reaches its iteration cap, the value
     comes from the unconverged factor and the SPI warns. Automatic order
     selection that has not converged by ``max_order`` raises
-    ``NotAppropriate``: the model is over-fitting at that record length. So
-    does a series with fewer observations than the largest order the
-    parametric method fits.
+    ``NotAppropriate``: the model is over-fitting at that record length. The
+    search tries orders up to ``min(max_order, T - 1)``, so a short series is
+    fitted at the order BIC selects, and is not appropriate only if BIC is
+    still improving at ``T - 1``; an explicit ``order`` above ``T`` is not
+    appropriate either.
 
     References
     ----------

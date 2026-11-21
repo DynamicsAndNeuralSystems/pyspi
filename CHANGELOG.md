@@ -207,7 +207,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   An unknown `statistic` raises `ValueError` rather than `NameError`.
   The README's *Frequency bands* section explains the units and how to give bands in Hz.
 - **Spectral SPIs on a series too short for them are NaN, labelled not appropriate, with the cause recorded.**
-  Parametric `sgc` is refused with fewer observations than the largest order it fits (with automatic order selection and the default `max_order=50`, `T < 50`, where 2.0.2 usually returned a value), or when its order selection is still improving at `max_order`.
+  Parametric `sgc` with automatic order selection searches orders up to `T - 1` on a series shorter than `max_order`, so it returns a value on short series, and is not appropriate only when the selection has not converged (BIC still improving at `max_order`, or at `T - 1` on a shorter series); an explicit `order` above `T` is not appropriate.
   Multitaper `psi` is refused with fewer than two independent frequencies in its band.
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
@@ -607,7 +607,7 @@ Values for the directed spectral classes listed under **Fixed** are also transpo
 | `mi`, `tlmi`, `te` `_kraskov_NN-4_DCE-AUTO*` | 5 | AUTO Theiler window capped at `N // 10`. |
 | `phi_Geo_t-1_norm-0` | 1 | Optimiser runs to a disconnected model. |
 | `dcoh_*` | 6 | Closed frequency band. |
-| `sgc_parametric_*` | 18 | Yule-Walker VAR fit and corrected frequency labels. |
+| `sgc_parametric_*` | 18 | Yule-Walker VAR fit (autocovariance about the mean and divided by `T`, where 2.0.2 divided by `T - k`), which moves the causality spectrum by up to about 1.5% at `T = 500`, 5-10% at `T = 100` and more on shorter series; and corrected frequency labels. |
 | `phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli` `_multitaper_mean_*`; `plv_multitaper_max_*` | 21 | Real-valued 0 Hz and Nyquist bins left out of the band (`dspli` also: taper-pair sign products). |
 | `psi_multitaper_mean_*` (half bands) | 2 | Closed band less the real-valued bins. |
 | `gpfit_DotProduct`, `gpfit_RBF` | 2 | Leave-one-out MSE. |
