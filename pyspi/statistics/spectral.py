@@ -180,10 +180,9 @@ class NonparametricSpectral(Unsigned):
     ``fs = 250`` with the band [8, 12] gives the same values as ``fs = 1``
     with [0.032, 0.048], up to floating-point rounding; GroupDelay's
     ``slope``, in radians per unit of frequency, is the one output that
-    scales with it. At construction ``fs``
-    must be positive and finite and ``0 <= fmin <= fmax <= fs / 2`` (the
-    upper edge with a relative tolerance of 1e-9), or ``ValueError`` is
-    raised.
+    scales with it. At construction ``fs`` must be positive and finite and
+    ``0 <= fmin <= fmax <= fs / 2`` (the upper edge with a relative tolerance
+    of 1e-9), or ``ValueError`` is raised.
 
     For a measure that is antisymmetric at every frequency
     (``_antisymmetric_spectrum``), ``statistic='mean'`` keeps
@@ -1643,15 +1642,14 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     Frequencies are in the units of ``fs``, at the default ``fs = 1`` in
     cycles per sample; ``fs`` only relabels the frequency axis (see
     ``NonparametricSpectral``). At construction ``fs`` must be positive and
-    finite and ``0 <= fmin <= fmax <= fs / 2``, or ``ValueError`` is raised;
-    a band holding no frequency of the grid raises ``ValueError`` when the SPI
+    finite and ``0 <= fmin <= fmax <= fs / 2``, or ``ValueError`` is raised; a
+    band holding no frequency of the grid raises ``ValueError`` when the SPI
     is computed. Spectral GC is undefined at 0 Hz, so ``fmin = 0`` means the
     lowest positive frequency, 1e-5, which the identifier names
-    (``_fmin-1e-05``).
-    A cell with more than ``nan_threshold`` of its in-band frequencies NaN is
-    set to NaN, with a warning. Automatic order selection that has not
-    converged by ``max_order`` raises ``ValueError``: the model is
-    over-fitting at that record length.
+    (``_fmin-1e-05``). A cell with more than ``nan_threshold`` of its in-band
+    frequencies NaN is set to NaN, with a warning. Automatic order selection
+    that has not converged by ``max_order`` raises ``ValueError``: the model
+    is over-fitting at that record length.
 
     References
     ----------

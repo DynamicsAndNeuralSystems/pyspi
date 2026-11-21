@@ -187,7 +187,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli`, `dswpli`, `ppc` and `psi_multitaper_*` leave those bins out of the band; amplitude measures keep the closed band.
 - **Frequency bands were not checked.**
   In 2.0.2 a band above `fs / 2`, with `fmin > fmax`, or holding no frequency of the series' grid gave NaN, or a value under an identifier that named a different band (`fmax=0.9` at `fs=1` gave the full-band value).
-  Every multitaper and wavelet SPI now raises `ValueError` at construction unless `fs` is positive and finite and `0 <= fmin <= fmax <= fs / 2` (`fmin < fmax` for the wavelet `psi`), and the message says that the band is in the units of `fs`, which defaults to 1.
+  Every multitaper and wavelet SPI, and spectral GC, now raises `ValueError` at construction unless `fs` is positive and finite and `0 <= fmin <= fmax <= fs / 2` (`fmin < fmax` for the wavelet `psi`), and the message says that the band is in the units of `fs`, which defaults to 1.
   A band with no frequency of the series' grid raises `ValueError` when computed, so the SPI is listed in `Calculator.errors`.
   An unknown `statistic` raises `ValueError` rather than `NameError`.
   The README's *Frequency bands* section explains the units and how to give bands in Hz.

@@ -91,11 +91,11 @@ def require_band(fs, fmin, fmax, strict=False):
     """
     Check a frequency band ``[fmin, fmax]`` given in the units of ``fs``.
 
-    The rule every spectral and wavelet SPI applies at construction: ``fs``
-    is a positive finite number, and ``0 <= fmin <= fmax <= fs / 2``, with
-    ``fmin < fmax`` when ``strict``. The Nyquist edge is compared with a
-    relative tolerance of 1e-9. At the default ``fs = 1`` the band is in
-    cycles per sample.
+    The rule the multitaper, spectral GC and wavelet SPIs apply at
+    construction: ``fs`` is a positive finite number, and
+    ``0 <= fmin <= fmax <= fs / 2``, with ``fmin < fmax`` when ``strict``.
+    The Nyquist edge is compared with a relative tolerance of 1e-9. At the
+    default ``fs = 1`` the band is in cycles per sample.
 
     Parameters
     ----------

@@ -82,7 +82,7 @@ def test_nyquist_computed_in_floating_point_is_accepted(make):
     make(fs=fs, fmin=0.1, fmax=fmax)
 
 
-def test_an_empty_band_is_refused_only_where_the_estimator_needs_width():
+def test_a_zero_width_band_is_refused_only_where_the_estimator_needs_width():
     # A single frequency is a valid closed band for the multitaper and
     # coherence classes; the wavelet phase slope index spaces its frequencies
     # linearly from fmin to fmax, so it needs fmin < fmax.
