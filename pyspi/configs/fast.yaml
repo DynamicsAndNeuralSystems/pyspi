@@ -999,7 +999,7 @@
       - M14
     dependencies:
     configs:
-      - statistic: q
+      - statistic: asym
         quantile: 0.95
 
   # Tail-dependence asymmetry

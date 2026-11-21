@@ -1492,22 +1492,22 @@
       - M14
     dependencies:
     configs:
-      - statistic: Q
+      - statistic: strength
         quantile: 0.95
         labels:
           - undirected
           - unsigned
-      - statistic: q
+      - statistic: asym
         quantile: 0.95
         labels:
           - antisymmetric
           - signed
-      - statistic: Q
+      - statistic: strength
         quantile: 0.9
         labels:
           - undirected
           - unsigned
-      - statistic: q
+      - statistic: asym
         quantile: 0.9
         labels:
           - antisymmetric
