@@ -383,12 +383,16 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`LiangInformationFlow`: the Liang-Kleeman rate of information flow** (`liang_rate_k-1`, `liang_norm_k-1`, `liang-cond_rate_k-1`, `liang-cond_norm_k-1`; `liang_norm_k-1` also in `fast`).
   It is the closed-form maximum-likelihood estimator of the flow from source to target under a linear stochastic model, in nats per sample and signed: positive means the source makes the target more uncertain, negative that it stabilises it.
   `liang_*` is the pairwise estimator of Liang (2014, *Phys. Rev. E* 90, 052150), `liang-cond_*` the multivariate one of Liang (2021, *Entropy* 23, 679), which conditions on every other series, and `*_norm_*` divides by the target's entropy budget (Liang 2015, *Phys. Rev. E* 92, 022126) to give a share in [-1, 1].
-- **`pac_{mi,mvl}_p-<f1>-<f2>_a-<f3>-<f4>`: phase-amplitude coupling**, class `PhaseAmplitudeCoupling` in the new module `pyspi/statistics/crossfreq.py`.
+- **`pac_{mi,mvl}[_{excess,z}]_p-<f1>-<f2>_a-<f3>-<f4>`: phase-amplitude coupling**, class `PhaseAmplitudeCoupling` in the new module `pyspi/statistics/crossfreq.py`.
   `A[i, j]` measures how strongly the phase of the row process in `phase_band` modulates the amplitude envelope of the column process in `amp_band` (cycles per sample), from zero-phase order-4 Butterworth band-passes and the Hilbert transform, with two filter lengths discarded at each end.
   `mi` is the modulation index of Tort et al. (2010, J Neurophysiol 104:1195) over 18 phase bins; `mvl` is the normalised mean vector length of Özkurt & Schnitzler (2011, J Neurosci Methods 201:438).
   Both are directed, unsigned and in [0, 1].
   An amplitude band narrower than twice the top phase frequency cannot carry the modulation (Aru et al. 2015, Curr Opin Neurobiol 31:51) and is refused at construction.
-  `full` bundles `mi` at the band pairs (0.01-0.05, 0.15-0.4) and (0.05-0.1, 0.2-0.45); `mvl` is available by name.
+  The raw indices are not zero for independent processes, and their chance level grows with the target's own amplitude modulation.
+  `statistic="<stat>_excess"` subtracts the index's mean over `n_surr = 100` circular time shifts of the target's envelope (shifts uniform on `[n/10, 9n/10]` of the `n` retained samples, fixed seed), and `"<stat>_z"` divides that by the surrogates' standard deviation; both are signed.
+  The z-score is a significance score, not an effect size: it saturates as the coupling grows, because the surrogates' spread grows with the target's modulation.
+  Time-shift surrogates cannot see coupling to a strictly periodic source, and neither normalisation removes the spurious PAC of sharp non-sinusoidal waveforms (Kramer et al. 2008, J Neurosci Methods 170:352).
+  `full` bundles `mi_excess` at the band pairs (0.01-0.05, 0.15-0.4) and (0.05-0.1, 0.2-0.45); the other statistics are available by name.
 
 ### Dependencies
 
