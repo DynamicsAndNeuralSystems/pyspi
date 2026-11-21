@@ -1,17 +1,15 @@
-import warnings
 import inspect
-import numpy as np
+import warnings
 
+from mne_connectivity import envelope_correlation
+import numpy as np
 from scipy import optimize, special
 from scipy.linalg import solve_triangular
+from sklearn import linear_model
+from sklearn.gaussian_process import GaussianProcessRegressor, kernels
+from sklearn.metrics import mean_squared_error
 from statsmodels.tsa import stattools
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
-from sklearn.gaussian_process import kernels, GaussianProcessRegressor
-from sklearn.metrics import mean_squared_error
-from sklearn import linear_model
-from mne_connectivity import envelope_correlation
-from pyspi.utils import fmt_param
-from pyspi.lib.ids.dependence import compute_IDS
 
 from pyspi.base import (
     Directed,
@@ -21,33 +19,61 @@ from pyspi.base import (
     parse_bivariate,
     parse_multivariate,
 )
+from pyspi.lib.ids.dependence import compute_IDS
+from pyspi.utils import fmt_param
 
 
 class Cointegration(Directed, Unsigned):
-    """Cointegration test statistics.
+    """Cointegration test statistic of a pair, Johansen [1]_ or Engle-Granger [2]_.
 
-    ``johansen`` is symmetric by construction: it tests the rank of a VECM
-    fitted to the pair, and swapping the columns leaves the trace and maximum
-    eigenvalue statistics unchanged. On stationary input its statistics mainly
-    measure how quickly the two processes revert to their means: they fall
-    steeply as the processes become more persistent, with or without coupling,
-    so compare them only across pairs whose processes have similar
-    autocorrelation.
+    ``method='johansen'`` fits a vector error-correction model (VECM) to the
+    pair with statsmodels' ``coint_johansen`` and reports its trace or
+    maximum-eigenvalue statistic for the null of no cointegrating relation
+    (rank 0). Swapping the pair leaves both unchanged, so the result is
+    symmetric (undirected) and non-negative, and ``(j, i)`` is served from the
+    ``(i, j)`` fit. On stationary input these statistics mainly measure how
+    quickly the two processes revert to their means: they fall steeply as the
+    processes become more persistent, with or without coupling, so compare
+    them only across pairs whose processes have similar autocorrelation.
 
-    ``aeg`` (augmented Engle-Granger) is *not* symmetric: it regresses the first
-    series on the second and unit-root-tests the residuals, so swapping the
-    arguments changes the residual series and hence the statistic.
+    ``method='aeg'`` is statsmodels' augmented Engle-Granger test, ``coint``:
+    ``A[i, j]`` regresses process ``j`` on process ``i`` (regressor on the row,
+    as for ``lmfit``) and is the unit-root t-statistic of the residuals. It is
+    not symmetric, and each orientation is reported as computed (directed).
+    It is signed: more negative is stronger evidence of cointegration, and a
+    positive value means none.
 
-    The class is ``Directed`` and reports each orientation as computed, with no
-    symmetrisation rule (min, max or mean over orientations have no settled
-    convention). ``johansen`` serves ``(j, i)`` from the ``(i, j)`` computation,
-    since for it the two orientations are equal.
+    References
+    ----------
+    .. [1] S. Johansen, "Estimation and hypothesis testing of cointegration
+           vectors in Gaussian vector autoregressive models", Econometrica
+           59(6), 1551-1580 (1991).
+    .. [2] R. F. Engle, C. W. J. Granger, "Co-integration and error
+           correction: representation, estimation, and testing", Econometrica
+           55(2), 251-276 (1987).
 
-    For ``aeg``, ``table[i, j]`` is the Engle-Granger t-statistic of process
-    *j* regressed on process *i* (regressor on the row, as for ``lmfit``).
-
-    ``det_order`` sets the deterministic terms of the Johansen VECM: -1 for
-    none, 0 for a constant, 1 for a linear trend.
+    Parameters
+    ----------
+    method : str, optional
+        ``'johansen'`` or ``'aeg'``. Default: ``'johansen'``.
+    statistic : str, optional
+        ``'trace_stat'`` or ``'max_eig_stat'`` for ``'johansen'``;
+        ``'tstat'`` for ``'aeg'``. Default: ``'trace_stat'``.
+    det_order : int, optional
+        Deterministic terms of the Johansen VECM: -1 for none, 0 for a
+        constant, 1 for a linear trend. Default: 1.
+    k_ar_diff : int, optional
+        Number of lagged differences in the Johansen VECM. Default: 1.
+    autolag : str or None, optional
+        How ``'aeg'`` chooses the lag of its unit-root test: ``'aic'``,
+        ``'bic'``, ``'t-stat'``, or None to use ``maxlag`` lags. Default:
+        ``'aic'``.
+    maxlag : int, optional
+        Largest lag ``'aeg'`` considers. Default: 10.
+    trend : str, optional
+        Deterministic terms of the ``'aeg'`` regression: ``'c'`` (constant),
+        ``'ct'`` (constant and linear trend), ``'ctt'`` (and quadratic trend)
+        or ``'n'`` (none). Default: ``'c'``.
     """
 
     name = "Cointegration"
@@ -58,7 +84,7 @@ class Cointegration(Directed, Unsigned):
 
     @property
     def _cache_subkey(self):
-        # Cache key matches self.key (per cache lookup in _from_cache).
+        # The same key as self.key, which _from_cache looks up.
         if self._method == "johansen":
             return (self._method, self._det_order, self._k_ar_diff)
         return (self._method, self._autolag, self._maxlag, self._trend)
@@ -75,15 +101,13 @@ class Cointegration(Directed, Unsigned):
     ):
         self._method = method
         self._statistic = statistic
-        # Structural label follows the estimator, not the class. See the class
-        # docstring: johansen is symmetric, aeg is not.
+        # The structural label follows the method: johansen is symmetric,
+        # aeg is not.
         if method == "aeg":
             self.labels = [l for l in self.labels if l != "undirected"] + ["directed"]
             if statistic == "tstat":
-                # A *signed* Engle-Granger t-statistic: more negative is
-                # stronger evidence of cointegration, and a positive value
-                # means none at all. Signed, so `Calculator._rmmin` and
-                # `set_group` do not treat the sign as noise.
+                # Signed, so `Calculator._rmmin` and the SPI-SPI correlations
+                # keep the sign.
                 self.issigned = lambda: True
         if method == "johansen":
             self.identifier += (
@@ -142,9 +166,8 @@ class Cointegration(Directed, Unsigned):
             except KeyError:
                 data.coint[self.key] = {idx: ci}
             if self._method == "johansen":
-                # Provably orientation-independent, so serving (j, i) from the
-                # same computation is an optimisation, not an assumption. aeg is
-                # orientation-dependent and must not be aliased.
+                # Johansen's statistics do not depend on the orientation; aeg's
+                # do, so only johansen serves (j, i) from this fit.
                 data.coint[self.key][(j, i)] = ci
 
         return ci
@@ -156,11 +179,20 @@ class Cointegration(Directed, Unsigned):
 
 
 class LinearModel(Directed, Unsigned):
-    """Mean squared error of a linear fit of the column on the row.
+    """Mean squared error of a linear regression of the column on the row.
 
-    ``table[i, j]`` regresses process *j* on process *i* and returns the
-    in-sample MSE, so lower means a better prediction of the column from the
-    row. On z-scored data an uninformative regressor gives ``(T - 1) / T``.
+    ``A[i, j]`` fits process ``j`` on process ``i`` with the scikit-learn
+    linear model ``model`` and returns the in-sample mean squared error of the
+    prediction of ``x_j``, so lower means the row predicts the column better.
+    On z-scored data an uninformative regressor gives about ``(T - 1) / T``.
+    Directed and unsigned. Models that take a ``random_state`` get a fixed
+    seed.
+
+    Parameters
+    ----------
+    model : str
+        Name of a class in ``sklearn.linear_model``, such as
+        ``'LinearRegression'``, ``'Ridge'`` or ``'Lasso'``. Required.
     """
 
     name = "Linear model regression"
@@ -170,7 +202,7 @@ class LinearModel(Directed, Unsigned):
     def __init__(self, model):
         self.identifier += f"_{model}"
         self._model = getattr(linear_model, model)
-        # Cache whether model accepts random_state (avoids inspect.signature per pair)
+        # Checked once here rather than for every pair.
         self._has_random_state = "random_state" in inspect.signature(self._model).parameters
 
     @parse_bivariate
@@ -187,17 +219,29 @@ class LinearModel(Directed, Unsigned):
 
 
 class GPModel(Directed, Unsigned):
-    """Gaussian process regression of process j on process i.
+    """Gaussian process regression of the column on the row [1]_.
 
-    ``table[i, j]`` is the leave-one-out mean squared error of a GP that
-    predicts ``z[j]`` from ``z[i]`` (lower is better; about 1 for an unrelated
-    pair of z-scored series). The kernel is ``ConstantKernel() + WhiteKernel()
-    + {RBF, DotProduct}()``, with hyperparameters maximising the log marginal
-    likelihood; ``DotProduct`` makes it Bayesian linear regression.
+    ``A[i, j]`` is the leave-one-out mean squared error of a Gaussian process
+    that predicts ``x_j`` from ``x_i`` (lower is better; about 1 for an
+    unrelated pair of z-scored series). The kernel is
+    ``ConstantKernel() + WhiteKernel() + K()``, with ``K`` named by ``kernel``
+    and the hyperparameters maximising the log marginal likelihood;
+    ``DotProduct`` makes it Bayesian linear regression. The error is
+    leave-one-out at the fitted hyperparameters ([1]_, eq. 5.12), because the
+    RBF fit can interpolate the data and drive the in-sample error to zero on
+    unrelated pairs. Directed and unsigned.
 
-    The error is leave-one-out at the fitted hyperparameters (Rasmussen &
-    Williams 2006, eq. 5.12). The in-sample error is not used because the RBF
-    fit can interpolate the data, driving it to zero on unrelated pairs.
+    References
+    ----------
+    .. [1] C. E. Rasmussen, C. K. I. Williams, "Gaussian Processes for Machine
+           Learning", MIT Press (2006).
+
+    Parameters
+    ----------
+    kernel : str, optional
+        Name of a kernel in ``sklearn.gaussian_process.kernels`` that takes no
+        required arguments, such as ``'RBF'`` or ``'DotProduct'``.
+        Default: ``'RBF'``.
     """
 
     name = "Gaussian process regression"
@@ -228,6 +272,36 @@ class GPModel(Directed, Unsigned):
 
 
 class PowerEnvelopeCorrelation(Undirected, Unsigned):
+    """Correlation of the amplitude envelopes of a pair [1]_.
+
+    The envelope of each series is the modulus of its analytic signal
+    (Hilbert transform), and ``A[i, j]`` is the Pearson correlation of the
+    envelopes of ``x_i`` and ``x_j``, from mne-connectivity's
+    ``envelope_correlation`` on the record as one epoch. With ``orth=True``
+    each signal is first orthogonalised to the other, which removes
+    zero-lag coupling such as field spread [1]_, and the two orientations are
+    averaged. Undirected. Signed, in ``[-1, 1]``, except for the
+    orthogonalised variant with ``absolute=True``, which is unsigned.
+
+    References
+    ----------
+    .. [1] J. F. Hipp, D. J. Hawellek, M. Corbetta, M. Siegel, A. K. Engel,
+           "Large-scale cortical correlation structure of spontaneous
+           oscillatory activity", Nature Neuroscience 15(6), 884-890 (2012).
+
+    Parameters
+    ----------
+    orth : bool, optional
+        Orthogonalise each pair before taking envelopes. Default: False.
+    log : bool, optional
+        Correlate the logarithms of the squared envelopes (log power).
+        Default: False.
+    absolute : bool, optional
+        Report ``|r|``. mne-connectivity applies it only with ``orth=True``;
+        otherwise it changes the identifier but not the value.
+        Default: False.
+    """
+
     name = "Power envelope correlation"
     identifier = "pec"
     labels = ["unsigned", "misc", "undirected"]
@@ -243,8 +317,8 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
         self._absolute = absolute
         if absolute:
             self.identifier += "_abs"
-        # A correlation in [-1, 1]; only the orthogonalised variant with
-        # `absolute` is non-negative (MNE ignores `absolute` otherwise).
+        # Only the orthogonalised variant with `absolute` is non-negative
+        # (MNE ignores `absolute` otherwise).
         if not (self._orth and absolute):
             self.labels = [l for l in self.labels if l != "unsigned"] + ["signed"]
             self.issigned = lambda: True
@@ -260,6 +334,29 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
         return adj
 
 class InterDependenceScore(Undirected, Unsigned):
+    """Interdependence score (IDS) of a pair, from correlations of kernel features.
+
+    Each series is mapped to the first ``terms`` terms of the Taylor expansion
+    of a Gaussian kernel, ``exp(-b x^2) x^k / sqrt(k!)`` for
+    ``k = 0, ..., terms - 1`` with ``b = bandwidth``, and the
+    ``terms x terms`` absolute Pearson correlations between the two sets of
+    features are reduced to one number by ``pnorm``. Undirected and unsigned,
+    in ``[0, 1]``, and sensitive to nonlinear as well as linear dependence. A
+    constant feature contributes a correlation of 0. Adapted from
+    A. Radhakrishnan's ``interdependence_scores`` package (see
+    ``pyspi.lib.ids``).
+
+    Parameters
+    ----------
+    terms : int, optional
+        Number of terms of the expansion. Default: 6.
+    pnorm : str or int, optional
+        ``'max'`` takes the largest correlation (IDS-max), ``1`` their mean
+        and ``2`` their root mean square. Default: ``'max'``.
+    bandwidth : float, optional
+        The constant ``b`` in the Gaussian kernel. Default: 0.5.
+    """
+
     name = "Interdependence score"
     identifier = "ids"
     labels = ["unsigned", "misc", "undirected", "nonlinear"]
@@ -273,8 +370,8 @@ class InterDependenceScore(Undirected, Unsigned):
         self._num_terms = terms
         self._p_norm = pnorm
         self._bandwidth_term = bandwidth
-        # Every result-affecting parameter must reach the identifier. Only
-        # non-default values are appended, so the bundled `ids` keeps its name.
+        # Every parameter reaches the identifier, but only when it is not the
+        # default, so the default SPI is `ids`.
         for tag, value, default in (("terms", terms, 6), ("pnorm", pnorm, "max"),
                                     ("bw", bandwidth, 0.5)):
             if value != default:
@@ -283,16 +380,14 @@ class InterDependenceScore(Undirected, Unsigned):
 
     @parse_multivariate
     def multivariate(self, data):
-        # reshape for the compute_IDS function which expects shape (obs, proc)
+        # compute_IDS takes (observations, processes).
         z = np.squeeze(data.to_numpy(), axis=2).T
         ids = compute_IDS(z, num_terms=self._num_terms, p_norm=self._p_norm,
                            bandwidth_term=self._bandwidth_term)
         return ids
 
 
-# --------------------------------------------------------------------------
-# Edge time series: coupling nonstationarity
-# --------------------------------------------------------------------------
+# Edge time series: coupling nonstationarity.
 
 # Quadrature grid over x ~ N(0, 1) for the Gaussian topshare null.
 _EDGE_X = np.linspace(-9.0, 9.0, 4001)
@@ -360,20 +455,19 @@ def _edge_gauss_topshare(r, frac):
 
 
 class EdgeTimeSeries(Undirected, Signed):
-    r"""Coupling nonstationarity from the edge time series.
+    r"""Coupling nonstationarity from the edge time series of a pair [1]_ [2]_.
 
     The edge time series of a pair is the frame-wise product of the z-scored
-    series, ``e_t = z_x(t) z_y(t)`` (Faskowitz et al., 2020; Esfahlani et al.,
-    2020). Its mean is ``c r`` (below), so it resolves Pearson's ``r`` into
-    per-frame contributions. Each statistic is referenced to its value for a
-    serially independent Gaussian pair with the same ``r``, so it is ~0 in
-    expectation for Gaussian iid data at any correlation. This separates
-    nonstationary coupling from the sampling spread that windowed correlations
-    show even when the coupling is stationary (Hindriks et al., 2016). For
-    strongly autocorrelated series the finite-sample corrections act on the
-    effective sample size rather than ``T``. The statistics describe the
-    co-fluctuation structure of the pair's edge time series, not coupling
-    strength.
+    series, ``e_t = z_x(t) z_y(t)``. Its mean is ``c r`` (below), so it
+    resolves Pearson's ``r`` into per-frame contributions. Each statistic is
+    referenced to its value for a serially independent Gaussian pair with the
+    same ``r``, so it is ~0 in expectation for Gaussian iid data at any
+    correlation. This separates nonstationary coupling from the sampling
+    spread that windowed correlations show even when the coupling is
+    stationary [3]_. For strongly autocorrelated series the finite-sample
+    corrections act on the effective sample size rather than ``T``. The
+    statistics describe the co-fluctuation structure of the pair's edge time
+    series, not coupling strength.
 
     Conventions: each series is z-scored with ``ddof=1`` (a no-op on data
     z-scored by ``Data``), so ``mean(z^2) = c := (T-1)/T``,
@@ -382,50 +476,70 @@ class EdgeTimeSeries(Undirected, Signed):
     ``x`` and ``y`` (undirected) and signed; ``excessvar`` and ``topshare``
     are also invariant to permuting time.
 
-    ``statistic`` selects one of three:
+    References
+    ----------
+    .. [1] J. Faskowitz, F. Z. Esfahlani, Y. Jo, O. Sporns, R. F. Betzel,
+           "Edge-centric functional network representations of human cerebral
+           cortex reveal overlapping system-level architecture", Nature
+           Neuroscience 23(12), 1644-1654 (2020).
+    .. [2] F. Z. Esfahlani, Y. Jo, J. Faskowitz, L. Byrge, D. P. Kennedy,
+           O. Sporns, R. F. Betzel, "High-amplitude cofluctuations in cortical
+           activity drive functional connectivity", Proceedings of the
+           National Academy of Sciences 117(45), 28393-28401 (2020).
+    .. [3] R. Hindriks, M. H. Adhikari, Y. Murayama, M. Ganzetti, D. Mantini,
+           N. K. Logothetis, G. Deco, "Can sliding-window correlations reveal
+           dynamic functional connectivity in resting-state fMRI?",
+           NeuroImage 127, 242-256 (2016).
 
-    ``excessvar`` (``edge_excessvar``)
-        The excess variance ``var(e) - c^2 g(r)``,
-        ``g(r) = 1 + r^2 - (2 + 4 r^2) / (T - 1)``. Isserlis' theorem gives
-        ``var(xy) = 1 + rho^2`` for a Gaussian pair; the ``1/(T - 1)`` term
-        reduces the plug-in's finite-sample bias to ``O(T^-2)``. Positive =
-        burstier than Gaussian (heavy-tailed ``e``: the correlation comes and
-        goes, or rides on shared high-amplitude events); negative = steadier
-        (sub-Gaussian ``e``). It is the standardised cokurtosis
-        ``cum(x, x, y, y)``, so a shared variance modulation with unchanged
-        coupling also makes it positive.
+    Parameters
+    ----------
+    statistic : str, optional
+        One of three, with identifiers in brackets. Default: ``'excessvar'``.
 
-    ``topshare`` (``edge_topshare_f-<frac>``)
-        The excess share of the cofluctuation carried by the top ``frac`` of
-        frames. With ``k = max(1, round(frac T))`` and ``top`` the ``k`` frames
-        of largest ``|e_t|``, ``S = sum_{t in top} e_t / sum_t |e_t|`` and
-        ``topshare = S - S0(r, k/T)``. ``S`` lies in [-1, 1]; it is a share of
-        ``sum |e|`` because ``sum e`` vanishes as ``r -> 0``.
-        ``S0(rho, f) = E[e 1{|e| > q}] / E|e|`` for ``e = x y``, ``(x, y)``
-        standard bivariate Gaussian with correlation ``rho`` and ``q`` the
-        ``(1 - f)`` quantile of ``|e|``, by one-dimensional quadrature
-        (``y | x`` is normal). It responds to coupling carried by
-        high-amplitude frames (Esfahlani et al.'s cofluctuation events), not to
-        coupling that switches on at ordinary amplitude. Odd under ``y -> -y``,
-        like ``r``: for a positively correlated pair, positive = more
-        event-driven than a Gaussian pair of the same ``r``, negative =
-        coupling spread more evenly over frames; the signs swap for an
-        anticorrelated pair.
+        ``excessvar`` (``edge_excessvar``)
+            The excess variance ``var(e) - c^2 g(r)``,
+            ``g(r) = 1 + r^2 - (2 + 4 r^2) / (T - 1)``. Isserlis' theorem gives
+            ``var(xy) = 1 + rho^2`` for a Gaussian pair; the ``1/(T - 1)`` term
+            reduces the plug-in's finite-sample bias to ``O(T^-2)``. Positive =
+            burstier than Gaussian (heavy-tailed ``e``: the correlation comes and
+            goes, or rides on shared high-amplitude events); negative = steadier
+            (sub-Gaussian ``e``). It is the standardised cokurtosis
+            ``cum(x, x, y, y)``, so a shared variance modulation with unchanged
+            coupling also makes it positive.
 
-    ``acf1`` (``edge_acf1``)
-        The lag-1 autocorrelation of ``e`` beyond its Gaussian value,
-        ``rho_e(1) - [rho_x(1) rho_y(1) + r_xy(1) r_yx(1)] / (1 + r^2)``, with
-        ``rho_e(1) = sum_{t<T} (e_t - m)(e_{t+1} - m) / sum_t (e_t - m)^2``,
-        ``rho_x(1) = sum_{t<T} z_x(t) z_x(t+1) / (T - 1)`` and the lagged
-        cross-correlations ``r_xy(1) = sum_{t<T} z_x(t) z_y(t+1) / (T - 1)``
-        and ``r_yx(1)`` (``x`` and ``y`` swapped). The bracket is
-        ``corr(e_t, e_{t+1})`` for a stationary jointly Gaussian pair
-        (Isserlis) at the sample values, so autocorrelated Gaussian series give
-        ~0. Positive = coupling episodes persist longer than that implies;
-        negative = they alternate faster.
+        ``topshare`` (``edge_topshare_f-<frac>``)
+            The excess share of the cofluctuation carried by the top ``frac`` of
+            frames. With ``k = max(1, round(frac T))`` and ``top`` the ``k`` frames
+            of largest ``|e_t|``, ``S = sum_{t in top} e_t / sum_t |e_t|`` and
+            ``topshare = S - S0(r, k/T)``. ``S`` lies in [-1, 1]; it is a share of
+            ``sum |e|`` because ``sum e`` vanishes as ``r -> 0``.
+            ``S0(rho, f) = E[e 1{|e| > q}] / E|e|`` for ``e = x y``, ``(x, y)``
+            standard bivariate Gaussian with correlation ``rho`` and ``q`` the
+            ``(1 - f)`` quantile of ``|e|``, by one-dimensional quadrature
+            (``y | x`` is normal). It responds to coupling carried by
+            high-amplitude frames (the cofluctuation events of [2]_), not to
+            coupling that switches on at ordinary amplitude. Odd under ``y -> -y``,
+            like ``r``: for a positively correlated pair, positive = more
+            event-driven than a Gaussian pair of the same ``r``, negative =
+            coupling spread more evenly over frames; the signs swap for an
+            anticorrelated pair.
 
-    ``frac`` (``0 < frac < 1``, default 0.05) is the fraction of frames in the
-    top set, used by ``topshare`` only (identifier suffix ``_f-0-05``).
+        ``acf1`` (``edge_acf1``)
+            The lag-1 autocorrelation of ``e`` beyond its Gaussian value,
+            ``rho_e(1) - [rho_x(1) rho_y(1) + r_xy(1) r_yx(1)] / (1 + r^2)``, with
+            ``rho_e(1) = sum_{t<T} (e_t - m)(e_{t+1} - m) / sum_t (e_t - m)^2``,
+            ``rho_x(1) = sum_{t<T} z_x(t) z_x(t+1) / (T - 1)`` and the lagged
+            cross-correlations ``r_xy(1) = sum_{t<T} z_x(t) z_y(t+1) / (T - 1)``
+            and ``r_yx(1)`` (``x`` and ``y`` swapped). The bracket is
+            ``corr(e_t, e_{t+1})`` for a stationary jointly Gaussian pair
+            (Isserlis) at the sample values, so autocorrelated Gaussian series give
+            ~0. Positive = coupling episodes persist longer than that implies;
+            negative = they alternate faster.
+
+    frac : float, optional
+        Fraction of frames in the top set, ``0 < frac < 1``, for
+        ``topshare`` only (identifier suffix ``_f-0-05``). Default: None,
+        which ``topshare`` reads as 0.05.
     """
 
     name = "Edge time series (coupling nonstationarity)"

@@ -1,27 +1,26 @@
+"""pyspi: statistics of pairwise interactions for multivariate time series."""
 import logging
+
 import numpy as np
 
-# No OMP_NUM_THREADS default here: a setdefault at this point would run after
-# numpy has initialised its BLAS, so it would pin nothing in-process and only
-# change the environment of every program that imports pyspi. Thread pinning
-# lives in pyspi._parallel: workers pin BLAS in _worker_init, and
-# Calculator.compute warns about (or, on a single-core allocation, pins) an
-# oversubscribed setup.
+# No OMP_NUM_THREADS default here: set after numpy has loaded its BLAS, it
+# would pin nothing and only change the environment of the importing program.
+# Thread pinning is in pyspi._parallel.
 
-# Standard library practice: a library should not emit log output unless the
-# application configures a handler. Calculator(verbose=...) attaches a real
-# handler on demand via pyspi._logging.configure().
+# A library logs nothing unless the application adds a handler;
+# Calculator(verbose=...) adds one through pyspi._logging.configure().
 logging.getLogger("pyspi").addHandler(logging.NullHandler())
 
-# NumPy 2 removed np.NaN; some legacy code paths still reference it.
+# NumPy 2 has no np.NaN; the alias is kept for code that still uses it.
 if not hasattr(np, "NaN"):
     np.NaN = np.nan
 
 
+# The package imports come after the np.NaN alias above.
 from .calculator import Calculator, Results, load_results, load_table  # noqa: E402
 # Per-cell quality codes (shared with pyhctsa); see Calculator.quality.
 from .quality import Quality  # noqa: E402
-# Bumped whenever a change can alter a valid SPI output. Record it with saved
+# Changed whenever a change can alter a valid SPI output. Record it with saved
 # results, and do not pool results computed under different values.
 from ._parallel import COMPUTATION_VERSION  # noqa: E402
 
