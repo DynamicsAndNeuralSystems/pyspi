@@ -542,10 +542,11 @@ class LagResolvedCorrelation(Directed, Signed):
         pair_lag = self._pair_lag(data, L)
         pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
         both = np.full((M, M, 2), np.nan)
-        # A failing pair is NaN in both of its cells (the scalar NaN that
-        # fill_pairwise stores broadcasts over the last axis).
+        # A failing pair is NaN, and reported as a failure, in both of its
+        # cells; only the upper triangle of `both` is read.
         fill_pairwise(self.identifier, both, pairs,
-                      lambda i, j: self._pair(data, i, j, L, pair_lag))
+                      lambda i, j: self._pair(data, i, j, L, pair_lag),
+                      mirror=True)
         A = np.full((M, M), np.nan)
         iu = np.triu_indices(M, 1)
         A[iu] = both[..., 0][iu]
