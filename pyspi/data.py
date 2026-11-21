@@ -1,16 +1,18 @@
-"""Provide data structures for multivariate analysis.
+"""The ``Data`` container for multivariate time series, and the bundled datasets.
 
-Code is adapted from Patricia Wollstadt's IDTxL (https://github.com/pwollstadt/IDTxl)
+Adapted from the ``Data`` class of Patricia Wollstadt's IDTxl
+(https://github.com/pwollstadt/IDTxl).
 """
-import numpy as np
-import pandas as pd
-from pyspi import utils
-from scipy.stats import zscore
-from scipy.signal import detrend
 import os
 
-from ._logging import get_logger
+import numpy as np
+import pandas as pd
+from scipy.signal import detrend
+from scipy.stats import zscore
+
+from pyspi import utils
 from ._compat import resolve_zscore
+from ._logging import get_logger
 
 logger = get_logger("pyspi.data")
 
@@ -20,12 +22,9 @@ VERBOSE = False
 def _validate_procnames(procnames, n_processes):
     """Coerce process names to unique strings, or say why they cannot be.
 
-    Names are the column and row labels of the results table, and
-    ``Calculator.to_frame()`` stacks on them, so duplicates would fail there
-    with pandas' "Columns with duplicate values are not supported in stack",
-    far from the cause. They are also written to the NPZ as a ``U`` array, so a
-    non-string name would load back as its ``str()``. Coercing here makes the
-    object and the file agree from the start.
+    Names label the rows and columns of the results table, which
+    ``Calculator.to_frame()`` cannot stack with duplicates, and are saved as
+    strings, so they are made strings here for the object and file to agree.
     """
     names = [str(p) for p in procnames]
     if len(names) != n_processes:
@@ -44,60 +43,57 @@ def _validate_procnames(procnames, n_processes):
 
 
 class Data:
-    """Store data for dependency analysis.
+    """A multivariate time series: processes x observations x replications.
 
-    Data takes a 2-dimensional array representing realisations of random
-    variables in dimensions: processes and observations.
-    Indicate the actual order of dimensions in the provided array in a two-character string, e.g. 'ps'
-    for an array with realisations over (1) processes, and (2) observations in time.
+    Holds ``M`` processes of ``T`` observations (and ``R`` replications,
+    usually 1) as a read-only array, each process optionally detrended and
+    z-scored along time. Statistics cache intermediate results on the
+    instance; changing the series with ``set_data``, ``add_process`` or
+    ``remove_process`` drops every cache. A series with a non-finite value is
+    refused.
 
-    Example:
-        >>> # Initialise empty data object
-        >>> data = Data()
-        >>>
-        >>> # Load a prefilled financial dataset
-        >>> data_forex = Data().load_dataset(forex)
-        >>>
-        >>> # Create data objects with data of various sizes
-        >>> d = np.arange(3000).reshape((3, 1000))  # 3 procs.,
-        >>> data_2 = Data(d, dim_order='ps')        # 1000 observations
-        >>>
-        >>> # Overwrite data in existing object with random data
-        >>> d = np.arange(5000)
-        >>> data_2.set_data(data_new, 's')
+    Parameters
+    ----------
+    data : array-like, str or None, optional
+        The time series: a numpy array, a pandas DataFrame, or the path of a
+        ``.npy``, ``.txt``, ``.csv`` or ``.ts`` file (``.ts`` needs aeon).
+        Default: None, an empty ``Data`` to fill with ``add_process``.
+    dim_order : str, optional
+        The order of the dimensions of ``data``, one character per dimension:
+        ``'p'`` for processes, ``'s'`` for observations (samples) and ``'r'``
+        for replications. Default: ``'ps'``.
+    detrend : bool, optional
+        Remove the least-squares line from each process. Default: False.
+    zscore : bool or None, optional
+        z-score each process along time (``ddof=1``). This is per process, not
+        over the whole dataset, so it removes each process's units without
+        letting the other processes influence any pairwise statistic.
+        Default: None, which means True.
+    name : str or None, optional
+        Name of the dataset. Default: None (``"N/A"``).
+    procnames : list or None, optional
+        One unique name per process, converted to strings. Default: None,
+        which gives ``proc-0``, ``proc-1``, ...
+    n_processes : int or None, optional
+        Keep only the first ``n_processes`` processes. Default: None (all).
+    n_observations : int or None, optional
+        Keep only the first ``n_observations`` observations. Default: None
+        (all).
+    normalise : bool or None, optional
+        Deprecated spelling of ``zscore``, removed in pyspi 4.0.
+        Default: None.
 
-    Args:
-        data (array_like, optional):
-            2-dimensional array with raw data, default=None.
-        dim_order (str, optional):
-            Order of dimensions, accepts two combinations of the characters 'p', and 's' for processes and observations, default='ps'.
-        detrend (bool, optional):
-            If True, detrend each time series in the MTS dataset individually along the time axis, default=False.
-        zscore (bool, optional):
-            If True, z-score each time series in the MTS dataset individually
-            along the time axis, default=True. Standardisation is per-process,
-            not whole-dataset: it removes each process's arbitrary gain/units
-            without letting the choice of the other processes in the dataset
-            influence any pairwise statistic.
-        normalise (bool, optional):
-            Deprecated 2.x spelling of ``zscore``; removed in 4.0.
-        name (str, optional):
-            Name of the dataset
-        procnames (list, optional):
-            List of process names with length the number of processes, default=None.
-        n_processes (int, optional):
-            Truncates data to this many processes, default=None.
-        n_observations (int, optional):
-            Truncates data to this many observations, default=None.
-
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pyspi.data import Data, load_dataset
+    >>> data = Data(np.random.randn(3, 1000), dim_order="ps")  # 3 processes
+    >>> forex = load_dataset("forex")
     """
 
-    # Every attribute a statistic may cache directly on a Data instance. This is
-    # the authoritative list: anything that writes `data.<x> = ...` from
-    # pyspi/statistics/ must appear here, or its cache will survive a mutation
-    # of the underlying series and silently serve results from the old data.
-    #
-    # Derived mechanically from the statistics package:
+    # Every attribute a statistic may cache on a Data instance. Anything that
+    # writes `data.<x> = ...` in pyspi/statistics must be listed, or its cache
+    # would survive a change of the series. To list them:
     #   grep -rhoE "\bdata\.[a-z_][a-z0-9_]*\s*=" pyspi/statistics/*.py
     _CACHE_ATTRS = (
         "_spectral_bv_conn",
@@ -135,18 +131,15 @@ class Data:
         n_observations=None,
         normalise=None,
     ):
-        # `normalise` is the deprecated 2.x spelling of `zscore` (removed in 4.0).
+        # `normalise` is the deprecated spelling of `zscore`.
         self.zscore = resolve_zscore(zscore, normalise)
         self.detrend = detrend
-        # Explicit empty state so attribute access is consistent before set_data
-        # has run (Data() with no args is a legitimate builder-pattern entry point
-        # used by add_process()).
+        # An empty Data() is filled with add_process().
         self._data = None
         self.n_processes = 0
         self.n_observations = 0
         self.n_replications = 0
-        # _name and _procnames are only set when data is actually loaded — keeps
-        # the existing contract that name="N/A" until data exists.
+        # _name and _procnames are set only once there is data.
 
         if data is not None:
             dat = self.convert_to_numpy(data)
@@ -164,11 +157,8 @@ class Data:
     def _from_prepared_array(cls, arr, procnames=None, name=None):
         """Build a Data around an already-preprocessed array, without copying.
 
-        Internal constructor for the parallel workers, which attach to a
-        shared-memory block holding the parent's already-detrended/z-scored
-        series. Copying would defeat the point of sharing, so ownership is
-        waived here and the array is exposed read-only instead — workers only
-        ever read it.
+        Used by the parallel workers, which attach to a shared-memory block
+        holding the parent's preprocessed series and only read it.
         """
         if arr.ndim != 3:
             raise ValueError(
@@ -183,10 +173,7 @@ class Data:
         self._name = name or "N/A"
         self._reset_data_size()
         if procnames is not None:
-            # Validated on the internal constructor too. The parallel workers
-            # reach Data only through this path, so skipping the check here
-            # would mean a name set that `Calculator.to_frame()` cannot stack
-            # is caught in a serial run and not in a parallel one.
+            # Validated here too, so parallel runs refuse the same names.
             self._procnames = _validate_procnames(procnames, self.n_processes)
         self._sync_procnames()
         return self
@@ -217,12 +204,9 @@ class Data:
     def _apply_preprocessing(self, data, log=False):
         """Detrend and/or z-score along the time axis of a (p, s, r) array.
 
-        The single preprocessing path, shared by ``set_data`` and
-        ``add_process`` so every process is on the same scale.
-
-        Both are per-process along time, so applying them to one appended
-        process gives exactly the same result as applying them to the whole
-        array at once.
+        Shared by ``set_data`` and ``add_process``. Both steps act on each
+        process separately, so one appended process is treated exactly as it
+        would be in the whole array.
         """
         if self.detrend:
             if log:
@@ -246,10 +230,8 @@ class Data:
     def _invalidate_caches(self):
         """Drop every statistic cache held on this instance.
 
-        Called whenever the underlying series change. Statistics cache results
-        keyed by parameters but *not* by the data, so a cache that outlives a
-        mutation returns the previous dataset's numbers with no error and no
-        warning — the most dangerous failure mode in the package.
+        Called whenever the series change: caches are keyed by parameters, not
+        by the data, so one that outlived a change would serve stale values.
         """
         for attr in self._CACHE_ATTRS:
             self.__dict__.pop(attr, None)
@@ -267,11 +249,23 @@ class Data:
         self._invalidate_caches()
 
     def to_numpy(self, realisation=None, squeeze=False):
-        """Return the numpy array.
+        """The series as a read-only numpy array.
 
-        The result is a **read-only** view of the internal store. Copy it if you
-        need to modify it; writing through it would desynchronise the statistic
-        caches from the data they were computed on.
+        A view of the internal store, read-only so the statistic caches stay in
+        step with the data; copy it to modify it.
+
+        Parameters
+        ----------
+        realisation : int or None, optional
+            Return only this replication. Default: None (all).
+        squeeze : bool, optional
+            Drop dimensions of length 1. Default: False.
+
+        Returns
+        -------
+        numpy.ndarray
+            Shape ``(M, T, R)``, or ``(M, T)`` for one ``realisation``, less
+            any length-1 dimensions when ``squeeze``.
         """
         if realisation is not None:
             dat = self._data[:, :, realisation]
@@ -281,16 +275,26 @@ class Data:
         if squeeze:
             dat = np.squeeze(dat)
 
-        # Always freeze, never conditionally. The shared-memory worker path is
-        # where `owndata` is False, so guarding on it would leave writable
-        # exactly the block every other worker is reading.
+        # Always freeze: in the workers the array is a shared-memory block.
         dat = dat.view()
         dat.setflags(write=False)
         return dat
 
     @staticmethod
     def convert_to_numpy(data):
-        """Converts other data instances to default numpy format."""
+        """Read ``data`` into a numpy array.
+
+        Parameters
+        ----------
+        data : numpy.ndarray, pandas.DataFrame or str
+            An array, a DataFrame, or the path of a ``.npy``, ``.txt``,
+            ``.csv`` (comma-separated) or ``.ts`` file (``.ts`` needs aeon).
+
+        Returns
+        -------
+        numpy.ndarray
+            The data, unchanged in shape.
+        """
 
         if isinstance(data, np.ndarray):
             npdat = data
@@ -329,15 +333,32 @@ class Data:
         n_observations=None,
         verbose=False,
     ):
-        """Overwrite data in an existing instance.
+        """Replace the series held by this instance.
 
-        Args:
-            data (np.ndarray):
-                2-dimensional array of realisations
-            dim_order (str, optional):
-                order of dimensions, accepts a combination of the characters
-                'p' and 's', for processes and observations;
-                must have the same length as number of dimensions in data
+        The array is reordered to processes x observations x replications,
+        truncated, preprocessed with this instance's ``detrend`` and ``zscore``
+        settings and checked for non-finite values. Every statistic cache is
+        dropped, and process names are kept only if the number of processes
+        is unchanged.
+
+        Parameters
+        ----------
+        data : numpy.ndarray
+            Array of one to three dimensions.
+        dim_order : str, optional
+            The order of the dimensions of ``data``, one character per
+            dimension: ``'p'`` (processes), ``'s'`` (observations) or ``'r'``
+            (replications). Default: ``'ps'``.
+        name : str or None, optional
+            New name of the dataset; None keeps the current one.
+            Default: None.
+        n_processes : int or None, optional
+            Keep only the first ``n_processes`` processes. Default: None (all).
+        n_observations : int or None, optional
+            Keep only the first ``n_observations`` observations.
+            Default: None (all).
+        verbose : bool, optional
+            Log the new size. Default: False.
         """
         if len(dim_order) > 3:
             raise RuntimeError("dim_order can not have more than two " "entries")
@@ -346,8 +367,7 @@ class Data:
                 "Data array dimension ({0}) and length of "
                 "dim_order ({1}) are not equal.".format(data.ndim, len(dim_order))
             )
-        # Unknown or repeated symbols (e.g. 'xx', 'pp') would produce 4-D/5-D
-        # internal states that fail far from here.
+        # Unknown or repeated symbols would give a 4-D or 5-D array.
         unknown = set(dim_order) - set("psr")
         if unknown:
             raise ValueError(
@@ -368,9 +388,7 @@ class Data:
 
         data = self._apply_preprocessing(data, log=True)
 
-        # Check all non-finite values, not just NaNs: with zscore=False an inf
-        # passes straight through to the estimators, where it surfaces as an
-        # unrelated failure much later.
+        # Inf as well as NaN: with zscore=False an Inf would reach the SPIs.
         bad = ~np.isfinite(data)
         if bad.any():
             raise ValueError(
@@ -395,19 +413,25 @@ class Data:
             )
 
     def add_process(self, proc, verbose=False):
-        """Appends a univariate process to the dataset.
+        """Append one process to the dataset.
 
-        Args:
-            proc (ndarray):
-                Univariate process to add, must be an array the same size as existing ones.
+        The process is preprocessed as the others were. If the processes are
+        named, it is named ``proc-<index>``, or the next such name not already
+        taken.
+
+        Parameters
+        ----------
+        proc : numpy.ndarray
+            A 1-D array (after squeezing) with as many observations as the
+            dataset; the first process of an empty ``Data``.
+        verbose : bool, optional
+            Log the new size when this is the first process. Default: False.
         """
         proc = np.squeeze(proc)
         if not isinstance(proc, np.ndarray) or proc.ndim != 1:
             raise TypeError("Process must be a 1D numpy array")
 
-        # Guard on the value, not on hasattr: _data is always present (set
-        # to None in __init__), so hasattr is True even for an empty Data and
-        # the builder path would reshape into a zero-width array.
+        # _data is None, not absent, in an empty Data.
         if self._data is None:
             self.set_data(proc, dim_order="s", verbose=verbose)
             return
@@ -417,8 +441,7 @@ class Data:
                 f"Process has {proc.size} observations but the dataset has "
                 f"{self.n_observations}."
             )
-        # Preprocess the incoming process the same way set_data would, so the
-        # builder path produces a dataset with uniform preprocessing.
+        # Preprocessed as set_data would.
         block = self._apply_preprocessing(
             np.reshape(np.asarray(proc, dtype=float), (1, self.n_observations, 1))
         )
@@ -426,11 +449,8 @@ class Data:
         self._set_internal(appended)
         self._reset_data_size()
         if hasattr(self, "_procnames"):
-            # `proc-<index>` can already be taken: a caller who named their
-            # processes ["a", "proc-2"] and then appended twice would produce a
-            # second "proc-2", and `Calculator.to_frame()` cannot stack
-            # duplicated labels. Fall past any name already in use rather than
-            # silently creating a collision the constructor would have rejected.
+            # `proc-<index>` may already be taken (names ["a", "proc-2"], then
+            # two appends): skip to a free name, as names must be unique.
             index = self.n_processes - 1
             taken = set(self._procnames)
             name = f"proc-{index}"
@@ -440,6 +460,15 @@ class Data:
             self._procnames.append(name)
 
     def remove_process(self, procs):
+        """Remove processes from the dataset.
+
+        An index out of range is logged as an error and nothing is removed.
+
+        Parameters
+        ----------
+        procs : int or list of int
+            Index or indices of the processes to remove.
+        """
         try:
             reduced = np.delete(self._data, procs, axis=0)
         except IndexError:
@@ -456,10 +485,9 @@ class Data:
             self._procnames = [self._procnames[i] for i in keep]
 
     def _sync_procnames(self):
-        """Drop stale process names after a change in width.
+        """Drop the process names if their number no longer matches the processes.
 
-        Names are positional, so after a change in width they identify nothing
-        and the generated ``proc-i`` names are used instead.
+        Names are positional; the generated ``proc-i`` names are used instead.
         """
         names = self.__dict__.get("_procnames")
         if names is not None and len(names) != self.n_processes:
@@ -492,8 +520,8 @@ class Data:
         self.n_replications = self._data.shape[2]
 
 
-# name -> (filename, dim_order, description). Every bundled .npy is stored
-# (observations, processes), hence dim_order 'sp' throughout.
+# name -> (filename, dim_order, description). Every bundled .npy is stored as
+# (observations, processes).
 _DATASETS = {
     "forex":           ("forex.npy",           "sp", "Foreign-exchange rates (250 obs, 7 processes)."),
     "cml":             ("cml.npy",             "sp", "Coupled map lattice (500 obs, 10 processes)."),
@@ -502,14 +530,29 @@ _DATASETS = {
 
 
 def available_datasets():
-    """Return ``{name: description}`` for every bundled dataset."""
+    """The bundled example datasets.
+
+    Returns
+    -------
+    dict
+        ``{name: description}`` for every dataset :func:`load_dataset` takes.
+    """
     return {name: desc for name, (_f, _d, desc) in _DATASETS.items()}
 
 
 def load_dataset(name):
-    """Load a bundled example dataset by name.
+    """Load a bundled example dataset.
 
-    See :func:`available_datasets` for the full list.
+    Parameters
+    ----------
+    name : str
+        ``'forex'``, ``'cml'`` or ``'standard_normal'`` (see
+        :func:`available_datasets`).
+
+    Returns
+    -------
+    Data
+        The dataset, z-scored with the ``Data`` defaults.
     """
     try:
         filename, dim_order, _desc = _DATASETS[name]
