@@ -204,13 +204,15 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     .. [2] T.E. Özkurt, A. Schnitzler, "A critical note on the definition of
            phase-amplitude cross-frequency coupling", J. Neurosci. Methods
            201(2), 438-443 (2011).
-    .. [3] R.T. Canolty et al., "High gamma power is phase-locked to theta
-           oscillations in human neocortex", Science 313(5793), 1626-1628
-           (2006).
+    .. [3] R.T. Canolty, E. Edwards, S.S. Dalal, M. Soltani, S.S. Nagarajan,
+           H.E. Kirsch, M.S. Berger, N.M. Barbaro, R.T. Knight, "High gamma
+           power is phase-locked to theta oscillations in human neocortex",
+           Science 313(5793), 1626-1628 (2006).
     .. [4] M.A. Kramer, A.B.L. Tort, N.J. Kopell, "Sharp edge artifacts and
            spurious coupling in EEG frequency comodulation measures",
            J. Neurosci. Methods 170(2), 352-357 (2008).
-    .. [5] J. Aru et al., "Untangling cross-frequency coupling in
+    .. [5] J. Aru, J. Aru, V. Priesemann, M. Wibral, L. Lana, G. Pipa,
+           W. Singer, R. Vicente, "Untangling cross-frequency coupling in
            neuroscience", Curr. Opin. Neurobiol. 31, 51-61 (2015).
 
     Parameters

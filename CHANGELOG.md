@@ -191,7 +191,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   2.x used tslearn's default radius of 1; the radius is now 10% of `T` or `1.5·√T`, whichever is smaller, with a floor of 10 and a cap of `T-1`, tunable with `PYSPI_DTW_SAKOE_LINEAR_FRAC`, `PYSPI_DTW_SAKOE_SQRT_COEFF` and `PYSPI_DTW_SAKOE_MIN_RADIUS`.
   Itakura-constrained DTW also applies the `sqrt(T)` normalisation on every path.
 - **`hsic` and `hsic_biased` depended on the order of the two processes.**
-  Each variable now gets its own median-heuristic kernel width (Gretton et al. 2005).
+  Each variable now gets its own median-heuristic kernel width, the median distance between its samples (Gretton et al. 2007).
 - **`phi_Geo_*` stopped before its model was disconnected.**
   The solver now also requires the constraint to be met, and phi_G is evaluated at the block-diagonal projection (Oizumi et al. 2016).
 - **`gwtau` left the start of the trajectory out of its distance vector** (Kravtsova et al. 2023); values change by the factor `sqrt((T - 1) / T)`.
@@ -405,7 +405,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 
 Definitions the corrected measures are checked against:
 
-- Massey, J. (1990). Causality, feedback and directed information. *Proc. ISITA*. — the `sum_i I(X^i; Y_i | Y^{i-1})` form now implemented by `DirectedInfo`.
+- Massey, J. (1990). Causality, feedback and directed information. *Proc. ISITA*, 303–305. — the `sum_i I(X^i; Y_i | Y^{i-1})` form now implemented by `DirectedInfo`.
 - Frenzel, S. & Pompe, B. (2007). Partial mutual information for coupling analysis of multivariate time series. *Phys. Rev. Lett.* 99, 204101. — the conditional-MI estimator behind `di_kraskov` and kraskov transfer entropy.
 - Kraskov, A., Stögbauer, H. & Grassberger, P. (2004). Estimating mutual information. *Phys. Rev. E* 69, 066138. — KSG estimator and its effective-sample conditions.
 - Kozachenko, L. & Leonenko, N. (1987). Sample estimate of the entropy of a random vector. *Probl. Inf. Transm.* 23, 95–101. — the k-NN entropy that is undefined on tied data.
@@ -415,15 +415,16 @@ Definitions the corrected measures are checked against:
 - Bokil, H., Purpura, K., Schoffelen, J.-M., Thomson, D. & Mitra, P. (2007). Comparing spectra and coherences for groups of unequal size. *J. Neurosci. Methods* 159, 337–345. — the same z-transform, with its bias and variance both `1/(2n − 2)`.
 - Gotman, J. (1983). Measurement of small time differences between EEG channels. *Electroencephalogr. Clin. Neurophysiol.* 56, 501–514. — group delay as the slope of coherence phase against frequency.
 - Staniek, M. & Lehnertz, K. (2008). Symbolic transfer entropy. *Phys. Rev. Lett.* 100, 158101. — one ordinal-pattern length at unit delay, source and destination alike.
-- Hoyer, P., Janzing, D., Mooij, J., Peters, J. & Schölkopf, B. (2009). Nonlinear causal discovery with additive noise models. *NIPS*. — `anm`.
-- Fonollosa, J. A. R. (2016). Conditional distribution variability measures for causality detection. — `cds`.
+- Hoyer, P., Janzing, D., Mooij, J., Peters, J. & Schölkopf, B. (2008). Nonlinear causal discovery with additive noise models. *NIPS* 21, 689–696. — `anm`.
+- Fonollosa, J. A. R. (2019). Conditional distribution variability measures for causality detection. In *Cause Effect Pairs in Machine Learning*, Springer, 339–347. — `cds`.
 - Blöbaum, P., Janzing, D., Washio, T., Shimizu, S. & Schölkopf, B. (2018). Cause-effect inference by comparing regression errors. *AISTATS*. — `reci`.
 - Daniušis, P. et al. (2010). Inferring deterministic causal relations. *UAI*. — `igci`.
 - Wibral, M., Vicente, R. & Lindner, M. (2014). Transfer entropy in neuroscience. — the maximum corrected AIS embedding criterion, as distinct from Ragwitz local-prediction selection (Ragwitz & Kantz 2002).
 - Gao, W., Oh, S. & Viswanath, P. (2018). Demystifying fixed k-nearest neighbor information estimators. *IEEE Trans. Inf. Theory* 64, 5629–5661. — why the KSG error is not O(1/√N) in general.
 - Vlachos, M., Kollios, G. & Gunopulos, D. (2002). Discovering similar multidimensional trajectories. *Proc. ICDE*, 673–684. — LCSS with a band that limits which pairs may match, as `lcss_constraint-*` now computes.
-- Mehta, R., Chung, J., Shen, C., Xu, T. & Vogelstein, J. (2020). Independence testing for multivariate time series. *arXiv:1908.06486*. — the lagged sum behind `dcorrx` and `mgcx`, `sum_l (n - l)/n * S(target[l:], source[:n-l])`.
-- Gretton, A., Bousquet, O., Smola, A. & Schölkopf, B. (2005). Measuring statistical dependence with Hilbert-Schmidt norms. *ALT*, 63–77. — HSIC, with a median-heuristic kernel width per variable.
+- Shen, C., Chung, J., Mehta, R., Xu, T. & Vogelstein, J. T. (2024). Independence testing for temporal data. *Trans. Mach. Learn. Res.* — the lagged sum behind `dcorrx` and `mgcx`, `sum_l (n - l)/n * S(target[l:], source[:n-l])`.
+- Gretton, A., Bousquet, O., Smola, A. & Schölkopf, B. (2005). Measuring statistical dependence with Hilbert-Schmidt norms. *ALT*, LNCS 3734, 63–77. — HSIC.
+- Gretton, A., Fukumizu, K., Teo, C. H., Song, L., Schölkopf, B. & Smola, A. J. (2007). A kernel statistical test of independence. *NIPS* 20, 585–592. — the median-heuristic kernel width, which `hsic` sets per variable.
 - Vinck, M., Oostenveld, R., van Wingerden, M., Battaglia, F. & Pennartz, C. (2011). An improved index of phase-synchronization for electrophysiological data in the presence of volume-conduction, noise and sample-size bias. *NeuroImage* 55, 1548–1565. — the debiased squared PLI and wPLI as means over taper pairs.
 - Oizumi, M., Tsuchiya, N. & Amari, S. (2016). Unified framework for information integration based on information geometry. *PNAS* 113, 14817–14822. — geometric integrated information as the KL divergence to the nearest disconnected model, the constrained minimum `phi_Geo_*` must reach.
 - Korzeniewska, A., Mańczak, M., Kamiński, M., Blinowska, K. & Kasicki, S. (2003). Determination of information flow direction among brain structures by a modified directed transfer function (dDTF) method. *J. Neurosci. Methods* 125, 195–207. — the direct DTF as full-frequency DTF times partial coherence.

@@ -680,7 +680,7 @@
 
       - phitype: "Geo"
 
-# Spectral (frequency-domain) statistics (see Schoegl and Supp, 2006)
+# Spectral (frequency-domain) statistics (see Schloegl and Supp, 2006)
 .statistics.spectral:
   # Coherence phase
   CoherencePhase:

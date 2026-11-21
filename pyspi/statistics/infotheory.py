@@ -1477,7 +1477,8 @@ class JointEntropy(InfoTheoryBase, Undirected):
     References
     ----------
     .. [1] L.F. Kozachenko, N.N. Leonenko, "Sample estimate of the entropy of a
-           random vector", Problems Inf. Transmission 23(2), 95 (1987).
+           random vector", Problems of Information Transmission 23(2),
+           95-101 (1987).
     .. [2] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
            dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
 
@@ -1531,7 +1532,8 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
     References
     ----------
     .. [1] L.F. Kozachenko, N.N. Leonenko, "Sample estimate of the entropy of a
-           random vector", Problems Inf. Transmission 23(2), 95 (1987).
+           random vector", Problems of Information Transmission 23(2),
+           95-101 (1987).
     .. [2] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
            dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
 
@@ -2148,7 +2150,8 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     References
     ----------
     .. [1] L.F. Kozachenko, N.N. Leonenko, "Sample estimate of the entropy of a
-           random vector", Problems Inf. Transmission 23(2), 95 (1987).
+           random vector", Problems of Information Transmission 23(2),
+           95-101 (1987).
     .. [2] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
            dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
 
@@ -2229,7 +2232,8 @@ class CausalEntropy(InfoTheoryBase, Directed):
            multiple-access channel with feedback", Proc. 1998 IEEE Int. Symp.
            Information Theory, 189 (1998).
     .. [2] L.F. Kozachenko, N.N. Leonenko, "Sample estimate of the entropy of a
-           random vector", Problems Inf. Transmission 23(2), 95 (1987).
+           random vector", Problems of Information Transmission 23(2),
+           95-101 (1987).
     .. [3] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
            dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
 
@@ -2310,7 +2314,7 @@ class DirectedInfo(CausalEntropy, Directed):
     ----------
     .. [1] J.L. Massey, "Causality, feedback and directed information", Proc.
            Int. Symp. Information Theory and its Applications (ISITA-90),
-           Waikiki, Hawaii (1990).
+           Waikiki, Hawaii, 303-305 (1990).
     .. [2] A. Kraskov, H. Stögbauer, P. Grassberger, "Estimating mutual
            information", Phys. Rev. E 69(6), 066138 (2004).
     .. [3] S. Frenzel, B. Pompe, "Partial mutual information for coupling
@@ -2430,7 +2434,8 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
     .. [1] N. Ay, "Information geometry on complexity and stochastic
            interaction", Entropy 17(4), 2432-2458 (2015).
     .. [2] L.F. Kozachenko, N.N. Leonenko, "Sample estimate of the entropy of a
-           random vector", Problems Inf. Transmission 23(2), 95 (1987).
+           random vector", Problems of Information Transmission 23(2),
+           95-101 (1987).
     .. [3] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
            dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
 

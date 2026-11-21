@@ -235,7 +235,7 @@ def test_anm_shared_factorisation_is_bit_identical_to_sklearn(T):
 # ---------------------------------------------------------------------------
 
 def _cds_populated_bins(x, ffactor=2, maxdev=3, minc=12):
-    """How many x-bins hold more than `minc` points (Fonollosa 2016).
+    """How many x-bins hold more than `minc` points (Fonollosa 2019).
 
     x is standardised, re-standardised on its points within `maxdev`
     deviations, then rounded to a grid of 1/ffactor and clipped at
@@ -250,7 +250,7 @@ def _cds_populated_bins(x, ffactor=2, maxdev=3, minc=12):
 
 
 def test_cds_is_undefined_not_zero_when_conditionals_cannot_be_compared():
-    """CDS is the spread of P(y | x = a) across the x-bins a (Fonollosa 2016).
+    """CDS is the spread of P(y | x = a) across the x-bins a (Fonollosa 2019).
 
     It needs at least two bins with more than `minc` = 12 points. With fewer,
     cdt returns 0 (trivially with one bin, hard-coded with none), which is the

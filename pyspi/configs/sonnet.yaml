@@ -104,7 +104,7 @@
     configs:
       - phitype: 'star'
 
-# Spectral (frequency-domain) statistics (see Schoegl and Supp, 2006)
+# Spectral (frequency-domain) statistics (see Schloegl and Supp, 2006)
 .statistics.spectral:
 
   # Magnitude-squared coherence

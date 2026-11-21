@@ -21,7 +21,8 @@ repository-code: 'https://github.com/DynamicsAndNeuralSystems/pyspi'
 keywords:
   - pairwise-interactions
   - time-series analysis
-license: GPL-3.0
+license: GPL-3.0-or-later
+version: 3.0.0
 preferred-citation:
   type: article
   title: Unifying pairwise interactions in complex dynamics

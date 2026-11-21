@@ -212,8 +212,10 @@ class InformationGeometricCausalInference(Directed, Signed):
            K. Zhang, B. Schölkopf, "Inferring deterministic causal
            relations", Proceedings of the 26th Conference on Uncertainty in
            Artificial Intelligence, 143-150 (2010).
-    .. [2] D. Janzing et al., "Information-geometric approach to inferring
-           causal directions", Artificial Intelligence 182-183, 1-31 (2012).
+    .. [2] D. Janzing, J. Mooij, K. Zhang, J. Lemeire, J. Zscheischler,
+           P. Daniušis, B. Steudel, B. Schölkopf, "Information-geometric
+           approach to inferring causal directions", Artificial Intelligence
+           182-183, 1-31 (2012).
     .. [3] D. Kalainathan, O. Goudet, R. Dutta, "Causal Discovery Toolbox:
            uncovering causal relationships in Python", Journal of Machine
            Learning Research 21(37), 1-5 (2020).
@@ -649,8 +651,9 @@ class ConvergentCrossMapping(Directed, Signed):
 
     References
     ----------
-    .. [1] G. Sugihara et al., "Detecting causality in complex ecosystems",
-           Science 338(6106), 496-500 (2012).
+    .. [1] G. Sugihara, R. May, H. Ye, C.-H. Hsieh, E. Deyle, M. Fogarty,
+           S. Munch, "Detecting causality in complex ecosystems", Science
+           338(6106), 496-500 (2012).
 
     Parameters
     ----------

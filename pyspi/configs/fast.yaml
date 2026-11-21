@@ -330,7 +330,7 @@
         l_history: 1
         labels:
           - M05
-# Spectral (frequency-domain) statistics (see Schoegl and Supp, 2006)
+# Spectral (frequency-domain) statistics (see Schloegl and Supp, 2006)
 .statistics.spectral:
   # Coherence phase
   CoherencePhase:

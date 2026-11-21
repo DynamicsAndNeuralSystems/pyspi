@@ -1293,8 +1293,9 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
 
     References
     ----------
-    .. [1] G. Nolte et al., "Robustly estimating the flow direction of
-           information in complex physical systems", Phys. Rev. Lett.
+    .. [1] G. Nolte, A. Ziehe, V.V. Nikulin, A. Schlögl, N. Krämer,
+           T. Brismar, K.-R. Müller, "Robustly estimating the flow direction
+           of information in complex physical systems", Phys. Rev. Lett.
            100(23), 234101 (2008).
 
     Parameters
