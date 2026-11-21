@@ -485,7 +485,7 @@ class Data:
             self._procnames = [self._procnames[i] for i in keep]
 
     def _sync_procnames(self):
-        """Drop the process names if their number no longer matches the processes.
+        """Drop the process names if their number differs from the processes'.
 
         Names are positional; the generated ``proc-i`` names are used instead.
         """
