@@ -84,10 +84,10 @@ class PhaseSlopeIndex(mne, Undirected):
     Frequencies are in the units of ``fs``, at the default ``fs = 1`` in
     cycles per sample; ``fs`` only relabels the frequency axis, so
     ``fs = 250`` with the band [8, 12] gives the same values as ``fs = 1``
-    with [0.032, 0.048]. At construction ``fs`` must be positive and finite
-    and ``0 <= fmin < fmax <= fs / 2``, or ``ValueError`` is raised; a band
-    whose upper edge is at or below the floor ``5 fs / T`` raises
-    ``ValueError`` when the SPI is computed.
+    with [0.032, 0.048], up to floating-point rounding. At construction
+    ``fs`` must be positive and finite and ``0 <= fmin < fmax <= fs / 2``, or
+    ``ValueError`` is raised; a band whose upper edge is at or below the floor
+    ``5 fs / T`` raises ``ValueError`` when the SPI is computed.
 
     References
     ----------
@@ -267,10 +267,10 @@ class WaveletCoherence(Unsigned, Undirected):
     Frequencies are in the units of ``fs``, at the default ``fs = 1`` in
     cycles per sample; ``fs`` only relabels the frequency axis, so
     ``fs = 250`` with the band [8, 12] gives the same values as ``fs = 1``
-    with [0.032, 0.048]. At construction ``fs`` must be positive and finite
-    and ``0 <= fmin <= fmax <= fs / 2``, or ``ValueError`` is raised; a band
-    holding no frequency of the grid, which depends on ``T``, raises
-    ``ValueError`` when the SPI is computed.
+    with [0.032, 0.048], up to floating-point rounding. At construction
+    ``fs`` must be positive and finite and ``0 <= fmin <= fmax <= fs / 2``,
+    or ``ValueError`` is raised; a band holding no frequency of the grid,
+    which depends on ``T``, raises ``ValueError`` when the SPI is computed.
 
     References
     ----------

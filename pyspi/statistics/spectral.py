@@ -178,8 +178,9 @@ class NonparametricSpectral(Unsigned):
     default ``fs = 1``, normalised frequency in cycles per sample, with the
     Nyquist frequency at 0.5. ``fs`` only relabels the frequency axis, so
     ``fs = 250`` with the band [8, 12] gives the same values as ``fs = 1``
-    with [0.032, 0.048]; GroupDelay's ``slope``, in radians per unit of
-    frequency, is the one output that scales with it. At construction ``fs``
+    with [0.032, 0.048], up to floating-point rounding; GroupDelay's
+    ``slope``, in radians per unit of frequency, is the one output that
+    scales with it. At construction ``fs``
     must be positive and finite and ``0 <= fmin <= fmax <= fs / 2`` (the
     upper edge with a relative tolerance of 1e-9), or ``ValueError`` is
     raised.
