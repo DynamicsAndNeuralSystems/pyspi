@@ -131,7 +131,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `di_kraskov` estimates each term directly with the KSG/Frenzel-Pompe conditional-MI estimator, whose biases cancel by construction; the kernel and Kozachenko variants, composed from separately estimated entropies, are not bundled.
   `n` reaches the identifier of `DirectedInfo` and `CausalEntropy`.
 - **KSG ties and scale.**
-  KSG standardises each coordinate, as JIDT does, and breaks ties deterministically: in each series with a positive standard deviation, every repeated value gets Gaussian jitter of SD `1e-10 × std` from a fixed-seed generator (seeds: source 0, target 1, embedding selection 2), repeated until all values are distinct, as in pyhctsa.
+  KSG standardises each coordinate, as JIDT does, and breaks ties deterministically: in each series with a positive standard deviation, every repeated value gets Gaussian jitter of SD `1e-10 × std` from a fixed-seed generator (seeds: source 0, target 1, embedding selection 2), repeated until all values are distinct, as in pyhctsa, or NaN, labelled not appropriate, when the jitter is below the floating-point resolution of the values (an un-z-scored series far from zero).
   Tie-free series are untouched and match JIDT 1.6.1 run without its dither to about 1e-15.
   Without this, tied data give confident nonzero MI on independent series, since every kth-neighbour radius is zero; every process of the bundled `forex` dataset is tied.
   The jitter is deterministic but depends on observation order; NaN, infinite and constant series raise.

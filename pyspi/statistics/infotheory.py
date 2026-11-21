@@ -681,6 +681,12 @@ def _tie_break(y, seed=0):
     std, is returned unchanged. Apply to the raw series *before* delay
     embedding so that every embedded lag of a sample carries the same
     perturbation.
+
+    Values far from zero relative to their spread (``|y| / std`` above about
+    1e5, possible only without z-scoring) have a floating-point resolution
+    coarser than the jitter, so the ties survive every pass; the estimate is
+    then not appropriate (``NotAppropriate``), and centring or z-scoring the
+    series resolves it.
     """
     y = np.asarray(y, dtype=np.float64)
     if y.size < 2 or not np.all(np.isfinite(y)):
@@ -693,11 +699,20 @@ def _tie_break(y, seed=0):
         _, inverse, counts = np.unique(y, return_inverse=True, return_counts=True)
         repeated = counts[inverse.ravel()] > 1
         if not repeated.any():
-            break
+            return y
         if rng is None:
             rng = np.random.default_rng(seed)
             y = y.copy()
         y[repeated] += 1e-10 * sigma * rng.standard_normal(y.shape)[repeated]
+    if len(np.unique(y)) < y.size:
+        raise NotAppropriate(
+            f"KSG could not break the ties in a series with "
+            f"{y.size - len(np.unique(y))} repeated value(s): the tie-breaking "
+            f"jitter (1e-10 of the standard deviation, {1e-10 * sigma:.3g}) is "
+            f"below the floating-point resolution of values of this magnitude "
+            f"(largest |value| {np.max(np.abs(y)):.3g}). Centre or z-score the "
+            f"series."
+        )
     return y
 
 
