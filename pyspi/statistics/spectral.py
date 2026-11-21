@@ -1346,3 +1346,146 @@ class PhaseAlignedCorrelation(Undirected, Unsigned):
         P[lower] = P.T[lower]
         np.fill_diagonal(P, np.nan)
         return P
+
+
+def _flattened_power(x):
+    """Multitaper power of a demeaned series divided by its log-log linear fit.
+
+    Returns the frequencies (cycles/sample) from the multitaper half-bandwidth
+    ``3 / T`` up to (not including) Nyquist, and the power there divided by the
+    least-squares ``1/f^a`` fit, so a peak above the aperiodic background
+    stands out whatever the background's slope.
+    """
+    T = x.size
+    m = sc.Multitaper(x[:, np.newaxis, np.newaxis], sampling_frequency=1,
+                      tapers=_whole_record_tapers(T, 1))
+    n = m.n_fft_samples
+    S = np.mean(np.abs(m.fft()[0, 0, :, :, 0]) ** 2, axis=0)[: n // 2 + 1]
+    f = np.arange(S.size) / n
+    keep = (f >= 3 / T) & (f < 0.5)
+    a, b = np.polyfit(np.log(f[keep]), np.log(S[keep]), 1)
+    return f[keep], S[keep] / np.exp(b + a * np.log(f[keep]))
+
+
+def _segment_ppc(dphi, L):
+    """Pairwise phase consistency of ``dphi`` over samples in non-adjacent segments.
+
+    ``dphi`` is cut into ``M`` segments of ``L`` samples (a remainder is
+    dropped), and the value is the mean of ``cos(dphi_s - dphi_t)`` over the
+    sample pairs whose segments are neither the same nor adjacent. NaN for
+    fewer than three segments.
+    """
+    M = dphi.size // L
+    if M < 3:
+        return np.nan
+    s = np.exp(1j * dphi[: M * L]).reshape(M, L).sum(axis=1)
+    num = (np.abs(s.sum()) ** 2 - np.sum(np.abs(s) ** 2)
+           - 2 * np.sum((s[1:] * np.conj(s[:-1])).real))
+    return num / ((M * L) ** 2 - M * L * L - 2 * (M - 1) * L * L)
+
+
+class AdaptivePhaseConsistency(Undirected, Unsigned):
+    """Spectrally weighted Hilbert phase consistency (Vinck et al. 2010, NeuroImage 51, 112-122).
+
+    Each process is band-passed (zero-phase, second-order Butterworth) in
+    bands ``[f_c / 2, 3 f_c / 2]``, the upper edge capped at 0.49, with centres
+    ``f_c`` a factor ``sqrt(2)`` apart from ``max(4 / T, 0.005)`` to 0.4
+    cycles/sample, and its instantaneous phase is taken from the analytic
+    signal. In each band the phase difference ``dphi = phi_i - phi_j`` is cut
+    into segments of ``L = ceil(2 / (f_hi - f_lo))`` samples, and the pairwise
+    phase consistency is the mean of ``cos(dphi_s - dphi_t)`` over sample pairs
+    in segments that are neither the same nor adjacent, which leaves out the
+    dependence between nearby samples of a band-passed signal. The bands are
+    averaged with weights ``w(f_c)``, the mean of ``G_i(f) G_j(f)`` over the
+    band, where ``G`` is a process's multitaper power spectrum (time-bandwidth
+    product 3) divided by its log-log linear (``1/f^a``) fit over ``3 / T`` to
+    Nyquist. The weights follow the rhythmic power the
+    two processes share, so no band is fixed in advance.
+
+    Undirected and unsigned (invariant to the sign and scale of either
+    process), in [-1, 1]: about 0 under independence and 1 for a constant
+    phase lag, anti-phase included. Coupling in a rhythm that stands little
+    above either process's ``1/f`` background gets little weight. It has no
+    parameters: the bands are in cycles per sample, so the value does not
+    depend on the sampling frequency. The first and last 5% of samples are
+    left out of every band to avoid filter edge effects, and a band that then
+    holds fewer than six segments is skipped, so the lowest band used is
+    centred at about 13 cycles per record or above and slower rhythms are not
+    seen. Because sample pairs in the same or adjacent segments are left out,
+    a phase difference that drifts by about a cycle across the record reads
+    negative, more so the fewer segments a band holds. NaN for a constant
+    process, or when every band is skipped (``T < 46``).
+    """
+
+    name = "Spectrally weighted Hilbert phase consistency"
+    identifier = "ppc_hilbert_adaptive"
+    labels = ["unsigned", "spectral", "undirected"]
+
+    _FC_MIN = 0.005
+    _FC_MAX = 0.4
+    _F_TOP = 0.49
+    _MIN_SEGMENTS = 6
+
+    def _bands(self, T):
+        """``(sos, lo, hi, L)`` for each band whose trimmed series holds six segments."""
+        n = T - 2 * (T // 20)
+        bands = []
+        fc = max(4 / T, self._FC_MIN)
+        while fc <= self._FC_MAX:
+            lo, hi = fc / 2, min(1.5 * fc, self._F_TOP)
+            L = int(np.ceil(2 / (hi - lo)))
+            if n // L >= self._MIN_SEGMENTS:
+                sos = signal.butter(2, [lo, hi], btype="band", fs=1, output="sos")
+                bands.append((sos, lo, hi, L))
+            fc *= np.sqrt(2)
+        return bands
+
+    @staticmethod
+    def _process(x, bands):
+        """Flattened power spectrum and per-band phase of one process; None if constant."""
+        if np.ptp(x) == 0:
+            return None
+        x = x - x.mean()
+        T = x.size
+        trim = slice(T // 20, T - T // 20)
+        f, G = _flattened_power(x)
+        phases = [np.angle(signal.hilbert(signal.sosfiltfilt(sos, x)))[trim]
+                  for sos, *_ in bands]
+        return f, G, phases
+
+    @staticmethod
+    def _pair(a, b, bands):
+        if a is None or b is None:
+            return np.nan
+        f, Ga, pa = a
+        _, Gb, pb = b
+        G = Ga * Gb
+        num = den = 0.0
+        for k, (_, lo, hi, L) in enumerate(bands):
+            p = _segment_ppc(pa[k] - pb[k], L)
+            in_band = (f >= lo) & (f <= hi)
+            if np.isfinite(p) and in_band.any():
+                w = G[in_band].mean()
+                num += w * p
+                den += w
+        return num / den if den > 0 else np.nan
+
+    def _matrix(self, z):
+        M, T = z.shape
+        A = np.full((M, M), np.nan)
+        bands = self._bands(T)
+        if not bands:
+            return A
+        processes = [self._process(x, bands) for x in z]
+        for j in range(M):
+            for i in range(j):
+                A[i, j] = A[j, i] = self._pair(processes[i], processes[j], bands)
+        return A
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        return float(self._matrix(data.to_numpy(squeeze=True)[[i, j]])[0, 1])
+
+    @parse_multivariate
+    def multivariate(self, data):
+        return self._matrix(data.to_numpy(squeeze=True))

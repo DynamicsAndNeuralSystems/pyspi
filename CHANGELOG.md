@@ -393,6 +393,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The z-score is a significance score, not an effect size: it saturates as the coupling grows, because the surrogates' spread grows with the target's modulation.
   Time-shift surrogates cannot see coupling to a strictly periodic source, and neither normalisation removes the spurious PAC of sharp non-sinusoidal waveforms (Kramer et al. 2008, J Neurosci Methods 170:352).
   `full` bundles `mi_excess` at the band pairs (0.01-0.05, 0.15-0.4) and (0.05-0.1, 0.2-0.45); the other statistics are available by name.
+- **`ppc_hilbert_adaptive`: spectrally weighted Hilbert phase consistency** (`AdaptivePhaseConsistency` in `pyspi/statistics/spectral.py`), the pairwise phase consistency (Vinck et al. 2010) of band-passed Hilbert phases, averaged over log-spaced bands with weights from the rhythmic power the two processes share above their `1/f` backgrounds, so no band has to be chosen in advance.
+  It is undirected and unsigned, about 0 under independence and 1 for a constant phase lag, and has no parameters (bands are in cycles per sample).
+  In `full` only; not in `fast` or the `benchmarked_p*` sets until it has been timed.
 
 ### Dependencies
 
