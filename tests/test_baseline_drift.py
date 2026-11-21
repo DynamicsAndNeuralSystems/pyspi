@@ -144,6 +144,7 @@ OPTIONAL_IN_FULL = frozenset({
     "bary-sq_softdtw_max",
     "bary_dtw_max",
     "bary_euclidean_max",
+    "bary_sgddtw_corr",
     "bary_sgddtw_max",
     "bary_softdtw_max",
     "ccm_E-10_diff",

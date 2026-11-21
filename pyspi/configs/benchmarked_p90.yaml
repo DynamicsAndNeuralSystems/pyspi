@@ -323,10 +323,6 @@
       statistic: corr
       labels:
       - M09
-    - mode: sgddtw
-      statistic: corr
-      labels:
-      - M09
 
 .statistics.causal:
   ConditionalDistributionSimilarity:

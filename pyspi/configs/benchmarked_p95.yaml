@@ -371,10 +371,6 @@
       statistic: corr
       labels:
       - M09
-    - mode: sgddtw
-      statistic: corr
-      labels:
-      - M09
     - mode: softdtw
       statistic: corr
       labels:
