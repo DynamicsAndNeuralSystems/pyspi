@@ -804,11 +804,14 @@ class Calculator:
 
         - ``"full"``: every SPI.
         - ``"fast"``: all but the slowest SPIs.
-        - ``"sonnet"``: 14 representative SPIs, one per module (M01-M14).
+        - ``"sonnet"``: 14 representative SPIs, one per module (M01-M14);
+          M07 has no bundled SPI, so M14 has two.
         - ``"fabfour"``: 4 SPIs: covariance, Spearman's correlation, directed
           information and power-envelope correlation.
         - ``"benchmarked_p80"``, ``"_p90"``, ``"_p95"``, ``"_p99"``: the
-          fastest 80, 90, 95 or 99% of SPIs by measured compute cost.
+          SPIs below the 80th, 90th, 95th or 99th percentile of compute cost
+          among those timed in pyspi's compute-cost benchmark; SPIs not
+          timed there are in none of them.
     detrend : bool, optional
         Remove the least-squares line from each process. Default: False.
     zscore : bool or None, optional
