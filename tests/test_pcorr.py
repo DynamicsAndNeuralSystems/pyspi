@@ -187,7 +187,7 @@ def test_full_and_fast_configs_construct():
         cfg = yaml.safe_load(fh)[".statistics.basic"]
     assert ([c["estimator"] for c in cfg["PartialCorrelation"]["configs"]]
             == ESTIMATORS)
-    assert cfg["PartialCorrelation"]["labels"] == cfg["Precision"]["labels"]
+    assert cfg["PartialCorrelation"]["labels"] == ["undirected", "linear", "signed", "multivariate", "contemporaneous", "M14"]
 
 
 # Singular covariance: with no more samples than processes (T <= M) the

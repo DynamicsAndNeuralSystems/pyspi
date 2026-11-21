@@ -15,33 +15,6 @@
       - estimator: GraphicalLasso
       - estimator: GraphicalLassoCV
 
-  # Precision
-  Precision:
-    labels:
-      - undirected
-      - linear
-      - signed
-      - multivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-      - estimator: EmpiricalCovariance
-      - estimator: GraphicalLasso
-      - estimator: LedoitWolf
-      - estimator: OAS
-      - estimator: ShrunkCovariance
-      - estimator: EmpiricalCovariance
-        squared: True
-      - estimator: GraphicalLasso
-        squared: True
-      - estimator: LedoitWolf
-        squared: True
-      - estimator: OAS
-        squared: True
-      - estimator: ShrunkCovariance
-        squared: True
-
   # Partial correlation
   PartialCorrelation:
     labels:
