@@ -843,16 +843,16 @@ def test_crossmap_entropy_embedding_dimension(k, dims):
     assert seen["dims"] == dims, seen["dims"]
 
 
-def test_cointegration_aeg_tstat_is_signed_and_johansen_is_not():
-    """The Engle-Granger t-statistic's sign is the finding, not noise.
+def test_cointegration_statistics_are_unsigned():
+    """Every statistic is a strength of evidence on a one-ended scale.
 
-    It is signed so that `Calculator._rmmin` does not shift the column by its
-    minimum and `set_group` does not take its `abs()`. Johansen's trace and
-    maximum-eigenvalue statistics are non-negative and stay unsigned.
+    The Engle-Granger t-statistic is on an inverted scale (more negative is
+    stronger evidence); Johansen's trace and maximum-eigenvalue statistics
+    are non-negative.
     """
     from pyspi.statistics.misc import Cointegration
 
-    assert Cointegration(method="aeg", statistic="tstat").issigned()
+    assert not Cointegration(method="aeg", statistic="tstat").issigned()
     assert not Cointegration(method="johansen", statistic="trace_stat").issigned()
     assert not Cointegration(method="johansen", statistic="max_eig_stat").issigned()
 

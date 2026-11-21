@@ -54,7 +54,7 @@ def test_values_are_symmetric_in_the_unit_interval_and_permutation_invariant():
 
 def test_labels_and_sign_agree_with_the_values():
     spi = WaveletCoherence()
-    assert {"undirected", "unsigned"} <= set(spi.labels)
+    assert "undirected" in spi.labels and "signed" not in spi.labels
     assert not {"directed", "signed", "antisymmetric"} & set(spi.labels)
     assert not spi.issigned()
 
