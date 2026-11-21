@@ -205,7 +205,7 @@ class KLEntropyCalculator:
         # entropy to -inf (common in quantised data), so fail with the cause.
         if not np.all(eps > 0):
             n_tied = int(np.sum(eps == 0))
-            raise ValueError(
+            raise NotAppropriate(
                 f"Kozachenko entropy is undefined for tied observations: "
                 f"{n_tied} of {len(eps)} points have a duplicate (zero "
                 f"nearest-neighbour distance). The data is quantised or has "
@@ -319,7 +319,7 @@ def _kernel_counts(tree, pts, width, dce):
                                                 return_length=True),
                           dtype=np.float64)
     if len(pts) < 2 * dce:
-        raise ValueError(
+        raise NotAppropriate(
             f"Kernel Theiler window {dce - 1} (excluding |j - i| <= "
             f"{dce - 1}) leaves no comparison points among N={len(pts)} "
             f"observations; it needs N >= {2 * dce}.")
@@ -760,14 +760,15 @@ def _validate_ksg_sample(N, k, w, context=""):
     """
     effective = N - (2 * w + 1) if w else N - 1
     where = f" ({context})" if context else ""
-    if N < 2:
-        raise ValueError(f"KSG needs at least 2 observations, got {N}{where}.")
     if k < 1:
         raise ValueError(f"KSG needs k >= 1, got k={k}{where}.")
     if w < 0:
         raise ValueError(f"Theiler window must be >= 0, got w={w}{where}.")
+    # The series cannot support the estimate: not appropriate, not an error.
+    if N < 2:
+        raise NotAppropriate(f"KSG needs at least 2 observations, got {N}{where}.")
     if k > effective:
-        raise ValueError(
+        raise NotAppropriate(
             f"KSG k={k} exceeds the {effective} usable neighbour(s) for "
             f"N={N} observations with Theiler window w={w}{where}. Reduce k, "
             f"lengthen the series, or narrow the Theiler window."
@@ -1049,7 +1050,7 @@ def _ais_scorer(estimator, k_nn=None, w=0):
             n_eff = len(series) - 1 - (dim - 1) * delay
             try:
                 _validate_ksg_sample(n_eff, k_nn, w)
-            except ValueError:
+            except NotAppropriate:
                 # Unsupported candidates are skipped, so a valid smaller
                 # embedding is chosen when one exists.
                 return -np.inf
@@ -1078,7 +1079,7 @@ def _select_embedding(series, scorer, dim_max, tau_max):
             if np.isfinite(score) and score > best[2]:
                 best = (dim, delay, score)
     if best[0] is None:
-        raise ValueError(
+        raise NotAppropriate(
             f"No (dimension, delay) in 1..{dim_max} x 1..{tau_max} can be "
             f"scored on a series of {len(series)} observations: every "
             f"candidate leaves too few aligned samples for the estimator. "

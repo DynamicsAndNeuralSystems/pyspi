@@ -29,6 +29,7 @@ import re
 import numpy as np
 import pytest
 
+from pyspi.base import NotAppropriate
 from pyspi.data import Data
 
 T_SHORT, T_LONG = 64, 256
@@ -506,7 +507,7 @@ def test_short_records_are_refused_with_a_reason_not_a_number():
     # already succeeds, which is why the fixture is this small.
     tiny = Data(data=np.random.default_rng(0).standard_normal((3, 5)),
                 dim_order="ps")
-    with pytest.raises(ValueError, match="usable neighbour|can be scored"):
+    with pytest.raises(NotAppropriate, match="usable neighbour|can be scored"):
         it.TransferEntropy(estimator="kraskov", auto_embed_method="MAX_CORR_AIS",
                            k_search_max=3, tau_search_max=2).bivariate(
                                tiny, i=0, j=1)

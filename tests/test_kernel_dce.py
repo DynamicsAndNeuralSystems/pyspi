@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 from scipy.spatial import cKDTree
 
+from pyspi.base import NotAppropriate
 from pyspi.data import Data
 from pyspi.statistics.infotheory import (
     ConditionalEntropy,
@@ -137,7 +138,7 @@ def test_window_too_wide_for_the_series_is_refused():
     rng = np.random.default_rng(0)
     data = Data(rng.standard_normal((2, 40)), dim_order="ps", zscore=False)
     MutualInfo(estimator="kernel", dyn_corr_excl=19).bivariate(data, i=0, j=1)
-    with pytest.raises(ValueError, match="leaves no comparison points"):
+    with pytest.raises(NotAppropriate, match="leaves no comparison points"):
         MutualInfo(estimator="kernel", dyn_corr_excl=20).bivariate(data, i=0, j=1)
 
 

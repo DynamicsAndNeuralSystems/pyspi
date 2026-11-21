@@ -136,8 +136,9 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Without this, tied data give confident nonzero MI on independent series, since every kth-neighbour radius is zero; every process of the bundled `forex` dataset is tied.
   The jitter is deterministic but depends on observation order; NaN, infinite and constant series raise.
   **Every `kraskov` SPI's values can change**: 2.x ran JIDT with its seeded random dither, which 3.0 does not reproduce.
-- **KSG refuses inputs it cannot estimate from**: `k` too large for the effective sample, and negative Theiler windows; the auto-embedding search skips candidates it cannot support.
-- **Kozachenko entropy returned `-inf` on tied data** (a nearest neighbour at distance zero); it now raises with the cause named.
+- **KSG and kernel estimates the input cannot support are NaN, labelled not appropriate, with the cause recorded**: `k` too large for the effective sample, an auto-embedding search with no candidate it can score (candidates it cannot support are skipped), and a kernel Theiler window that leaves no comparison points.
+  Negative Theiler windows raise.
+- **Kozachenko entropy returned `-inf` on tied data** (a nearest neighbour at distance zero); it is now NaN, labelled not appropriate, with the cause recorded.
 - **Gaussian estimates from too few samples returned values set by the ridge.**
   A Gaussian information-theoretic SPI whose aligned samples do not exceed the dimension of its largest covariance block (for example `xme_gaussian_k10` at T ≤ 20 or `di_gaussian_n-5` at T ≤ 15) is now NaN, labelled not appropriate, with the cause recorded.
 - **Six measures advertised `kraskov` and ran Gaussian.**
