@@ -83,7 +83,10 @@ def test_one_sample_too_few_is_not_appropriate_and_names_the_numbers(name):
 def test_values_at_and_above_the_threshold_are_unchanged(name):
     make, t_min, _, expected = CASES[name]
     for T, value in zip((t_min, t_min + 1, 60), expected):
-        assert make().bivariate(_pair(T), i=0, j=1) == value, (name, T)
+        # To the drift suite's tolerance: a log-determinant differs in its
+        # last digits between BLAS builds.
+        assert make().bivariate(_pair(T), i=0, j=1) == pytest.approx(
+            value, rel=1e-9), (name, T)
 
 
 @pytest.mark.parametrize("name", ["je", "mi", "tlmi"])
