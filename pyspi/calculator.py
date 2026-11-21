@@ -461,7 +461,8 @@ def load_results(path):
 
 
 def feature_vector(table, directedness=None, include_self=False):
-    """Flatten a results table to one value per independent pairwise feature.
+    """
+    Flatten a results table to one value per independent pairwise feature.
 
     :attr:`Calculator.table` stores every SPI as a full ``M x M`` matrix. For
     an ``undirected`` SPI the lower triangle is a copy of the upper one and
@@ -544,7 +545,8 @@ def feature_vector(table, directedness=None, include_self=False):
 
 
 def _directedness_from_table(table):
-    """Recover ``{identifier: trait}`` for a table loaded from disk.
+    """
+    Recover ``{identifier: trait}`` for a table loaded from disk.
 
     ``table.attrs["run_spec"]["config"]`` names the bundled config or YAML
     path the SPIs were built from; they are instantiated again to read their
@@ -1058,7 +1060,8 @@ class Calculator:
         return long[["spi", "source", "target", "value"]].reset_index(drop=True)
 
     def feature_vector(self, include_self=False):
-        """One value per independent pairwise feature, as a ``pandas.Series``.
+        """
+        One value per independent pairwise feature, as a ``pandas.Series``.
 
         Turns :attr:`table` into features for classification or regression
         across datasets. For ``undirected`` and ``antisymmetric`` SPIs only the

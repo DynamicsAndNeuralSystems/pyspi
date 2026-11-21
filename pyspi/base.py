@@ -194,7 +194,8 @@ class Directed:
     labels = ['signed']
 
     def directedness(self):
-        """The one symmetry trait this SPI's matrix ``A`` obeys.
+        """
+        The one symmetry trait this SPI's matrix ``A`` obeys.
 
         One of ``"undirected"`` (``A[i, j] == A[j, i]``), ``"antisymmetric"``
         (``A[i, j] == -A[j, i]``), ``"directed"`` or ``"asymmetric"`` (no

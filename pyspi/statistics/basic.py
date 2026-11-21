@@ -253,7 +253,8 @@ _XCORR_MAX_LAG_FRACTION = 4
 
 
 def _xcorr_profile(data, i, j):
-    """The cached cross-correlation profile of the pair ``(i, j)``.
+    """
+    The cached cross-correlation profile of the pair ``(i, j)``.
 
     ``P[T//4 + l] = sum_t x_i[t + l] x_j[t] / (T sd_i sd_j)`` on the demeaned
     series, for lags ``l = -T//4 .. +T//4`` (odd length ``2 (T//4) + 1``, the
@@ -318,7 +319,8 @@ class CrossCorrelation(Undirected, Signed):
     which each estimate rests on few overlapping samples. The window is
     centred on lag 0 and ``r_yx(l) = r_xy(-l)``, so the result does not depend
     on the order of the pair (undirected). Signed unless ``squared=True``.
-    NaN when either series is constant.
+    NaN when either series is constant. The lag profile is cached in
+    ``data.xcorr`` and shared with ``LagResolvedCorrelation``.
 
     Parameters
     ----------
@@ -386,7 +388,8 @@ class CrossCorrelation(Undirected, Signed):
 
 
 def _acf_1e_length(data, p):
-    """First lag ``k >= 1`` at which the sample ACF of process ``p`` is below 1/e.
+    """
+    First lag ``k >= 1`` at which the sample ACF of process ``p`` is below 1/e.
 
     ``pyspi.utils.acf`` is the biased (divide-by-T) sample autocorrelation of
     the demeaned series. The search runs out to ``T // 4``; if the ACF stays at
@@ -417,7 +420,8 @@ def _round_to_lag(v, cap):
 
 
 class LagResolvedCorrelation(Directed, Signed):
-    """Directed, lag-resolved cross-correlation [1]_.
+    """
+    Directed, lag-resolved cross-correlation [1]_.
 
     Reads the lag profile that :class:`CrossCorrelation` caches in
     ``data.xcorr`` and reports where on the lag axis a pair's linear coupling
@@ -498,10 +502,10 @@ class LagResolvedCorrelation(Directed, Signed):
     max_lag : int or None, optional
         Cap on the lag window, at least 1; None uses ``T // 4``.
         Default: None.
-    tau : int or str, optional
+    tau : int, str or None, optional
         The lag of ``'onesided'``: an integer from 1 to ``L``, or ``'1e'`` for
-        the pair's correlation lengths. Only ``'onesided'`` takes it.
-        Default: 1.
+        the pair's correlation lengths; None means 1. The other statistics
+        refuse any value but None. Default: None.
     """
 
     name = "Lag-resolved cross-correlation"
@@ -563,7 +567,8 @@ class LagResolvedCorrelation(Directed, Signed):
         return L
 
     def _pair_lag(self, data, L):
-        """The pair's ``onesided`` lag or ``onesidedpeak`` window, ``f(i, j)``.
+        """
+        The pair's ``onesided`` lag or ``onesidedpeak`` window, ``f(i, j)``.
 
         ``None`` for the statistics that read the whole window.
         """
@@ -587,7 +592,8 @@ class LagResolvedCorrelation(Directed, Signed):
 
     @staticmethod
     def _lead_profile(data, i, j, L):
-        """``d[L + tau] = r_{i->j}(tau)`` for ``tau = -L .. L``.
+        """
+        ``d[L + tau] = r_{i->j}(tau)`` for ``tau = -L .. L``.
 
         The cached profile has ``P[c + l] = sum_t x_i[t + l] x_j[t] / (T s_i
         s_j)`` with ``c = T // 4``, so ``r_{i->j}(tau)``, which pairs ``x_i[t]``

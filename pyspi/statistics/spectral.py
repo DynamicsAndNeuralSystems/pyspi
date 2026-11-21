@@ -128,8 +128,10 @@ _DEFAULT_NW = 3
 
 
 def _check_time_halfbandwidth_product(nw):
-    """Validated ``NW``: a real number of at least 1.5, so that there are two or
-    more tapers (``floor(2 NW) - 1``); integral values are returned as ``int``."""
+    """
+    Validated ``NW``: a real number of at least 1.5, so that there are two or
+    more tapers (``floor(2 NW) - 1``); integral values are returned as ``int``.
+    """
     if (isinstance(nw, bool) or not isinstance(nw, numbers.Real)
             or not np.isfinite(nw) or nw < 1.5):
         raise ValueError(
@@ -243,8 +245,10 @@ class NonparametricSpectral(Unsigned):
 
     @property
     def _frequency_step(self):
-        """One multitaper bandwidth, ``2 NW`` FFT bins: estimates closer than
-        this share the tapers' main lobes and carry no independent phase."""
+        """
+        One multitaper bandwidth, ``2 NW`` FFT bins: estimates closer than
+        this share the tapers' main lobes and carry no independent phase.
+        """
         return max(1, int(round(2 * self._nw)))
 
     @property
@@ -552,6 +556,9 @@ class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     name = "Magnitude-squared coherence"
@@ -593,6 +600,9 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
     statistic : str, optional
         Only ``'mean'``, the circular mean: wrapped phase has no ordinary
         maximum. Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     # Antisymmetric in (i, j): phi(i, j) = -phi(j, i).
@@ -658,6 +668,9 @@ class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     _phase_based = True
@@ -700,6 +713,9 @@ class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     _phase_based = True
@@ -753,6 +769,9 @@ class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     statistic : str, optional
         ``'mean'`` (antisymmetric) or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     # Antisymmetric in (i, j): sign of the imaginary coherency.
@@ -800,6 +819,9 @@ class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     statistic : str, optional
         ``'mean'`` (antisymmetric) or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     # Antisymmetric in (i, j): imaginary-coherency weighted sign.
@@ -849,6 +871,9 @@ class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     _phase_based = True
@@ -904,6 +929,9 @@ class DebiasedSquaredWeightedPhaseLagIndex(
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     _phase_based = True
@@ -946,6 +974,9 @@ class PairwisePhaseConsistency(NonparametricSpectralMultivariate, Undirected):
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     _phase_based = True
@@ -1008,6 +1039,9 @@ class DirectedCoherence(NonparametricSpectralBivariate, Directed):
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     name = "Directed coherence"
@@ -1063,6 +1097,9 @@ class PartialDirectedCoherence(NonparametricSpectralBivariate, Directed):
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     name = "Partial directed coherence"
@@ -1104,6 +1141,9 @@ class GeneralizedPartialDirectedCoherence(NonparametricSpectralBivariate, Direct
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     name = "Generalized partial directed coherence"
@@ -1150,6 +1190,9 @@ class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     name = "Directed transfer function"
@@ -1203,6 +1246,9 @@ class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     name = "Direct directed transfer function"
@@ -1272,6 +1318,9 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     statistic : str, optional
         Only ``'mean'``, the name the identifiers (``psi_multitaper_mean_*``)
         give to the sum over the band. Default: ``'mean'``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     # Antisymmetric in (i, j): slope of the phase spectrum.
@@ -1352,8 +1401,8 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
     ``b = 1/(2n - 2)``, so the null z-score is ``(arctanh|C| - b) / sqrt(b)``.
     Benjamini-Hochberg is applied over the in-band frequencies, the longest
     contiguous run of significant bins is kept and thinned to one bin per
-    multitaper bandwidth (``2 NW`` FFT bins), and, if at least three bins remain,
-    the unwrapped coherency phase is regressed on frequency. The band leaves
+    multitaper bandwidth (``2 NW`` FFT bins), and, if at least three bins
+    remain, the unwrapped coherency phase is regressed on frequency. The band leaves
     out 0 Hz and ``fs / 2``, where the phase is forced to 0 or pi. The
     per-bin screen is liberal with few tapers, so false estimates are
     controlled by the run and three-point requirements. NaN when no such run
@@ -1393,6 +1442,9 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         ``fs * slope / (2 pi)``), ``'slope'`` (radians per unit of
         frequency) or ``'rvalue'`` (``|r|`` of the regression). Required in
         practice: the inherited default ``'mean'`` raises ``ValueError``.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
+        (see ``NonparametricSpectral``). Default: 3.
     """
 
     name = "Group delay"
@@ -1590,6 +1642,10 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         Largest fraction of NaN in-band frequencies a cell may have before it
         is set to NaN; a value other than 0.5 is appended to the identifier
         as ``_nanthr-<x>``. Default: 0.5.
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5,
+        for ``method='nonparametric'`` (see ``NonparametricSpectral``); the
+        parametric method refuses a value other than 3. Default: 3.
     """
 
     name = "Spectral Granger causality"

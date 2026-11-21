@@ -168,21 +168,26 @@ _N_WAVELET_FREQS = 64
 
 
 def _efolding_time(freqs, fs, n_cycles):
-    """Morlet e-folding time in samples, ``sqrt(2) sigma_t`` with
-    ``sigma_t = n_cycles / (2 pi f)`` seconds."""
+    """
+    Morlet e-folding time in samples, ``sqrt(2) sigma_t`` with
+    ``sigma_t = n_cycles / (2 pi f)`` seconds.
+    """
     return np.sqrt(2) * n_cycles / (2 * np.pi * freqs) * fs
 
 
 def _morlet_frequencies(n_observations, fs, n_cycles):
-    """Bin centres ``(k + 1/2) fs / (2 * 64)`` on ``(0, fs/2)`` whose cone of
-    influence leaves at least half the record (``T - 2 tau >= T / 2``)."""
+    """
+    Bin centres ``(k + 1/2) fs / (2 * 64)`` on ``(0, fs/2)`` whose cone of
+    influence leaves at least half the record (``T - 2 tau >= T / 2``).
+    """
     freqs = (np.arange(_N_WAVELET_FREQS) + 0.5) * (fs / 2) / _N_WAVELET_FREQS
     tau = _efolding_time(freqs, fs, n_cycles)
     return freqs[n_observations - 2 * tau >= n_observations / 2]
 
 
 def _morlet_coefficients(z, freqs, fs, n_cycles):
-    """Analytic Morlet coefficients ``W[i, f, t]`` of the rows of ``z``.
+    """
+    Analytic Morlet coefficients ``W[i, f, t]`` of the rows of ``z``.
 
     Each wavelet is a Gaussian in frequency centred on ``f`` with standard
     deviation ``f / n_cycles`` and unit peak gain, applied by FFT with zero
@@ -200,7 +205,8 @@ def _morlet_coefficients(z, freqs, fs, n_cycles):
 
 
 class WaveletCoherence(Unsigned, Undirected):
-    """Smoothed wavelet coherence of each pair, averaged over a frequency band [1]_.
+    """
+    Smoothed wavelet coherence of each pair, averaged over a frequency band [1]_.
 
     ``R^2_ij(f, t) = |S(W_i W_j*)|^2 / (S(|W_i|^2) S(|W_j|^2))`` is the local
     squared coherence of the analytic Morlet coefficients ``W(f, t)``, where
@@ -250,8 +256,8 @@ class WaveletCoherence(Unsigned, Undirected):
         Default: 1.
     fmin : float, optional
         Lower edge of the band, inclusive. Default: 0.
-    fmax : float, optional
-        Upper edge of the band, inclusive. Default: ``fs / 2``.
+    fmax : float or None, optional
+        Upper edge of the band, inclusive; None is ``fs / 2``. Default: None.
     statistic : str, optional
         Band statistic; only ``'mean'`` is accepted. Default: ``'mean'``.
     n_cycles : float, optional
@@ -325,7 +331,8 @@ class WaveletCoherence(Unsigned, Undirected):
         return scale_kernel @ a
 
     def _scale_kernel(self, freqs):
-        """Boxcar of ``scale_smoothing`` octaves, uniform in log frequency.
+        """
+        Boxcar of ``scale_smoothing`` octaves, uniform in log frequency.
 
         The grid is linear, so each frequency is weighted by ``1 / f``, the
         width of its bin in log frequency.
@@ -394,6 +401,8 @@ class WaveletCoherence(Unsigned, Undirected):
 
 
 def _integral(x):
-    """``x`` as an ``int`` when it is integral, so ``6`` and ``6.0`` name the
-    same identifier."""
+    """
+    ``x`` as an ``int`` when it is integral, so ``6`` and ``6.0`` name the
+    same identifier.
+    """
     return int(x) if float(x).is_integer() else float(x)
