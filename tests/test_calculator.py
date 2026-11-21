@@ -1,5 +1,6 @@
 from pyspi.calculator import (Calculator, Data, CalculatorFrame, CorrelationFrame,
-                              load_spis_from_yaml, resolve_config, bundled_configs)
+                              load_spis_from_yaml, load_config_yaml, resolve_config,
+                              bundled_configs)
 from pyspi.data import available_datasets, load_dataset
 import numpy as np
 import os
@@ -223,6 +224,31 @@ def test_missing_config_path_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         Calculator(config=str(tmp_path / "nope.yaml"))
 
+@pytest.mark.parametrize("name", bundled_configs())
+def test_bundled_configs_pass_strict_loading(name):
+    """No bundled config repeats a key or carries an unknown entry key."""
+    assert load_config_yaml(resolve_config(name))
+
+def test_config_misspelt_configs_key_is_refused(tmp_path):
+    """`config:` instead of `configs:` must not fall back to default parameters."""
+    cfg = tmp_path / "typo.yaml"
+    cfg.write_text(".statistics.basic:\n  SpearmanR:\n    config:\n      - squared: true\n")
+    with pytest.raises(ValueError, match="unknown key"):
+        Calculator(config=str(cfg))
+
+def test_config_repeated_module_is_refused(tmp_path):
+    """A module named twice must not silently drop its first block."""
+    cfg = tmp_path / "dup.yaml"
+    cfg.write_text(".statistics.basic:\n  Covariance:\n    configs:\n      - squared: false\n"
+                   ".statistics.basic:\n  SpearmanR:\n    configs:\n      - squared: false\n")
+    with pytest.raises(Exception, match="duplicate key"):
+        Calculator(config=str(cfg))
+
+def test_config_bare_class_entry_uses_defaults(tmp_path):
+    cfg = tmp_path / "bare.yaml"
+    cfg.write_text(".statistics.basic:\n  SpearmanR:\n")
+    assert list(load_spis_from_yaml(str(cfg))) == ["spearmanr"]
+
 @pytest.mark.parametrize("config, procs, obs", [
     ("full", 2, 100),
     ("full", 5, 100),
@@ -326,6 +352,13 @@ def test_load_valid_dataset(dataset_name):
     """Every dataset advertised by available_datasets() must actually load."""
     dataset = load_dataset(dataset_name)
     assert isinstance(dataset, Data), f"Could not load dataset: {dataset_name}"
+
+def test_load_csv_dataset(tmp_path):
+    arr = np.random.default_rng(0).standard_normal((3, 50))
+    path = tmp_path / "x.csv"
+    np.savetxt(path, arr, delimiter=",")
+    data = Data(str(path), zscore=False)
+    np.testing.assert_allclose(data.to_numpy(squeeze=True), arr)
 
 def test_load_invalid_dataset():
     """Test whether the load_dataset function throws the correct error/message when trying to load non-existent dataset."""
