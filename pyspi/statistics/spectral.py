@@ -1711,13 +1711,13 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             self._max_order = max_order
             paramstr = (f"_parametric_{statistic}_fs-{fmt_param(fs)}"
                         f"_fmin-{fmt_param(self._fmin)}"
-                        f"_fmax-{fmt_param(fmax)}_order-{order}").replace(
+                        f"_fmax-{fmt_param(fmax)}_order-{fmt_param(order)}").replace(
                 ".", "-"
             )
             # max_order bounds the order search, so it matters only when the
             # order is selected rather than given.
             if order is None and max_order != 50:
-                paramstr += f"_maxorder-{max_order}"
+                paramstr += f"_maxorder-{fmt_param(max_order)}"
         # Non-default NaN handling changes the value, so it is named; defaults
         # are not, so bundled identifiers are unchanged.
         if not ignore_nan:

@@ -579,7 +579,7 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
     def __init__(self, max_lag=1):
         self._max_lag = max_lag
-        self.identifier += f"_maxlag-{max_lag}"
+        self.identifier += f"_maxlag-{fmt_param(max_lag)}"
 
     def _prepare(self, z, lag):
         """
@@ -653,7 +653,7 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
 
     def __init__(self, max_lag=1):
         self._max_lag = max_lag
-        self.identifier += f"_maxlag-{max_lag}"
+        self.identifier += f"_maxlag-{fmt_param(max_lag)}"
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):

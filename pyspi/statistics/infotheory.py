@@ -1235,7 +1235,9 @@ class InfoTheoryBase(Unsigned):
                     f"dyn_corr_excl is not implemented for the kernel "
                     f"{type(self).__name__}, which is composed from marginal "
                     f"entropies; it applies to kernel MI, TLMI and TE.")
-            self.identifier = self.identifier + "_W-{}".format(self._kernel_width)
+            # Dots are kept here (``_W-0.5``), unlike most identifiers.
+            self.identifier = (self.identifier + "_W-"
+                               + utils.fmt_param(self._kernel_width))
             self.labels = self.labels + ["nonlinear"]
         elif estimator == "symbolic":
             if not isinstance(self, TransferEntropy):
@@ -2525,7 +2527,8 @@ class IntegratedInformation(Undirected, Unsigned):
         self._phitype = phitype
         self._delay = delay
         self._normalization = normalization
-        self.identifier += f"_{phitype}_t-{delay}_norm-{normalization}"
+        self.identifier += (f"_{phitype}_t-{delay}"
+                            f"_norm-{utils.fmt_param(normalization)}")
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):

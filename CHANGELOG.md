@@ -82,6 +82,9 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Statistics cache results on the `Data` instance, keyed by their own parameters; `set_data`, `add_process` and `remove_process` did not invalidate them, so cached statistics served the previous dataset's numbers.
   Every cache is now dropped on mutation, and `Data` copies and freezes its input.
 - **Spectral caches ignored `fs`**, so two SPIs differing only in sampling rate could share a cached spectrum.
+- **Equal parameters give equal SPI identifiers.**
+  A numpy scalar names the same SPI as the equal Python number (`fmax=np.float64(0.25)` and `fmax=0.25` both give `_fmax-0-25`), and an integral float the same as the integer (`fs=1.0` and `fs=1` both give `_fs-1`), so a config built in Python and the same config in YAML share table columns and checkpoints.
+  No bundled identifier changes.
 - **Importing pyspi reseeded NumPy's global RNG** (`pyspi.lib.ids` called `np.random.seed(1717)` at import), overriding the caller's seed.
 - **Process names** are coerced to `str` and must be unique; `Data(procnames=...)` was validated and then discarded, so custom names never reached the results table.
   `Data.add_process()` no longer creates a duplicate name.
