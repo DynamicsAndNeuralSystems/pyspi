@@ -130,24 +130,6 @@
       - biased: False
       - biased: True
 
-  # Barycenter
-  Barycenter:
-    labels:
-      - undirected
-      - nonlinear
-      - unsigned
-      - bivariate
-      - time-dependent
-      - M14
-    dependencies:
-    configs:
-      - mode: euclidean
-        statistic: max
-
-      - mode: euclidean
-        statistic: max
-        squared: True
-        
 # Causal inference statistics
 .statistics.causal:
   # Additive noise model
