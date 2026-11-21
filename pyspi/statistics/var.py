@@ -44,7 +44,8 @@ _SINGULAR_RCOND = 1e-12
 
 
 def max_feasible_order(n_processes, n_observations):
-    """The largest VAR order whose least-squares fit is well posed.
+    """
+    The largest VAR order whose least-squares fit is well posed.
 
     A VAR(p) on ``M`` processes fits ``N = T - p`` samples with ``K = M p + 1``
     regressors per equation. The cap
@@ -59,7 +60,8 @@ def max_feasible_order(n_processes, n_observations):
 
 
 def lagged_design(Z, order, start=None):
-    """Targets ``Y`` (``N x M``) and regressors ``X`` (``N x (1 + M p)``) of a VAR(p).
+    """
+    Targets ``Y`` (``N x M``) and regressors ``X`` (``N x (1 + M p)``) of a VAR(p).
 
     Rows are the samples ``t = start, ..., T-1`` (``start`` defaults to ``p``;
     order selection passes a larger one so every candidate order is fitted on
@@ -80,7 +82,8 @@ def lagged_design(Z, order, start=None):
 
 
 def fit_var(Z, order, start=None):
-    """Least-squares fit of a VAR(p) with intercept to the rows of ``Z``.
+    """
+    Least-squares fit of a VAR(p) with intercept to the rows of ``Z``.
 
     Every equation shares the regressors, so the fit is one minimum-norm
     least-squares solve by SVD. Returns a dict with
@@ -136,7 +139,8 @@ def _source_columns(source, n_processes, order):
 
 
 def restricted_rss_increase(fit, source):
-    """``RSS_restricted - RSS_full`` for every target when ``source``'s lags are dropped.
+    """
+    ``RSS_restricted - RSS_full`` for every target when ``source``'s lags are dropped.
 
     The restricted model of target ``j`` keeps the intercept and the ``p`` lags
     of every process except ``source``. For a well-conditioned design the
@@ -168,7 +172,8 @@ def restricted_rss_increase(fit, source):
 
 
 def select_order_bic(Z, max_order=DEFAULT_MAX_ORDER):
-    """The VAR order in ``1..max_order`` that minimises BIC, and the criteria.
+    """
+    The VAR order in ``1..max_order`` that minimises BIC, and the criteria.
 
     ``BIC(p) = ln det Sigma_p + (M^2 p + M) ln(N) / N``, with ``Sigma_p`` the
     maximum-likelihood residual covariance of the full VAR(p) and
@@ -209,7 +214,8 @@ def select_order_bic(Z, max_order=DEFAULT_MAX_ORDER):
 
 
 def _parse_order(order, max_order):
-    """``(order, max_order)`` checked for a VAR statistic.
+    """
+    ``(order, max_order)`` checked for a VAR statistic.
 
     ``order`` is a positive int or ``"bic"``. With ``"bic"``, ``max_order`` is a
     positive int, default ``DEFAULT_MAX_ORDER``; with a fixed order it must be
@@ -230,7 +236,8 @@ def _parse_order(order, max_order):
 
 
 class ConditionalGrangerCausality(Directed, Unsigned):
-    """Conditional (multivariate) Granger causality from one VAR of all processes [1]_.
+    """
+    Conditional (multivariate) Granger causality from one VAR of all processes [1]_.
 
     A VAR(p) with intercept is fitted to all ``M`` processes by ordinary least
     squares (the full model). For ``i -> j``, the restricted model of target
@@ -395,7 +402,8 @@ def frequency_grid(nfreq=DEFAULT_NFREQ):
 
 
 def var_frequency_response(coef, freq):
-    """``A(f) = I - sum_k A_k exp(-2 pi i f k)`` at each frequency in ``freq``.
+    """
+    ``A(f) = I - sum_k A_k exp(-2 pi i f k)`` at each frequency in ``freq``.
 
     ``coef`` is a fit's ``(p, M, M)`` lag tensor (``coef[k - 1, j, i]``:
     target ``j``, source ``i``). Returns an ``(F, M, M)`` complex array indexed
@@ -410,7 +418,8 @@ def var_frequency_response(coef, freq):
 
 
 def full_frequency_dtf(H):
-    """Full-frequency DTF of a transfer function ``H[f, target, source]`` (Korzeniewska et al. 2003).
+    """
+    Full-frequency DTF of a transfer function ``H[f, target, source]`` (Korzeniewska et al. 2003).
 
     ``eta_ij(f) = |H_ij(f)| / sqrt(sum_f sum_k |H_ik(f)|^2)``, target ``i``,
     source ``j``: each target's inflow normalised over every source and every
@@ -436,7 +445,8 @@ def _innovation_precision(fit):
 
 
 def conditional_spectrum(fit, measure, nfreq=DEFAULT_NFREQ):
-    """One conditional spectral measure of a VAR fit at every frequency of the grid.
+    """
+    One conditional spectral measure of a VAR fit at every frequency of the grid.
 
     ``measure`` is ``"pdc"`` (``|pi|^2``), ``"gpdc"`` (generalised,
     ``|pi^g|^2``), ``"pcoh"`` (squared partial coherence ``|P|^2``) or
@@ -496,7 +506,8 @@ def _band_edge(name, value):
 
 
 class ConditionalSpectral(Unsigned):
-    """Base class of the conditional spectral measures of one VAR of all processes.
+    """
+    Base class of the conditional spectral measures of one VAR of all processes.
 
     The base of ``cpdc_*``, ``cgpdc_*``, ``cddtf_*`` and ``pcohmag_*``. Each
     is read off the same OLS VAR(p) with intercept that ``cgc_*`` fits to all
@@ -576,7 +587,8 @@ class ConditionalSpectral(Unsigned):
 
     @parse_multivariate
     def spectrum(self, data):
-        """``(freq, S)``: the measure at every grid frequency, before the band statistic.
+        """
+        ``(freq, S)``: the measure at every grid frequency, before the band statistic.
 
         ``S`` is ``(nfreq, M, M)``, indexed ``[f, source, target]`` with the
         diagonal included; it is the cached array, read-only.
@@ -601,7 +613,8 @@ class ConditionalSpectral(Unsigned):
 
 
 class ConditionalPartialDirectedCoherence(ConditionalSpectral, Directed):
-    """Partial directed coherence of a VAR of all processes, ``cpdc_*`` [1]_.
+    """
+    Partial directed coherence of a VAR of all processes, ``cpdc_*`` [1]_.
 
     ``cpdc[i, j]`` (source ``i``, target ``j``) is the band statistic of
     ``|A_ji(f)|^2 / sum_k |A_ki(f)|^2``, the share of source ``i``'s outflow
@@ -648,7 +661,8 @@ class ConditionalPartialDirectedCoherence(ConditionalSpectral, Directed):
 
 
 class ConditionalGeneralizedPartialDirectedCoherence(ConditionalSpectral, Directed):
-    """Generalized PDC of a VAR of all processes, ``cgpdc_*`` [1]_.
+    """
+    Generalized PDC of a VAR of all processes, ``cgpdc_*`` [1]_.
 
     ``cgpdc[i, j]`` (source ``i``, target ``j``) is the band statistic of
     ``(|A_ji(f)|^2 / sigma_j^2) / sum_k (|A_ki(f)|^2 / sigma_k^2)``, PDC with
@@ -694,7 +708,8 @@ class ConditionalGeneralizedPartialDirectedCoherence(ConditionalSpectral, Direct
 
 
 class ConditionalDirectDirectedTransferFunction(ConditionalSpectral, Directed):
-    """Direct directed transfer function of a VAR of all processes, ``cddtf_*`` [1]_.
+    """
+    Direct directed transfer function of a VAR of all processes, ``cddtf_*`` [1]_.
 
     ``cddtf[i, j]`` (source ``i``, target ``j``) is the band statistic of
     ``eta_ji(f) |P_ji(f)|``: the full-frequency DTF from ``i`` into ``j``,
@@ -744,7 +759,8 @@ class ConditionalDirectDirectedTransferFunction(ConditionalSpectral, Directed):
 
 
 class PartialCoherence(ConditionalSpectral, Undirected):
-    """Squared partial coherence of a VAR of all processes, ``pcohmag_*`` [1]_.
+    """
+    Squared partial coherence of a VAR of all processes, ``pcohmag_*`` [1]_.
 
     ``pcohmag[i, j]`` is the band statistic of
     ``|Q_ij(f)|^2 / (Q_ii(f) Q_jj(f))``, ``Q = S(f)^{-1}`` the inverse of the

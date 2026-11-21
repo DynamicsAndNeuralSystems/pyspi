@@ -6,7 +6,8 @@ from pyspi.utils import fmt_param
 
 
 class mne(Unsigned):
-    """Base class of the Morlet-wavelet SPIs computed with mne-connectivity.
+    """
+    Base class of the Morlet-wavelet SPIs computed with mne-connectivity.
 
     Holds the sampling frequency, the band ``[fmin, fmax]`` and the statistic
     that reduces the result, and appends them to the identifier.
@@ -39,7 +40,8 @@ class mne(Unsigned):
 
 
 class PhaseSlopeIndex(mne, Undirected):
-    """Time-averaged instantaneous phase slope from Morlet wavelets.
+    """
+    Time-averaged instantaneous phase slope from Morlet wavelets.
 
     Not Nolte et al.'s phase slope index [1]_, which weights each phase
     difference by the coherence; that index is ``statistics.spectral``'s

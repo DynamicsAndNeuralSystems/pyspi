@@ -51,7 +51,8 @@ GAUSSIAN_RIDGE = 1e-8
 
 
 def _gaussian_mi_from_r(r, ridge_rel=GAUSSIAN_RIDGE):
-    """I(X;Y) = -0.5*log(1 - r^2) for jointly Gaussian X, Y, ridged.
+    """
+    I(X;Y) = -0.5*log(1 - r^2) for jointly Gaussian X, Y, ridged.
 
     The ridge is that of the entropy path on the correlation scale: noise of
     variance ridge*V on each variable attenuates the correlation by exactly
@@ -63,7 +64,8 @@ def _gaussian_mi_from_r(r, ridge_rel=GAUSSIAN_RIDGE):
 
 
 def _gaussian_pairwise_joint_entropy(Z, ridge_rel=GAUSSIAN_RIDGE):
-    """Vectorised pairwise Gaussian joint entropy, matching the scalar path.
+    """
+    Vectorised pairwise Gaussian joint entropy, matching the scalar path.
 
     Same ridge as _gaussian_log_det, so bivariate() and multivariate() cannot
     disagree.
@@ -80,7 +82,8 @@ def _gaussian_pairwise_joint_entropy(Z, ridge_rel=GAUSSIAN_RIDGE):
 
 
 def _gaussian_log_det(cov, ridge_rel=GAUSSIAN_RIDGE):
-    """log|Σ + ridge*diag(diag(Σ))|, the shared Gaussian log-determinant.
+    """
+    log|Σ + ridge*diag(diag(Σ))|, the shared Gaussian log-determinant.
 
     Every Gaussian entropy, joint entropy, conditional entropy, MI, TLMI, TE
     and AIS in this module goes through this or through `_gaussian_mi_from_r`,
@@ -112,7 +115,8 @@ def _gaussian_log_det(cov, ridge_rel=GAUSSIAN_RIDGE):
 
 
 class GaussianEntropyCalculator:
-    """Multivariate Gaussian entropy calculator.
+    """
+    Multivariate Gaussian entropy calculator.
 
     H = 0.5 * d * log(2*pi*e) + 0.5 * log|Sigma|, in nats. Same interface as
     JIDT's EntropyCalculatorMultiVariateGaussian.
@@ -144,7 +148,8 @@ class GaussianEntropyCalculator:
 
 
 class KLEntropyCalculator:
-    """Kozachenko-Leonenko nearest-neighbour entropy calculator.
+    """
+    Kozachenko-Leonenko nearest-neighbour entropy calculator.
 
     H = psi(N) - psi(1) + log(c_d) + (d/N) * sum(log(eps_i)), in nats, with
     the L2 norm and k = 1 as in JIDT. Same interface as JIDT's
@@ -189,7 +194,8 @@ class KLEntropyCalculator:
 
 
 def _gaussian_entropy_from_data(data_2d):
-    """Gaussian entropy of an (N, d) array, in nats.
+    """
+    Gaussian entropy of an (N, d) array, in nats.
 
     NaN (not -inf) when the covariance is singular after the ridge, so a
     difference such as H(X,Y) - H(Y) is NaN rather than infinite.
@@ -207,7 +213,8 @@ def _gaussian_entropy_from_data(data_2d):
 # ---------------------------------------------------------------------------
 
 class KernelEntropyCalculator:
-    """Box-kernel entropy calculator.
+    """
+    Box-kernel entropy calculator.
 
     Box (Heaviside) kernel with the L-infinity norm, as in JIDT's
     EntropyCalculatorMultiVariateKernel, whose interface it shares:
@@ -263,15 +270,18 @@ class KernelEntropyCalculator:
 
 
 def _unit_std(data, ref=None):
-    """Columns divided by the sample std of ``ref`` (default: themselves), as
-    JIDT's NORMALISE does; constant columns are kept."""
+    """
+    Columns divided by the sample std of ``ref`` (default: themselves), as
+    JIDT's NORMALISE does; constant columns are kept.
+    """
     stds = np.std(data if ref is None else ref, axis=0, ddof=1)
     stds = np.where(stds > 0, stds, 1.0)
     return data / stds[None, :]
 
 
 def _kernel_counts(tree, pts, width, dce):
-    """Box-kernel neighbour counts of each point of ``pts`` in ``tree``.
+    """
+    Box-kernel neighbour counts of each point of ``pts`` in ``tree``.
 
     ``dce`` is JIDT's kernel ``DYN_CORR_EXCL``: when positive, neighbours
     ``|j - i| < dce`` (the point itself included) do not count. That is the
@@ -290,7 +300,8 @@ def _kernel_counts(tree, pts, width, dce):
 
 
 class KernelMICalculator:
-    """Box-kernel mutual information calculator.
+    """
+    Box-kernel mutual information calculator.
 
     ``MI = mean(log(n_xy * N / (n_x * n_y)))`` in nats, where ``n_x``, ``n_y``
     and ``n_xy`` are counts within an L-infinity ball of radius
@@ -374,7 +385,8 @@ class KernelMICalculator:
 
 
 class KernelTECalculator:
-    """Box-kernel transfer entropy calculator.
+    """
+    Box-kernel transfer entropy calculator.
 
     ``TE(X -> Y) = mean(log(n_yn_yp_x * n_yp / (n_yp_x * n_yn_yp)))`` in nats,
     with a box kernel of half-width ``kernel_width`` in the L-infinity norm,
@@ -471,7 +483,8 @@ class KernelTECalculator:
 # ---------------------------------------------------------------------------
 
 def _ordinal_pattern_id(vec):
-    """Convert a vector to its ordinal pattern ID.
+    """
+    Convert a vector to its ordinal pattern ID.
 
     The ordinal pattern is the rank ordering. Maps to an integer in [0, d!).
     Uses the factorial number system (Lehmer code).
@@ -495,7 +508,8 @@ def _ordinal_pattern_id(vec):
 
 
 def _series_to_ordinal_symbols(x, k):
-    """Convert a 1D time series to a sequence of ordinal pattern symbols.
+    """
+    Convert a 1D time series to a sequence of ordinal pattern symbols.
 
     For each t, the embedding vector is [x[t], x[t-1], ..., x[t-k+1]].
     Returns integer array of symbol IDs, length T-k+1.
@@ -518,7 +532,8 @@ def _series_to_ordinal_symbols(x, k):
 
 
 class SymbolicTECalculator:
-    """Symbolic (ordinal-pattern) transfer entropy calculator.
+    """
+    Symbolic (ordinal-pattern) transfer entropy calculator.
 
     Converts source and target to ordinal patterns of length k and computes
     TE from joint symbol histograms, as in JIDT's
@@ -573,7 +588,8 @@ class SymbolicTECalculator:
         src_curr = src_symbols[:n]
 
         def _discrete_entropy(*arrs):
-            """Joint entropy of integer-valued arrays from their histogram.
+            """
+            Joint entropy of integer-valued arrays from their histogram.
 
             Counts distinct rows directly: packing the symbols into one
             integer can overflow int64 for large alphabets (k >= 10).
@@ -624,7 +640,8 @@ _TIE_SEED_SELECTION = 2
 
 
 def _tie_break(y, seed=0):
-    """Make every value of a raw series distinct with tiny fixed-seed jitter.
+    """
+    Make every value of a raw series distinct with tiny fixed-seed jitter.
 
     Each entry whose value occurs more than once gets Gaussian jitter of
     standard deviation ``1e-10 * std(y, ddof=1)``: entry ``i`` gets the ``i``-th
@@ -658,7 +675,8 @@ def _tie_break(y, seed=0):
 
 
 def _knn_condition(X):
-    """Validate KSG input and standardise each coordinate.
+    """
+    Validate KSG input and standardise each coordinate.
 
     Non-finite values and constant coordinates raise. Ties do not: callers
     apply ``_tie_break`` to raw series first. Deterministic: no rounding,
@@ -691,7 +709,8 @@ def _knn_condition(X):
 # ---------------------------------------------------------------------------
 
 def _validate_ksg_sample(N, k, w, context=""):
-    """Reject KSG settings that cannot produce a meaningful estimate.
+    """
+    Reject KSG settings that cannot produce a meaningful estimate.
 
     The estimator needs k neighbours among the points that survive the
     Theiler exclusion; otherwise it returns a finite number that estimates
@@ -714,7 +733,8 @@ def _validate_ksg_sample(N, k, w, context=""):
 
 
 def _strict_radius(epsilon):
-    """Largest representable radius strictly smaller than ``epsilon``.
+    """
+    Largest representable radius strictly smaller than ``epsilon``.
 
     ``cKDTree.query_ball_point`` includes the radius boundary. KSG estimator 1
     requires marginal distances strictly below the joint kth-neighbour radius,
@@ -729,7 +749,8 @@ _KSG_CHUNK = 1 << 21
 
 
 def _ksg_radius(tree, points, k, w):
-    """Strict radius of each point's kth nearest neighbour in the joint space.
+    """
+    Strict radius of each point's kth nearest neighbour in the joint space.
 
     With a Theiler window ``w`` the neighbours ``|j - i| <= w`` do not count.
     The nearest ``k + 2w + 2`` points always hold ``k`` that do (the point
@@ -759,7 +780,8 @@ def _ksg_radius(tree, points, k, w):
 
 
 def _ksg_counts(tree, points, radius, w):
-    """Neighbours of each point within its ``radius``, boundary included.
+    """
+    Neighbours of each point within its ``radius``, boundary included.
 
     The point itself is not a neighbour, nor is any ``|j - i| <= w``. The tree
     counts every point in the ball; the excluded ones that fell inside it are
@@ -780,7 +802,8 @@ def _ksg_counts(tree, points, radius, w):
 
 
 def _ksg_pool_digamma(N, w):
-    """KSG's ``psi(N)`` term for a neighbour pool reduced by a Theiler window.
+    """
+    KSG's ``psi(N)`` term for a neighbour pool reduced by a Theiler window.
 
     ``psi(N)`` is ``psi(m + 1)`` for a pool of ``m = N - 1`` candidate
     neighbours. The window removes ``|j - i| <= w`` from point i's pool,
@@ -829,7 +852,8 @@ def _ksg_mi_pair(x, y, k, w):
 
 
 def _ksg_mi_general(A, B, k_nn, w=0, condition=True):
-    """KSG estimator 1 MI(A; B) for A (N, dA) and B (N, dB), L-infinity norm.
+    """
+    KSG estimator 1 MI(A; B) for A (N, dA) and B (N, dB), L-infinity norm.
 
     _ksg_mi_pair for any marginal dimensions. Marginal neighbours are counted
     strictly (< eps). A Theiler window w excludes |j - i| <= w from the
@@ -906,7 +930,8 @@ def _te_build_embeddings(src, targ, k_history, k_tau, l_history, l_tau):
 
 
 def _gaussian_ais(targ, k, tau):
-    """Bias-corrected Gaussian AIS, MI(Y_future; Y_past_embedding(k, tau)).
+    """
+    Bias-corrected Gaussian AIS, MI(Y_future; Y_past_embedding(k, tau)).
 
     The criterion for auto-embedding: (k, tau) = argmax AIS. The in-sample
     log-det estimate is biased upward by the mean of its chi-squared null,
@@ -938,7 +963,8 @@ def _gaussian_ais(targ, k, tau):
 
 
 def _ksg_ais(targ, k, tau, k_nn, w=0):
-    """KSG AIS, MI(Y_future; Y_past_embedding(k, tau)), for the kraskov TE.
+    """
+    KSG AIS, MI(Y_future; Y_past_embedding(k, tau)), for the kraskov TE.
 
     The counterpart of _gaussian_ais. KSG is approximately bias-free, so the
     maximum over k is interior without a bias term (JIDT's MAX_CORR_AIS also
@@ -956,7 +982,8 @@ def _ksg_ais(targ, k, tau, k_nn, w=0):
 
 
 def _ais_scorer(estimator, k_nn=None, w=0):
-    """``f(series, dim, delay) -> score`` for the estimator that will run the TE.
+    """
+    ``f(series, dim, delay) -> score`` for the estimator that will run the TE.
 
     The source and destination embeddings are chosen by the same scorer, with
     the estimator that computes the TE: a Gaussian AIS would pick the
@@ -984,7 +1011,8 @@ def _ais_scorer(estimator, k_nn=None, w=0):
 
 
 def _select_embedding(series, scorer, dim_max, tau_max):
-    """``(dimension, delay, score)`` maximising the scorer.
+    """
+    ``(dimension, delay, score)`` maximising the scorer.
 
     Ties go to the smaller dimension and then the smaller delay: a
     lower-dimensional embedding that stores as much information is the
@@ -1027,7 +1055,8 @@ def _gaussian_te_bivariate(src, targ, k_history, k_tau, l_history, l_tau):
 
 
 def _ksg_cmi(A, B, C, k_nn, w=0, condition=True):
-    """KSG conditional mutual information I(A; B | C), Frenzel-Pompe estimator.
+    """
+    KSG conditional mutual information I(A; B | C), Frenzel-Pompe estimator.
 
     Estimates the CMI directly: the neighbour radius is fixed once in the
     joint space [A, B, C] and reused in every marginal count, so the
@@ -1114,7 +1143,8 @@ _AUTO_EMBED_DEST_ONLY = "MAX_CORR_AIS_DEST_ONLY"
 
 
 class InfoTheoryBase(Unsigned):
-    """Base class for the information-theoretic SPIs, with estimator dispatch.
+    """
+    Base class for the information-theoretic SPIs, with estimator dispatch.
 
     Every measure is in nats, whatever the estimator (JIDT reports bits for
     its kernel and symbolic estimators; divide by ln 2 to compare). The
@@ -1370,7 +1400,8 @@ class InfoTheoryBase(Unsigned):
             return H_XY - H_Y
 
     def _per_process(self, data, tag, i, compute):
-        """``compute()`` for process ``i``, cached on ``data.entropy``.
+        """
+        ``compute()`` for process ``i``, cached on ``data.entropy``.
 
         For a quantity of one series that a pairwise statistic would otherwise
         recompute for every partner. ``tag`` names it and carries every
@@ -1387,7 +1418,8 @@ class InfoTheoryBase(Unsigned):
         return data.entropy[key][i]
 
     def _resolve_theiler(self, data, i, j):
-        """Theiler (dynamic correlation exclusion) window for pair (i, j).
+        """
+        Theiler (dynamic correlation exclusion) window for pair (i, j).
 
         None gives 0 (no window), an integer that window, and "AUTO" the
         autocorrelation time ``2 * <acf(x_i), acf(x_j)>``, capped at N // 10
@@ -1414,7 +1446,8 @@ class InfoTheoryBase(Unsigned):
         return int(raw_w)
 
     def _kernel_window(self, data, i, j):
-        """JIDT's kernel ``DYN_CORR_EXCL`` for pair (i, j).
+        """
+        JIDT's kernel ``DYN_CORR_EXCL`` for pair (i, j).
 
         JIDT's kernel estimators exclude ``|j - i| < DYN_CORR_EXCL``, so
         ``w + 1`` excludes ``|j - i| <= w``, the kraskov window. With w = 0
@@ -1995,7 +2028,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
         self._calc = self._new_te_calc()
 
     def _new_te_calc(self):
-        """A TE calculator configured with this instance's embedding.
+        """
+        A TE calculator configured with this instance's embedding.
 
         Used by ``__init__`` and by ``__setstate__``, since pickling drops the
         calculator and a fresh one has the default history length of 1.
@@ -2017,7 +2051,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
     _embedding_scorer = staticmethod(_ais_scorer)
 
     def _selected_embedding(self, data, process, series, scorer, w):
-        """``(dimension, delay)`` for one series, cached on the Data object.
+        """
+        ``(dimension, delay)`` for one series, cached on the Data object.
 
         The criterion is the series' own active information storage, so the
         choice depends on the series, estimator, search bounds and Theiler
@@ -2323,7 +2358,8 @@ class DirectedInfo(CausalEntropy, Directed):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        """Directed information from process ``i`` to process ``j``.
+        """
+        Directed information from process ``i`` to process ``j``.
 
         Each term ``H(Y_i | Y^{i-1}) - H(Y_i | Y^{i-1}, X^i)`` is estimated on
         one common window of aligned samples.

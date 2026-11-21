@@ -18,7 +18,8 @@ from pyspi.utils import require_int
 
 
 def _spearman_matrix(Z):
-    """Spearman's rho between the rows of ``Z``: Pearson on average ranks.
+    """
+    Spearman's rho between the rows of ``Z``: Pearson on average ranks.
 
     Same values as ``stats.spearmanr(Z, axis=1)``, but always a matrix, and a
     constant row gives NaN only in its own row and column.
@@ -27,7 +28,8 @@ def _spearman_matrix(Z):
 
 
 class Estimators(Undirected, Signed):
-    """Base class for the SPIs read off a scikit-learn covariance fit.
+    """
+    Base class for the SPIs read off a scikit-learn covariance fit.
 
     The fit of ``estimator`` (a class in ``sklearn.covariance``) is cached as
     ``data.covariance[estimator]`` and shared by ``Covariance``, ``Precision``
@@ -90,7 +92,8 @@ class Estimators(Undirected, Signed):
         return getattr(mycov, self._kind + "_").copy()
 
     def _pseudo_inverse_rank(self, mycov):
-        """Rank of the fitted covariance if the precision is its pseudo-inverse, else None.
+        """
+        Rank of the fitted covariance if the precision is its pseudo-inverse, else None.
 
         scikit-learn sets ``precision_ = pinvh(covariance_)`` for every
         estimator except the graphical lasso, which solves for the precision
@@ -127,7 +130,8 @@ class Estimators(Undirected, Signed):
 
 
 class Covariance(Estimators):
-    """Covariance matrix of the processes from a scikit-learn estimator.
+    """
+    Covariance matrix of the processes from a scikit-learn estimator.
 
     ``A[i, j]`` is the ``(i, j)`` entry of the estimator's ``covariance_``,
     the lag-0 covariance of ``x_i`` and ``x_j``. On data z-scored by ``Data``
@@ -154,7 +158,8 @@ class Covariance(Estimators):
 
 
 class Precision(Estimators):
-    """Precision (inverse covariance) matrix of the ``M`` processes.
+    """
+    Precision (inverse covariance) matrix of the ``M`` processes.
 
     ``A[i, j]`` is the ``(i, j)`` entry of ``P = C^-1``, with ``C`` the
     covariance from the scikit-learn ``estimator`` (the graphical lasso
@@ -185,7 +190,8 @@ class Precision(Estimators):
 
 
 class PartialCorrelation(Estimators):
-    """Partial correlation [1]_.
+    """
+    Partial correlation [1]_.
 
     With ``P`` the precision (inverse covariance) matrix of the ``M``
     processes from the scikit-learn ``estimator``,
@@ -241,7 +247,8 @@ class PartialCorrelation(Estimators):
 
 
 class CrossCorrelation(Undirected, Signed):
-    """Sample cross-correlation, reduced over the lags in ``[-T // 4, T // 4]``.
+    """
+    Sample cross-correlation, reduced over the lags in ``[-T // 4, T // 4]``.
 
     ``r(l) = sum_t x[t+l] y[t] / (T sd_x sd_y)`` on the demeaned series. This
     is the biased estimator (divided by ``T``, not ``T - |l|``), as in
@@ -348,7 +355,8 @@ class CrossCorrelation(Undirected, Signed):
 
 
 class SpearmanR(Undirected, Signed):
-    """Spearman's rank correlation coefficient [1]_.
+    """
+    Spearman's rank correlation coefficient [1]_.
 
     Pearson's correlation of the ranks of ``x_i`` and ``x_j`` (average ranks
     for ties) at lag 0, as ``scipy.stats.spearmanr``. Undirected; signed, in
@@ -398,7 +406,8 @@ class SpearmanR(Undirected, Signed):
 
 
 class KendallTau(Undirected, Signed):
-    """Kendall's rank correlation coefficient tau [1]_.
+    """
+    Kendall's rank correlation coefficient tau [1]_.
 
     Kendall's tau-b [2]_ of ``x_i`` and ``x_j`` at lag 0, the default of
     ``scipy.stats.kendalltau``: the difference between the numbers of
@@ -463,7 +472,8 @@ def _xi_source_order(x):
 
 
 def _xi_target_terms(y):
-    """``(r, denominator)`` for the target ``y``.
+    """
+    ``(r, denominator)`` for the target ``y``.
 
     ``r[k] = #{j : y_j <= y_k}`` and the denominator is
     ``2 * sum_k l_k (n - l_k) / n`` with ``l_k = #{j : y_j >= y_k}``.
@@ -476,7 +486,8 @@ def _xi_target_terms(y):
 
 
 class ChatterjeeXi(Directed, Unsigned):
-    """Chatterjee's rank correlation xi [1]_.
+    """
+    Chatterjee's rank correlation xi [1]_.
 
     For a source ``X`` and a target ``Y`` of length ``n``, sort the pairs by
     ``X`` and let ``Y_(1), ..., Y_(n)`` be the targets in that order. With
@@ -571,7 +582,8 @@ class ChatterjeeXi(Directed, Unsigned):
 
 
 class LaggedCorrelation(Undirected, Signed):
-    """Symmetrised lagged correlation at lag ``tau``.
+    """
+    Symmetrised lagged correlation at lag ``tau``.
 
     ``0.5 * (corr(x_i[tau:], x_j[:-tau]) + corr(x_j[tau:], x_i[:-tau]))``: the
     mean of the correlations with each process leading the other by ``tau``

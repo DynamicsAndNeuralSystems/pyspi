@@ -120,7 +120,8 @@ CONFIG_DIR = Path(__file__).parent / "configs"
 
 
 def bundled_configs():
-    """Names of the bundled configs.
+    """
+    Names of the bundled configs.
 
     Returns
     -------
@@ -131,7 +132,8 @@ def bundled_configs():
 
 
 def resolve_config(config):
-    """Resolve a config name or path to the path of its YAML file.
+    """
+    Resolve a config name or path to the path of its YAML file.
 
     Parameters
     ----------
@@ -183,7 +185,8 @@ def _full_config_cache_buckets():
 
 
 def warn_partial_cache_buckets(spis):
-    """Warn when a config keeps only part of an expensive shared-cache group.
+    """
+    Warn when a config keeps only part of an expensive shared-cache group.
 
     Some SPI families build one expensive cached intermediate on the Data
     object and derive cheap variants from it (``ccm``, ``barycenter``). The
@@ -245,7 +248,8 @@ _DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({
 
 @functools.cache
 def _installed_versions():
-    """pyspi's version and the installed version of each runtime dependency.
+    """
+    pyspi's version and the installed version of each runtime dependency.
 
     The dependencies are pyspi's declared requirements, extras excluded.
     ``None`` marks a package that is not installed or carries no metadata.
@@ -274,7 +278,8 @@ _NPZ_SCHEMA = 2
 
 
 class Results(NamedTuple):
-    """The contents of a results ``.npz``, as :func:`load_results` returns them.
+    """
+    The contents of a results ``.npz``, as :func:`load_results` returns them.
 
     A field the file does not record is ``None``.
 
@@ -301,7 +306,8 @@ class Results(NamedTuple):
 
 
 def _frame_from_matrices(matrices, spis, procs):
-    """``(n_spis, M, M)`` -> the wide ``M x (n_spis * M)`` frame :attr:`Calculator.table` uses.
+    """
+    ``(n_spis, M, M)`` -> the wide ``M x (n_spis * M)`` frame :attr:`Calculator.table` uses.
 
     The one builder for :attr:`Calculator.table`, :attr:`Calculator.quality`
     and what :func:`load_table` / :func:`load_results` return, so their index
@@ -377,7 +383,8 @@ def _read_npz(path):
 
 
 def load_table(path):
-    """Load the results table that :meth:`Calculator.save` wrote to ``.npz``.
+    """
+    Load the results table that :meth:`Calculator.save` wrote to ``.npz``.
 
     Only ``.npz`` round-trips; ``.csv`` is a one-way export. For the per-cell
     quality codes, use :func:`load_results`.
@@ -412,7 +419,8 @@ def _table_from_parts(parts):
 
 
 def load_results(path):
-    """Load everything :meth:`Calculator.save` wrote to ``.npz``.
+    """
+    Load everything :meth:`Calculator.save` wrote to ``.npz``.
 
     A file without quality codes (schema < 2) has them derived from its values
     and ``errors``: a cell is GOOD, NaN or +/-Inf by its value, the diagonal
@@ -452,7 +460,8 @@ def load_results(path):
 
 
 class _ConfigLoader(yaml.FullLoader):
-    """FullLoader that refuses a key repeated within one mapping.
+    """
+    FullLoader that refuses a key repeated within one mapping.
 
     PyYAML keeps the last of two equal keys, so a module named twice in a
     config would silently lose its first block of SPIs.
@@ -474,7 +483,8 @@ _CONFIG_ENTRY_KEYS = ("labels", "configs", "dependencies")
 
 
 def load_config_yaml(configfile):
-    """Read an SPI config, refusing malformed ones.
+    """
+    Read an SPI config, refusing malformed ones.
 
     A key other than ``labels``, ``configs`` or ``dependencies`` in a class
     entry is refused rather than ignored, since a misspelt ``config:`` would
@@ -515,7 +525,8 @@ def load_config_yaml(configfile):
 
 
 def load_spis_from_yaml(configfile, quiet=False):
-    """Instantiate every SPI of a config.
+    """
+    Instantiate every SPI of a config.
 
     Used by :class:`Calculator` and by the parallel workers. Progress is
     logged by the ``pyspi.calculator`` logger at INFO level. Two SPIs with the
@@ -561,7 +572,8 @@ def load_spis_from_yaml(configfile, quiet=False):
 
 
 def _insert_spi(spis, spi, module_name, fcn, params):
-    """Insert an SPI, rejecting an identifier already in ``spis``.
+    """
+    Insert an SPI, rejecting an identifier already in ``spis``.
 
     The identifier names the table column and the checkpoint file.
     """
@@ -596,7 +608,8 @@ def _expand_lagged_correlation_configs(configs):
 
 
 class Calculator:
-    """Compute every SPI of a config on a multivariate time series.
+    """
+    Compute every SPI of a config on a multivariate time series.
 
     The SPIs are instantiated from the config when the Calculator is built;
     :meth:`compute` fills :attr:`table`, one ``M x M`` matrix per SPI with
@@ -706,7 +719,8 @@ class Calculator:
 
     @property
     def errors(self):
-        """``{identifier: "ExcType: message"}`` for every SPI that failed.
+        """
+        ``{identifier: "ExcType: message"}`` for every SPI that failed.
 
         A failed SPI still occupies its column in :attr:`table`, filled with
         NaN. Consult this before interpreting a table: a NaN column is
@@ -722,7 +736,8 @@ class Calculator:
 
     @property
     def pair_errors(self):
-        """``{identifier: [(source, target, "ExcType: message"), ...]}`` for failed pairs.
+        """
+        ``{identifier: [(source, target, "ExcType: message"), ...]}`` for failed pairs.
 
         A pair whose computation raised inside an SPI that otherwise succeeded
         (see :func:`pyspi.base.fill_pairwise`) is NaN in :attr:`table` and
@@ -734,7 +749,8 @@ class Calculator:
 
     @property
     def run_digest(self):
-        """Content hash of the resolved run: spec plus the input data itself.
+        """
+        Content hash of the resolved run: spec plus the input data itself.
 
         This is what a checkpoint is bound to: a checkpoint resumes only into a
         run with the same dataset, preprocessing, config, process order and
@@ -765,7 +781,8 @@ class Calculator:
 
     @property
     def run_spec(self):
-        """The resolved specification of what this Calculator computes.
+        """
+        The resolved specification of what this Calculator computes.
 
         The config it resolved to, the preprocessing applied, the dataset's
         shape and process names, the SPIs instantiated, and the versions of
@@ -832,7 +849,8 @@ class Calculator:
 
     @property
     def table(self):
-        """The results table.
+        """
+        The results table.
 
         A DataFrame with processes as rows and a ``(spi, process)`` column
         MultiIndex, so ``table[identifier]`` is that SPI's ``M x M`` matrix,
@@ -848,7 +866,8 @@ class Calculator:
 
     @property
     def quality(self):
-        """Per-cell quality codes: a ``uint8`` DataFrame shaped like :attr:`table`.
+        """
+        Per-cell quality codes: a ``uint8`` DataFrame shaped like :attr:`table`.
 
         Each cell holds a :class:`pyspi.quality.Quality` code. ``GOOD`` (0)
         means the value in :attr:`table` is a real, finite number; every other
@@ -893,7 +912,8 @@ class Calculator:
         return f'<table><tbody>{body}</tbody></table>'
 
     def to_frame(self, dropna=True):
-        """The results in long form, one row per ``(spi, source, target)``.
+        """
+        The results in long form, one row per ``(spi, source, target)``.
 
         The same values as :attr:`table`, in the shape suited to plotting,
         ``groupby`` and joins. Self-pairs are dropped.
@@ -921,7 +941,8 @@ class Calculator:
         return long[["spi", "source", "target", "value"]].reset_index(drop=True)
 
     def summary(self):
-        """An overview of the last :meth:`compute` call, for printing.
+        """
+        An overview of the last :meth:`compute` call, for printing.
 
         Returns
         -------
@@ -975,7 +996,8 @@ class Calculator:
         raise Exception("Do not set this property externally. Use the group() method.")
 
     def load_dataset(self, dataset):
-        """Load a dataset, replacing any earlier one and its results.
+        """
+        Load a dataset, replacing any earlier one and its results.
 
         Parameters
         ----------
@@ -1013,7 +1035,8 @@ class Calculator:
             np.full(shape, Quality.NOT_COMPUTED, dtype=np.uint8), self.spis, procs)
 
     def save(self, path):
-        """Write the results to a file, in the format its suffix names.
+        """
+        Write the results to a file, in the format its suffix names.
 
         ``.npz`` (recommended) stores the values as an ``(n_spis, M, M)`` array
         with the SPI and process names, and round-trips exactly through
@@ -1074,7 +1097,8 @@ class Calculator:
         mp_context=None,
         progress=True,
     ):
-        """Compute every SPI on the loaded dataset.
+        """
+        Compute every SPI on the loaded dataset.
 
         Fills :attr:`table` and :attr:`quality`, and records failures in
         :attr:`errors` and :attr:`pair_errors` and times in :attr:`timings`.
@@ -1224,7 +1248,8 @@ class Calculator:
         return table
 
     def set_group(self, classes):
-        """Assign this dataset to the class whose labels it carries.
+        """
+        Assign this dataset to the class whose labels it carries.
 
         Sets :attr:`group` to the index of the one class in ``classes`` all of
         whose labels are among :attr:`labels`, and :attr:`group_name` to its
@@ -1280,7 +1305,8 @@ class Calculator:
                 )
 
     def get_stat_labels(self):
-        """The labels of each SPI.
+        """
+        The labels of each SPI.
 
         Returns
         -------
@@ -1290,7 +1316,8 @@ class Calculator:
         return {k: v.labels for k, v in zip(self._spis.keys(), self._spis.values())}
 
     def _get_correlation_df(self, with_labels=False, rmmin=False):
-        """Spearman correlation between every pair of SPIs, over the pairs of processes.
+        """
+        Spearman correlation between every pair of SPIs, over the pairs of processes.
 
         A pair of SPIs is correlated on absolute values unless both are
         signed. With ``rmmin`` the unsigned SPIs are first shifted to a
@@ -1337,7 +1364,8 @@ def forall(func):
 
 
 class CalculatorFrame:
-    """A set of Calculators, one per dataset, run and compared together.
+    """
+    A set of Calculators, one per dataset, run and compared together.
 
     Parameters
     ----------
@@ -1391,7 +1419,8 @@ class CalculatorFrame:
 
     @staticmethod
     def from_calculator(calculator):
-        """A CalculatorFrame holding ``calculator``.
+        """
+        A CalculatorFrame holding ``calculator``.
 
         Parameters
         ----------
@@ -1407,7 +1436,8 @@ class CalculatorFrame:
         return cf
 
     def set_calculator(self, calculators):
-        """Replace the calculators of the frame (with a warning if it had any).
+        """
+        Replace the calculators of the frame (with a warning if it had any).
 
         Parameters
         ----------
@@ -1428,7 +1458,8 @@ class CalculatorFrame:
                 self.add_calculator(calc)
 
     def add_calculator(self, calc):
-        """Add calculators to the frame.
+        """
+        Add calculators to the frame.
 
         Parameters
         ----------
@@ -1460,7 +1491,8 @@ class CalculatorFrame:
         self.n_calculators = len(self.calculators.index)
 
     def init_from_list(self, datasets, names, labels, **kwargs):
-        """Add one Calculator per dataset, all built with the same arguments.
+        """
+        Add one Calculator per dataset, all built with the same arguments.
 
         Parameters
         ----------
@@ -1486,7 +1518,8 @@ class CalculatorFrame:
         self, document, detrend=False, zscore=None, n_processes=None, n_observations=None,
         normalise=None, **kwargs
     ):
-        """Add one Calculator per dataset listed in a YAML file.
+        """
+        Add one Calculator per dataset listed in a YAML file.
 
         A dataset that fails to load is skipped with a warning.
 
@@ -1566,7 +1599,8 @@ class CalculatorFrame:
         del self._calculators
 
     def merge(self, other):
-        """Add the calculators of another CalculatorFrame.
+        """
+        Add the calculators of another CalculatorFrame.
 
         Parameters
         ----------
@@ -1581,7 +1615,8 @@ class CalculatorFrame:
             self._calculators = other._calculators
 
     def compute(self, **kwargs):
-        """Compute every calculator in the frame, one dataset after another.
+        """
+        Compute every calculator in the frame, one dataset after another.
 
         For many datasets on many cores, one dataset per process (such as a
         scheduler array job) is faster than ``n_jobs > 1`` here, because SPIs
@@ -1619,7 +1654,8 @@ class CalculatorFrame:
         calc._rmmin()
 
     def get_correlation_df(self, with_labels=False, **kwargs):
-        """Spearman correlations between SPIs, over pairs of processes, per dataset.
+        """
+        Spearman correlations between SPIs, over pairs of processes, per dataset.
 
         For each dataset, every pair of SPIs is correlated across the pairs of
         processes (on absolute values unless both SPIs are signed). An unnamed
@@ -1683,7 +1719,8 @@ class CalculatorFrame:
 
 
 class CorrelationFrame:
-    """Correlations between SPIs, over pairs of processes, across datasets.
+    """
+    Correlations between SPIs, over pairs of processes, across datasets.
 
     Holds the SPI-by-SPI Spearman correlations of each dataset
     (:meth:`CalculatorFrame.get_correlation_df`), for comparing how SPIs
@@ -1781,7 +1818,8 @@ class CorrelationFrame:
         raise AttributeError("Do not directly set the dlabels attribute.")
 
     def merge(self, other):
-        """Add the datasets of another CorrelationFrame; datasets must be named.
+        """
+        Add the datasets of another CorrelationFrame; datasets must be named.
 
         Parameters
         ----------
@@ -1835,7 +1873,8 @@ class CorrelationFrame:
     def get_average_correlation(
         self, thresh=0.2, absolute=True, summary="mean", remove_insig=False
     ):
-        """The SPI-by-SPI correlation matrix summarised over datasets.
+        """
+        The SPI-by-SPI correlation matrix summarised over datasets.
 
         Parameters
         ----------
@@ -1879,7 +1918,8 @@ class CorrelationFrame:
         return ss_adj
 
     def get_feature_matrix(self, sthresh=0.8, dthresh=0.2, dropduplicates=True):
-        """The SPI-pair-by-dataset correlations, with sparse rows and columns dropped.
+        """
+        The SPI-pair-by-dataset correlations, with sparse rows and columns dropped.
 
         Parameters
         ----------
@@ -1955,7 +1995,8 @@ class CorrelationFrame:
             group[m] = CorrelationFrame._get_group(labels[m], classes, m)
 
     def set_sgroups(self, classes):
-        """Assign each SPI to the first class whose labels it carries.
+        """
+        Assign each SPI to the first class whose labels it carries.
 
         Parameters
         ----------
@@ -1972,7 +2013,8 @@ class CorrelationFrame:
         )
 
     def set_dgroups(self, classes):
-        """Assign each dataset to the first class whose labels it carries.
+        """
+        Assign each dataset to the first class whose labels it carries.
 
         Parameters
         ----------
@@ -1988,7 +2030,8 @@ class CorrelationFrame:
         )
 
     def get_dgroup_ids(self, names=None):
-        """Group indices of datasets, from :meth:`set_dgroups`.
+        """
+        Group indices of datasets, from :meth:`set_dgroups`.
 
         Parameters
         ----------
@@ -2005,7 +2048,8 @@ class CorrelationFrame:
         return [self._dgroup_ids[n] for n in names]
 
     def get_dgroup_names(self, names=None):
-        """Group names of datasets, from :meth:`set_dgroups`.
+        """
+        Group names of datasets, from :meth:`set_dgroups`.
 
         Parameters
         ----------
@@ -2022,7 +2066,8 @@ class CorrelationFrame:
         return [self._dgroup_names[i] for i in self.get_dgroup_ids(names)]
 
     def get_sgroup_ids(self, names=None):
-        """Group indices of SPIs, from :meth:`set_sgroups`.
+        """
+        Group indices of SPIs, from :meth:`set_sgroups`.
 
         Parameters
         ----------
@@ -2039,7 +2084,8 @@ class CorrelationFrame:
         return [self._sgroup_ids[n] for n in names]
 
     def get_sgroup_names(self, names=None):
-        """Group names of SPIs, from :meth:`set_sgroups`.
+        """
+        Group names of SPIs, from :meth:`set_sgroups`.
 
         Parameters
         ----------
@@ -2056,7 +2102,8 @@ class CorrelationFrame:
         return [self._sgroup_names[i] for i in self.get_sgroup_ids(names)]
 
     def relabel_spis(self, names, labels):
-        """Replace the labels of SPIs.
+        """
+        Replace the labels of SPIs.
 
         Parameters
         ----------
@@ -2074,7 +2121,8 @@ class CorrelationFrame:
                 self._slabels = {n: l}
 
     def relabel_data(self, names, labels):
-        """Replace the labels of datasets.
+        """
+        Replace the labels of datasets.
 
         Parameters
         ----------

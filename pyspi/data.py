@@ -20,7 +20,8 @@ VERBOSE = False
 
 
 def _validate_procnames(procnames, n_processes):
-    """Coerce process names to unique strings, or say why they cannot be.
+    """
+    Coerce process names to unique strings, or say why they cannot be.
 
     Names label the rows and columns of the results table, which
     ``Calculator.to_frame()`` cannot stack with duplicates, and are saved as
@@ -43,7 +44,8 @@ def _validate_procnames(procnames, n_processes):
 
 
 class Data:
-    """A multivariate time series: processes x observations x replications.
+    """
+    A multivariate time series: processes x observations x replications.
 
     Holds ``M`` processes of ``T`` observations (and ``R`` replications,
     usually 1) as a read-only array, each process optionally detrended and
@@ -155,7 +157,8 @@ class Data:
 
     @classmethod
     def _from_prepared_array(cls, arr, procnames=None, name=None):
-        """Build a Data around an already-preprocessed array, without copying.
+        """
+        Build a Data around an already-preprocessed array, without copying.
 
         Used by the parallel workers, which attach to a shared-memory block
         holding the parent's preprocessed series and only read it.
@@ -202,7 +205,8 @@ class Data:
             return [f"proc-{i}" for i in range(self.n_processes)]
 
     def _apply_preprocessing(self, data, log=False):
-        """Detrend and/or z-score along the time axis of a (p, s, r) array.
+        """
+        Detrend and/or z-score along the time axis of a (p, s, r) array.
 
         Shared by ``set_data`` and ``add_process``. Both steps act on each
         process separately, so one appended process is treated exactly as it
@@ -228,7 +232,8 @@ class Data:
         return data
 
     def _invalidate_caches(self):
-        """Drop every statistic cache held on this instance.
+        """
+        Drop every statistic cache held on this instance.
 
         Called whenever the series change: caches are keyed by parameters, not
         by the data, so one that outlived a change would serve stale values.
@@ -237,7 +242,8 @@ class Data:
             self.__dict__.pop(attr, None)
 
     def _set_internal(self, arr):
-        """Install ``arr`` as the backing store, owned and frozen.
+        """
+        Install ``arr`` as the backing store, owned and frozen.
 
         Data takes ownership: the array is copied if it is not already private,
         then marked read-only so neither the caller nor a statistic can mutate
@@ -249,7 +255,8 @@ class Data:
         self._invalidate_caches()
 
     def to_numpy(self, realisation=None, squeeze=False):
-        """The series as a read-only numpy array.
+        """
+        The series as a read-only numpy array.
 
         A view of the internal store, read-only so the statistic caches stay in
         step with the data; copy it to modify it.
@@ -282,7 +289,8 @@ class Data:
 
     @staticmethod
     def convert_to_numpy(data):
-        """Read ``data`` into a numpy array.
+        """
+        Read ``data`` into a numpy array.
 
         Parameters
         ----------
@@ -333,7 +341,8 @@ class Data:
         n_observations=None,
         verbose=False,
     ):
-        """Replace the series held by this instance.
+        """
+        Replace the series held by this instance.
 
         The array is reordered to processes x observations x replications,
         truncated, preprocessed with this instance's ``detrend`` and ``zscore``
@@ -413,7 +422,8 @@ class Data:
             )
 
     def add_process(self, proc, verbose=False):
-        """Append one process to the dataset.
+        """
+        Append one process to the dataset.
 
         The process is preprocessed as the others were. If the processes are
         named, it is named ``proc-<index>``, or the next such name not already
@@ -460,7 +470,8 @@ class Data:
             self._procnames.append(name)
 
     def remove_process(self, procs):
-        """Remove processes from the dataset.
+        """
+        Remove processes from the dataset.
 
         An index out of range is logged as an error and nothing is removed.
 
@@ -485,7 +496,8 @@ class Data:
             self._procnames = [self._procnames[i] for i in keep]
 
     def _sync_procnames(self):
-        """Drop the process names if their number differs from the processes'.
+        """
+        Drop the process names if their number differs from the processes'.
 
         Names are positional; the generated ``proc-i`` names are used instead.
         """
@@ -530,7 +542,8 @@ _DATASETS = {
 
 
 def available_datasets():
-    """The bundled example datasets.
+    """
+    The bundled example datasets.
 
     Returns
     -------
@@ -541,7 +554,8 @@ def available_datasets():
 
 
 def load_dataset(name):
-    """Load a bundled example dataset.
+    """
+    Load a bundled example dataset.
 
     Parameters
     ----------

@@ -50,7 +50,8 @@ def _auto_sakoe_radius(length):
 
 
 class PairwiseDistance(Undirected, Unsigned):
-    """Distance between two time series, treated as vectors of length T.
+    """
+    Distance between two time series, treated as vectors of length T.
 
     ``A[i, j]`` is ``d(x_i, x_j)`` for the chosen ``metric``, computed with
     scikit-learn's ``pairwise_distances``. Undirected and unsigned (zero for
@@ -101,7 +102,8 @@ class PairwiseDistance(Undirected, Unsigned):
 # Itakura-constrained DTW
 # ---------------------------------------------------------------------------
 def _itakura_mask(n, m, max_slope=2.0):
-    """``tslearn.metrics.itakura_mask(n, m, max_slope)``, vectorised.
+    """
+    ``tslearn.metrics.itakura_mask(n, m, max_slope)``, vectorised.
 
     The same arithmetic, column by column, as tslearn's numba version, without
     its per-process compilation.
@@ -138,7 +140,8 @@ def _itakura_rows(n, m):
 
 @numba.njit(cache=True, nogil=True)
 def _banded_dtw(x, y, lo, hi):
-    """tslearn's DTW recursion over row ``i``'s columns ``lo[i]:hi[i]`` only.
+    """
+    tslearn's DTW recursion over row ``i``'s columns ``lo[i]:hi[i]`` only.
 
     Each cell is ``(x_i - y_j)^2 + min(up, left, diagonal)`` in tslearn's
     order, so the value is bitwise tslearn's; cells outside the band stay at
@@ -177,7 +180,8 @@ def _centred(dist, bias):
 
 
 def _dcorr_centred(cx, cy, bias):
-    """hyppo 0.5.2's ``_dcorr`` on two `_centred` results, bit for bit.
+    """
+    hyppo 0.5.2's ``_dcorr`` on two `_centred` results, bit for bit.
 
     0 when a variance is not positive, or (biased only) the covariance is
     not; the biased ratio is square-rooted (dCor), the unbiased one is the
@@ -194,7 +198,8 @@ def _dcorr_centred(cx, cy, bias):
 
 
 def _cached_pairs(identifier, M, prepare, combine, item_bytes, directed=False):
-    """`fill_pairwise` of ``combine(prepare(i), prepare(j))`` over every pair.
+    """
+    `fill_pairwise` of ``combine(prepare(i), prepare(j))`` over every pair.
 
     Each series is prepared once per block of series it is paired within,
     and at most two blocks (about `_DCORR_CACHE_BYTES`) are held at a time.
@@ -244,7 +249,8 @@ def _euclidean_distance(v):
 
 
 def _median_gaussian_distance(v):
-    """``1 - K / max(K)`` for a Gaussian kernel ``K`` of median-heuristic width.
+    """
+    ``1 - K / max(K)`` for a Gaussian kernel ``K`` of median-heuristic width.
 
     hyppo's ``Hsic`` statistic is dcorr of these induced distances. Here each
     variable's width is the median distance between its own samples; hyppo
@@ -261,7 +267,8 @@ def _median_gaussian_distance(v):
 
 
 class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
-    """Normalised Hilbert-Schmidt Independence Criterion (HSIC) [1]_ [2]_.
+    """
+    Normalised Hilbert-Schmidt Independence Criterion (HSIC) [1]_ [2]_.
 
     The statistic of hyppo's ``Hsic``: the distance correlation (as
     `DistanceCorrelation`) of the distances ``1 - K / max(K)`` induced by a
@@ -321,7 +328,8 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
 
 
 def _row_dominance_counts(rx, ry):
-    """``c[i, j] = #{k : rx[i, k] <= rx[i, j] and ry[i, k] <= ry[i, j]}``.
+    """
+    ``c[i, j] = #{k : rx[i, k] <= rx[i, j] and ry[i, k] <= ry[i, j]}``.
 
     ``rx`` and ``ry`` are row-wise max-ranks (1..n). Offline 2-D dominance
     counting with one Fenwick tree per row, all rows at once: because ranks
@@ -364,7 +372,8 @@ _HHG_CHUNK_ENTRIES = 2**22
 
 
 def _hhg_statistic(x, y):
-    """hyppo's ``HHG().statistic(x, y)`` in O(n^2 log n) rather than O(n^3).
+    """
+    hyppo's ``HHG().statistic(x, y)`` in O(n^2 log n) rather than O(n^3).
 
     The sum over ``i != j`` of Pearson's chi-square for the 2x2 table that
     splits the other samples by ``d_x(i, .) <= d_x(i, j)`` and
@@ -400,7 +409,8 @@ def _hhg_statistic(x, y):
 
 
 class HellerHellerGorfine(Undirected, Unsigned):
-    """Heller-Heller-Gorfine independence statistic [1]_.
+    """
+    Heller-Heller-Gorfine independence statistic [1]_.
 
     For each ordered pair of time points ``(s, t)``, ``s != t``, the other
     samples are split by whether they lie within ``|x_s - x_t|`` of ``x_s``
@@ -431,7 +441,8 @@ class HellerHellerGorfine(Undirected, Unsigned):
 
 
 class DistanceCorrelation(Undirected, Unsigned):
-    """Distance correlation [1]_.
+    """
+    Distance correlation [1]_.
 
     The distance correlation of two series, each treated as one sample of
     ``T`` scalar observations (time order is ignored), from their ``T x T``
@@ -484,7 +495,8 @@ class DistanceCorrelation(Undirected, Unsigned):
 
 
 class MultiscaleGraphCorrelation(Undirected, Unsigned):
-    """Multiscale graph correlation (MGC) [1]_.
+    """
+    Multiscale graph correlation (MGC) [1]_.
 
     hyppo's ``MGC().statistic`` on the two series, each treated as one sample
     of ``T`` scalar observations (time order is ignored), with Euclidean
@@ -513,7 +525,8 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
 
 
 def _lagged_sum(test, x, y, max_lag):
-    """``sum_{l=0}^{L} (n - l)/n * S(x[l:], y[:n - l])``, as in DcorrX and MGCX.
+    """
+    ``sum_{l=0}^{L} (n - l)/n * S(x[l:], y[:n - l])``, as in DcorrX and MGCX.
 
     The cross-distance statistic of hyppo's ``DcorrX`` and ``MGCX`` as their
     docstrings define it: the present of ``x`` against the past of ``y``, i.e.
@@ -533,7 +546,8 @@ def _lagged_sum(test, x, y, max_lag):
 
 
 class CrossDistanceCorrelation(Directed, Unsigned):
-    """Cross-distance correlation (DcorrX) [1]_.
+    """
+    Cross-distance correlation (DcorrX) [1]_.
 
     ``A[i, j] = sum_{l=0}^{max_lag} (T - l)/T * dcorr(x_j[l:], x_i[:T - l])``:
     the unbiased distance correlation (as `DistanceCorrelation` with
@@ -568,8 +582,10 @@ class CrossDistanceCorrelation(Directed, Unsigned):
         self.identifier += f"_maxlag-{max_lag}"
 
     def _prepare(self, z, lag):
-        """Centred distances of ``z[lag:]`` (as target) and ``z[:n - lag]``
-        (as source), the blocks `_lagged_sum` crops."""
+        """
+        Centred distances of ``z[lag:]`` (as target) and ``z[:n - lag]``
+        (as source), the blocks `_lagged_sum` crops.
+        """
         d = _euclidean_distance(z)
         if lag == 0:
             c = _centred(d, False)
@@ -610,7 +626,8 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
 
 class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
-    """Cross-multiscale graph correlation (MGCX) [1]_.
+    """
+    Cross-multiscale graph correlation (MGCX) [1]_.
 
     As `CrossDistanceCorrelation`, with hyppo's MGC statistic (as
     `MultiscaleGraphCorrelation`) in place of the distance correlation:
@@ -648,7 +665,8 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
 
 
 class TimeWarping(Undirected, Unsigned):
-    """Base for the elastic alignment measures (DTW, soft-DTW, LCSS).
+    """
+    Base for the elastic alignment measures (DTW, soft-DTW, LCSS).
 
     A subclass sets ``_simfn(x, y, global_constraint=...)``. A
     ``global_constraint`` other than None is appended to the identifier as
@@ -680,7 +698,8 @@ class TimeWarping(Undirected, Unsigned):
 
 
 class DynamicTimeWarping(TimeWarping):
-    """Dynamic time warping (DTW) distance [1]_.
+    """
+    Dynamic time warping (DTW) distance [1]_.
 
     ``A[i, j] = sqrt(min_pi sum_{(a, b) in pi} (x_i[a] - x_j[b])^2)``, the
     minimum over warping paths ``pi`` (monotone, continuous, matched
@@ -887,7 +906,8 @@ class DynamicTimeWarping(TimeWarping):
 
 
 def _banded_lcss(x, y, global_constraint=None, eps=1.0):
-    """LCSS similarity in which only pairs inside the global band may match.
+    """
+    LCSS similarity in which only pairs inside the global band may match.
 
     The band (tslearn's own Sakoe-Chiba radius-1 or Itakura slope-2 mask)
     restricts which pairs count as matches, not where the recursion may pass
@@ -920,7 +940,8 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
 
 
 class LongestCommonSubsequence(TimeWarping):
-    """Longest common subsequence (LCSS) similarity [1]_.
+    """
+    Longest common subsequence (LCSS) similarity [1]_.
 
     Two samples match when ``|x_i[a] - x_j[b]| <= 1`` (tslearn's ``eps``,
     in the units of the data, so one standard deviation after z-scoring).
@@ -956,7 +977,8 @@ class LongestCommonSubsequence(TimeWarping):
 
 
 class SoftDynamicTimeWarping(TimeWarping):
-    """Soft dynamic time warping (soft-DTW) [1]_.
+    """
+    Soft dynamic time warping (soft-DTW) [1]_.
 
     tslearn's ``soft_dtw`` at its default ``gamma = 1``: the DTW recursion
     on squared differences with the minimum replaced by the soft minimum
@@ -999,7 +1021,8 @@ class SoftDynamicTimeWarping(TimeWarping):
 
 
 class Barycenter(Undirected, Signed):
-    """A statistic of the barycenter (average series) of the pair [1]_ [2]_ [3]_.
+    """
+    A statistic of the barycenter (average series) of the pair [1]_ [2]_ [3]_.
 
     The barycenter ``b`` of ``{x_i, x_j}`` is computed with tslearn under one
     of four geometries: Euclidean (``(x_i + x_j) / 2``), DTW (DTW barycenter
@@ -1137,7 +1160,8 @@ class Barycenter(Undirected, Signed):
 
 
 class GromovWassersteinTau(Undirected, Unsigned):
-    """Gromov-Wasserstein distance GW_tau between two time series [1]_.
+    """
+    Gromov-Wasserstein distance GW_tau between two time series [1]_.
 
     Each series becomes the planar trajectory ``(t, x_t)``; ``vec_geo_dist``
     is the vector of intrinsic (arc-length) distances of every point from the
@@ -1222,7 +1246,8 @@ class GromovWassersteinTau(Undirected, Unsigned):
 
 
 class GromovWasserstainTau(GromovWassersteinTau):
-    """Deprecated, misspelled alias of `GromovWassersteinTau`.
+    """
+    Deprecated, misspelled alias of `GromovWassersteinTau`.
 
     The identifier (``gwtau``) and the values are the same; it warns on use
     and will be removed in pyspi 4.0.
@@ -1243,7 +1268,8 @@ class GromovWasserstainTau(GromovWassersteinTau):
 # ---------------------------------------------------------------------------
 
 class CrossPairwiseDistance(Undirected, Unsigned):
-    """Smallest (or mean) root-T-normalised distance over lag shifts up to ``tau``.
+    """
+    Smallest (or mean) root-T-normalised distance over lag shifts up to ``tau``.
 
     At each lag ``t`` the two series are paired with an offset of ``t``, the
     ``t`` samples that fall off each end are repeated against the opposite

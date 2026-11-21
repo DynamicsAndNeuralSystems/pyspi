@@ -32,7 +32,8 @@ def _level_token(value):
 
 
 def _event_times(x, quantile):
-    """Onset times of the runs of ``x`` above its empirical ``quantile``.
+    """
+    Onset times of the runs of ``x`` above its empirical ``quantile``.
 
     A sample is an exceedance when ``x[t] > np.quantile(x, quantile)``; a run of
     consecutive exceedances is one event, dated at its first sample. A series
@@ -48,7 +49,8 @@ def _event_times(x, quantile):
 
 
 def _half_gaps(t):
-    """``min(t[k+1] - t[k], t[k] - t[k-1]) / 2`` for each event time ``t[k]``.
+    """
+    ``min(t[k+1] - t[k], t[k] - t[k-1]) / 2`` for each event time ``t[k]``.
 
     The first and last events have one neighbour, and the missing gap is left
     out of the minimum (it is ``inf``). A lone event gets ``inf``.
@@ -60,7 +62,8 @@ def _half_gaps(t):
 
 
 def _es_counts(t_src, h_src, t_tgt, h_tgt, max_delay=None):
-    """Directed event-synchronisation counts ``(c(tgt|src), c(src|tgt))``.
+    """
+    Directed event-synchronisation counts ``(c(tgt|src), c(src|tgt))``.
 
     ``c(tgt|src)`` is ``c(y|x)`` of ``EventSynchronisation`` with ``x`` the source:
     the number of target events that *follow* a source event within the local
@@ -112,7 +115,8 @@ def _es_counts(t_src, h_src, t_tgt, h_tgt, max_delay=None):
 
 
 class EventSynchronisation(Directed):
-    """Event synchronisation of extreme events [1]_.
+    """
+    Event synchronisation of extreme events [1]_.
 
     **Events.** Each series ``x`` is reduced to the times at which it exceeds
     its own empirical ``quantile`` (``x[t] > np.quantile(x, quantile)``, upper
@@ -268,7 +272,8 @@ class EventSynchronisation(Directed):
 
 
 class TailDependenceAsymmetry(Undirected):
-    """Asymmetry between upper and lower empirical tail dependence [1]_.
+    """
+    Asymmetry between upper and lower empirical tail dependence [1]_.
 
     With ``R_x(t)`` the rank of ``x[t]`` among the ``T`` samples (average ranks
     for ties), level ``u = quantile`` and ``k = floor((1 - u) T)``, the upper

@@ -46,7 +46,8 @@ logger = get_logger("pyspi.parallel")
 
 
 def default_mp_context() -> str:
-    """Best start method for the current platform.
+    """
+    Best start method for the current platform.
 
     fork on Linux: workers inherit the parent's already-imported modules and
     instantiated SPIs via copy-on-write, so worker startup is near-instant.
@@ -62,7 +63,8 @@ _WORKER_STATE: dict = {}
 
 
 def _attach_data(shm_name, shape, dtype_str, procnames, name):
-    """Build a Data object that views an existing shared-memory block.
+    """
+    Build a Data object that views an existing shared-memory block.
 
     The shared array is the parent's already-normalised/detrended ``_dataset._data``,
     so we bypass Data.__init__ to avoid re-applying those transforms.
@@ -82,7 +84,8 @@ _BLAS_ENV_VARS = (
 
 
 def _pin_blas_env() -> None:
-    """Force BLAS/threading env vars to 1 in the parent, before workers spawn.
+    """
+    Force BLAS/threading env vars to 1 in the parent, before workers spawn.
 
     threadpool_limits (see _pin_worker_thread_pools) pins OpenBLAS/MKL/OpenMP
     at runtime; these env vars additionally cover numba and — for spawn
@@ -97,7 +100,8 @@ def _pin_blas_env() -> None:
 
 
 def available_cores() -> int:
-    """Cores this process may actually use.
+    """
+    Cores this process may actually use.
 
     ``sched_getaffinity`` honours cgroup/cpuset pinning, so under PBS or Slurm
     this returns the cores the scheduler actually granted -- not the machine's
@@ -114,7 +118,8 @@ def available_cores() -> int:
 
 
 def resolve_n_jobs(n_jobs) -> int:
-    """Turn a user ``n_jobs`` into a worker count >= 1, joblib-style.
+    """
+    Turn a user ``n_jobs`` into a worker count >= 1, joblib-style.
 
     Positive values pass through; ``-1`` means every core this process may use
     (see :func:`available_cores`), ``-2`` all but one, and so on, floored at 1.
@@ -151,7 +156,8 @@ def _requested_threads() -> int:
 
 
 def guard_oversubscription(n_jobs: int) -> None:
-    """Warn -- or intervene -- when threads x processes exceeds the cores we hold.
+    """
+    Warn -- or intervene -- when threads x processes exceeds the cores we hold.
 
     The dangerous case is dataset-level parallelism on a cluster: many
     single-core pyspi processes, each inheriting a site-wide
@@ -203,7 +209,8 @@ _THREADPOOL_LIMITER = None  # module-global so the limiter is never GC'd
 
 
 def _pin_worker_thread_pools():
-    """Pin every nested thread/process pool to 1 so process workers don't oversubscribe.
+    """
+    Pin every nested thread/process pool to 1 so process workers don't oversubscribe.
 
     n_jobs workers each running a library that itself spawns cpu_count() threads
     = quadratic blow-up. The pools pinned: BLAS + OpenMP (numpy/scipy/sklearn),
@@ -223,7 +230,8 @@ def _pin_worker_thread_pools():
 
 def _worker_init(shm_name, shape, dtype_str, procnames, ds_name, configfile, progress_q,
                  config_bytes=None):
-    """ProcessPoolExecutor initializer. Runs once per worker.
+    """
+    ProcessPoolExecutor initializer. Runs once per worker.
 
     Re-instantiates SPIs from the configfile (some SPI classes use closures in
     ``__init__`` that aren't picklable, so we can't ship instances across the
@@ -258,7 +266,8 @@ def _worker_init(shm_name, shape, dtype_str, procnames, ds_name, configfile, pro
 
 
 def _run_task(spi_keys, checkpoint_dir):
-    """Compute a bucket of SPIs sequentially in this worker.
+    """
+    Compute a bucket of SPIs sequentially in this worker.
 
     Posts ``(key, failed)`` to the progress queue after each SPI, and returns
     the list of ``(key, SPIResult)`` pairs.
@@ -281,7 +290,8 @@ def _run_task(spi_keys, checkpoint_dir):
 
 
 class SPIResult(NamedTuple):
-    """One SPI's result, as both execution paths and resume produce it.
+    """
+    One SPI's result, as both execution paths and resume produce it.
 
     ``values`` is the ``(M, M)`` float64 matrix with NaN in every cell whose
     ``quality`` code is not ``Quality.GOOD``. ``err`` is the SPI-level error
@@ -315,7 +325,8 @@ def failed_quality(M: int) -> np.ndarray:
 
 
 def derive_quality(values, err) -> np.ndarray:
-    """Quality codes for a stored result saved without them (a file or checkpoint).
+    """
+    Quality codes for a stored result saved without them (a file or checkpoint).
 
     Codes follow the stored values (NaN, +/-Inf, finite), and the diagonal is
     NaN. If the SPI carries an error that is not one of the value-describing
@@ -336,7 +347,8 @@ def derive_quality(values, err) -> np.ndarray:
 
 
 def execute_spi(spi, data, key, M) -> SPIResult:
-    """Compute one SPI, label every cell with a quality code, and capture failures.
+    """
+    Compute one SPI, label every cell with a quality code, and capture failures.
 
     The single execution primitive shared by the serial and parallel paths, so
     both agree on what counts as a failure and on which warnings are captured.
@@ -412,7 +424,8 @@ def execute_spi(spi, data, key, M) -> SPIResult:
 
 
 def write_checkpoint(checkpoint_dir, key, S, err, quality=None, pair_errors=None):
-    """Persist one SPI result plus its sidecars.
+    """
+    Persist one SPI result plus its sidecars.
 
     ``<key>.npy`` is the commit point: a key counts as done only once it
     exists. So any previous ``<key>.npy`` is removed first, the sidecars (error,
@@ -446,7 +459,8 @@ def write_checkpoint(checkpoint_dir, key, S, err, quality=None, pair_errors=None
 
 
 def _atomic_npy_write(path: Path, arr: np.ndarray) -> None:
-    """Atomic write: numpy.save then os.replace. POSIX rename is atomic.
+    """
+    Atomic write: numpy.save then os.replace. POSIX rename is atomic.
 
     Note: ``np.save(path, arr)`` auto-appends ``.npy`` if absent — that
     rewrites our ``.npy.tmp`` to ``.npy.tmp.npy`` and breaks the rename.
@@ -459,7 +473,8 @@ def _atomic_npy_write(path: Path, arr: np.ndarray) -> None:
 
 
 def cache_bucket(spi):
-    """``(namespace, *_cache_subkey)`` -- the key that actually shares a cache.
+    """
+    ``(namespace, *_cache_subkey)`` -- the key that actually shares a cache.
 
     The one definition of "these SPIs share work", used by the scheduler here
     and by ``calculator.warn_partial_cache_buckets``. ``None`` for an SPI that
@@ -484,7 +499,8 @@ _NAMESPACE_COST = {"ccm": 292.7, "barycenter": 11.1, "spectral_bv": 0.2,
 
 
 def build_tasks(spi_keys, spis) -> list[list[str]]:
-    """Bucket SPI keys by the cache they actually share.
+    """
+    Bucket SPI keys by the cache they actually share.
 
     SPIs in one bucket form a multi-SPI task, so the cached intermediate is
     built once on the worker's Data and reused; SPIs that cache nothing become
@@ -579,7 +595,8 @@ def write_manifest(checkpoint_dir: Path, digest: str, spec: dict) -> None:
 
 
 def checkpoint_owner_matches(checkpoint_dir: Path, digest: str):
-    """Return (matches, reason). A directory with no manifest is unowned.
+    """
+    Return (matches, reason). A directory with no manifest is unowned.
 
     A directory that holds results but no manifest is a mismatch: nothing
     records which run wrote them.
@@ -605,7 +622,8 @@ def checkpoint_owner_matches(checkpoint_dir: Path, digest: str):
 
 
 def _read_checkpoint_quality(checkpoint_dir: Path, key, arr, err, M):
-    """The stored quality codes for ``key``, or codes derived from its values.
+    """
+    The stored quality codes for ``key``, or codes derived from its values.
 
     A quality sidecar is used only if it has the right shape and agrees with
     the values (GOOD exactly where the value is finite); one that disagrees is
@@ -638,7 +656,8 @@ def _read_checkpoint_pairs(checkpoint_dir: Path, key, quality):
 
 
 def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool = True):
-    """Return (done_results, remaining_keys).
+    """
+    Return (done_results, remaining_keys).
 
     done_results: dict[key] -> SPIResult (no warnings, zero elapsed time).
     A key is considered done if ``<key>.npy`` exists and has shape (M, M).

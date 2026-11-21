@@ -24,7 +24,8 @@ from pyspi.utils import fmt_param
 
 
 class Cointegration(Directed, Unsigned):
-    """Cointegration test statistic of a pair, Johansen [1]_ or Engle-Granger [2]_.
+    """
+    Cointegration test statistic of a pair, Johansen [1]_ or Engle-Granger [2]_.
 
     ``method='johansen'`` fits a vector error-correction model (VECM) to the
     pair with statsmodels' ``coint_johansen`` and reports its trace or
@@ -179,7 +180,8 @@ class Cointegration(Directed, Unsigned):
 
 
 class LinearModel(Directed, Unsigned):
-    """Mean squared error of a linear regression of the column on the row.
+    """
+    Mean squared error of a linear regression of the column on the row.
 
     ``A[i, j]`` fits process ``j`` on process ``i`` with the scikit-learn
     linear model ``model`` and returns the in-sample mean squared error of the
@@ -219,7 +221,8 @@ class LinearModel(Directed, Unsigned):
 
 
 class GPModel(Directed, Unsigned):
-    """Gaussian process regression of the column on the row [1]_.
+    """
+    Gaussian process regression of the column on the row [1]_.
 
     ``A[i, j]`` is the leave-one-out mean squared error of a Gaussian process
     that predicts ``x_j`` from ``x_i`` (lower is better; about 1 for an
@@ -272,7 +275,8 @@ class GPModel(Directed, Unsigned):
 
 
 class PowerEnvelopeCorrelation(Undirected, Unsigned):
-    """Correlation of the amplitude envelopes of a pair [1]_.
+    """
+    Correlation of the amplitude envelopes of a pair [1]_.
 
     The envelope of each series is the modulus of its analytic signal
     (Hilbert transform), and ``A[i, j]`` is the Pearson correlation of the
@@ -334,7 +338,8 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
         return adj
 
 class InterDependenceScore(Undirected, Unsigned):
-    """Interdependence score (IDS) of a pair, from correlations of kernel features.
+    """
+    Interdependence score (IDS) of a pair, from correlations of kernel features.
 
     Each series is mapped to the first ``terms`` terms of the Taylor expansion
     of a Gaussian kernel, ``exp(-b x^2) x^k / sqrt(k!)`` for
@@ -397,7 +402,8 @@ _EDGE_TOPSHARE_NULL = {}
 
 
 def _edge_gauss_topshare_point(rho, frac):
-    """Gaussian topshare null at one correlation ``rho`` in [0, 1].
+    """
+    Gaussian topshare null at one correlation ``rho`` in [0, 1].
 
     For ``e = x y`` with ``(x, y)`` standard bivariate Gaussian of correlation
     ``rho``, returns ``E[e 1{|e| > q}] / E|e|`` where ``P(|e| > q) = frac``.
@@ -434,7 +440,8 @@ def _edge_gauss_topshare_point(rho, frac):
 
 
 def _edge_gauss_topshare(r, frac):
-    """Gaussian topshare null, vectorised over ``r`` (odd in ``r``).
+    """
+    Gaussian topshare null, vectorised over ``r`` (odd in ``r``).
 
     Tabulated once per process and ``frac`` on 129 nodes uniform in
     ``theta = arcsin|r|`` (smooth through ``|r| -> 1``, where the null has a
@@ -455,7 +462,8 @@ def _edge_gauss_topshare(r, frac):
 
 
 class EdgeTimeSeries(Undirected, Signed):
-    r"""Coupling nonstationarity from the edge time series of a pair [1]_ [2]_.
+    r"""
+    Coupling nonstationarity from the edge time series of a pair [1]_ [2]_.
 
     The edge time series of a pair is the frame-wise product of the z-scored
     series, ``e_t = z_x(t) z_y(t)``. Its mean is ``c r`` (below), so it

@@ -30,7 +30,8 @@ def parse_univariate(function):
     return parsed_function
 
 def parse_bivariate(function):
-    """Let ``bivariate`` take two arrays, or a ``Data`` and the indices ``i``, ``j``.
+    """
+    Let ``bivariate`` take two arrays, or a ``Data`` and the indices ``i``, ``j``.
 
     With two processes, ``i`` and ``j`` default to 0 and 1; otherwise both must
     be given, as keywords. ``inplace=False`` works on a copy of the ``Data``.
@@ -108,7 +109,8 @@ _PAIR_FAILURES: ContextVar = ContextVar("pyspi_pair_failures", default=None)
 
 @contextlib.contextmanager
 def collect_pair_failures():
-    """Collect the pair failures that `fill_pairwise` reports inside the block.
+    """
+    Collect the pair failures that `fill_pairwise` reports inside the block.
 
     Yields a list that fills with ``(i, j, message)`` tuples, one per matrix
     cell whose value could not be computed (both cells of a mirrored pair).
@@ -128,7 +130,8 @@ def _report_pair_failure(i, j, err):
 
 
 def fill_pairwise(identifier, A, pairs, compute, mirror=False):
-    """Evaluate ``compute(i, j)`` into ``A[i, j]`` for each pair, isolating failures.
+    """
+    Evaluate ``compute(i, j)`` into ``A[i, j]`` for each pair, isolating failures.
 
     A pair whose estimate is undefined (e.g., tied observations for a
     Kozachenko-Leonenko entropy, or a singular fit) raises inside ``compute``.
@@ -170,7 +173,8 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
 
 
 class Directed:
-    """Base class of the SPIs: a directed statistic, ``A[i, j]`` with row = source.
+    """
+    Base class of the SPIs: a directed statistic, ``A[i, j]`` with row = source.
 
     A subclass defines ``bivariate`` (one pair) or ``multivariate`` (the whole
     ``M x M`` matrix); the default ``multivariate`` evaluates ``bivariate`` for
@@ -222,7 +226,8 @@ class Directed:
         return None
 
 class Undirected(Directed):
-    """Base class of the undirected SPIs, with ``A[i, j] == A[j, i]``.
+    """
+    Base class of the undirected SPIs, with ``A[i, j] == A[j, i]``.
 
     Runs ``bivariate`` once per unordered pair and mirrors the value, so a
     subclass need only define ``bivariate``.
@@ -237,7 +242,8 @@ class Undirected(Directed):
 
     @parse_multivariate
     def multivariate(self,data):
-        """``bivariate(i, j)`` for each pair ``i < j``, mirrored onto ``(j, i)``.
+        """
+        ``bivariate(i, j)`` for each pair ``i < j``, mirrored onto ``(j, i)``.
 
         Each unordered pair is evaluated once. A failed pair is NaN in both
         cells, with an error reported for both and counted once in the warning;

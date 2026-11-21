@@ -9,7 +9,8 @@ import yaml
 
 
 def require_int(name, value, minimum=1):
-    """Check that an SPI parameter is an integer of at least ``minimum``.
+    """
+    Check that an SPI parameter is an integer of at least ``minimum``.
 
     Used for every parameter that counts samples (histories, delays,
     neighbour counts, lag windows). Unlike ``int(value)``, it refuses a
@@ -42,7 +43,8 @@ def require_int(name, value, minimum=1):
 
 
 def require_positive_float(name, value):
-    """Check that an SPI parameter is a strictly positive, finite real number.
+    """
+    Check that an SPI parameter is a strictly positive, finite real number.
 
     The companion of :func:`require_int` for continuous parameters such as
     kernel bandwidths. It refuses a ``bool``, a string, NaN and Inf.
@@ -81,7 +83,8 @@ def require_positive_float(name, value):
 
 
 def acf(x, mode='positive'):
-    """Sample autocorrelation function of a series, computed by FFT.
+    """
+    Sample autocorrelation function of a series, computed by FFT.
 
     The series is demeaned and divided by its standard deviation, and the
     autocorrelation is normalised to 1 at lag 0 (the biased estimator).
@@ -123,7 +126,8 @@ def acf(x, mode='positive'):
     return np.concatenate([acf_full[::-1], acf_full[1:]])
 
 def swap_chars(s, i_1, i_2):
-    """Swap two characters of a string.
+    """
+    Swap two characters of a string.
 
     Parameters
     ----------
@@ -147,7 +151,8 @@ def swap_chars(s, i_1, i_2):
     return ''.join([s[0:i_1], s[i_2], s[i_1+1:i_2], s[i_1], s[i_2+1:]])
 
 def convert_mdf_to_ddf(df):
-    """Reshape SPI-SPI correlations from one block per dataset to one column per dataset.
+    """
+    Reshape SPI-SPI correlations from one block per dataset to one column per dataset.
 
     Parameters
     ----------
@@ -173,7 +178,8 @@ def convert_mdf_to_ddf(df):
     return ddf
 
 def filter_spis(keywords, output_name = None, configfile= None):
-    """Write a config of the SPIs that carry every one of the given labels.
+    """
+    Write a config of the SPIs that carry every one of the given labels.
 
     Each SPI of the source config is instantiated and kept if its labels
     (after the config's own labels are merged in) include all ``keywords``.
@@ -316,7 +322,8 @@ def _print_timing_summary(calc, n_slowest=5):
 
 
 def inspect_calc_results(calc):
-    """Print a summary of a computed Calculator's results.
+    """
+    Print a summary of a computed Calculator's results.
 
     SPIs are counted as successful, "NaNs" (no good off-diagonal value) or
     "Partial NaNs" (some), from ``calc.quality``. Each SPI listed under the
@@ -396,7 +403,8 @@ def inspect_calc_results(calc):
 
 
 def fmt_param(x):
-    """Format a parameter value for an SPI identifier, losslessly.
+    """
+    Format a parameter value for an SPI identifier, losslessly.
 
     Identifiers name table columns and checkpoint files, so two different
     values must never format alike. A float is formatted with ``repr``, the

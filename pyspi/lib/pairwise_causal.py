@@ -95,7 +95,8 @@ def _fast_hsic_test_gamma(X, Y, sig=(-1, -1), maxpnt=200):
 
 
 def normalized_hsic(x, y):
-    """HSIC between standardised `x` and `y`; lower means more independent.
+    """
+    HSIC between standardised `x` and `y`; lower means more independent.
 
     cdt's biased statistic ``tr(K H L H) / m``, with Gaussian kernels of
     median-heuristic width, on at most 200 evenly spaced samples.
@@ -135,7 +136,8 @@ def _discretized_values(x, ffactor, maxdev):
 
 
 def _discretized_sequence(x, ffactor, maxdev, norm=True):
-    """x binned at ``1/ffactor`` standard deviations and clipped at ``maxdev``.
+    """
+    x binned at ``1/ffactor`` standard deviations and clipped at ``maxdev``.
 
     With ``norm``, a discrete x (no more distinct values than levels) is
     returned unchanged; otherwise x is standardised, then restandardised on
@@ -154,7 +156,8 @@ def _discretized_sequence(x, ffactor, maxdev, norm=True):
 
 
 def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12, min_conditionals=0):
-    """Spread of P(y | x) across x-bins (CDS); lower favours x -> y.
+    """
+    Spread of P(y | x) across x-bins (CDS); lower favours x -> y.
 
     The statistic is the spread of P(y | x = a) across the x-bins ``a``
     holding more than ``minc`` points.
@@ -231,7 +234,8 @@ def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12, min_conditionals=0):
 # ---------------------------------------------------------------------------
 
 def reci_score(x, y, degree=3):
-    """Mean squared error of a monomial fit of y on x, both min-max scaled.
+    """
+    Mean squared error of a monomial fit of y on x, both min-max scaled.
 
     The polynomial columns for x and x**2 are zeroed (the intercept is fitted
     by `LinearRegression`), so at the default degree=3 the fit is the paper's
@@ -274,7 +278,8 @@ def _eval_entropy(x):
 
 
 def _integral_approx_estimator(x, y):
-    """Slope-based IGCI (Daniusis et al. 2010); > 0 favours x -> y.
+    """
+    Slope-based IGCI (Daniusis et al. 2010); > 0 favours x -> y.
 
     ``a`` and ``b`` are about (m-1) * C_{X->Y} and (m-1) * C_{Y->X}, and the
     paper infers X -> Y when C_{X->Y} < C_{Y->X}, so the score is ``b - a``.
@@ -293,7 +298,8 @@ def _integral_approx_estimator(x, y):
 
 
 def igci_score(x, y, ref_measure="gaussian", estimator="entropy"):
-    """Entropy (or integral-approximation) asymmetry; > 0 favours x -> y.
+    """
+    Entropy (or integral-approximation) asymmetry; > 0 favours x -> y.
 
     Parameters
     ----------

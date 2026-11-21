@@ -25,7 +25,8 @@ _ANM_ALPHA = 1e-10
 
 
 def _anm_scores(x, ys):
-    """``normalized_hsic(residual, x)`` for the GP regression of each y on x.
+    """
+    ``normalized_hsic(residual, x)`` for the GP regression of each y on x.
 
     The regression is ``GaussianProcessRegressor(kernel=_ANM_KERNEL,
     optimizer=None).fit(x, y).predict(x)``, the posterior mean at the training
@@ -51,7 +52,8 @@ def _anm_scores(x, ys):
 
 
 class AdditiveNoiseModel(Directed, Unsigned):
-    """Additive-noise-model (ANM) score, row (cause) -> column (effect) [1]_.
+    """
+    Additive-noise-model (ANM) score, row (cause) -> column (effect) [1]_.
 
     ``A[i, j]`` is the HSIC [2]_ between ``x_i`` and the residual of a
     Gaussian-process regression of ``x_j`` on ``x_i``. If
@@ -110,7 +112,8 @@ class AdditiveNoiseModel(Directed, Unsigned):
 
 
 class ConditionalDistributionSimilarity(Directed, Unsigned):
-    """Conditional distribution similarity (CDS) score, row -> column [1]_.
+    """
+    Conditional distribution similarity (CDS) score, row -> column [1]_.
 
     Row = cause, column = effect. Both series are standardised and binned at
     half a standard deviation, clipped at three (13 levels). For every bin of
@@ -151,7 +154,8 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
 
 
 class RegressionErrorCausalInference(Directed, Unsigned):
-    """Regression-error-based causal inference (RECI), row -> column [1]_.
+    """
+    Regression-error-based causal inference (RECI), row -> column [1]_.
 
     Row = cause, column = effect. ``A[i, j]`` is the mean squared error of
     the least-squares fit ``x_j ~ a x_i^3 + b``, with both series first
@@ -183,7 +187,8 @@ class RegressionErrorCausalInference(Directed, Unsigned):
 
 
 class InformationGeometricCausalInference(Directed, Signed):
-    """Information-geometric causal inference (IGCI) [1]_ [2]_.
+    """
+    Information-geometric causal inference (IGCI) [1]_ [2]_.
 
     ``A[i, j] = H(x_i) - H(x_j)``, the difference between the entropies of
     the two standardised series (IGCI with a Gaussian reference measure),
@@ -225,7 +230,8 @@ class InformationGeometricCausalInference(Directed, Signed):
 
 
 class InformationGeometricConditionalIndependence(InformationGeometricCausalInference):
-    """Deprecated alias of `InformationGeometricCausalInference`.
+    """
+    Deprecated alias of `InformationGeometricCausalInference`.
 
     The name misdescribes IGCI, which tests no conditional independence. The
     identifier (``igci``) and the values are the same; it warns on use and
@@ -245,7 +251,8 @@ class InformationGeometricConditionalIndependence(InformationGeometricCausalInfe
 
 
 def _optimal_embedding_dimension(df, column, lib_pred, max_e=10):
-    """E in [1, max_e] maximising simplex-projection skill, computed serially.
+    """
+    E in [1, max_e] maximising simplex-projection skill, computed serially.
 
     The serial equivalent of ``pyEDM.EmbedDimension``: it runs
     ``pyEDM.Simplex`` for each E (as ``PoolFunc.EmbedDimSimplexFunc`` does in
@@ -270,7 +277,8 @@ def _optimal_embedding_dimension(df, column, lib_pred, max_e=10):
 
 
 def _ccm_library_sizes(N, E, nlibs=21):
-    """``nlibs + 1`` library sizes from ``ceil(2E/10)*10`` to ``floor((N-E-1)/10)*10``.
+    """
+    ``nlibs + 1`` library sizes from ``ceil(2E/10)*10`` to ``floor((N-E-1)/10)*10``.
 
     Inclusive at both ends; fewer (the caller NaN-pads) when the span is under
     ``nlibs``.
@@ -298,7 +306,8 @@ def _pearson(predictions, actuals):
 
 
 def _cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=42, tp=0):
-    """Cross-map skill of one variable's shadow manifold against several targets.
+    """
+    Cross-map skill of one variable's shadow manifold against several targets.
 
     Returns ``(len(targets), len(lib_sizes))``: entry ``[t, l]`` is the mean,
     over ``sample`` random libraries of ``lib_sizes[l]`` points drawn without
@@ -351,7 +360,8 @@ def _cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=42, tp=0):
 
 
 def _shadow_manifold(library, targets, E, tp):
-    """Delay embedding of ``library`` and the targets ``tp`` steps ahead of it.
+    """
+    Delay embedding of ``library`` and the targets ``tp`` steps ahead of it.
 
     Row r of ``embed`` is ``(x(t), x(t-1), ..., x(t-E+1))`` for ``t =
     rows[r]``, and row r of each ``actuals`` entry is ``y(t + tp)``; ``rows``
@@ -370,7 +380,8 @@ def _shadow_manifold(library, targets, E, tp):
 
 
 def _simplex_rhos(dist, neighbours, k, actuals, candidates=None):
-    """Simplex cross-map skill of every target for one random library.
+    """
+    Simplex cross-map skill of every target for one random library.
 
     ``dist`` and ``neighbours`` are ``(n_points, q)``, each row sorted by
     distance, ``neighbours`` holding embedding-row indices. The first ``k``
@@ -423,7 +434,8 @@ def _simplex_rhos(dist, neighbours, k, actuals, candidates=None):
 
 
 def _cross_map_skill_dense(library, targets, E, L, sample=100, seed=42, tp=0):
-    """``_cross_map_skill`` at the single library size ``L``, one KD-tree query in all.
+    """
+    ``_cross_map_skill`` at the single library size ``L``, one KD-tree query in all.
 
     Returns ``(len(targets),)``, equal to
     ``_cross_map_skill(library, targets, E, [L], sample, seed, tp)[:, 0]``
@@ -483,7 +495,8 @@ def _ccm_store(data, key, value):
 
 
 def _ccm_embedding(data, E, procs=None):
-    """Embedding dimension of each process in ``procs`` (default: all), as ints.
+    """
+    Embedding dimension of each process in ``procs`` (default: all), as ints.
 
     A fixed ``E`` is returned for every process. ``E=None`` gives each process
     its simplex-optimal dimension (``_optimal_embedding_dimension`` over E =
@@ -520,7 +533,8 @@ def _ccm_embedding(data, E, procs=None):
 
 
 def _ccm_curves(z, embedding, nlibs=_CCM_NLIBS):
-    """CCM skill curves ``(P, P, nlibs + 1)`` of the processes ``z`` (P, N).
+    """
+    CCM skill curves ``(P, P, nlibs + 1)`` of the processes ``z`` (P, N).
 
     ``[s, t, l]`` is "t xmap s" (the shadow manifold of t recovering s) at the
     l-th library size of ``_ccm_library_sizes(N, E_st)``, NaN-padded past the
@@ -562,7 +576,8 @@ def _ccm_log_library_sizes(embedding, N, nlibs=_CCM_NLIBS):
 
 
 def _ccm_convergence(curves):
-    """Last finite skill minus first finite skill along the library axis.
+    """
+    Last finite skill minus first finite skill along the library axis.
 
     NaN where fewer than two library sizes have a finite skill.
     """
@@ -577,7 +592,8 @@ def _ccm_convergence(curves):
 
 
 def _ccm_slope(curves, log_L):
-    """OLS slope of skill on ``ln L`` over the library sizes where both are finite.
+    """
+    OLS slope of skill on ``ln L`` over the library sizes where both are finite.
 
     NaN where fewer than two such sizes.
     """
@@ -594,7 +610,8 @@ def _ccm_slope(curves, log_L):
 
 
 class ConvergentCrossMapping(Directed, Signed):
-    """Convergent cross-mapping skill, row (source) -> column (target) [1]_.
+    """
+    Convergent cross-mapping skill, row (source) -> column (target) [1]_.
 
     ``A[i, j]`` is read off the skill with which the shadow manifold (delay
     embedding) of ``x_j`` recovers ``x_i``, which [1]_ reads as ``i`` driving
@@ -728,7 +745,8 @@ class ConvergentCrossMapping(Directed, Signed):
 
 def _lagged_ccm_skill(z, embedding, max_lag, nlibs=_CCM_NLIBS, sample=100,
                       seed=42):
-    """Cross-map skill by prediction horizon, ``(P, P, 2 * max_lag + 1)``.
+    """
+    Cross-map skill by prediction horizon, ``(P, P, 2 * max_lag + 1)``.
 
     ``[s, t, max_lag + tp]`` is "t xmap s" at horizon ``tp``: the shadow
     manifold of t at time u estimating ``s[u + tp]``, at the largest library
@@ -758,7 +776,8 @@ def _lagged_ccm_skill(z, embedding, max_lag, nlibs=_CCM_NLIBS, sample=100,
 
 
 class LaggedConvergentCrossMapping(Directed, Signed):
-    """Lagged convergent cross-mapping, row (source) -> column (target) [1]_.
+    """
+    Lagged convergent cross-mapping, row (source) -> column (target) [1]_.
 
     [1]_ extends CCM with a cross-map lag: the shadow manifold of the library
     variable at time t estimates the other variable at time ``t + Tp``. For
@@ -876,7 +895,8 @@ class LaggedConvergentCrossMapping(Directed, Signed):
 
 
 def _nli_embed(x, m, tau):
-    """Delay vectors ``(x_n, x_{n-tau}, ..., x_{n-(m-1)tau})``, one per row.
+    """
+    Delay vectors ``(x_n, x_{n-tau}, ..., x_{n-(m-1)tau})``, one per row.
 
     Rows run over ``n = (m-1)tau, ..., T-1``, so every process of a dataset
     gives the same ``N = T - (m-1)tau`` time indices and row ``n`` of two
@@ -889,7 +909,8 @@ def _nli_embed(x, m, tau):
 
 
 def _nli_neighbours(emb, k, theiler):
-    """Time indices of the ``k`` nearest neighbours of every delay vector.
+    """
+    Time indices of the ``k`` nearest neighbours of every delay vector.
 
     Neighbours with ``|n - r| <= theiler`` (the point itself included) are
     excluded. At most ``2 * theiler + 1`` points are excluded per row, so the
@@ -912,7 +933,8 @@ def _nli_mean_sq_dist(emb, idx):
 
 
 def _nli_mean_sq_dist_all(emb, theiler):
-    """Mean squared distance from each ``x_n`` to every admissible ``x_j``.
+    """
+    Mean squared distance from each ``x_n`` to every admissible ``x_j``.
 
     Admissible means ``|n - j| > theiler``. Returns ``(R, n_admissible)``.
     The sum over all ``j`` uses ``sum_j |c_n - c_j|^2 = N|c_n|^2 + sum_j
@@ -937,7 +959,8 @@ def _nli_mean_sq_dist_all(emb, theiler):
 
 
 def _nli_ranks(emb, theiler, queries, block=128):
-    """Rank of ``|x_n - x_{queries[n, l]}|`` among ``x_n``'s admissible distances.
+    """
+    Rank of ``|x_n - x_{queries[n, l]}|`` among ``x_n``'s admissible distances.
 
     For each row ``n`` the distances to every ``x_j`` with ``|n - j| >
     theiler`` are ranked in ascending order (1 = nearest); entry ``[n, l]`` is
@@ -967,7 +990,8 @@ def _nli_ranks(emb, theiler, queries, block=128):
 
 
 class NonlinearInterdependence(Directed, Unsigned):
-    """Nonlinear interdependence S, H, N or L [1]_ [2]_ [3]_ [4]_.
+    """
+    Nonlinear interdependence S, H, N or L [1]_ [2]_ [3]_ [4]_.
 
     State-space measures of whether close states of one process occur at the
     same times as close states of another. Each process is delay-embedded,
@@ -1115,7 +1139,8 @@ class NonlinearInterdependence(Directed, Unsigned):
         return cache["process"][p]
 
     def _conditioned_ranks(self, data, cache, i, conditioners):
-        """Fill ``cache["ranks"][(i, j)] = G_n^k(x_i | x_j)`` for each j given.
+        """
+        Fill ``cache["ranks"][(i, j)] = G_n^k(x_i | x_j)`` for each j given.
 
         All of process i's conditioning partners are ranked in one pass over
         its distance rows.
@@ -1160,7 +1185,8 @@ class NonlinearInterdependence(Directed, Unsigned):
 
     @parse_multivariate
     def multivariate(self, data):
-        """Every ordered pair, from per-process embeddings and neighbours.
+        """
+        Every ordered pair, from per-process embeddings and neighbours.
 
         Each process is embedded and searched once (O(N log N) with a
         KD-tree); a pair then costs O(N k m). L additionally ranks each
@@ -1182,7 +1208,8 @@ class NonlinearInterdependence(Directed, Unsigned):
 
 
 def _liang_moments(z, k):
-    """The sample covariances every Liang-Kleeman estimator is built from.
+    """
+    The sample covariances every Liang-Kleeman estimator is built from.
 
     With the Euler forward difference at a step of one sample,
     ``dx_b[n] = (x_b[n + k] - x_b[n]) / k`` (Liang 2014; Liang 2021 eq. 7),
@@ -1215,7 +1242,8 @@ def _liang_moments(z, k):
 
 
 class LiangInformationFlow(Directed, Signed):
-    r"""Liang-Kleeman information flow, row (source) -> column (target) [1]_.
+    r"""
+    Liang-Kleeman information flow, row (source) -> column (target) [1]_.
 
     ``A[j, i]`` is ``T_{j->i}``, the rate at which the source ``x_j`` transfers
     information (entropy) to the target ``x_i``, in nats per sample, estimated
@@ -1341,7 +1369,8 @@ class LiangInformationFlow(Directed, Signed):
         return moments
 
     def _bivariate_flows(self, C, Cd, Vd):
-        """Liang (2014, 2015) for every ordered pair at once; ``[j, i]`` is j -> i.
+        """
+        Liang (2014, 2015) for every ordered pair at once; ``[j, i]`` is j -> i.
 
         For the pair (target i = "1", source j = "2"): ``a_self`` is
         ``a_11`` (2015 eq. 22), ``a_src`` is ``a_12`` (eq. 23), and
@@ -1422,7 +1451,8 @@ class LiangInformationFlow(Directed, Signed):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        """``T_{i->j}`` (or ``tau_{i->j}``): i is the source, j the target.
+        """
+        ``T_{i->j}`` (or ``tau_{i->j}``): i is the source, j the target.
 
         Read from the full table, which costs ``O(M^2)`` (``O(M^3)`` when
         conditional) once the cached covariances exist. Raises, rather than

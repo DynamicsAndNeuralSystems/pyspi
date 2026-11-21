@@ -33,7 +33,8 @@ except ImportError:
 
 @contextmanager
 def _surface_backend_log_warnings():
-    """Re-emit ``spectral_connectivity``'s log warnings as Python warnings.
+    """
+    Re-emit ``spectral_connectivity``'s log warnings as Python warnings.
 
     When Wilson's factorisation reaches its iteration cap, the backend logs a
     warning and returns the unconverged factor, from which every
@@ -68,7 +69,8 @@ def _ensure_time_series_3d(z):
 
 
 def _circular_nanmean(angles, axis):
-    """Circular mean angle, omitting NaNs along ``axis``.
+    """
+    Circular mean angle, omitting NaNs along ``axis``.
 
     Wrapped phase is averaged through its unit phasors, not as real numbers;
     e.g. values just below +pi and just above -pi average near pi rather than
@@ -96,7 +98,8 @@ def _circular_nanmean(angles, axis):
 
 
 def _real_valued_bins(freq, fs):
-    """Mask of the bins where the cross-spectrum of real signals is real.
+    """
+    Mask of the bins where the cross-spectrum of real signals is real.
 
     0 Hz always, and ``fs / 2`` when it is on the grid (an even FFT length),
     compared with a relative tolerance because the backend's grid is
@@ -106,7 +109,8 @@ def _real_valued_bins(freq, fs):
 
 
 def _closed_band(freq, fmin, fmax):
-    """Mask of ``fmin <= f <= fmax`` with a relative 1e-9 tolerance at both edges.
+    """
+    Mask of ``fmin <= f <= fmax`` with a relative 1e-9 tolerance at both edges.
 
     The tolerance keeps edge bins such as Nyquist, which the backend's
     floating-point grid ``k * fs / nfft`` can place just past ``fs / 2``.
@@ -118,7 +122,8 @@ def _closed_band(freq, fmin, fmax):
 
 
 class NonparametricSpectral(Unsigned):
-    """Base class of the multitaper spectral SPIs, computed with spectral_connectivity.
+    """
+    Base class of the multitaper spectral SPIs, computed with spectral_connectivity.
 
     The spectral matrix is a multitaper estimate over the whole record, with
     the backend's defaults (time-halfbandwidth product 3, five DPSS tapers),
@@ -191,7 +196,8 @@ class NonparametricSpectral(Unsigned):
 
     @property
     def key(self):
-        """Cache key: every parameter that changes the cached result.
+        """
+        Cache key: every parameter that changes the cached result.
 
         ``fs`` is part of the key because it is passed to ``sc.Multitaper`` and
         therefore changes both the connectivity estimate and the frequency grid.
@@ -221,7 +227,8 @@ class NonparametricSpectral(Unsigned):
 
 
 def _to_source_target(spi, adj):
-    """Put a spectral adjacency matrix into pyspi's (source, target) convention.
+    """
+    Put a spectral adjacency matrix into pyspi's (source, target) convention.
 
     pyspi fills ``A[i, j] = bivariate(i, j)``, row = source, column = target
     (``base.Directed.multivariate``). The spectral backends (spectral_connectivity,
@@ -236,7 +243,8 @@ def _to_source_target(spi, adj):
 
 
 class NonparametricSpectralMultivariate(NonparametricSpectral):
-    """Measures read from one multitaper ``Connectivity`` of all processes.
+    """
+    Measures read from one multitaper ``Connectivity`` of all processes.
 
     The spectral matrix is estimated once per ``(measure, fs)`` and cached on
     the dataset. A subclass names the backend measure in ``_measure`` or, with
@@ -284,7 +292,8 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
         return res, freq
 
     def _band(self, freq):
-        """Indices of the frequencies the band statistic reduces over.
+        """
+        Indices of the frequencies the band statistic reduces over.
 
         The closed band, less the real-valued bins for a phase measure (see
         ``NonparametricSpectral``).
@@ -325,7 +334,8 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
 
 
 class _FactoredConnectivity(sc.Connectivity):
-    """A pair's ``Connectivity``, reduced to its spectral factorisation.
+    """
+    A pair's ``Connectivity``, reduced to its spectral factorisation.
 
     The directed measures are read off the Wilson minimum-phase factor through
     the transfer function, the innovation covariance and the MVAR
@@ -366,7 +376,8 @@ class _FactoredConnectivity(sc.Connectivity):
 
 @functools.lru_cache(maxsize=8)
 def _whole_record_tapers(n_time_samples, fs):
-    """The DPSS tapers ``sc.Multitaper`` uses for one whole-record window.
+    """
+    The DPSS tapers ``sc.Multitaper`` uses for one whole-record window.
 
     They depend on the record length and sampling rate only, so they are
     computed once rather than for every pair's Multitaper.
@@ -378,7 +389,8 @@ def _whole_record_tapers(n_time_samples, fs):
 
 
 class NonparametricSpectralBivariate(NonparametricSpectral):
-    """Measures read from a pair's multitaper ``Connectivity`` and its factorisation.
+    """
+    Measures read from a pair's multitaper ``Connectivity`` and its factorisation.
 
     The directed spectral measures (DC, PDC, gPDC, DTF, dDTF) need the pair's
     transfer function ``H(f)``, obtained by Wilson's factorisation of the
@@ -396,7 +408,8 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
         return (self._fs,)
 
     def _get_cache(self, data, i, j):
-        """Cache Connectivity object per (i,j) pair, not per (measure,i,j).
+        """
+        Cache Connectivity object per (i,j) pair, not per (measure,i,j).
 
         Multiple directed spectral SPIs (DirectedCoherence, PartialDirectedCoherence,
         etc.) share the same Multitaper+Connectivity for a given (i,j), and with
@@ -454,7 +467,8 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
 
 
 class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
-    """Magnitude-squared coherence from a multitaper spectral estimate [1]_.
+    """
+    Magnitude-squared coherence from a multitaper spectral estimate [1]_.
 
     ``|S_ij(f)|^2 / (S_ii(f) S_jj(f))``, the squared modulus of the coherency
     (the backend's ``coherence_magnitude``, whose name the identifier
@@ -491,7 +505,8 @@ class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
 
 
 class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
-    """Phase of the coherency, circular-averaged over the band [1]_.
+    """
+    Phase of the coherency, circular-averaged over the band [1]_.
 
     ``arg S_ij(f)``, the phase of the multitaper cross-spectrum, in radians,
     averaged over the band through unit phasors (a circular mean).
@@ -554,7 +569,8 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
 
 
 class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
-    """Magnitude of the imaginary part of coherency [1]_.
+    """
+    Magnitude of the imaginary part of coherency [1]_.
 
     ``|Im S_ij(f)| / sqrt(S_ii(f) S_jj(f))``, with the cross-spectrum averaged
     over tapers, reduced over the band. Zero for coupling at zero lag, whose
@@ -596,7 +612,8 @@ class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
 
 
 class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
-    """Phase locking value across tapers [1]_.
+    """
+    Phase locking value across tapers [1]_.
 
     At each frequency, ``|mean_k exp(i arg S_k(f))|``, ``S_k`` being taper
     ``k``'s cross-spectrum, then the band statistic. Lachaux et al. average
@@ -640,7 +657,8 @@ class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
 
 
 class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
-    """Phase lag index, signed [1]_.
+    """
+    Phase lag index, signed [1]_.
 
     At each frequency, the mean over tapers of ``sign(Im S_k(f))``, ``S_k``
     being taper ``k``'s cross-spectrum, then the band statistic. This is the
@@ -691,7 +709,8 @@ class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
 
 
 class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
-    """Weighted phase lag index, signed [1]_.
+    """
+    Weighted phase lag index, signed [1]_.
 
     At each frequency, ``E[Im S_k(f)] / E[|Im S_k(f)|]`` over the tapers,
     ``S_k`` being taper ``k``'s cross-spectrum, then the band statistic. In
@@ -737,7 +756,8 @@ class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
 
 
 class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
-    """Debiased squared phase lag index [1]_.
+    """
+    Debiased squared phase lag index [1]_.
 
     The mean of ``sign(Im S_k) sign(Im S_l)`` over pairs ``k != l`` of the
     ``n`` tapers (and trials), ``S_k`` being taper ``k``'s cross-spectrum:
@@ -795,7 +815,8 @@ class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected
 class DebiasedSquaredWeightedPhaseLagIndex(
     NonparametricSpectralMultivariate, Undirected
 ):
-    """Debiased squared weighted phase lag index [1]_.
+    """
+    Debiased squared weighted phase lag index [1]_.
 
     ``((sum_k Im S_k)^2 - sum_k (Im S_k)^2) / ((sum_k |Im S_k|)^2 - sum_k
     (Im S_k)^2)`` over the tapers, ``S_k`` being taper ``k``'s
@@ -837,7 +858,8 @@ class DebiasedSquaredWeightedPhaseLagIndex(
 
 
 class PairwisePhaseConsistency(NonparametricSpectralMultivariate, Undirected):
-    """Pairwise phase consistency across tapers [1]_.
+    """
+    Pairwise phase consistency across tapers [1]_.
 
     The mean of ``cos(phi_k - phi_l)`` over pairs ``k != l`` of the ``n``
     tapers (and trials), ``phi_k`` being taper ``k``'s cross-spectral phase,
@@ -882,7 +904,8 @@ class PairwisePhaseConsistency(NonparametricSpectralMultivariate, Undirected):
 
 
 class DirectedCoherence(NonparametricSpectralBivariate, Directed):
-    """Directed coherence of a pair, from its spectral factorisation [1]_.
+    """
+    Directed coherence of a pair, from its spectral factorisation [1]_.
 
     ``DC_ij(f) = sqrt(sigma_jj) |H_ij(f)| / sqrt(sum_k sigma_kk |H_ik(f)|^2)``
     in the literature's ``[target i, source j]`` notation, where ``H`` is the
@@ -950,7 +973,8 @@ class DirectedCoherence(NonparametricSpectralBivariate, Directed):
 
 
 class PartialDirectedCoherence(NonparametricSpectralBivariate, Directed):
-    """Partial directed coherence of a pair, from its spectral factorisation [1]_.
+    """
+    Partial directed coherence of a pair, from its spectral factorisation [1]_.
 
     ``A[i, j]`` is the band statistic of ``|A_ji(f)|^2 / sum_k |A_ki(f)|^2``
     for source ``i`` (row) and target ``j`` (column), where
@@ -992,7 +1016,8 @@ class PartialDirectedCoherence(NonparametricSpectralBivariate, Directed):
 
 
 class GeneralizedPartialDirectedCoherence(NonparametricSpectralBivariate, Directed):
-    """Generalized partial directed coherence of a pair [1]_.
+    """
+    Generalized partial directed coherence of a pair [1]_.
 
     :class:`PartialDirectedCoherence` with each target weighted by its
     innovation variance: the band statistic of
@@ -1032,7 +1057,8 @@ class GeneralizedPartialDirectedCoherence(NonparametricSpectralBivariate, Direct
 
 
 class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
-    """Directed transfer function of a pair, from its spectral factorisation [1]_.
+    """
+    Directed transfer function of a pair, from its spectral factorisation [1]_.
 
     ``A[i, j]`` is the band statistic of ``|H_ji(f)|^2 / sum_k |H_jk(f)|^2``,
     the share of the inflow to the target ``j`` (column) that comes from the
@@ -1077,7 +1103,8 @@ class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
 
 
 class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
-    """Direct directed transfer function of a pair [1]_.
+    """
+    Direct directed transfer function of a pair [1]_.
 
     ``dDTF_ij(f) = eta_ij(f) |P_ij(f)|`` in the literature's
     ``[target i, source j]`` notation: the full-frequency DTF
@@ -1143,7 +1170,8 @@ class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
 
 
 class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
-    """Phase slope index from the multitaper coherency [1]_.
+    """
+    Phase slope index from the multitaper coherency [1]_.
 
     ``Psi_ij = Im sum_f conj(C_ij(f)) C_ij(f + df)`` over the band, with ``C``
     the complex coherency and ``df`` the frequency resolution of its estimate:
@@ -1230,7 +1258,8 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
 
 def _independent_significant_frequencies(p_values, step, alpha=0.05,
                                          min_group_size=3):
-    """Indices of the largest significant coherence cluster, thinned to `step`.
+    """
+    Indices of the largest significant coherence cluster, thinned to `step`.
 
     Benjamini-Hochberg over the in-band frequencies, then the longest
     contiguous run of significant points, then every `step`-th point of that
@@ -1259,7 +1288,8 @@ def _independent_significant_frequencies(p_values, step, alpha=0.05,
 
 
 class GroupDelay(NonparametricSpectralMultivariate, Directed):
-    """Group delay from the slope of the coherency phase [1]_.
+    """
+    Group delay from the slope of the coherency phase [1]_.
 
     The multitaper coherency is screened bin by bin for significance with the
     Fisher-z approximation [2]_: for coherence from ``n`` independent spectral
@@ -1343,7 +1373,8 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         return (type(self).__name__, self._fs, self._fmin, self._fmax)
 
     def _get_statistic(self, C):
-        """``(delay, slope, |r|)`` of Gotman's group delay (see the class docstring).
+        """
+        ``(delay, slope, |r|)`` of Gotman's group delay (see the class docstring).
 
         The regression runs against frequency in the units of ``fs``, so
         ``slope / (2 pi)`` is in seconds and ``fs * slope / (2 pi)`` in
@@ -1402,7 +1433,8 @@ _GC_N_FREQS = 1024
 
 
 def _fit_bivariate_var(x, order=None, max_order=50):
-    """Yule-Walker fit of the two-process VAR behind parametric spectral GC.
+    """
+    Yule-Walker fit of the two-process VAR behind parametric spectral GC.
 
     As ``nitime.analysis.granger.fit_model`` (Whittle's LWR recursion; with
     ``order=None``, the lowest order at which BIC stops improving), but on the
@@ -1437,7 +1469,8 @@ def _fit_bivariate_var(x, order=None, max_order=50):
 
 
 class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsigned):
-    """Spectral Granger causality of each pair, reduced over the band [1]_.
+    """
+    Spectral Granger causality of each pair, reduced over the band [1]_.
 
     Geweke's frequency-domain measure ``ln(S_jj(f) / S_jj^(i)(f))`` in nats,
     with ``S_jj^(i)`` the target's spectrum net of the part driven by the
@@ -1668,7 +1701,8 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
 
 
 def _welch_cross_spectra(z, nperseg):
-    """Hann-window Welch spectral matrices ``S[f, j, k]`` of ``z`` (processes x time).
+    """
+    Hann-window Welch spectral matrices ``S[f, j, k]`` of ``z`` (processes x time).
 
     One-sided rfft bins; segments of ``nperseg`` samples start every
     ``nperseg // 2`` (a remainder shorter than a segment is dropped), and each
@@ -1684,7 +1718,8 @@ def _welch_cross_spectra(z, nperseg):
 
 
 class PhaseAlignedCorrelation(Undirected, Unsigned):
-    """Phase-aligned correlation: zero-lag correlation maximised over all-pass filters.
+    """
+    Phase-aligned correlation: zero-lag correlation maximised over all-pass filters.
 
     ``P_jk = sum_f w_f |S_jk(f)| / sqrt(sum_f w_f S_jj(f) * sum_f w_f S_kk(f))``
     from Welch cross-spectra [1]_ (Hann window, segments of ``nperseg``
@@ -1785,7 +1820,8 @@ class PhaseAlignedCorrelation(Undirected, Unsigned):
 
 
 def _flattened_power(x):
-    """Multitaper power of a demeaned series divided by its log-log linear fit.
+    """
+    Multitaper power of a demeaned series divided by its log-log linear fit.
 
     Returns the frequencies (cycles/sample) from the multitaper half-bandwidth
     ``3 / T`` up to (not including) Nyquist, and the power there divided by the
@@ -1804,7 +1840,8 @@ def _flattened_power(x):
 
 
 def _segment_ppc(dphi, L):
-    """Pairwise phase consistency of ``dphi`` over samples in non-adjacent segments.
+    """
+    Pairwise phase consistency of ``dphi`` over samples in non-adjacent segments.
 
     ``dphi`` is cut into ``M`` segments of ``L`` samples (a remainder is
     dropped), and the value is the mean of ``cos(dphi_s - dphi_t)`` over the
@@ -1821,7 +1858,8 @@ def _segment_ppc(dphi, L):
 
 
 class AdaptivePhaseConsistency(Undirected, Unsigned):
-    """Spectrally weighted Hilbert phase consistency [1]_.
+    """
+    Spectrally weighted Hilbert phase consistency [1]_.
 
     Each process is band-passed (zero-phase, second-order Butterworth) in
     bands ``[f_c / 2, 3 f_c / 2]``, the upper edge capped at 0.49, with centres

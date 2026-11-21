@@ -45,9 +45,11 @@ _SURROGATE_SEED = 0
 
 @functools.lru_cache(maxsize=None)
 def _shift_index(n, n_surr):
-    """``(n_surr, n)`` gather index: row ``k`` circularly delays a length-``n``
+    """
+    ``(n_surr, n)`` gather index: row ``k`` circularly delays a length-``n``
     series by ``s_k`` samples, ``s_k`` uniform on the integers in
-    ``[n // 10, n - n // 10]``. Read-only and cached per ``(n, n_surr)``."""
+    ``[n // 10, n - n // 10]``. Read-only and cached per ``(n, n_surr)``.
+    """
     rng = np.random.default_rng(_SURROGATE_SEED)
     shifts = rng.integers(n // 10, n - n // 10, size=n_surr, endpoint=True)
     index = (np.arange(n)[None, :] - shifts[:, None]) % n
@@ -86,7 +88,8 @@ def _bandpass(band):
 
 @functools.lru_cache(maxsize=None)
 def _filter_length(band):
-    """Samples holding 99% of the energy of the one-pass impulse response.
+    """
+    Samples holding 99% of the energy of the one-pass impulse response.
 
     The response rings for a time set by the lower band edge and the
     bandwidth, so it is evaluated over ``100 / min(low, high - low)`` samples,
@@ -102,7 +105,8 @@ def _filter_length(band):
 
 
 def _band_series(data, band, kind):
-    """Phase or amplitude of every process in ``band``, full length, cached.
+    """
+    Phase or amplitude of every process in ``band``, full length, cached.
 
     ``data.crossfreq[(band, "phase")]`` is the angle and
     ``data.crossfreq[(band, "amp")]`` the modulus of the analytic signal
@@ -127,7 +131,8 @@ def _band_series(data, band, kind):
 
 
 class PhaseAmplitudeCoupling(Directed, Unsigned):
-    """Phase-amplitude coupling, source phase to target amplitude [1]_ [2]_.
+    """
+    Phase-amplitude coupling, source phase to target amplitude [1]_ [2]_.
 
     ``A[i, j]`` measures how strongly the amplitude envelope of process ``j``
     (column, target) in a high band ``amp_band = (f3, f4)`` is modulated by the
@@ -367,7 +372,8 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
         return float(excess / sd)
 
     def _pair_function(self, phase, amp):
-        """``compute(i, j)``: the statistic of source ``i`` and target ``j``.
+        """
+        ``compute(i, j)``: the statistic of source ``i`` and target ``j``.
 
         Each source's bins (or phasors) are formed once, then the raw index is
         O(n) per pair. For the surrogate statistics, each target's ``n_surr``
