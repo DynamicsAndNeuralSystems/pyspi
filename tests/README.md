@@ -27,8 +27,10 @@ corrupt baseline can never break collection of unrelated tests.
 | `test_cache_keys.py` | Parameterised statistic caches must key on every parameter that reaches the identifier. |
 | `test_run_identity.py` | Checkpoints must identify the run that produced them; identifier collisions must be rejected at insertion. |
 | `test_execution_parity.py` | Serial and parallel must agree on *failure* semantics, not only on numbers. Uses `failing_spis.py` + `parity_failure_config.yaml`. |
+| `test_quality.py` | Per-cell quality codes (`calc.quality`) for each kind of misbehaving SPI, serial/parallel parity of the codes, checkpoint resume, `.npz` round-trip, and loading files written before the codes existed. Uses the stubs in `failing_spis.py` + `quality_config.yaml`. |
 | `test_estimator_contracts.py` | An SPI must compute the estimator it advertises, or refuse. Symbolic/KSG preconditions. |
 | `test_structural_traits.py` | Declared symmetry labels vs observed baseline matrices; AEG process-order dependence. |
+| `test_undirected_pairs.py` | `Undirected.multivariate` evaluates each unordered pair once (call counts for a stub and for every bundled undirected SPI), mirrors values, codes and pair errors, raises when every pair fails, and matches the old both-orders loop bit for bit, including the SPIs that cache the opposite orientation. |
 
 ### Contract tests
 
