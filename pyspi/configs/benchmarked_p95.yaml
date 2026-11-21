@@ -490,6 +490,8 @@
       - bivariate
       - MXX
     configs:
+    - estimator: gaussian
+      history_length: 1
     - estimator: kozachenko
       history_length: 1
     - estimator: kernel
