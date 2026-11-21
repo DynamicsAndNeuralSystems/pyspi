@@ -133,6 +133,13 @@ if _TIER not in ("locked", "latest"):
     raise ValueError(f"PYSPI_DRIFT_TIER must be 'locked' or 'latest', got {_TIER!r}")
 
 
+# SPIs whose baseline entries are kept although the SPI may be absent from
+# `full`. A baseline entry is compared only while its SPI is bundled. This lets
+# several PRs that unbundle SPIs land in any order with config-only changes;
+# a follow-up PR then prunes their baseline entries and empties the set.
+OPTIONAL_IN_FULL = frozenset()
+
+
 def _tolerance(spi_key):
     """(atol, rtol) for ``spi_key`` under the selected tier."""
     if _TIER == "latest" and spi_key in LATEST_TIER_SPIS:
@@ -261,11 +268,12 @@ def test_baseline_covers_every_spi(dataset_name, baseline_tables, current_tables
     """The baseline and the current Calculator must expose the same SPI set.
 
     Without this, an SPI that is renamed or newly added is silently untested.
+    Baseline entries listed in `OPTIONAL_IN_FULL` may be absent from `full`.
     """
     baseline = baseline_tables(dataset_name)
     _, spis, _ = current_tables(dataset_name)
     missing_from_baseline = sorted(set(spis) - set(baseline))
-    missing_from_current = sorted(set(baseline) - set(spis))
+    missing_from_current = sorted(set(baseline) - set(spis) - OPTIONAL_IN_FULL)
     assert not missing_from_baseline and not missing_from_current, (
         f"[{dataset_name}] SPI set mismatch. "
         f"No baseline for: {missing_from_baseline}. "
@@ -279,6 +287,8 @@ def test_baseline_drift(dataset_name, spi_key, baseline_tables, current_tables,
     """Hard-fail on shape, NaN-pattern, or excessive numerical drift."""
     ref = baseline_tables(dataset_name)[spi_key]
     tables, spis, _ = current_tables(dataset_name)
+    if spi_key not in tables and spi_key in OPTIONAL_IN_FULL:
+        pytest.skip(f"{spi_key} is not in the full config")
     assert spi_key in tables, (
         f"[{dataset_name}] {spi_key}: present in baseline but not in the current "
         f"Calculator (see test_baseline_covers_every_spi)."
