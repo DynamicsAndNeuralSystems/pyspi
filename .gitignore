@@ -24,7 +24,7 @@ dist/
 bench/results/analysis/*.ipynb
 
 # Raw benchmark cells are large, machine-specific inputs to the tracked summaries.
-bench/results/cells/physics_config*.json
+bench/results/cells/pbs_config*.json
 
 # Local assistant instructions
 CLAUDE.md
