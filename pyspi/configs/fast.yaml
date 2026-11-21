@@ -150,18 +150,6 @@
         statistic: max
         squared: True
         
-  # Gromov-Wasserstein distance (GW_tau)
-  GromovWasserstainTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
-
 # Causal inference statistics
 .statistics.causal:
   # Additive noise model
@@ -292,6 +280,10 @@
       - estimator: kernel
         kernel_width: 0.25
 
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
+
   # Time-lagged mutual information
   TimeLaggedMutualInfo:
     labels:
@@ -313,6 +305,10 @@
 
       - estimator: kernel
         kernel_width: 0.25
+
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
 
   # Transfer entropy
   TransferEntropy:
