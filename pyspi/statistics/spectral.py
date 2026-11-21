@@ -304,8 +304,10 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
     """
     Measures read from one multitaper ``Connectivity`` of all processes.
 
-    The spectral matrix is estimated once per ``(measure, fs)`` and cached on
-    the dataset. A subclass names the backend measure in ``_measure`` or, with
+    Each measure's full-spectrum result is cached on the dataset under
+    ``(measure, fs, NW)``, so configurations that differ only in band or
+    statistic compute it once; ``GroupDelay`` and ``PhaseSlopeIndex`` also key
+    on the band. A subclass names the backend measure in ``_measure`` or, with
     ``_recompute``, computes its own in ``_get_statistic``. The band statistic
     is applied in ``multivariate``, and directed results are then put into
     pyspi's (source, target) orientation by ``_to_source_target``.
