@@ -102,7 +102,7 @@ which is the data's natural shape. `.csv` is also accepted for eyeballing small
 results, but it is one-way and impractical for the full SPI set.
 
 `feature_vector()` turns a table into features for classification or regression, one value per independent pair.
-Undirected SPIs store each pair twice (the lower triangle mirrors the upper), and antisymmetric SPIs such as `phase`, `pli`, `wpli`, `psi` and `es_q` store it twice with the sign flipped.
+Undirected SPIs store each pair twice (the lower triangle mirrors the upper), and antisymmetric SPIs such as `phase`, `pli`, `wpli`, `psi` and `es_asym` store it twice with the sign flipped.
 For these the vector keeps only the pairs `(i, j)` with `i < j`, and a positive antisymmetric value means process `i` leads process `j`.
 Directed SPIs keep both orientations.
 Self-pairs are dropped unless `include_self=True`.

@@ -64,8 +64,8 @@ KNOWN_UNESTIMABLE = {}
 
 # Event synchronisation needs at least two events in each series. At the 0.95
 # quantile on var1_M3_T100 the exceedances fall in runs that collapse to fewer
-# than two events per process, so every pair is undefined for Q and q.
-for _stat in ("Q", "q"):
+# than two events per process, so every pair is undefined for both statistics.
+for _stat in ("strength", "asym"):
     KNOWN_UNESTIMABLE.setdefault("var1_M3_T100", {})[f"es_{_stat}_q-0-95"] = (
         "fewer than two collapsed exceedance events per process at the 0.95 "
         "quantile with T=100")

@@ -5,12 +5,13 @@ manifest, so a run of the same width but different data, preprocessing or
 config cannot inherit another run's numbers.
 
 Also covered: identifier collisions. Distinct parameterisations must render to
-distinct identifiers, and a duplicate is rejected at insertion.
+distinct identifiers, and a duplicate, or two identifiers equal ignoring
+case, is rejected at insertion.
 """
 import numpy as np
 import pytest
 
-from pyspi.calculator import Calculator
+from pyspi.calculator import Calculator, bundled_configs
 from pyspi.data import Data
 
 CONFIG = "fabfour"
@@ -121,6 +122,55 @@ def test_duplicate_identifiers_are_rejected_at_insertion():
             load_spis_from_yaml(path)
     finally:
         os.unlink(path)
+
+
+CASE_PROBE_MODULE = '''
+from pyspi.base import Undirected, Unsigned
+
+
+class CaseProbe(Undirected, Unsigned):
+    name = "Case probe"
+    identifier = "probe"
+    labels = ["undirected", "unsigned"]
+
+    def __init__(self, tag="a"):
+        self.identifier = f"probe_{tag}"
+'''
+
+
+def test_identifiers_equal_ignoring_case_are_rejected_at_insertion(tmp_path, monkeypatch):
+    """Two identifiers that differ only in case would share checkpoint files
+    on a case-insensitive file system, so a config must not produce them."""
+    from pyspi.calculator import load_spis_from_yaml
+
+    (tmp_path / "case_probe_spis.py").write_text(CASE_PROBE_MODULE)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    path = tmp_path / "case.yaml"
+    path.write_text(
+        "case_probe_spis:\n"
+        "  CaseProbe:\n"
+        "    configs:\n"
+        "      - tag: Ab\n"
+        "      - tag: aB\n"
+    )
+    with pytest.raises(ValueError, match="differ only in letter case") as err:
+        load_spis_from_yaml(path, quiet=True)
+    assert "'probe_Ab'" in str(err.value) and "'probe_aB'" in str(err.value)
+    assert "case-insensitive file system" in str(err.value)
+
+    path.write_text(path.read_text().replace("aB", "cd"))
+    assert set(load_spis_from_yaml(path, quiet=True)) == {"probe_Ab", "probe_cd"}
+
+
+@pytest.mark.parametrize("config", sorted(bundled_configs()))
+def test_bundled_identifiers_are_unique_ignoring_case(config):
+    """Every bundled config can checkpoint on a case-insensitive file system."""
+    from pyspi.calculator import load_spis_from_yaml, resolve_config
+
+    identifiers = list(load_spis_from_yaml(resolve_config(config), quiet=True))
+    folded = [k.casefold() for k in identifiers]
+    clashes = sorted(k for k, f in zip(identifiers, folded) if folded.count(f) > 1)
+    assert not clashes, f"{config}: identifiers equal ignoring case: {clashes}"
 
 
 def test_identifier_does_not_collide_under_float_rounding():

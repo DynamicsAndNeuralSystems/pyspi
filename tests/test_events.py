@@ -156,8 +156,8 @@ def test_es_matches_the_hand_counts_on_series(max_delay):
     c_yx, c_xy = HAND_A[max_delay]
     norm = np.sqrt(5 * 5)
 
-    Q_spi = EventSynchronisation("Q", quantile=q, max_delay=max_delay)
-    q_spi = EventSynchronisation("q", quantile=q, max_delay=max_delay)
+    Q_spi = EventSynchronisation("strength", quantile=q, max_delay=max_delay)
+    q_spi = EventSynchronisation("asym", quantile=q, max_delay=max_delay)
     assert Q_spi.multivariate(data)[0, 1] == pytest.approx((c_yx + c_xy) / norm, abs=1e-12)
     assert Q_spi.bivariate(data, i=0, j=1) == pytest.approx((c_yx + c_xy) / norm, abs=1e-12)
     assert Q_spi.bivariate(data, i=1, j=0) == pytest.approx((c_yx + c_xy) / norm, abs=1e-12)
@@ -177,9 +177,9 @@ def test_es_halves_midpoint_ties_so_Q_stays_at_most_one():
     y = _series_with_events(T, TY_B, [1, 1, 1, 1], rng)
     data = Data(np.vstack([x, y]), dim_order="ps")
     q = _quantile_for(4, T)
-    Q = EventSynchronisation("Q", quantile=q).bivariate(data, i=0, j=1)
+    Q = EventSynchronisation("strength", quantile=q).bivariate(data, i=0, j=1)
     assert Q == pytest.approx(2 / np.sqrt(8))
-    assert EventSynchronisation("q", quantile=q).bivariate(data, i=0, j=1) == 0.0
+    assert EventSynchronisation("asym", quantile=q).bivariate(data, i=0, j=1) == 0.0
 
 
 # --------------------------------------------------------------------------
@@ -236,8 +236,8 @@ def test_es_agrees_with_pyunicorn():
             es_xy, es_yx = EventSeries.event_synchronization(
                 _pad(bx, 2 * T), _pad(by, 2 * T), taumax=taumax)
             # pyunicorn's es_XY counts x events *after* y events: c(x|y).
-            Q = EventSynchronisation("Q", q, max_delay).bivariate(data, i=0, j=1)
-            lead = EventSynchronisation("q", q, max_delay).bivariate(data, i=0, j=1)
+            Q = EventSynchronisation("strength", q, max_delay).bivariate(data, i=0, j=1)
+            lead = EventSynchronisation("asym", q, max_delay).bivariate(data, i=0, j=1)
             assert Q == pytest.approx(es_xy + es_yx, abs=1e-12)
             assert lead == pytest.approx(es_yx - es_xy, abs=1e-12)
 
@@ -259,8 +259,8 @@ def delayed_extremes():
 
 @pytest.mark.parametrize("quantile", [0.95, 0.9])
 def test_es_detects_that_x_extremes_lead_y_extremes(delayed_extremes, quantile):
-    Q = EventSynchronisation("Q", quantile).multivariate(delayed_extremes)
-    q = EventSynchronisation("q", quantile).multivariate(delayed_extremes)
+    Q = EventSynchronisation("strength", quantile).multivariate(delayed_extremes)
+    q = EventSynchronisation("asym", quantile).multivariate(delayed_extremes)
     assert q[0, 1] > 0.08
     assert q[1, 0] < -0.08
     # Q is not corrected for chance, so compare with the independent pairs.
@@ -345,8 +345,8 @@ def test_tailasym_reflection_negates_it_exactly():
 # --------------------------------------------------------------------------
 
 ALL_VARIANTS = [
-    EventSynchronisation("Q"), EventSynchronisation("q"),
-    EventSynchronisation("Q", 0.9, max_delay=2), EventSynchronisation("q", 0.9, max_delay=2),
+    EventSynchronisation("strength"), EventSynchronisation("asym"),
+    EventSynchronisation("strength", 0.9, max_delay=2), EventSynchronisation("asym", 0.9, max_delay=2),
     TailDependenceAsymmetry(0.95), TailDependenceAsymmetry(0.9),
     TailDependenceAsymmetry(0.9, "upper"), TailDependenceAsymmetry(0.9, "lower"),
 ]
@@ -447,7 +447,7 @@ def test_constant_series_gives_nan_for_its_pairs_only(spi, heavy_data):
     assert np.isnan(spi.bivariate(Data(Z, dim_order="ps", zscore=False), i=0, j=1))
 
 
-@pytest.mark.parametrize("statistic", ["Q", "q"])
+@pytest.mark.parametrize("statistic", ["strength", "asym"])
 def test_es_needs_two_events(statistic, heavy_data):
     Z = heavy_data[:3].copy()
     Z[1] = 0.0
@@ -465,11 +465,11 @@ def test_es_cache_is_keyed_on_quantile_only():
     """Alternating quantile and max_delay on one Data matches a fresh Data."""
     rng = np.random.default_rng(8)
     Z = rng.standard_t(3, (3, 400))
-    makers = [lambda: EventSynchronisation("Q", 0.95),
-              lambda: EventSynchronisation("q", 0.9),
-              lambda: EventSynchronisation("Q", 0.95, max_delay=1),
-              lambda: EventSynchronisation("Q", 0.9),
-              lambda: EventSynchronisation("q", 0.95, max_delay=2)]
+    makers = [lambda: EventSynchronisation("strength", 0.95),
+              lambda: EventSynchronisation("asym", 0.9),
+              lambda: EventSynchronisation("strength", 0.95, max_delay=1),
+              lambda: EventSynchronisation("strength", 0.9),
+              lambda: EventSynchronisation("asym", 0.95, max_delay=2)]
     shared = Data(Z, dim_order="ps")
     for _ in range(2):
         for make in makers:
@@ -477,19 +477,22 @@ def test_es_cache_is_keyed_on_quantile_only():
             want = make().multivariate(Data(Z, dim_order="ps"))
             assert np.array_equal(got, want, equal_nan=True)
     assert set(shared.events) == {0.95, 0.9}
-    assert EventSynchronisation("Q", 0.9)._cache_subkey == EventSynchronisation("q", 0.9, 3)._cache_subkey
+    assert EventSynchronisation("strength", 0.9)._cache_subkey == EventSynchronisation("asym", 0.9, 3)._cache_subkey
 
 
 def test_identifiers_and_parameter_validation():
-    assert EventSynchronisation("Q").identifier == "es_Q_q-0-95"
-    assert EventSynchronisation("q", 0.9).identifier == "es_q_q-0-9"
-    assert EventSynchronisation("q", 0.9, max_delay=5).identifier == "es_q_q-0-9_maxdelay-5"
+    assert EventSynchronisation("strength").identifier == "es_strength_q-0-95"
+    assert EventSynchronisation("asym", 0.9).identifier == "es_asym_q-0-9"
+    assert EventSynchronisation("asym", 0.9, max_delay=5).identifier == "es_asym_q-0-9_maxdelay-5"
     assert TailDependenceAsymmetry().identifier == "tailasym_q-0-95"
     assert TailDependenceAsymmetry(0.9, "upper").identifier == "tailasym_upper_q-0-9"
     for bad in (dict(statistic="Qq"), dict(quantile=1.0), dict(quantile=0),
                 dict(max_delay=0), dict(max_delay=2.5)):
         with pytest.raises((ValueError, TypeError)):
             EventSynchronisation(**bad)
+    for bad in ("Q", "q"):
+        with pytest.raises(ValueError, match="'strength', 'asym'"):
+            EventSynchronisation(bad)
     for bad in (dict(quantile=0.5), dict(quantile=1.2), dict(statistic="both")):
         with pytest.raises((ValueError, TypeError)):
             TailDependenceAsymmetry(**bad)
@@ -499,7 +502,7 @@ def test_identifiers_and_parameter_validation():
 # Calculator round trip and bundled configs
 # --------------------------------------------------------------------------
 
-BUNDLED = {"es_Q_q-0-95", "es_q_q-0-95", "es_Q_q-0-9", "es_q_q-0-9",
+BUNDLED = {"es_strength_q-0-95", "es_asym_q-0-95", "es_strength_q-0-9", "es_asym_q-0-9",
            "tailasym_q-0-95", "tailasym_q-0-9"}
 
 
@@ -507,9 +510,9 @@ def test_calculator_round_trip(tmp_path):
     cfg = {".statistics.events": {
         "EventSynchronisation": {
             "labels": ["nonlinear", "bivariate", "time-dependent", "M14"],
-            "configs": [{"statistic": "Q", "quantile": 0.95},
-                        {"statistic": "q", "quantile": 0.95},
-                        {"statistic": "q", "quantile": 0.9, "max_delay": 4}]},
+            "configs": [{"statistic": "strength", "quantile": 0.95},
+                        {"statistic": "asym", "quantile": 0.95},
+                        {"statistic": "asym", "quantile": 0.9, "max_delay": 4}]},
         "TailDependenceAsymmetry": {
             "labels": ["nonlinear", "bivariate", "contemporaneous", "M14"],
             "configs": [{"quantile": 0.95}, {"quantile": 0.9, "statistic": "lower"}]},
@@ -521,7 +524,7 @@ def test_calculator_round_trip(tmp_path):
     Z[1, 1:] += Z[0, :-1]
     calc = Calculator(dataset=Data(Z, dim_order="ps"), config=str(path))
     calc.compute()
-    expected = {"es_Q_q-0-95", "es_q_q-0-95", "es_q_q-0-9_maxdelay-4",
+    expected = {"es_strength_q-0-95", "es_asym_q-0-95", "es_asym_q-0-9_maxdelay-4",
                 "tailasym_q-0-95", "tailasym_lower_q-0-9"}
     assert set(calc.spis) == expected
     assert calc.errors == {}
@@ -531,20 +534,46 @@ def test_calculator_round_trip(tmp_path):
         off = ~np.eye(4, dtype=bool)
         assert np.allclose(A[off], direct[off], equal_nan=True), ident
     # q survives the Calculator with its sign: it is not min-shifted.
-    q = calc.table["es_q_q-0-95"].to_numpy(dtype=float)
+    q = calc.table["es_asym_q-0-95"].to_numpy(dtype=float)
     assert q[0, 1] > 0 > q[1, 0]
+
+
+def test_checkpoint_resume_returns_each_statistic(tmp_path):
+    """Both statistics checkpoint to separate files, on any file system, and a
+    resumed run returns each one's own values."""
+    cfg = {".statistics.events": {"EventSynchronisation": {
+        "labels": ["nonlinear", "bivariate", "time-dependent", "M14"],
+        "configs": [{"statistic": s, "quantile": u}
+                    for u in (0.95, 0.9) for s in ("strength", "asym")]}}}
+    path = tmp_path / "es.yaml"
+    path.write_text(yaml.safe_dump(cfg))
+    Z = np.random.default_rng(3).standard_normal((4, 300))
+    cp = tmp_path / "checkpoints"
+    first = Calculator(dataset=Data(Z, dim_order="ps"), config=str(path), verbose=False)
+    first.compute(checkpoint_dir=cp, progress=False)
+    assert len(list(cp.glob("*.npy"))) == len(first.spis) == 4
+    resumed = Calculator(dataset=Data(Z, dim_order="ps"), config=str(path), verbose=False)
+    resumed.compute(checkpoint_dir=cp, progress=False)
+    for ident in first.spis:
+        computed = first.table[ident].to_numpy(dtype=float)
+        assert np.array_equal(resumed.table[ident].to_numpy(dtype=float), computed,
+                              equal_nan=True), ident
+    for u in ("0-95", "0-9"):
+        assert not np.array_equal(first.table[f"es_strength_q-{u}"].to_numpy(dtype=float),
+                                  first.table[f"es_asym_q-{u}"].to_numpy(dtype=float),
+                                  equal_nan=True)
 
 
 def test_bundled_configs_construct_the_new_spis():
     full = load_spis_from_yaml(resolve_config("full"), quiet=True)
     assert BUNDLED <= set(full)
     traits = {"directed", "undirected", "antisymmetric", "signed", "unsigned"}
-    assert set(full["es_Q_q-0-95"].labels) & traits == {"undirected", "unsigned"}
-    assert set(full["es_q_q-0-95"].labels) & traits == {"antisymmetric", "signed"}
+    assert set(full["es_strength_q-0-95"].labels) & traits == {"undirected", "unsigned"}
+    assert set(full["es_asym_q-0-95"].labels) & traits == {"antisymmetric", "signed"}
     assert set(full["tailasym_q-0-95"].labels) & traits == {"undirected", "signed"}
-    assert "time-dependent" in full["es_q_q-0-9"].labels
+    assert "time-dependent" in full["es_asym_q-0-9"].labels
     assert "contemporaneous" in full["tailasym_q-0-9"].labels
     fast = load_spis_from_yaml(resolve_config("fast"), quiet=True)
-    assert {"es_q_q-0-95", "tailasym_q-0-95"} <= set(fast)
+    assert {"es_asym_q-0-95", "tailasym_q-0-95"} <= set(fast)
     calc = Calculator(config="full")
     assert BUNDLED <= set(calc.spis)
