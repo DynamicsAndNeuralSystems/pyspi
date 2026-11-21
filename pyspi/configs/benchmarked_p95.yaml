@@ -438,7 +438,7 @@
       statistic: max
       squared: true
 
-  GromovWasserstainTau:
+  GromovWassersteinTau:
     labels:
       - unsigned
       - distance

@@ -40,6 +40,7 @@ Tie-free series are not changed by pyspi's tie handling (see below), and for tho
 - `subset="all"` becomes `config="full"`; other `subset` names are unchanged.
 - `configfile=p` becomes `config=p`.
 - `normalise=` becomes `zscore=`, on `Calculator`, `Data` and `CalculatorFrame`.
+- The SPI class `GromovWasserstainTau` (misspelled) becomes `GromovWassersteinTau`, in Python and in YAML configs; the identifier `gwtau` and its values are unchanged.
 - Passing both an old and a new form raises `TypeError`.
 - **Positional arguments after `subset`** (2.x `configfile`, `detrend`, `normalise`) no longer line up; pass them as keywords.
 
