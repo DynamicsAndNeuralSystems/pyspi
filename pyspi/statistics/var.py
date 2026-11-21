@@ -230,56 +230,57 @@ def _parse_order(order, max_order):
 
 
 class ConditionalGrangerCausality(Directed, Unsigned):
-    """Conditional (multivariate) Granger causality from one VAR of all processes.
+    """Conditional (multivariate) Granger causality from one VAR of all processes [1]_.
 
     A VAR(p) with intercept is fitted to all ``M`` processes by ordinary least
     squares (the full model). For ``i -> j``, the restricted model of target
     ``j`` drops all ``p`` lags of source ``i``. With ``var_f`` and ``var_r`` the
     residual variances of ``j`` under the two models (same ``N = T - p``
-    samples, both divided by ``N``),
-
-        F[i, j] = ln(var_r / var_f)                (statistic="F", default)
-
-    in nats (Geweke 1984). It is zero when the source's past adds nothing to
-    the prediction of the target beyond the past of all other processes, so an
-    indirect path ``i -> k -> j`` or a common driver gives ``F[i, j]`` near zero.
-    With no causal link, ``N F`` is asymptotically chi-squared with ``p`` degrees
-    of freedom, so ``F`` is positively biased by about ``p / N``.
-    This is twice the scale of pyspi's bivariate ``gc_gaussian_*``
+    samples, both divided by ``N``), ``F[i, j] = ln(var_r / var_f)`` in nats.
+    It is zero when the source's past adds nothing to the prediction of the
+    target beyond the past of all other processes, so an indirect path
+    ``i -> k -> j`` or a common driver gives ``F[i, j]`` near zero [2]_. With
+    no causal link, ``N F`` is asymptotically chi-squared with ``p`` degrees
+    of freedom, so ``F`` is positively biased by about ``p / N``. This is
+    twice the scale of pyspi's bivariate ``gc_gaussian_*``
     (``0.5 ln(var_r / var_f)``); with two processes
     ``cgc_p-1 = 2 * gc_gaussian_k-1_kt-1_l-1_lt-1``.
 
-    ``statistic="coef"`` is the signed net lagged coefficient
-    ``sum_k A[k, j, i]`` of source ``i`` in target ``j``'s equation. It is in
-    units of the target per unit of the source, and lags of opposite sign can
-    cancel, so a strong influence can have a small ``coef``.
+    ``statistic='coef'`` is instead the signed net lagged coefficient
+    ``sum_k A[k, j, i]`` of source ``i`` in target ``j``'s equation, in units
+    of the target per unit of the source. Lags of opposite sign can cancel,
+    so a strong influence can have a small ``coef``.
 
-    Direction: row = source, column = target, so ``A[i, j]`` is ``i -> j``.
-    The diagonal is NaN.
+    Directed: row = source, column = target, so ``A[i, j]`` is ``i -> j``.
+    The diagonal is NaN. The fit needs ``p <= (T - 1) // (M + 1) - 1`` [3]_;
+    a fixed order above this raises ``ValueError``, and ``'bic'`` searches up
+    to it. The order chosen by BIC depends on the data and is not in the
+    identifier.
 
-    The fit needs ``p <= (T - 1) // (M + 1) - 1``; a fixed order above this
-    raises ``ValueError``, and ``"bic"`` searches up to it. The order chosen by
-    BIC depends on the data and is not in the identifier.
+    References
+    ----------
+    .. [1] J.F. Geweke, "Measures of conditional linear dependence and
+           feedback between time series", J. Am. Stat. Assoc. 79(388),
+           907-915 (1984).
+    .. [2] L. Barnett, A.K. Seth, "The MVGC multivariate Granger causality
+           toolbox: a new approach to Granger-causal inference", J. Neurosci.
+           Methods 223, 50-68 (2014).
+    .. [3] H. Lütkepohl, "New Introduction to Multiple Time Series Analysis",
+           Springer, Berlin (2005).
 
-    Parameters:
-        order (int or "bic"): VAR model order, or "bic" to choose it by the
-            Bayesian information criterion (default).
-        max_order (int, optional): largest order ``"bic"`` considers, default
-            10. Only valid with ``order="bic"``; a non-default value is
-            appended to the identifier as ``_pmax-<n>``.
-        statistic ("F" or "coef"): the log variance ratio (unsigned, default)
-            or the net lagged coefficient (signed, identifier suffix
-            ``_coef``).
-
-    References:
-        Geweke, J. (1984). Measures of conditional linear dependence and
-        feedback between time series. *J. Am. Stat. Assoc.* 79, 907-915.
-
-        Barnett, L. & Seth, A. K. (2014). The MVGC multivariate Granger
-        causality toolbox. *J. Neurosci. Methods* 223, 50-68.
-
-        Lütkepohl, H. (2005). *New Introduction to Multiple Time Series
-        Analysis*. Springer.
+    Parameters
+    ----------
+    order : int or str, optional
+        VAR model order, a positive int, or ``'bic'`` to choose it by the
+        Bayesian information criterion. Default: ``'bic'``.
+    max_order : int or None, optional
+        Largest order ``'bic'`` considers; None means 10. Only valid with
+        ``order='bic'``. A value other than 10 is appended to the identifier
+        as ``_pmax-<n>``. Default: None.
+    statistic : str, optional
+        ``'F'``, the log variance ratio (unsigned), or ``'coef'``, the net
+        lagged coefficient (signed; identifier suffix ``_coef``).
+        Default: ``'F'``.
     """
 
     name = "Conditional Granger causality"
@@ -495,89 +496,43 @@ def _band_edge(name, value):
 
 
 class ConditionalSpectral(Unsigned):
-    """Conditional (M-variate, parametric) spectral measures from one VAR of all processes.
+    """Base class of the conditional spectral measures of one VAR of all processes.
 
-    Base class of ``cpdc_*``, ``cgpdc_*``, ``cddtf_*`` and ``pcohmag_*``. Each
+    The base of ``cpdc_*``, ``cgpdc_*``, ``cddtf_*`` and ``pcohmag_*``. Each
     is read off the same OLS VAR(p) with intercept that ``cgc_*`` fits to all
-    ``M`` processes. With ``A_k`` the lag-``k`` coefficient matrix (row = target,
-    column = source) and ``Sigma`` the residual covariance, on a grid of
-    ``nfreq`` frequencies ``f`` evenly spaced over [0, 0.5] cycles per sample,
+    ``M`` processes, and shares its cached fit. With ``A_k`` the lag-``k``
+    coefficient matrix (row = target, column = source) and ``Sigma`` the
+    residual covariance, on a grid of ``nfreq`` frequencies ``f`` evenly
+    spaced over [0, 0.5] cycles per sample,
 
         A(f) = I - sum_k A_k exp(-2 pi i f k),   H(f) = A(f)^{-1},
         S(f) = H(f) Sigma H(f)^H,                S(f)^{-1} = A(f)^H Sigma^{-1} A(f).
 
     In the literature's ``[target i, source j]`` notation:
 
-    * PDC (``cpdc``; Baccalá & Sameshima 2001):
-      ``|pi_ij(f)|^2 = |A_ij(f)|^2 / sum_k |A_kj(f)|^2``, source ``j``'s outflow
-      normalised over every target ``k`` (itself included), so
-      ``sum_i |pi_ij(f)|^2 = 1`` at every frequency.
-    * gPDC (``cgpdc``; Baccalá, Sameshima & Takahashi 2007): the same with each
-      target weighted by its innovation variance ``sigma_k^2 = Sigma_kk``,
-      ``|A_ij|^2 / sigma_i^2 / sum_k (|A_kj|^2 / sigma_k^2)``: unlike PDC,
-      unchanged by rescaling any one process.
-    * Partial coherence (``pcohmag``; Dahlhaus 2000):
-      ``|P_ij(f)|^2 = |Q_ij|^2 / (Q_ii Q_jj)`` with ``Q = S(f)^{-1}``, the
-      coherence of ``i`` and ``j`` once the linear influence of every other
-      process, at all lags, is removed from both. Symmetric.
-    * dDTF (``cddtf``; Korzeniewska et al. 2003):
-      ``eta_ij(f) |P_ij(f)|``, the full-frequency DTF
-      ``eta_ij(f) = |H_ij(f)| / sqrt(sum_f sum_k |H_ik(f)|^2)`` (target ``i``'s
-      inflow normalised over every source and every grid frequency) gated by
-      the partial coherence, so that only direct paths survive.
+    * PDC (``cpdc``): ``|pi_ij(f)|^2 = |A_ij(f)|^2 / sum_k |A_kj(f)|^2``,
+      source ``j``'s outflow normalised over every target ``k`` (itself
+      included).
+    * gPDC (``cgpdc``): the same with each target weighted by its innovation
+      variance ``sigma_k^2 = Sigma_kk``; unlike PDC, unchanged by rescaling
+      any one process.
+    * Partial coherence (``pcohmag``): ``|P_ij(f)|^2 = |Q_ij|^2 / (Q_ii Q_jj)``
+      with ``Q = S(f)^{-1}``. Symmetric.
+    * dDTF (``cddtf``): ``eta_ij(f) |P_ij(f)|``, the full-frequency DTF
+      ``eta_ij(f) = |H_ij(f)| / sqrt(sum_f sum_k |H_ik(f)|^2)`` gated by the
+      partial coherence, so that only direct paths survive.
 
-    Scale: ``cpdc``, ``cgpdc`` and ``pcohmag`` report squared magnitudes
-    (``|pi|^2``, ``|P|^2``), as ``pdcoh_*``, ``gpdcoh_*`` and ``cohmag_*`` do;
-    ``cddtf`` reports the magnitude ``eta |P|``, as ``ddtf_*`` does. All lie in
-    [0, 1]. ``eta`` is normalised by a sum over the grid, so dDTF scales like
-    ``1 / sqrt(nfreq)`` and is comparable only at a fixed ``nfreq``.
-
-    Band statistic: ``statistic="mean"`` or ``"max"`` of the spectrum over the
-    grid frequencies in the closed band ``fmin <= f <= fmax``.
-
-    Direction: row = source, column = target, so ``A[i, j]`` is ``i -> j``
-    (the transpose of the literature's ``[target, source]``). The diagonal is
-    NaN.
-
-    Unlike the bivariate ``pdcoh_*``, ``dtf_*`` and ``ddtf_*``, these condition
-    on every other process: PDC is zero at all frequencies exactly when there
-    is no direct link ``i -> j`` (the same null as ``cgc_*``), and dDTF and
-    the partial coherence are near zero for a link only through other
-    processes.
-
-    Model order: as ``cgc_*`` (``order`` a positive int or ``"bic"``,
-    ``max_order`` only with ``"bic"``), whose cached fit these share.
-
-    Parameters:
-        order (int or "bic"): VAR model order, default "bic".
-        max_order (int, optional): largest order ``"bic"`` considers,
-            default 10 (identifier ``_pmax-<n>`` when not the default).
-        statistic ("mean" or "max"): band statistic, default "mean".
-        fmin, fmax (float): band edges in cycles per sample,
-            ``0 <= fmin <= fmax <= 0.5``; default the full band [0, 0.5]. The
-            band must hold at least one grid frequency.
-        nfreq (int): number of grid frequencies over [0, 0.5], default 256
-            (identifier ``_nf-<n>`` when not the default).
-
-    Identifiers: ``<stem>_p-<order>_<statistic>_fmin-<fmin>_fmax-<fmax>``
-    with ``.`` written ``-`` (``cpdc_p-bic_mean_fmin-0_fmax-0-5``).
-
-    References:
-        Baccalá, L. A. & Sameshima, K. (2001). Partial directed coherence: a
-        new concept in neural structure determination. *Biol. Cybern.* 84,
-        463-474.
-
-        Baccalá, L. A., Sameshima, K. & Takahashi, D. Y. (2007). Generalized
-        partial directed coherence. *15th Int. Conf. Digital Signal
-        Processing*, 163-166.
-
-        Korzeniewska, A., Mańczak, M., Kamiński, M., Blinowska, K. J. &
-        Kasicki, S. (2003). Determination of information flow direction among
-        brain structures by a modified directed transfer function (dDTF)
-        method. *J. Neurosci. Methods* 125, 195-207.
-
-        Dahlhaus, R. (2000). Graphical interaction models for multivariate
-        time series. *Metrika* 51, 157-172.
+    ``cpdc``, ``cgpdc`` and ``pcohmag`` report squared magnitudes, as
+    ``pdcoh_*``, ``gpdcoh_*`` and ``cohmag_*`` do; ``cddtf`` reports the
+    magnitude, as ``ddtf_*`` does. All lie in [0, 1]. The band statistic is
+    the mean or maximum over the grid frequencies in the closed band
+    ``fmin <= f <= fmax``. Row = source, column = target (the transpose of
+    the literature's layout), and the diagonal is NaN. Unlike the bivariate
+    ``pdcoh_*``, ``dtf_*`` and ``ddtf_*``, these condition on every other
+    process. Identifiers read
+    ``<stem>_p-<order>_<statistic>_fmin-<fmin>_fmax-<fmax>`` with ``.``
+    written ``-`` (``cpdc_p-bic_mean_fmin-0_fmax-0-5``). The parameters are
+    documented on each subclass.
     """
 
     # One fit per (order, max_order), shared with cgc_* in data.var.
@@ -646,13 +601,44 @@ class ConditionalSpectral(Unsigned):
 
 
 class ConditionalPartialDirectedCoherence(ConditionalSpectral, Directed):
-    """Partial directed coherence of a VAR of all processes, ``cpdc_*`` (Baccalá & Sameshima 2001).
+    """Partial directed coherence of a VAR of all processes, ``cpdc_*`` [1]_.
 
     ``cpdc[i, j]`` (source ``i``, target ``j``) is the band statistic of
     ``|A_ji(f)|^2 / sum_k |A_ki(f)|^2``, the share of source ``i``'s outflow
-    ``A(f)[:, i]`` that goes directly to ``j``. Zero at every frequency
-    exactly when ``j``'s equation has no lag of ``i``. See
-    :class:`ConditionalSpectral` for the common definitions and parameters.
+    ``A(f)[:, i]`` that goes directly to ``j``; a source's shares over all
+    targets, itself included, sum to 1 at every frequency. Zero at every
+    frequency exactly when ``j``'s equation has no lag of ``i`` (the same null
+    as ``cgc_*``). Directed and unsigned, in [0, 1]. See
+    :class:`ConditionalSpectral` for the common definitions.
+
+    References
+    ----------
+    .. [1] L.A. Baccalá, K. Sameshima, "Partial directed coherence: a new
+           concept in neural structure determination", Biol. Cybern. 84(6),
+           463-474 (2001).
+
+    Parameters
+    ----------
+    order : int or str, optional
+        VAR model order, a positive int, or ``'bic'`` to choose it by the
+        Bayesian information criterion. Default: ``'bic'``.
+    max_order : int or None, optional
+        Largest order ``'bic'`` considers; None means 10. Only valid with
+        ``order='bic'``. A value other than 10 is appended to the identifier
+        as ``_pmax-<n>``. Default: None.
+    statistic : str, optional
+        ``'mean'`` or ``'max'`` of the spectrum over the band.
+        Default: ``'mean'``.
+    fmin : float, optional
+        Lower edge of the band in cycles per sample, in [0, 0.5].
+        Default: 0.
+    fmax : float, optional
+        Upper edge of the band in cycles per sample, in [0, 0.5] and not below
+        ``fmin``; the band must hold at least one grid frequency. Default: 0.5.
+    nfreq : int, optional
+        Number of grid frequencies evenly spaced over [0, 0.5], at least 2. A
+        value other than 256 is appended to the identifier as ``_nf-<n>``.
+        Default: 256.
     """
 
     name = "Conditional partial directed coherence"
@@ -662,13 +648,43 @@ class ConditionalPartialDirectedCoherence(ConditionalSpectral, Directed):
 
 
 class ConditionalGeneralizedPartialDirectedCoherence(ConditionalSpectral, Directed):
-    """Generalised PDC of a VAR of all processes, ``cgpdc_*`` (Baccalá, Sameshima & Takahashi 2007).
+    """Generalized PDC of a VAR of all processes, ``cgpdc_*`` [1]_.
 
-    ``cgpdc[i, j]`` is the band statistic of
+    ``cgpdc[i, j]`` (source ``i``, target ``j``) is the band statistic of
     ``(|A_ji(f)|^2 / sigma_j^2) / sum_k (|A_ki(f)|^2 / sigma_k^2)``, PDC with
-    each target weighted by its innovation variance ``sigma_k^2 = Sigma_kk``,
-    which makes it invariant to rescaling any one process. See
-    :class:`ConditionalSpectral`.
+    each target weighted by its innovation variance
+    ``sigma_k^2 = Sigma_kk``, which makes it invariant to rescaling any one
+    process. Raises ``ValueError`` if a process has zero innovation variance.
+    Directed and unsigned, in [0, 1]. See :class:`ConditionalSpectral`.
+
+    References
+    ----------
+    .. [1] L.A. Baccalá, K. Sameshima, D.Y. Takahashi, "Generalized partial
+           directed coherence", 15th International Conference on Digital
+           Signal Processing, 163-166 (2007).
+
+    Parameters
+    ----------
+    order : int or str, optional
+        VAR model order, a positive int, or ``'bic'`` to choose it by the
+        Bayesian information criterion. Default: ``'bic'``.
+    max_order : int or None, optional
+        Largest order ``'bic'`` considers; None means 10. Only valid with
+        ``order='bic'``. A value other than 10 is appended to the identifier
+        as ``_pmax-<n>``. Default: None.
+    statistic : str, optional
+        ``'mean'`` or ``'max'`` of the spectrum over the band.
+        Default: ``'mean'``.
+    fmin : float, optional
+        Lower edge of the band in cycles per sample, in [0, 0.5].
+        Default: 0.
+    fmax : float, optional
+        Upper edge of the band in cycles per sample, in [0, 0.5] and not below
+        ``fmin``; the band must hold at least one grid frequency. Default: 0.5.
+    nfreq : int, optional
+        Number of grid frequencies evenly spaced over [0, 0.5], at least 2. A
+        value other than 256 is appended to the identifier as ``_nf-<n>``.
+        Default: 256.
     """
 
     name = "Conditional generalized partial directed coherence"
@@ -678,14 +694,47 @@ class ConditionalGeneralizedPartialDirectedCoherence(ConditionalSpectral, Direct
 
 
 class ConditionalDirectDirectedTransferFunction(ConditionalSpectral, Directed):
-    """Direct directed transfer function of a VAR of all processes, ``cddtf_*`` (Korzeniewska et al. 2003).
+    """Direct directed transfer function of a VAR of all processes, ``cddtf_*`` [1]_.
 
-    ``cddtf[i, j]`` is the band statistic of ``eta_ji(f) |P_ji(f)|``: the
-    full-frequency DTF from ``i`` into ``j``, ``|H_ji(f)|`` normalised by
-    ``sqrt(sum_f sum_k |H_jk(f)|^2)`` over the whole grid, times the partial
-    coherence of ``i`` and ``j`` given every other process. See
-    :class:`ConditionalSpectral` (and its note on the ``1 / sqrt(nfreq)``
-    scale).
+    ``cddtf[i, j]`` (source ``i``, target ``j``) is the band statistic of
+    ``eta_ji(f) |P_ji(f)|``: the full-frequency DTF from ``i`` into ``j``,
+    ``|H_ji(f)|`` normalised by ``sqrt(sum_f sum_k |H_jk(f)|^2)`` over the
+    whole grid, times the partial coherence of ``i`` and ``j`` given every
+    other process. Near zero for a link only through other processes.
+    Directed and unsigned, in [0, 1]. Because ``eta`` is normalised by a sum
+    over the grid, the value scales like ``1 / sqrt(nfreq)`` and is
+    comparable only at a fixed ``nfreq``. Raises ``ValueError`` if the
+    residual covariance is singular. See :class:`ConditionalSpectral`.
+
+    References
+    ----------
+    .. [1] A. Korzeniewska, M. Mańczak, M. Kamiński, K.J. Blinowska,
+           S. Kasicki, "Determination of information flow direction among
+           brain structures by a modified directed transfer function (dDTF)
+           method", J. Neurosci. Methods 125(1-2), 195-207 (2003).
+
+    Parameters
+    ----------
+    order : int or str, optional
+        VAR model order, a positive int, or ``'bic'`` to choose it by the
+        Bayesian information criterion. Default: ``'bic'``.
+    max_order : int or None, optional
+        Largest order ``'bic'`` considers; None means 10. Only valid with
+        ``order='bic'``. A value other than 10 is appended to the identifier
+        as ``_pmax-<n>``. Default: None.
+    statistic : str, optional
+        ``'mean'`` or ``'max'`` of the spectrum over the band.
+        Default: ``'mean'``.
+    fmin : float, optional
+        Lower edge of the band in cycles per sample, in [0, 0.5].
+        Default: 0.
+    fmax : float, optional
+        Upper edge of the band in cycles per sample, in [0, 0.5] and not below
+        ``fmin``; the band must hold at least one grid frequency. Default: 0.5.
+    nfreq : int, optional
+        Number of grid frequencies evenly spaced over [0, 0.5], at least 2. A
+        value other than 256 is appended to the identifier as ``_nf-<n>``.
+        Default: 256.
     """
 
     name = "Conditional direct directed transfer function"
@@ -695,16 +744,45 @@ class ConditionalDirectDirectedTransferFunction(ConditionalSpectral, Directed):
 
 
 class PartialCoherence(ConditionalSpectral, Undirected):
-    """Squared partial coherence of a VAR of all processes, ``pcohmag_*`` (Dahlhaus 2000).
+    """Squared partial coherence of a VAR of all processes, ``pcohmag_*`` [1]_.
 
     ``pcohmag[i, j]`` is the band statistic of
     ``|Q_ij(f)|^2 / (Q_ii(f) Q_jj(f))``, ``Q = S(f)^{-1}`` the inverse of the
     VAR's spectral matrix: the squared coherence of ``i`` and ``j`` after the
     linear influence of all other processes (past, present and future) is
-    removed from both. Symmetric and in [0, 1]. Zero at every frequency
-    exactly when ``i`` and ``j`` are conditionally independent given the
-    rest, an absent edge of Dahlhaus' partial correlation graph. See
-    :class:`ConditionalSpectral`.
+    removed from both. Undirected (symmetric) and unsigned, in [0, 1]. Zero
+    at every frequency exactly when ``i`` and ``j`` are conditionally
+    independent given the rest, an absent edge of Dahlhaus' partial
+    correlation graph. Raises ``ValueError`` if the residual covariance is
+    singular. See :class:`ConditionalSpectral`.
+
+    References
+    ----------
+    .. [1] R. Dahlhaus, "Graphical interaction models for multivariate time
+           series", Metrika 51(2), 157-172 (2000).
+
+    Parameters
+    ----------
+    order : int or str, optional
+        VAR model order, a positive int, or ``'bic'`` to choose it by the
+        Bayesian information criterion. Default: ``'bic'``.
+    max_order : int or None, optional
+        Largest order ``'bic'`` considers; None means 10. Only valid with
+        ``order='bic'``. A value other than 10 is appended to the identifier
+        as ``_pmax-<n>``. Default: None.
+    statistic : str, optional
+        ``'mean'`` or ``'max'`` of the spectrum over the band.
+        Default: ``'mean'``.
+    fmin : float, optional
+        Lower edge of the band in cycles per sample, in [0, 0.5].
+        Default: 0.
+    fmax : float, optional
+        Upper edge of the band in cycles per sample, in [0, 0.5] and not below
+        ``fmin``; the band must hold at least one grid frequency. Default: 0.5.
+    nfreq : int, optional
+        Number of grid frequencies evenly spaced over [0, 0.5], at least 2. A
+        value other than 256 is appended to the identifier as ``_nf-<n>``.
+        Default: 256.
     """
 
     name = "Partial coherence"
