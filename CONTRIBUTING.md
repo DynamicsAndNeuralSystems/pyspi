@@ -129,9 +129,13 @@ Each class entry carries its labels: directedness (`directed`, `undirected` or `
 An SPI not assigned to a module carries the code `MXX` instead.
 Each config entry adds the labels that depend on its parameters.
 Merged with the class's own labels, every SPI ends up with exactly one label from each of these groups, spelled as here.
-An SPI also carries the flag `signed` where it applies: when zero has a special meaning (no relationship, or no lead) and the sign says which of two opposite relationships holds, so that its absolute value measures the size of the effect, as for a covariance or a lead/lag whose sign says which process leads.
-Every other SPI is a one-ended spectrum of dependence and carries no sign label, whatever values it takes: soft-DTW and a differential entropy can be negative, yet are not signed.
-`unsigned` is not a label.
+Three optional flags say what an SPI's value is.
+By default, with no flag, the value is a one-ended strength of dependence, whatever values it takes: it answers "how much" (soft-DTW and a differential entropy can be negative, and carry no flag).
+`timing` marks a value that is a time or phase offset, such as a lag in samples or a phase in radians, not a strength: it answers "when".
+`profile` marks a value that describes how the dependence is distributed, over time or over the range of values, not how strong it is.
+`signed` marks a value for which zero has a special meaning (no relationship, or no lead) and the sign says which of two opposite cases holds, so that its absolute value is the size of the effect, as for a covariance; it combines with the default, with `timing` (a lag whose sign says which process leads) and with `profile`.
+An SPI carries at most one of `timing` and `profile`, and `unsigned` is not a label.
+`timing` says what the value is; `time-dependent` and the descriptive tag `lagged` say how the SPI is computed.
 A class may also carry descriptive tags: `basic`, `causal`, `distance`, `embedding`, `infotheory`, `lagged`, `misc`, `normal`, `rank`, `spectral`, `symbolic`, `temporal`, `unordered` and `wavelet`.
 Comments in a config are one or two lines per class.
 

@@ -1133,6 +1133,9 @@ class Barycenter(Undirected, Signed):
         if squared or statistic == "max_time":
             self.labels = [l for l in self.labels if l != "signed"]
             self.issigned = lambda: False
+        # The time index of the maximum is an offset, not a strength.
+        if statistic == "max_time":
+            self.labels = self.labels + ["timing"]
 
         self.identifier += f"_{mode}_{statistic}"
 

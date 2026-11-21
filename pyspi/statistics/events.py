@@ -337,8 +337,10 @@ class TailDependenceAsymmetry(Undirected):
         self._statistic = statistic
         self._quantile = _require_level("quantile", quantile, 0.5, 1.0)
         # The asymmetry is signed; the upper and lower coefficients are not.
-        sign = ["signed"] if statistic == "asymmetry" else []
-        self.labels = TailDependenceAsymmetry.labels + sign
+        # The asymmetry says which tail the dependence sits in (a profile);
+        # the upper and lower coefficients are strengths in one tail.
+        extra = ["signed", "profile"] if statistic == "asymmetry" else []
+        self.labels = TailDependenceAsymmetry.labels + extra
         stat = "" if statistic == "asymmetry" else f"_{statistic}"
         self.identifier = (
             f"{TailDependenceAsymmetry.identifier}{stat}"

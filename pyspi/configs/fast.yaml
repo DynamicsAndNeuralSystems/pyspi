@@ -66,6 +66,7 @@
       - statistic: lag
         labels:
           - antisymmetric
+          - timing
       - statistic: peak
         labels:
           - undirected
@@ -324,6 +325,7 @@
     labels:
       - linear
       - signed
+      - timing
       - antisymmetric
       - bivariate
       - frequency-dependent
@@ -891,6 +893,7 @@
       - undirected
       - nonlinear
       - signed
+      - profile
       - bivariate
       - time-dependent
       - M11
@@ -972,6 +975,7 @@
       - undirected
       - nonlinear
       - signed
+      - profile
       - bivariate
       - contemporaneous
       - M14

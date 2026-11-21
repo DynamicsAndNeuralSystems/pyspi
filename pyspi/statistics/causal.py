@@ -863,10 +863,13 @@ class LaggedConvergentCrossMapping(Directed, Signed):
         )
         self._k = require_int("max_lag", max_lag, minimum=1)
         self.identifier += f"_E-{self._E}_k-{self._k}_{statistic}"
-        # A skill is a one-ended strength; the lag of its peak is signed.
+        # A skill is a one-ended strength; the lag of its peak is a signed
+        # offset.
         if statistic == "skill":
             self.labels = [l for l in self.labels if l != "signed"]
             self.issigned = lambda: False
+        else:
+            self.labels = self.labels + ["timing"]
 
     @property
     def key(self):

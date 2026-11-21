@@ -611,7 +611,7 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
     _antisymmetric_spectrum = True
     _phase_based = True
     name = "Coherence phase"
-    labels = ["signed", "spectral", "antisymmetric"]
+    labels = ["signed", "timing", "spectral", "antisymmetric"]
 
     def __init__(self, **kwargs):
         if kwargs.get("statistic", "mean") != "mean":
@@ -622,7 +622,7 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
             )
         self.identifier = "phase"
         super().__init__(**kwargs)
-        self.labels = ["signed", "spectral", "antisymmetric"]
+        self.labels = ["signed", "timing", "spectral", "antisymmetric"]
         self._measure = "coherence_phase"
 
     @parse_multivariate
@@ -1465,6 +1465,9 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
                 if l not in ("undirected", "directed")
             ] + ["antisymmetric", "signed"]
             self.issigned = lambda: True
+            # The delay is a time offset.
+            if self._statistic == "delay":
+                self.labels.append("timing")
         else:
             # |r| is symmetric by construction and non-negative, so it is
             # neither directed nor signed.

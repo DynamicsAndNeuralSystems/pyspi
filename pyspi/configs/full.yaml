@@ -74,6 +74,7 @@
         labels:
           - antisymmetric
           - signed
+          - timing
       - statistic: peak
         labels:
           - undirected
@@ -120,6 +121,8 @@
         labels:
           - antisymmetric
           - signed
+          - timing
+          - timing
       - statistic: peak
         max_lag: 10
         labels:
@@ -376,6 +379,7 @@
         max_lag: 5
         labels:
           - signed
+          - timing
       - statistic: skill
         max_lag: 5
 
@@ -662,6 +666,7 @@
     labels:
       - linear
       - signed
+      - timing
       - antisymmetric
       - bivariate
       - frequency-dependent
@@ -1306,6 +1311,7 @@
       - undirected
       - nonlinear
       - signed
+      - profile
       - bivariate
       - time-dependent
       - M11
@@ -1462,6 +1468,7 @@
       - undirected
       - nonlinear
       - signed
+      - profile
       - bivariate
       - contemporaneous
       - M14

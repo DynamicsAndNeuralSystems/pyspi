@@ -303,10 +303,11 @@ class Signed:
     Mixin for signed SPIs, which carry the ``signed`` label.
 
     Zero has a special meaning (no relationship, or no lead) and the sign says
-    which of two opposite relationships holds, so the absolute value measures
-    the size of the effect. Covariance (positive or negative coupling) is the
-    model case; a lead/lag whose sign says which process leads is the same
-    kind.
+    which of two opposite cases holds, so the absolute value is the size of
+    the effect. Covariance (positive or negative coupling) is the model case.
+    ``signed`` combines with the default one-ended strength and with the
+    flags ``timing`` (a lead/lag whose sign says which process leads) and
+    ``profile``.
     """
     def issigned(self):
         return True
@@ -315,10 +316,12 @@ class Unsigned:
     """
     Mixin for every SPI that is not signed, which carries no sign label.
 
-    A one-ended spectrum of dependence, whatever values it takes: such an SPI
-    can return negative values through estimator bias, a floor that is not 0
-    (soft-DTW, a differential entropy) or an inverted scale (the Engle-Granger
-    t-statistic, more negative for stronger evidence).
+    By default its value is a one-ended strength of dependence (or, with the
+    flag ``timing`` or ``profile``, an offset or a description of how the
+    dependence is distributed), whatever values it takes: it can be negative
+    through estimator bias, a floor that is not 0 (soft-DTW, a differential
+    entropy) or an inverted scale (the Engle-Granger t-statistic, more
+    negative for stronger evidence).
     """
     def issigned(self):
         return False

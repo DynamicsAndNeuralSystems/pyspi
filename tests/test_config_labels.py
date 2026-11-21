@@ -6,7 +6,8 @@ vocabulary of CONTRIBUTING.md (which catches typos such as ``sigend``, a
 stray ``directed,`` or a compound such as ``linear/nonlinear``), and every
 SPI carries exactly one label from each axis of that vocabulary.
 ``signed`` is a flag, carried exactly when ``issigned()`` is true; ``unsigned``
-is not a label, and one in a config is dropped.
+is not a label, and one in a config is dropped. ``timing`` and ``profile`` are
+flags set by the class, on a fixed set of bundled SPIs.
 The labels a config writes for an SPI must also agree with the SPI itself:
 its sign with ``issigned()``, its directedness with the class trait, its
 linearity with the class where the class declares one, and each SPI carries
@@ -36,7 +37,8 @@ CONTRADICTORY = (
     ("directed", "undirected"),
 )
 # The label vocabulary of CONTRIBUTING.md: each SPI carries exactly one
-# label from each axis, and the flag ``signed`` where it applies.
+# label from each axis, and the flags ``signed``, ``timing`` and ``profile``
+# where they apply.
 LABEL_AXES = {
     "directedness": {"directed", "undirected", "antisymmetric"},
     "linearity": {"linear", "nonlinear"},
@@ -50,7 +52,20 @@ DESCRIPTIVE_TAGS = {
     "normal", "rank", "spectral", "symbolic", "temporal", "unordered",
     "wavelet",
 }
-VOCABULARY = set().union(*LABEL_AXES.values()) | DESCRIPTIVE_TAGS | {"signed"}
+FLAGS = {"signed", "timing", "profile"}
+VOCABULARY = set().union(*LABEL_AXES.values()) | DESCRIPTIVE_TAGS | FLAGS
+# The SPIs of `full` whose value is an offset (timing) or describes how the
+# dependence is distributed (profile).
+TIMING_IN_FULL = {
+    "lagcorr_lag_L-None", "lagcorr_lag_L-10", "lccm_E-None_k-5_tp",
+    "phase_multitaper_mean_fs-1_fmin-0_fmax-0-5",
+    "phase_multitaper_mean_fs-1_fmin-0_fmax-0-25",
+    "phase_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
+}
+PROFILE_IN_FULL = {
+    "edge_excessvar", "edge_topshare_f-0-05", "edge_acf1",
+    "tailasym_q-0-95", "tailasym_q-0-9",
+}
 
 
 @pytest.fixture(scope="module")
@@ -124,7 +139,7 @@ def test_the_vocabulary_matches_contributing():
     for axis, axis_labels in LABEL_AXES.items():
         if axis != "module":
             assert axis_labels <= named, (axis, sorted(axis_labels - named))
-    assert {"M01", "M14", "MXX", "signed"} <= named
+    assert {"M01", "M14", "MXX"} | FLAGS <= named
     assert DESCRIPTIVE_TAGS <= named, sorted(DESCRIPTIVE_TAGS - named)
 
 
@@ -302,3 +317,48 @@ def test_filter_spis_explains_that_unsigned_is_not_a_label(tmp_path, monkeypatch
         filter_spis(["unsigned"])
     with pytest.raises(ValueError, match="'unsigned' is not a label"):
         filter_spis(["linear", "unsigned"])
+
+
+@pytest.mark.parametrize("flag,expected", [("timing", TIMING_IN_FULL),
+                                           ("profile", PROFILE_IN_FULL)])
+def test_value_flags_in_full(labels_by_config, flag, expected):
+    full = labels_by_config["full"]
+    assert {ident for ident, labels in full.items() if flag in labels} == expected
+    # The same SPIs carry the flag in every config that includes them.
+    for config, spis in labels_by_config.items():
+        assert {i for i, labels in spis.items() if flag in labels} \
+            == expected & set(spis), config
+
+
+def test_no_spi_is_both_timing_and_profile(labels_by_config):
+    bad = [f"{config}/{ident}" for config, spis in labels_by_config.items()
+           for ident, labels in spis.items() if {"timing", "profile"} <= set(labels)]
+    assert not bad, bad
+
+
+def test_config_value_flags_agree_with_the_class(entries_by_config):
+    bad = []
+    for config, entries in entries_by_config.items():
+        for written, spi, merged in entries:
+            for flag in ("timing", "profile"):
+                if (flag in written) != (flag in spi.labels):
+                    bad.append(f"{config}/{merged.identifier}: {flag}")
+    assert not bad, "\n".join(bad)
+
+
+def test_unbundled_timing_statistics():
+    from pyspi.statistics.distance import Barycenter
+    from pyspi.statistics.events import TailDependenceAsymmetry
+    from pyspi.statistics.spectral import GroupDelay
+
+    def flags(spi):
+        return set(spi.labels) & {"timing", "profile"}
+
+    assert flags(GroupDelay(statistic="delay")) == {"timing"}
+    assert flags(GroupDelay(statistic="slope")) == set()
+    assert flags(GroupDelay(statistic="rvalue")) == set()
+    assert flags(Barycenter(statistic="max_time")) == {"timing"}
+    for statistic in ("mean", "max", "corr"):
+        assert flags(Barycenter(mode="dtw", statistic=statistic)) == set()
+    assert flags(TailDependenceAsymmetry(statistic="upper")) == set()
+    assert flags(TailDependenceAsymmetry(statistic="lower")) == set()

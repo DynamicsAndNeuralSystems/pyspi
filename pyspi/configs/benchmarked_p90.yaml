@@ -85,6 +85,7 @@
         labels:
           - antisymmetric
           - signed
+          - timing
       - statistic: peak
         labels:
           - undirected
@@ -131,6 +132,8 @@
         labels:
           - antisymmetric
           - signed
+          - timing
+          - timing
       - statistic: peak
         max_lag: 10
         labels:
@@ -426,6 +429,7 @@
     labels:
       - linear
       - signed
+      - timing
       - antisymmetric
       - bivariate
       - frequency-dependent

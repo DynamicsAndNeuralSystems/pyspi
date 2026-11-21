@@ -551,6 +551,9 @@ class LagResolvedCorrelation(Directed, Signed):
             sign = ["signed"]
         self.labels = LagResolvedCorrelation.labels + [
             self._TRAITS[statistic]] + sign
+        # The lag of peak |r| is an offset, not a strength.
+        if statistic == "lag":
+            self.labels.append("timing")
         self.identifier = f"lagcorr_{statistic}"
         if statistic == "onesided":
             self.identifier += f"_tau-{tau}"

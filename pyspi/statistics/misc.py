@@ -548,7 +548,8 @@ class EdgeTimeSeries(Undirected, Signed):
 
     name = "Edge time series (coupling nonstationarity)"
     identifier = "edge"
-    labels = ["misc", "undirected", "nonlinear", "signed"]
+    # Each statistic describes how the co-fluctuation is spread over time.
+    labels = ["misc", "undirected", "nonlinear", "signed", "profile"]
 
     _STATISTICS = ("excessvar", "topshare", "acf1")
 
