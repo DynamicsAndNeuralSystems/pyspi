@@ -298,3 +298,30 @@ def test_phi_is_symmetric_in_the_pair(phitype):
     X = _kuramoto_pair(0, 4)
     assert _phi(X, phitype) == pytest.approx(_phi(X[::-1].copy(), phitype),
                                              rel=1e-8, abs=1e-13)
+
+
+@pytest.mark.parametrize("kwargs, match", [
+    ({"phitype": "bogus"}, "phitype"),
+    ({"normalization": 2}, "normalization"),
+    ({"delay": 0}, "delay"),
+])
+def test_integrated_information_rejects_invalid_parameters(kwargs, match):
+    from pyspi.statistics.infotheory import IntegratedInformation
+
+    with pytest.raises(ValueError, match=match):
+        IntegratedInformation(**kwargs)
+
+
+def test_integrated_information_failure_reaches_calc_errors(monkeypatch):
+    """A failure on every pair is reported as the SPI's error, not a silent NaN."""
+    import pyspi.lib.phi_native as phi_native
+    from pyspi.data import Data
+    from pyspi.statistics.infotheory import IntegratedInformation
+
+    def boom(*a, **k):
+        raise np.linalg.LinAlgError("singular")
+
+    monkeypatch.setattr(phi_native, "phi_comp", boom)
+    data = Data(np.random.default_rng(0).standard_normal((3, 100)))
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        IntegratedInformation().multivariate(data)
