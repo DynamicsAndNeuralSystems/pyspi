@@ -145,7 +145,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `n` reaches the identifier of `DirectedInfo` and `CausalEntropy`.
 - **KSG ties and scale.**
   KSG standardises each coordinate, as JIDT does, and breaks ties deterministically: in each series with a positive standard deviation, every repeated value gets Gaussian jitter of SD `1e-10 × std` from a fixed-seed generator (seeds: source 0, target 1, embedding selection 2), repeated until all values are distinct, as in pyhctsa.
-  When the jitter is below the floating-point resolution of the values (an un-z-scored series far from zero), the estimate is NaN, labelled not appropriate.
+  A series whose repeated values lie so far from zero that the jitter would span too few floating-point steps to act as random (an un-z-scored series with a large offset) is centred before it is jittered, so the offset does not change the estimate.
   Tie-free series are untouched and match JIDT 1.6.1 run without its dither to about 1e-15.
   Without this, tied data give confident nonzero MI on independent series, since every kth-neighbour radius is zero; every process of the bundled `forex` dataset is tied.
   The jitter is deterministic but depends on observation order; NaN, infinite and constant series raise.
@@ -292,6 +292,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **The AUTO Theiler window (`dyn_corr_excl="AUTO"`) is capped at `N // 10`** (hctsa's rule), so it can no longer approach the series length.
 - **One undefined pair no longer voids an SPI.**
   A pair whose estimate raises (e.g., tied values for a Kozachenko-Leonenko entropy) is set to NaN with one warning, and the SPI fails only if every pair does.
+- **Input that cannot support an estimate is NaN, labelled not appropriate, with the reason in `calc.errors` or `calc.pair_errors`.**
+  This covers refusals driven by the data (a series too short for a lag, order, embedding or window, ties, collinear series, no amplitude in a band) in the information-theoretic SPIs, `lagcorr_*`, `ccm_*`, `lccm_*`, `nli_*`, `liang_*`, `cgc_*`, the conditional spectral SPIs (`cpdc_*`, `cgpdc_*`, `cddtf_*`, `pcohmag_*`), `pac_*` and `edge_*`.
+  `ccm_E-None_*` and `lccm_E-None_*` are not appropriate for a series of fewer than 41 observations, too few for their search over E = 1 to 10 (2.0.2 failed inside pyEDM for the shortest of these).
 - **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
 - **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.

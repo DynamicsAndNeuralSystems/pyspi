@@ -8,6 +8,7 @@ import sklearn.covariance as cov
 
 from pyspi.base import (
     Directed,
+    NotAppropriate,
     Undirected,
     Signed,
     Unsigned,
@@ -543,6 +544,9 @@ class LagResolvedCorrelation(Directed, Signed):
         self._tau = tau
         self._max_lag = (None if max_lag is None
                          else require_int("max_lag", max_lag, minimum=1))
+        if (statistic == "onesided" and tau != "1e"
+                and self._max_lag is not None and tau > self._max_lag):
+            raise ValueError(f"tau = {tau} exceeds max_lag = {self._max_lag}.")
 
         if statistic in self._UNSIGNED:
             self.issigned = lambda: False
@@ -564,7 +568,7 @@ class LagResolvedCorrelation(Directed, Signed):
         if self._max_lag is not None:
             L = min(L, self._max_lag)
         if L < 1:
-            raise ValueError(
+            raise NotAppropriate(
                 f"The lag window min(max_lag, T // 4) is {L} for T = {T}: "
                 f"at least one lag is needed.")
         return L
@@ -578,9 +582,10 @@ class LagResolvedCorrelation(Directed, Signed):
         stat = self._statistic
         if stat == "onesided" and self._tau != "1e":
             if self._tau > L:
-                raise ValueError(
+                raise NotAppropriate(
                     f"tau = {self._tau} is outside the lag window "
-                    f"L = min(max_lag, T // 4) = {L}.")
+                    f"L = min(max_lag, T // 4) = {L} for T = "
+                    f"{data.n_observations}.")
             return lambda i, j: self._tau
         if stat not in ("onesided", "onesidedpeak"):
             return None

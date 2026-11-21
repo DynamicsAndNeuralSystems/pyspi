@@ -8,7 +8,8 @@ from scipy.spatial import KDTree
 from sklearn.gaussian_process.kernels import ConstantKernel, RBF
 
 from pyspi.base import (
-    Directed, Unsigned, Signed, fill_pairwise, parse_bivariate, parse_multivariate,
+    Directed, NotAppropriate, Unsigned, Signed, fill_pairwise, parse_bivariate,
+    parse_multivariate,
 )
 from pyspi.lib.pairwise_causal import (
     cds_score, igci_score, normalized_hsic, reci_score,
@@ -288,7 +289,7 @@ def _ccm_library_sizes(N, E, nlibs=21):
     upper = int(np.floor((N - E - 1) / 10) * 10)
     lower = int(np.ceil(2 * E / 10) * 10)
     if upper < lower:
-        raise ValueError(
+        raise NotAppropriate(
             f"CCM at E={E} needs library sizes from {lower} to {upper}; "
             f"{N} observations are too few.")
     return [int(L) for L in np.unique(np.rint(np.linspace(lower, upper, nlibs + 1)))]
@@ -486,6 +487,8 @@ def _cross_map_skill_dense(library, targets, E, L, sample=100, seed=42, tp=0):
 
 # Library-size steps of the cached CCM skill curve (nlibs + 1 sizes).
 _CCM_NLIBS = 21
+# Largest embedding dimension the E=None selection searches.
+_CCM_MAX_E = 10
 
 
 def _ccm_store(data, key, value):
@@ -521,13 +524,22 @@ def _ccm_embedding(data, E, procs=None):
 
     z = data.to_numpy(squeeze=True)
     N = data.n_observations
+    # pyEDM's Simplex at dimension E needs at least 2(E + 1) library rows in
+    # 10 .. N - 10 (N - 19 rows); checked for the largest E before pyEDM runs.
+    if N - 19 < 2 * (_CCM_MAX_E + 1):
+        raise NotAppropriate(
+            f"CCM with E=None selects E in 1..{_CCM_MAX_E} by simplex "
+            f"projection on rows 10 to N - 10, which needs N >= "
+            f"{2 * (_CCM_MAX_E + 1) + 19} observations; got N = {N}. Use a "
+            f"longer series or a fixed E.")
     df = pd.DataFrame(
         np.concatenate([np.atleast_2d(np.arange(0, N)), z]).T,
         columns=["index"] + [f"proc{p}" for p in range(M)],
     )
     pred = str(10) + " " + str(N - 10)
     embedding = np.array(
-        [_optimal_embedding_dimension(df, f"proc{p}", pred) for p in idx],
+        [_optimal_embedding_dimension(df, f"proc{p}", pred, _CCM_MAX_E)
+         for p in idx],
         dtype=int)
     if procs is None:
         _ccm_store(data, ("embedding",), embedding)
@@ -1146,7 +1158,7 @@ class NonlinearInterdependence(Directed, Unsigned):
             x = data.to_numpy()[p, :, 0]
             N = x.shape[0] - (m - 1) * tau
             if N <= k + 2 * W + 1:
-                raise ValueError(
+                raise NotAppropriate(
                     f"{self.identifier} needs more than k + 2*theiler + 1 = "
                     f"{k + 2 * W + 1} delay vectors so that every point keeps "
                     f"more than k admissible neighbours; T = {x.shape[0]} "
@@ -1188,7 +1200,7 @@ class NonlinearInterdependence(Directed, Unsigned):
         Rk_cond = _nli_mean_sq_dist(emb, self._process(data, cache, j)[1])
         if self._statistic in ("S", "H") and not np.all(Rk_cond > 0):
             # Repeated delay vectors give R_n^k(X|Y) = 0: the ratio is undefined.
-            raise ValueError(
+            raise NotAppropriate(
                 f"{self.identifier}: a Y-conditioned neighbourhood has zero "
                 f"mean squared distance (repeated delay vectors), so "
                 f"{self._statistic}(X|Y) is undefined.")
@@ -1246,7 +1258,7 @@ def _liang_moments(z, k):
     z = np.atleast_2d(np.asarray(z, dtype=np.float64))
     n = z.shape[1] - k
     if n < 3:
-        raise ValueError(
+        raise NotAppropriate(
             f"Liang-Kleeman information flow with k={k} needs at least k + 3 = "
             f"{k + 3} observations; got {z.shape[1]}.")
     x = z[:, :n]
@@ -1419,7 +1431,7 @@ class LiangInformationFlow(Directed, Signed):
         M = C.shape[0]
         rank = np.linalg.matrix_rank(C)
         if rank < M:
-            raise ValueError(
+            raise NotAppropriate(
                 f"Conditional Liang-Kleeman flow needs a nonsingular covariance "
                 f"of all {M} series, but its rank is {rank}: too few "
                 f"observations, or a series that is a linear combination of "
@@ -1458,7 +1470,7 @@ class LiangInformationFlow(Directed, Signed):
         bad = off & np.isnan(A)
         if bad.any():
             if bad.sum() == off.sum():
-                raise ValueError(
+                raise NotAppropriate(
                     f'SPI "{self.identifier}": every pair is undefined '
                     f"(singular pairwise covariances).")
             i, j = np.argwhere(bad)[0]
@@ -1482,7 +1494,7 @@ class LiangInformationFlow(Directed, Signed):
             return np.nan
         value = self._matrix(data)[i, j]
         if np.isnan(value):
-            raise ValueError(
+            raise NotAppropriate(
                 f'SPI "{self.identifier}": pair ({i}, {j}) is undefined '
                 f"(singular covariance: collinear or constant series).")
         return float(value)

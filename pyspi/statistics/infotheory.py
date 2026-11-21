@@ -675,6 +675,10 @@ _TIE_SEED_SOURCE = 0
 _TIE_SEED_TARGET = 1
 _TIE_SEED_SELECTION = 2
 
+# Least number of floating-point steps the jitter's standard deviation must
+# span at the largest repeated value for the jitter to act as random.
+_TIE_JITTER_MIN_STEPS = 2000
+
 
 def _tie_break(y, seed=0):
     """
@@ -692,11 +696,17 @@ def _tie_break(y, seed=0):
     embedding so that every embedded lag of a sample carries the same
     perturbation.
 
-    Values far from zero relative to their spread (``|y| / std`` above about
-    1e5, possible only without z-scoring) have a floating-point resolution
-    coarser than the jitter, so the ties survive every pass; the estimate is
-    then not appropriate (``NotAppropriate``), and centring or z-scoring the
-    series resolves it.
+    The jitter acts as random only when its standard deviation spans at
+    least ``_TIE_JITTER_MIN_STEPS`` floating-point steps at the largest
+    repeated value. When a large offset leaves it fewer (an un-z-scored
+    series whose repeated values lie far from zero relative to its spread),
+    the series is centred first. The KSG estimators standardise each
+    coordinate before the neighbour search, so the centred series gives the
+    same estimate up to rounding, and its jitter is resolved: a value repeated
+    twice in a centred series lies within ``sqrt((T - 1) / 2)`` standard
+    deviations of zero, which is enough for fewer than 100,000 values. A
+    series whose repeated values are still too far from its mean, or whose
+    ties survive every pass, raises ``NotAppropriate``.
     """
     y = np.asarray(y, dtype=np.float64)
     if y.size < 2 or not np.all(np.isfinite(y)):
@@ -704,6 +714,25 @@ def _tie_break(y, seed=0):
     sigma = y.std(ddof=1)
     if not sigma > 0:
         return y
+    _, inverse, counts = np.unique(y, return_inverse=True, return_counts=True)
+    repeated = counts[inverse.ravel()] > 1
+    if repeated.any():
+        def steps(v):
+            return 1e-10 * sigma / np.spacing(np.max(np.abs(v[repeated])))
+
+        if steps(y) < _TIE_JITTER_MIN_STEPS:
+            # Centring changes no KSG estimate (each coordinate is standardised
+            # before the neighbour search) and resolves the jitter.
+            y = y - y.mean()
+            if steps(y) < _TIE_JITTER_MIN_STEPS:
+                far = np.max(np.abs(y[repeated])) / sigma
+                raise NotAppropriate(
+                    f"KSG cannot break the ties in this series reliably: a "
+                    f"repeated value lies {far:.3g} "
+                    f"standard deviations from the mean, where the "
+                    f"tie-breaking jitter spans only {steps(y):.3g} "
+                    f"floating-point steps (at least {_TIE_JITTER_MIN_STEPS} "
+                    f"are needed).")
     rng = None
     for _ in range(100):
         _, inverse, counts = np.unique(y, return_inverse=True, return_counts=True)
@@ -717,12 +746,8 @@ def _tie_break(y, seed=0):
     if len(np.unique(y)) < y.size:
         raise NotAppropriate(
             f"KSG could not break the ties in a series with "
-            f"{y.size - len(np.unique(y))} repeated value(s): the tie-breaking "
-            f"jitter (1e-10 of the standard deviation, {1e-10 * sigma:.3g}) is "
-            f"below the floating-point resolution of values of this magnitude "
-            f"(largest |value| {np.max(np.abs(y)):.3g}). Centre or z-score the "
-            f"series."
-        )
+            f"{y.size - len(np.unique(y))} repeated value(s) after 100 "
+            f"jitter passes.")
     return y
 
 

@@ -121,7 +121,7 @@ calc.compute()
 ```
 
 `forex` is quantised: every one of its seven processes contains repeated values (24–212 distinct values across 250 observations).
-The Kozachenko-Leonenko entropy is undefined on tied values, so on `forex` the SPIs built on it (`je_kozachenko`, `ce_kozachenko`, `cce_kozachenko_n-5`, `xme_kozachenko_k1` and `si_kozachenko_k-1`) fail: their values are NaN, with the message in `calc.errors` and the code `Quality.ERROR` in `calc.quality`.
+The Kozachenko-Leonenko entropy is undefined on tied values, so on `forex` the SPIs built on it (`je_kozachenko`, `ce_kozachenko`, `cce_kozachenko_n-5`, `xme_kozachenko_k1` and `si_kozachenko_k-1`) are not appropriate for it: their values are NaN, with the reason in `calc.errors` and the code `Quality.NAN` in `calc.quality`.
 The KSG (`kraskov`) SPIs run, because they break ties with a tiny fixed-seed jitter.
 
 The [tutorial notebook](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/pyspi_tutorial.ipynb) walks through the 3.0 API.
