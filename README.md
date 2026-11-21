@@ -170,6 +170,22 @@ filter_spis(["nonlinear", "directed"], output_name="my_spis")
 calc = Calculator(config="my_spis.yaml")
 ```
 
+## Frequency bands
+
+pyspi is sampling-rate agnostic: a dataset carries no sampling rate.
+The bundled spectral SPIs use normalised frequency, in cycles per sample, so a band `[0, 0.25]` covers 0 to `fs / 4` whatever the true sampling rate `fs`, and a frequency in Hz is the normalised one times `fs`.
+To define bands in Hz, set `fs`, `fmin` and `fmax` on the multitaper and wavelet entries of a custom config; for example, coherence over 8–12 Hz at 250 Hz, with the identifier `cohmag_multitaper_mean_fs-250_fmin-8_fmax-12`:
+
+```yaml
+.statistics.spectral:
+  CoherenceMagnitude:
+    configs:
+      - {fs: 250, fmin: 8, fmax: 12}
+```
+
+The conditional VAR (`cpdc`, `cgpdc`, `cddtf`, `pcohmag`) and phase-amplitude coupling (`pac`) entries take cycles per sample only, so divide their band edges by `fs`.
+A band outside `[0, fs / 2]` is refused when the config is loaded, and one that holds no frequency of the series' frequency grid, which depends on its length, fails with its reason in `calc.errors`.
+
 ## Running at scale
 
 **Prefer one dataset per process.** `Calculator.compute(n_jobs=...)` parallelises

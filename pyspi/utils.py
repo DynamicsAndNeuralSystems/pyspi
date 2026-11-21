@@ -82,6 +82,91 @@ def require_positive_float(name, value):
     return value
 
 
+# Relative tolerance at the Nyquist edge, as in `spectral._closed_band`, so a
+# band edge equal to ``fs / 2`` up to floating-point round-off is accepted.
+_NYQUIST_RTOL = 1e-9
+
+
+def require_band(fs, fmin, fmax, strict=False):
+    """
+    Check a frequency band ``[fmin, fmax]`` given in the units of ``fs``.
+
+    The rule the multitaper, spectral GC and wavelet SPIs apply at
+    construction: ``fs`` is a positive finite number, and
+    ``0 <= fmin <= fmax <= fs / 2``, with ``fmin < fmax`` when ``strict``.
+    The Nyquist edge is compared with a relative tolerance of 1e-9. At the
+    default ``fs = 1`` the band is in cycles per sample.
+
+    Parameters
+    ----------
+    fs : float
+        Sampling frequency.
+    fmin : float
+        Lower edge of the band.
+    fmax : float
+        Upper edge of the band.
+    strict : bool, optional
+        Require ``fmin < fmax``, for an estimator that needs a band of
+        positive width. Default: False.
+
+    Returns
+    -------
+    tuple
+        ``(fs, fmin, fmax)`` as given, so that identifiers keep their
+        formatting. A ``TypeError`` is raised for a value that is not a real
+        number and a ``ValueError`` for one outside the rule.
+    """
+    require_positive_float("fs", fs)
+    nyquist = fs / 2
+    for name, value in (("fmin", fmin), ("fmax", fmax)):
+        if isinstance(value, (bool, np.bool_)) or not isinstance(
+                value, (int, float, np.integer, np.floating)):
+            raise TypeError(
+                f"{name} must be a real number, got {value!r} "
+                f"({type(value).__name__}).")
+        if not np.isfinite(value):
+            raise ValueError(f"{name} must be finite, got {value!r}.")
+        if value < 0:
+            raise ValueError(
+                f"{name} must be in [0, fs / 2] = [0, {fmt_param(nyquist)}], "
+                f"got {value!r}.")
+        if value > nyquist and not np.isclose(value, nyquist,
+                                              rtol=_NYQUIST_RTOL, atol=0):
+            raise ValueError(
+                f"{name} must be in [0, fs / 2] = [0, {fmt_param(nyquist)}], "
+                f"got {value!r}; the band is in the units of fs, which "
+                f"defaults to 1 (cycles per sample), so a band in Hz needs fs "
+                f"set to the sampling rate.")
+    if fmin > fmax or (strict and fmin == fmax):
+        relation = "<" if strict else "<="
+        raise ValueError(
+            f"fmin must be {relation} fmax, got fmin={fmin!r} and fmax={fmax!r}.")
+    return fs, fmin, fmax
+
+
+def empty_band_error(owner, fmin, fmax, detail):
+    """
+    The ``ValueError`` for a band that holds no frequency of a series' grid.
+
+    Parameters
+    ----------
+    owner : str
+        Name of the SPI class.
+    fmin, fmax : float
+        Edges of the band.
+    detail : str
+        What the band holds and why, e.g. ``"no frequency of the series'
+        grid (grid step 0.001)"``.
+
+    Returns
+    -------
+    ValueError
+        The error, for the caller to raise.
+    """
+    return ValueError(
+        f"{owner}: the band [{fmin}, {fmax}] holds {detail}; widen it.")
+
+
 def acf(x, mode='positive'):
     """
     Sample autocorrelation function of a series, computed by FFT.

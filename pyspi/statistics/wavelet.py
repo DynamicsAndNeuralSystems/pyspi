@@ -2,7 +2,12 @@ import numpy as np
 from mne_connectivity import phase_slope_index
 
 from pyspi.base import Undirected, Unsigned, parse_multivariate
-from pyspi.utils import fmt_param, require_positive_float
+from pyspi.utils import (
+    empty_band_error,
+    fmt_param,
+    require_band,
+    require_positive_float,
+)
 
 
 class mne(Unsigned):
@@ -10,23 +15,28 @@ class mne(Unsigned):
     Base class of the Morlet-wavelet SPIs computed with mne-connectivity.
 
     Holds the sampling frequency, the band ``[fmin, fmax]`` and the statistic
-    that reduces the result, and appends them to the identifier.
+    that reduces the result, and appends them to the identifier. The band is
+    checked at construction: ``fs`` positive and finite, and
+    ``0 <= fmin < fmax <= fs / 2``.
     """
 
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean"):
+        require_positive_float("fs", fs)
         if fmax is None:
             fmax = fs / 2
+        # Strict: the wavelet frequencies are spaced linearly from fmin to fmax.
+        require_band(fs, fmin, fmax, strict=True)
 
         # fs is passed to mne as sfreq and sets PhaseSlopeIndex's frequency floor.
         self._fs = fs
         self._fmin = fmin
-        self._fmax = fmax
-        if statistic == "mean":
-            self._statfn = np.nanmean
-        elif statistic == "max":
-            self._statfn = np.nanmax
-        else:
-            raise NameError(f"Unknown statistic {statistic}")
+        # At most fs / 2 exactly, which mne requires of every wavelet frequency.
+        self._fmax = min(fmax, fs / 2)
+        if statistic not in ("mean", "max"):
+            raise ValueError(
+                f"{type(self).__name__} does not support statistic="
+                f"{statistic!r}; it supports mean, max.")
+        self._statfn = np.nanmean if statistic == "mean" else np.nanmax
 
         self._statistic = statistic
 
@@ -71,6 +81,14 @@ class PhaseSlopeIndex(mne, Undirected):
     whatever the data, so it carries no lead/lag information; it is signed
     but not antisymmetric.
 
+    Frequencies are in the units of ``fs``, at the default ``fs = 1`` in
+    cycles per sample; ``fs`` only relabels the frequency axis, so
+    ``fs = 250`` with the band [8, 12] gives the same values as ``fs = 1``
+    with [0.032, 0.048], up to floating-point rounding. At construction
+    ``fs`` must be positive and finite and ``0 <= fmin < fmax <= fs / 2``, or
+    ``ValueError`` is raised; a band whose upper edge is at or below the floor
+    ``5 fs / T`` raises ``ValueError`` when the SPI is computed.
+
     References
     ----------
     .. [1] G. Nolte et al., "Robustly estimating the flow direction of
@@ -80,14 +98,15 @@ class PhaseSlopeIndex(mne, Undirected):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band, raised to ``5 fs / T`` (five cycles over the
-        record) when below it. Default: 0.
+        Lower edge of the band, in [0, ``fmax``), raised to ``5 fs / T``
+        (five cycles over the record) when below it. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in (``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` (antisymmetric) or ``'max'`` of ``psi(t)`` over time.
         Default: ``'mean'``.
@@ -113,7 +132,13 @@ class PhaseSlopeIndex(mne, Undirected):
     def _get_psi(self, data):
         """PSI over this class's ``[fmin, fmax]`` band, cached per band."""
         # Frequencies below five cycles over the record are not resolved.
-        fmin = max(self._fmin, 5.0 * self._fs / data.n_observations)
+        floor = 5.0 * self._fs / data.n_observations
+        fmin = max(self._fmin, floor)
+        if fmin >= self._fmax:
+            raise empty_band_error(
+                "PhaseSlopeIndex", self._fmin, self._fmax,
+                f"no frequency of the series' grid (the lowest it resolves is "
+                f"5 fs / T = {floor:.4g} for T = {data.n_observations})")
         # Keyed on the resolved fmin, so bands floored alike share an entry.
         key = (self._fs, fmin, self._fmax)
         try:
@@ -239,6 +264,14 @@ class WaveletCoherence(Unsigned, Undirected):
     Settings other than the defaults are appended to the identifier
     (``_cycles-8``, ``_tsmooth-1``, ``_ssmooth-0-6``, ``_coi-False``).
 
+    Frequencies are in the units of ``fs``, at the default ``fs = 1`` in
+    cycles per sample; ``fs`` only relabels the frequency axis, so
+    ``fs = 250`` with the band [8, 12] gives the same values as ``fs = 1``
+    with [0.032, 0.048], up to floating-point rounding. At construction
+    ``fs`` must be positive and finite and ``0 <= fmin <= fmax <= fs / 2``,
+    or ``ValueError`` is raised; a band holding no frequency of the grid,
+    which depends on ``T``, raises ``ValueError`` when the SPI is computed.
+
     References
     ----------
     .. [1] C. Torrence, P.J. Webster, "Interdecadal changes in the
@@ -252,12 +285,14 @@ class WaveletCoherence(Unsigned, Undirected):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin``, ``fmax`` and the grid are in its units.
-        Default: 1.
+        Sampling frequency, positive and finite. ``fmin``, ``fmax`` and the
+        grid are in its units; at the default 1 they are in cycles per
+        sample. Default: 1.
     fmin : float, optional
-        Lower edge of the band, inclusive. Default: 0.
+        Lower edge of the band, inclusive, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band, inclusive; None is ``fs / 2``. Default: None.
+        Upper edge of the band, inclusive, in [``fmin``, ``fs / 2``]; None is
+        the Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         Band statistic; only ``'mean'`` is accepted. Default: ``'mean'``.
     n_cycles : float, optional
@@ -280,8 +315,10 @@ class WaveletCoherence(Unsigned, Undirected):
 
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean", n_cycles=6,
                  time_smoothing=2, scale_smoothing=1.2, coi=True):
+        require_positive_float("fs", fs)
         if fmax is None:
             fmax = fs / 2
+        require_band(fs, fmin, fmax)
         if statistic != "mean":
             raise ValueError(
                 f"WaveletCoherence supports only statistic='mean', got {statistic!r}.")
@@ -392,9 +429,10 @@ class WaveletCoherence(Unsigned, Undirected):
         freqs, r2 = self._coherence_by_frequency(data)
         in_band = (freqs >= self._fmin) & (freqs <= self._fmax)
         if not in_band.any():
-            raise ValueError(
-                f"WaveletCoherence: no wavelet frequency in [{self._fmin}, "
-                f"{self._fmax}] for a series of {data.n_observations} samples.")
+            raise empty_band_error(
+                "WaveletCoherence", self._fmin, self._fmax,
+                f"no frequency of the series' grid (the wavelet grid for "
+                f"T = {data.n_observations})")
         adj = np.mean(r2[in_band], axis=0)
         np.fill_diagonal(adj, np.nan)
         return adj

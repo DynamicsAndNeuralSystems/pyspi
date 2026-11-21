@@ -192,6 +192,12 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     from sharp, non-sinusoidal waveforms, whose harmonics are locked to their
     own fundamental [4]_.
 
+    Frequencies are in cycles per sample (normalised frequency, Nyquist 0.5);
+    the class takes no ``fs``, so a band in Hz is divided by the sampling
+    rate. At construction each band must satisfy ``0 < low < high < 0.5``,
+    open at both ends because a band-pass filter needs edges strictly inside
+    (0, Nyquist), or ``ValueError`` is raised.
+
     The amplitude envelope can follow a modulation at ``f`` only if the
     amplitude band passes the sidebands at ``carrier +/- f``, so construction
     raises ``ValueError`` unless ``f4 - f3 >= 2 f2`` [5]_ and ``f3 >= f2``.

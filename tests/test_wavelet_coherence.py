@@ -149,7 +149,7 @@ def test_short_series_and_empty_bands_are_refused():
         WaveletCoherence().multivariate(Data(np.random.default_rng(8).standard_normal((2, 8)),
                                              dim_order="ps"))
     d = Data(np.random.default_rng(9).standard_normal((2, 100)), dim_order="ps")
-    with pytest.raises(ValueError, match="no wavelet frequency"):
+    with pytest.raises(ValueError, match="holds no frequency"):
         WaveletCoherence(fmin=0, fmax=0.01).multivariate(d)
 
 

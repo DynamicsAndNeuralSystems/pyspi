@@ -536,7 +536,14 @@ class ConditionalSpectral(Unsigned):
     ``pdcoh_*``, ``gpdcoh_*`` and ``cohmag_*`` do; ``cddtf`` reports the
     magnitude, as ``ddtf_*`` does. All lie in [0, 1]. The band statistic is
     the mean or maximum over the grid frequencies in the closed band
-    ``fmin <= f <= fmax``. Row = source, column = target (the transpose of
+    ``fmin <= f <= fmax``.
+
+    Frequencies are in cycles per sample (normalised frequency, Nyquist 0.5);
+    these classes take no ``fs``, so a band in Hz is divided by the sampling
+    rate. At construction ``0 <= fmin <= fmax <= 0.5`` and the band must hold
+    a grid frequency, or ``ValueError`` is raised.
+
+    Row = source, column = target (the transpose of
     the literature's layout), and the diagonal is NaN. Unlike the bivariate
     ``pdcoh_*``, ``dtf_*`` and ``ddtf_*``, these condition on every other
     process. Identifiers read
