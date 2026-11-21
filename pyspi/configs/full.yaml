@@ -12,44 +12,7 @@
     dependencies:
     configs:
       - estimator: EmpiricalCovariance
-      - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
       - estimator: MinCovDet
-      - estimator: GraphicalLassoCV
-        squared: True
-
-  # Precision
-  Precision:
-    labels:
-      - undirected
-      - linear
-      - signed
-      - multivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-      - estimator: EmpiricalCovariance
-      - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
-      - estimator: LedoitWolf
-      - estimator: MinCovDet
-      - estimator: OAS
-      - estimator: ShrunkCovariance
-      - estimator: EmpiricalCovariance
-        squared: True
-      - estimator: GraphicalLasso
-        squared: True
-      - estimator: GraphicalLassoCV
-        squared: True
-      - estimator: LedoitWolf
-        squared: True
-      - estimator: MinCovDet
-        squared: True
-      - estimator: OAS
-        squared: True
-      - estimator: ShrunkCovariance
-        squared: True
 
   # Partial correlation
   PartialCorrelation:
@@ -64,7 +27,6 @@
     configs:
       - estimator: EmpiricalCovariance
       - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
       - estimator: LedoitWolf
       - estimator: MinCovDet
       - estimator: OAS
@@ -368,54 +330,14 @@
       - M14
     dependencies:
     configs:
-      - mode: euclidean
-        statistic: max
       - mode: dtw
         statistic: corr
         labels:
           - M09
-      - mode: dtw
-        statistic: max
-      - mode: sgddtw
-        statistic: corr
-        labels:
-          - M09
-      - mode: sgddtw
-        statistic: max
       - mode: softdtw
         statistic: corr
         labels:
           - M09
-      - mode: softdtw
-        statistic: max
-
-      - mode: euclidean
-        statistic: max
-        squared: True
-
-      - mode: dtw
-        statistic: max
-        squared: True
-
-      - mode: sgddtw
-        statistic: max
-        squared: True
-
-      - mode: softdtw
-        statistic: max
-        squared: True
-
-  # Gromov-Wasserstein distance (GW_tau)
-  GromovWasserstainTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
 
 # Causal inference statistics
 .statistics.causal:
@@ -600,6 +522,10 @@
       - estimator: kernel
         kernel_width: 0.25
 
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
+
   # Time-lagged mutual information
   TimeLaggedMutualInfo:
     labels:
@@ -621,6 +547,10 @@
 
       - estimator: kernel
         kernel_width: 0.25
+
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
 
   # Transfer entropy
   TransferEntropy:
@@ -665,6 +595,13 @@
       - estimator: kernel
         kernel_width: 0.25
         k_history: 1
+        labels:
+          - M14
+
+      - estimator: kernel
+        kernel_width: 0.25
+        k_history: 1
+        dyn_corr_excl: AUTO
         labels:
           - M14
 
@@ -947,36 +884,6 @@
         labels:
           - M12
 
-  # Directed transfer function
-  DirectedTransferFunction:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-      - fs: 1
-
-      - fmin: 0
-        fmax: 0.25
-
-      - fmin: 0.25
-        fmax: 0.5
-
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
-
   # Directed coherence
   DirectedCoherence:
     labels:
@@ -1006,59 +913,6 @@
       - fmin: 0.25
         fmax: 0.5
         statistic: max
-
-  # Direct directed transfer function
-  DirectDirectedTransferFunction:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-      - fs: 1
-
-      - fmin: 0
-        fmax: 0.25
-
-      - fmin: 0.25
-        fmax: 0.5
-
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
-
-  # Group delay
-  GroupDelay:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M01
-    dependencies:
-    configs:
-      - fmin: 0
-        fmax: 0.5
-        statistic: delay
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: delay
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: delay
 
   # Spectral Granger causality
   SpectralGrangerCausality:
