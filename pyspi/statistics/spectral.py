@@ -202,9 +202,11 @@ class NonparametricSpectral(Unsigned):
     is kept. Phase measures (``_phase_based``) also leave out the real-valued
     bins, 0 Hz and ``fs / 2``: there every taper's Fourier coefficient of a
     real signal is real, so the cross-spectral phase is exactly 0 or pi and
-    carries no estimate. A band left with no frequency of the series' grid,
-    which depends on ``T``, raises ``NotAppropriate`` when the SPI is
-    computed, which the Calculator records as NaN with the reason.
+    carries no estimate, and a phase measure's band of zero width at 0 or
+    ``fs / 2`` is refused at construction. A band left with no frequency of
+    the series' grid, which depends on ``T``, raises ``NotAppropriate`` when
+    the SPI is computed, which the Calculator records as NaN with the
+    reason.
 
     Frequencies are in the units of the sampling frequency ``fs``: at the
     default ``fs = 1``, normalised frequency in cycles per sample, with the
@@ -245,12 +247,22 @@ class NonparametricSpectral(Unsigned):
     # real-valued bins (see the class docstring).
     _phase_based = False
 
+    # Needs a band of positive width (`fmin < fmax`) whatever the series.
+    _positive_width = False
+
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean",
                  time_halfbandwidth_product=_DEFAULT_NW):
         require_positive_float("fs", fs)
         if fmax is None:
             fmax = fs / 2
-        require_band(fs, fmin, fmax)
+        require_band(fs, fmin, fmax, strict=self._positive_width)
+        # A single real-valued bin is all such a band can hold at any length.
+        if self._phase_based and fmin == fmax and (
+                fmin == 0 or np.isclose(fmax, fs / 2, rtol=1e-9, atol=0)):
+            raise ValueError(
+                f"{type(self).__name__}: the band [{fmin}, {fmax}] holds only "
+                f"{'0 Hz' if fmin == 0 else 'fs / 2'}, where the cross-spectrum "
+                f"of real signals has no phase; widen it.")
 
         # `fs` reaches the multitaper estimate, the frequency grid, every cache
         # key and GroupDelay's conversion to samples.
@@ -1413,9 +1425,10 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     ``df`` is the multitaper bandwidth, ``2 NW`` FFT bins (six at the default
     ``NW = 3``): closer frequencies share tapers and carry no independent
     phase. The sign is reliable for lags up to ``T / (4 NW)`` samples, beyond
-    which the phase difference wraps. The band leaves out 0 Hz and ``fs / 2``
-    and must hold at least two frequencies one bandwidth apart, or the class
-    raises ``NotAppropriate`` (NaN with the reason in a Calculator).
+    which the phase difference wraps. The band leaves out 0 Hz and ``fs / 2``,
+    must have ``fmin < fmax`` (checked at construction), and must hold at
+    least two frequencies one bandwidth apart, or the class raises
+    ``NotAppropriate`` (NaN with the reason in a Calculator).
 
     This is the unnormalised index. Nolte et al. divide it by a jackknife
     standard deviation over epochs, which a single recording does not provide,
@@ -1469,6 +1482,8 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     # identifiers carry.
     _statistics = ("mean",)
     _phase_based = True
+    # Two frequencies one bandwidth apart: a single frequency never has them.
+    _positive_width = True
 
     def __init__(self, **kwargs):
         self.identifier = "psi"

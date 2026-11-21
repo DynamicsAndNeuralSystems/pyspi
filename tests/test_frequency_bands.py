@@ -86,12 +86,15 @@ def test_nyquist_computed_in_floating_point_is_accepted(make):
 
 def test_a_zero_width_band_is_refused_only_where_the_estimator_needs_width():
     # A single frequency is a valid closed band for the multitaper and
-    # coherence classes; the wavelet phase slope index spaces its frequencies
-    # linearly from fmin to fmax, so it needs fmin < fmax.
+    # coherence classes (for wavelet coherence, one of its fixed grid
+    # points, 65 / 256 here). The wavelet phase slope index spaces its
+    # frequencies linearly from fmin to fmax, and the multitaper one needs two
+    # frequencies a bandwidth apart, so both need fmin < fmax.
     spectral.CoherenceMagnitude(fmin=0.25, fmax=0.25)
-    wavelet.WaveletCoherence(fmin=0.25, fmax=0.25)
-    with pytest.raises(ValueError, match="fmin must be < fmax"):
-        wavelet.PhaseSlopeIndex(fmin=0.25, fmax=0.25)
+    wavelet.WaveletCoherence(fmin=65 / 256, fmax=65 / 256)
+    for cls in (wavelet.PhaseSlopeIndex, spectral.PhaseSlopeIndex):
+        with pytest.raises(ValueError, match="fmin must be < fmax"):
+            cls(fmin=0.25, fmax=0.25)
 
 
 def test_spectral_gc_reads_fmin_zero_as_the_lowest_positive_frequency():
@@ -117,8 +120,9 @@ def test_spectral_gc_reads_fmin_zero_as_the_lowest_positive_frequency():
     (spectral.DirectedCoherence(fmin=0.101, fmax=0.109), "no frequency of the series' grid"),
     (spectral.SpectralGrangerCausality(fmin=0.101, fmax=0.109), "no frequency of the series' grid"),
     (spectral.PhaseLockingValue(fmin=0.101, fmax=0.109), "no frequency of the series' grid"),
-    (spectral.PhaseLockingValue(fmin=0, fmax=0), "only the real-valued bins"),
-    (spectral.GroupDelay(statistic="delay", fmin=0.5, fmax=0.5), "only the real-valued bins"),
+    # At T = 100 these hold only 0 Hz and only fs / 2; longer series fill them.
+    (spectral.PhaseLockingValue(fmin=0, fmax=0.004), "only the real-valued bins"),
+    (spectral.GroupDelay(statistic="delay", fmin=0.495, fmax=0.5), "only the real-valued bins"),
     # 5 fs / T = 0.05 at T = 100.
     (wavelet.PhaseSlopeIndex(fmin=0, fmax=0.04), "no frequency of the series' grid"),
 ], ids=lambda x: getattr(x, "identifier", ""))

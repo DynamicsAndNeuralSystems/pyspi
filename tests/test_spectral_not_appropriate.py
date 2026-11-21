@@ -4,7 +4,8 @@ A band that holds no frequency of the series' grid, or a series too short for
 the tapers, segments, wavelets, bands or VAR orders an SPI needs, raises
 ``pyspi.base.NotAppropriate``. The Calculator stores NaN with ``Quality.NAN``
 and records the reason in ``calc.errors``, prefixed ``"NotAppropriate: "``.
-A band that no series could fill is refused at construction instead.
+A band that no series could fill is a bad parameter, refused with
+``ValueError`` at construction instead.
 """
 import warnings
 
@@ -22,13 +23,13 @@ from pyspi.statistics import spectral, wavelet
 CASES = [
     ("spectral", "CoherenceMagnitude", dict(fmin=0.101, fmax=0.109), 100,
      "holds no frequency of the series' grid"),
-    ("spectral", "PhaseLockingValue", dict(fmin=0, fmax=0), 100,
+    ("spectral", "PhaseLockingValue", dict(fmin=0, fmax=0.004), 100,
      "holds only the real-valued bins"),
     ("spectral", "DirectedCoherence", dict(fmin=0.101, fmax=0.109), 100,
      "holds no frequency of the series' grid"),
     ("spectral", "SpectralGrangerCausality", dict(fmin=0.101, fmax=0.109), 100,
      "holds no frequency of the series' grid"),
-    ("spectral", "GroupDelay", dict(statistic="delay", fmin=0.5, fmax=0.5), 100,
+    ("spectral", "GroupDelay", dict(statistic="delay", fmin=0.495, fmax=0.5), 100,
      "holds only the real-valued bins"),
     ("spectral", "PhaseSlopeIndex", dict(fmin=0.1, fmax=0.12), 100,
      "needs at least two independent frequencies"),
@@ -120,6 +121,31 @@ def test_a_band_off_the_parametric_grid_is_refused_at_construction():
         spectral.SpectralGrangerCausality(method="parametric", fmin=0.4995, fmax=0.4999)
     spectral.SpectralGrangerCausality(method="parametric", fmin=0.498, fmax=0.4995)
     spectral.SpectralGrangerCausality(fmin=0.4995, fmax=0.4999)
+
+
+@pytest.mark.parametrize("make, message", [
+    (lambda: spectral.PhaseLockingValue(fmin=0, fmax=0), r"holds only 0 Hz"),
+    (lambda: spectral.GroupDelay(statistic="delay", fmin=0.5, fmax=0.5),
+     r"holds only fs / 2"),
+    (lambda: spectral.PhaseSlopeIndex(fmin=0.2, fmax=0.2), "fmin must be < fmax"),
+    (lambda: wavelet.WaveletCoherence(fmin=0.098, fmax=0.105),
+     "holds none of the wavelet grid"),
+    (lambda: wavelet.WaveletCoherence(fmin=0, fmax=0.003),
+     "holds none of the wavelet grid"),
+], ids=["plv-0-0", "gd-nyquist", "psi-zero-width", "wtc-between-grid-points",
+        "wtc-below-grid"])
+def test_a_band_empty_at_every_length_is_refused_at_construction(make, message):
+    with pytest.raises(ValueError, match=message):
+        make()
+
+
+def test_bands_that_longer_series_fill_are_computed_there():
+    """The replacement cases above are refused at T = 100 only for want of length."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for spi in (spectral.PhaseLockingValue(fmin=0, fmax=0.004),
+                    spectral.GroupDelay(statistic="delay", fmin=0.495, fmax=0.5)):
+            spi.multivariate(_data(1000))
 
 
 def test_a_long_enough_series_is_still_computed():

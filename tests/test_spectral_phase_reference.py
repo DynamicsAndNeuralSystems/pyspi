@@ -310,17 +310,28 @@ def test_coherence_magnitude_keeps_the_closed_band(statistic, fmin, fmax):
     assert np.allclose(got[off], expected[off], rtol=0, atol=1e-12)
 
 
-@pytest.mark.parametrize("fmin, fmax", [(0, 0), (0.5, 0.5), (0, 0.005)])
+@pytest.mark.parametrize("fmin, fmax", [(0, 0), (0.5, 0.5)])
 @pytest.mark.parametrize("cls_name", sorted(_PHASE_MEASURES) + ["CoherencePhase"])
-def test_a_band_of_only_real_valued_bins_is_refused(cls_name, fmin, fmax):
+def test_a_band_of_one_real_valued_bin_is_refused_at_construction(cls_name, fmin, fmax):
     """No phase measure has a value on a band holding nothing but 0 Hz or Nyquist.
 
-    ``(0, 0.005)`` at T=100 holds only the 0 Hz bin (the grid step is 0.01).
+    A band of zero width at either holds nothing else at any length, so it is a
+    bad parameter.
     """
     import pyspi.statistics.spectral as spectral
 
-    spi = getattr(spectral, cls_name)(fmin=fmin, fmax=fmax)
-    with pytest.raises(ValueError, match="real-valued"):
+    with pytest.raises(ValueError, match="where the cross-spectrum of real signals has no phase"):
+        getattr(spectral, cls_name)(fmin=fmin, fmax=fmax)
+
+
+@pytest.mark.parametrize("cls_name", sorted(_PHASE_MEASURES) + ["CoherencePhase"])
+def test_a_band_of_only_real_valued_bins_at_this_length_is_not_appropriate(cls_name):
+    """``(0, 0.005)`` at T=100 holds only the 0 Hz bin (the grid step is 0.01)."""
+    import pyspi.statistics.spectral as spectral
+    from pyspi.base import NotAppropriate
+
+    spi = getattr(spectral, cls_name)(fmin=0, fmax=0.005)
+    with pytest.raises(NotAppropriate, match="real-valued"):
         spi.multivariate(_kuramoto())
 
 

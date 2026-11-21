@@ -202,12 +202,17 @@ def _efolding_time(freqs, fs, n_cycles):
     return np.sqrt(2) * n_cycles / (2 * np.pi * freqs) * fs
 
 
+def _wavelet_grid(fs):
+    """The 64 bin centres ``(k + 1/2) fs / (2 * 64)`` on ``(0, fs/2)``."""
+    return (np.arange(_N_WAVELET_FREQS) + 0.5) * (fs / 2) / _N_WAVELET_FREQS
+
+
 def _morlet_frequencies(n_observations, fs, n_cycles):
     """
-    Bin centres ``(k + 1/2) fs / (2 * 64)`` on ``(0, fs/2)`` whose cone of
-    influence leaves at least half the record (``T - 2 tau >= T / 2``).
+    Bin centres of ``_wavelet_grid`` whose cone of influence leaves at least
+    half the record (``T - 2 tau >= T / 2``).
     """
-    freqs = (np.arange(_N_WAVELET_FREQS) + 0.5) * (fs / 2) / _N_WAVELET_FREQS
+    freqs = _wavelet_grid(fs)
     tau = _efolding_time(freqs, fs, n_cycles)
     return freqs[n_observations - 2 * tau >= n_observations / 2]
 
@@ -271,10 +276,11 @@ class WaveletCoherence(Unsigned, Undirected):
     ``fs = 250`` with the band [8, 12] gives the same values as ``fs = 1``
     with [0.032, 0.048], up to floating-point rounding. At construction
     ``fs`` must be positive and finite and ``0 <= fmin <= fmax <= fs / 2``,
-    or ``ValueError`` is raised. A band holding no frequency of the grid,
-    which depends on ``T``, and a series too short for any wavelet to fit
-    raise ``NotAppropriate`` when the SPI is computed, which the Calculator
-    records as NaN with the reason.
+    or ``ValueError`` is raised, as it is for a band holding none of the 64
+    grid frequencies. A band holding no frequency of the grid left after the
+    cone of influence, which depends on ``T``, and a series too short for any
+    wavelet to fit raise ``NotAppropriate`` when the SPI is computed, which
+    the Calculator records as NaN with the reason.
 
     References
     ----------
@@ -323,6 +329,12 @@ class WaveletCoherence(Unsigned, Undirected):
         if fmax is None:
             fmax = fs / 2
         require_band(fs, fmin, fmax)
+        # The cone of influence removes grid points as T falls, never adds them.
+        grid = _wavelet_grid(fs)
+        if not ((grid >= fmin) & (grid <= fmax)).any():
+            raise ValueError(
+                f"WaveletCoherence: the band [{fmin}, {fmax}] holds none of the "
+                f"wavelet grid (k + 1/2) fs / 128, k = 0 to 63; widen it.")
         if statistic != "mean":
             raise ValueError(
                 f"WaveletCoherence supports only statistic='mean', got {statistic!r}.")
