@@ -14,6 +14,7 @@ from spectral_connectivity.transforms import prepare_time_series
 
 from pyspi.base import (
     Directed,
+    NotAppropriate,
     Undirected,
     Unsigned,
     fill_pairwise,
@@ -201,8 +202,11 @@ class NonparametricSpectral(Unsigned):
     is kept. Phase measures (``_phase_based``) also leave out the real-valued
     bins, 0 Hz and ``fs / 2``: there every taper's Fourier coefficient of a
     real signal is real, so the cross-spectral phase is exactly 0 or pi and
-    carries no estimate. A band left with no frequency of the series' grid,
-    which depends on ``T``, raises ``ValueError`` when the SPI is computed.
+    carries no estimate, and a phase measure's band of zero width at 0 or
+    ``fs / 2`` is refused at construction. A band left with no frequency of
+    the series' grid, which depends on ``T``, raises ``NotAppropriate`` when
+    the SPI is computed, which the Calculator records as NaN with the
+    reason.
 
     Frequencies are in the units of the sampling frequency ``fs``: at the
     default ``fs = 1``, normalised frequency in cycles per sample, with the
@@ -243,12 +247,22 @@ class NonparametricSpectral(Unsigned):
     # real-valued bins (see the class docstring).
     _phase_based = False
 
+    # Needs a band of positive width (`fmin < fmax`) whatever the series.
+    _positive_width = False
+
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean",
                  time_halfbandwidth_product=_DEFAULT_NW):
         require_positive_float("fs", fs)
         if fmax is None:
             fmax = fs / 2
-        require_band(fs, fmin, fmax)
+        require_band(fs, fmin, fmax, strict=self._positive_width)
+        # A single real-valued bin is all such a band can hold at any length.
+        if self._phase_based and fmin == fmax and (
+                fmin == 0 or np.isclose(fmax, fs / 2, rtol=1e-9, atol=0)):
+            raise ValueError(
+                f"{type(self).__name__}: the band [{fmin}, {fmax}] holds only "
+                f"{'0 Hz' if fmin == 0 else 'fs / 2'}, where the cross-spectrum "
+                f"of real signals has no phase; widen it.")
 
         # `fs` reaches the multitaper estimate, the frequency grid, every cache
         # key and GroupDelay's conversion to samples.
@@ -331,7 +345,7 @@ class NonparametricSpectral(Unsigned):
 
         The closed band, less the real-valued bins for a phase measure (see
         ``NonparametricSpectral``). A band left with no frequency raises
-        ``ValueError``.
+        ``NotAppropriate``.
         """
         in_band = _closed_band(freq, self._fmin, self._fmax)
         keep = in_band & ~_real_valued_bins(freq, self._fs) if self._phase_based else in_band
@@ -1411,9 +1425,10 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     ``df`` is the multitaper bandwidth, ``2 NW`` FFT bins (six at the default
     ``NW = 3``): closer frequencies share tapers and carry no independent
     phase. The sign is reliable for lags up to ``T / (4 NW)`` samples, beyond
-    which the phase difference wraps. The band leaves out 0 Hz and ``fs / 2``
-    and must hold at least two frequencies one bandwidth apart, or the class
-    raises ``ValueError``.
+    which the phase difference wraps. The band leaves out 0 Hz and ``fs / 2``,
+    must have ``fmin < fmax`` (checked at construction), and must hold at
+    least two frequencies one bandwidth apart, or the class raises
+    ``NotAppropriate`` (NaN with the reason in a Calculator).
 
     This is the unnormalised index. Nolte et al. divide it by a jackknife
     standard deviation over epochs, which a single recording does not provide,
@@ -1467,6 +1482,8 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     # identifiers carry.
     _statistics = ("mean",)
     _phase_based = True
+    # Two frequencies one bandwidth apart: a single frequency never has them.
+    _positive_width = True
 
     def __init__(self, **kwargs):
         self.identifier = "psi"
@@ -1488,7 +1505,7 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
         inside = self._band(freq)
         coherency = C.coherency()[..., inside[::self._frequency_step], :, :]
         if coherency.shape[-3] < 2:
-            raise ValueError(
+            raise NotAppropriate(
                 f"Phase slope index needs at least two independent frequencies "
                 f"in [{self._fmin}, {self._fmax}] besides 0 Hz and fs/2; the "
                 f"series is too short for this band.")
@@ -1681,6 +1698,12 @@ _SGC_FMIN = 1e-5
 _GC_N_FREQS = 1024
 
 
+def _parametric_gc_frequencies(fs):
+    """The grid ``granger_causality_xy`` evaluates on, ``k fs / 1026`` for k = 0 to 512."""
+    w = np.linspace(0, np.pi, _GC_N_FREQS // 2 + 1, endpoint=False)
+    return w * fs / (2 * np.pi)
+
+
 def _fit_bivariate_var(x, order=None, max_order=50):
     """
     Yule-Walker fit of the two-process VAR behind parametric spectral GC.
@@ -1693,26 +1716,47 @@ def _fit_bivariate_var(x, order=None, max_order=50):
     nitime's ``autocov_vector`` (normalised by ``T - k``, not demeaned) need
     not be.
 
-    ``max_order`` is the largest order tried. Returns ``(coef, ecov)`` in
+    ``max_order`` is the largest order tried, capped at ``T - 3``: the
+    residual covariance of a higher order is singular for any two demeaned
+    series of ``T`` observations. If BIC is still improving at the cap, the
+    order cannot be selected and ``NotAppropriate`` is raised, as it is for
+    an explicit ``order`` above ``T - 3``. Returns ``(coef, ecov)`` in
     nitime's convention, ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
     """
     x = x - x.mean(axis=-1, keepdims=True)
     n_obs = x.shape[-1]
-    n_lags = (max_order if order is None else order) + 1
+    supported = n_obs - 3
+    if order is not None and order > supported:
+        raise NotAppropriate(
+            f"Parametric spectral Granger causality: order {order} needs at "
+            f"least {order + 3} observations, but the series has {n_obs}. "
+            f"Set a lower `order`, or use a longer series.")
+    if supported < 0:
+        raise NotAppropriate(
+            f"Parametric spectral Granger causality needs at least 3 "
+            f"observations, but the series has {n_obs}.")
+    largest = order if order is not None else min(max_order, supported)
     # R[k] = (1/T) sum_t x(t+k) x(t)^T: nitime's lag orientation.
-    R = np.stack([x[:, k:] @ x[:, :n_obs - k].T for k in range(n_lags)]) / n_obs
+    R = np.stack([x[:, k:] @ x[:, :n_obs - k].T
+                  for k in range(largest + 1)]) / n_obs
     if order is not None:
         return nt_alg.lwr_recursion(R)
 
     best = None
-    for p in range(max_order + 1):
+    for p in range(largest + 1):
         coef, ecov = nt_alg.lwr_recursion(R[: p + 1])
         # nitime's criterion and arguments: (ecov, n_process, order, n_process * T).
         crit = nt_utils.bayesian_information_criterion(ecov, 2, p, 2 * n_obs)
         if best is not None and crit > best[0]:
             return best[1:]
         best = (crit, coef, ecov)
-    raise ValueError(
+    if largest < max_order:
+        raise NotAppropriate(
+            f"Parametric spectral Granger causality: automatic AR order "
+            f"selection was still improving at order {largest}, the largest "
+            f"that {n_obs} observations support. Set an explicit `order`, or "
+            f"use a longer series.")
+    raise NotAppropriate(
         f"Model estimation order did not converge at max_order = {max_order}"
     )
 
@@ -1739,16 +1783,24 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     Frequencies are in the units of ``fs``, at the default ``fs = 1`` in
     cycles per sample; ``fs`` only relabels the frequency axis (see
     ``NonparametricSpectral``). At construction ``fs`` must be positive and
-    finite and ``0 <= fmin <= fmax <= fs / 2``, or ``ValueError`` is raised; a
-    band holding no frequency of the grid raises ``ValueError`` when the SPI
-    is computed. Spectral GC is undefined at 0 Hz, so ``fmin = 0`` means the
-    lowest positive frequency, 1e-5, which the identifier names
-    (``_fmin-1e-05``). A cell with more than ``nan_threshold`` of its in-band
-    frequencies NaN is set to NaN, with a warning. With
-    ``method='nonparametric'``, where Wilson's factorisation of a pair reaches
-    its iteration cap, the value comes from the unconverged factor and the SPI
-    warns. Automatic order selection that has not converged by ``max_order``
-    raises ``ValueError``: the model is over-fitting at that record length.
+    finite and ``0 <= fmin <= fmax <= fs / 2``, or ``ValueError`` is raised.
+    The parametric method's grid does not depend on the series, so a band
+    holding none of its frequencies raises ``ValueError`` at construction;
+    the nonparametric grid does, and a band holding none of it raises
+    ``NotAppropriate`` when the SPI is computed. Spectral GC is undefined at
+    0 Hz, so ``fmin = 0`` means the lowest positive frequency, 1e-5, which
+    the identifier names (``_fmin-1e-05``).
+    A cell with more than ``nan_threshold`` of its in-band frequencies NaN is
+    set to NaN, with a warning. With ``method='nonparametric'``, where
+    Wilson's factorisation of a pair reaches its iteration cap, the value
+    comes from the unconverged factor and the SPI warns. Automatic order
+    selection that has not converged by ``max_order`` raises
+    ``NotAppropriate``: the model is over-fitting at that record length. The
+    search tries orders up to ``min(max_order, T - 3)``, the largest a series
+    of ``T`` observations supports, so a short series is fitted at the order
+    BIC selects, and is not appropriate only if BIC is still improving at
+    ``T - 3``; an explicit ``order`` above ``T - 3`` is not appropriate
+    either.
 
     References
     ----------
@@ -1837,6 +1889,13 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             raise ValueError(
                 f"fmax must be >= {_SGC_FMIN} (spectral GC is undefined at 0 "
                 f"Hz), got {fmax!r}.")
+        if method == "parametric" and not _closed_band(
+                _parametric_gc_frequencies(fs), self._fmin, fmax).any():
+            raise ValueError(
+                f"SpectralGrangerCausality: the band [{self._fmin}, {fmax}] "
+                f"holds no frequency of the parametric method's grid, "
+                f"k fs / {_GC_N_FREQS + 2} for k = 0 to {_GC_N_FREQS // 2}; "
+                f"widen it.")
         self.ignore_nan = ignore_nan
         self.nan_threshold = nan_threshold
 
@@ -1913,13 +1972,13 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                                 z[[i, j]], self._order, self._max_order)
                             w, F[i, j], F[j, i], _, _ = nt_alg.granger_causality_xy(
                                 coef, ecov, n_freqs=_GC_N_FREQS)
-                except ValueError as err:
+                except NotAppropriate as err:
                     # BIC still improving at `max_order` signals over-fitting
                     # at this record length; say so rather than relay the
                     # bare message.
                     if "did not converge" not in str(err):
                         raise
-                    raise ValueError(
+                    raise NotAppropriate(
                         f"Parametric spectral Granger causality: automatic AR "
                         f"order selection did not converge at "
                         f"max_order={self._max_order} on "
@@ -2037,7 +2096,8 @@ class PhaseAlignedCorrelation(Undirected, Unsigned):
         Welch segment length in samples, at least 2 and at most ``T``. None
         picks the largest power of two not above ``T / 8``, within [8, 256],
         which keeps ``K`` between 15 and 31 for ``T`` from 64 to 2047, and
-        refuses a record too short for four segments (``T < 20``). An integer
+        refuses a record too short for four segments (``T < 20``), as an
+        integer above ``T`` does, with ``NotAppropriate``. An integer
         fixes the resolution across lengths. The identifier records ``auto``
         or the integer. Default: None.
     """
@@ -2060,14 +2120,14 @@ class PhaseAlignedCorrelation(Undirected, Unsigned):
     def _segment_length(self, T):
         if self._nperseg is not None:
             if self._nperseg > T:
-                raise ValueError(f"nperseg={self._nperseg} exceeds the series "
-                                 f"length T={T}.")
+                raise NotAppropriate(f"nperseg={self._nperseg} exceeds the series "
+                                     f"length T={T}.")
             return self._nperseg
         n = max(self._MIN_AUTO_NPERSEG, 1 << max((T // 8).bit_length() - 1, 0))
         n = min(self._MAX_AUTO_NPERSEG, n)
         shortest = n + (self._MIN_AUTO_SEGMENTS - 1) * (n // 2)
         if T < shortest:
-            raise ValueError(
+            raise NotAppropriate(
                 f"Phase-aligned correlation needs T >= {shortest} for "
                 f"{self._MIN_AUTO_SEGMENTS} segments of the automatic length "
                 f"{n} (got T={T}); pass nperseg to override.")
@@ -2167,7 +2227,9 @@ class AdaptivePhaseConsistency(Undirected, Unsigned):
     seen. Because sample pairs in the same or adjacent segments are left out,
     a phase difference that drifts by about a cycle across the record reads
     negative, more so the fewer segments a band holds. NaN for a constant
-    process, or when every band is skipped (``T < 46``).
+    process. When every band is skipped (``T < 46``) the series cannot
+    support the estimate and ``NotAppropriate`` is raised, which the
+    Calculator records as NaN with its reason.
 
     References
     ----------
@@ -2235,7 +2297,10 @@ class AdaptivePhaseConsistency(Undirected, Unsigned):
         A = np.full((M, M), np.nan)
         bands = self._bands(T)
         if not bands:
-            return A
+            raise NotAppropriate(
+                f"Spectrally weighted phase consistency: no band holds "
+                f"{self._MIN_SEGMENTS} segments in a series of {T} samples "
+                f"(T >= 46 is needed).")
         processes = [self._process(x, bands) for x in z]
         for j in range(M):
             for i in range(j):

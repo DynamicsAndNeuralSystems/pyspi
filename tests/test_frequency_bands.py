@@ -2,8 +2,9 @@
 
 The multitaper and wavelet classes take ``fs``, ``fmin`` and ``fmax``, with the
 band in the units of ``fs``; ``fs`` only relabels the frequency axis. Each
-checks ``0 <= fmin <= fmax <= fs / 2`` at construction and raises when the band
-holds no frequency of the series' grid at compute time.
+checks ``0 <= fmin <= fmax <= fs / 2`` at construction and raises
+``NotAppropriate`` when the band holds no frequency of the series' grid at
+compute time.
 """
 import re
 import warnings
@@ -17,6 +18,7 @@ from pyspi.calculator import (
     load_spis_from_yaml,
     resolve_config,
 )
+from pyspi.base import NotAppropriate
 from pyspi.data import Data
 from pyspi.quality import Quality
 from pyspi.statistics import spectral, wavelet
@@ -84,12 +86,15 @@ def test_nyquist_computed_in_floating_point_is_accepted(make):
 
 def test_a_zero_width_band_is_refused_only_where_the_estimator_needs_width():
     # A single frequency is a valid closed band for the multitaper and
-    # coherence classes; the wavelet phase slope index spaces its frequencies
-    # linearly from fmin to fmax, so it needs fmin < fmax.
+    # coherence classes (for wavelet coherence, one of its fixed grid
+    # points, 65 / 256 here). The wavelet phase slope index spaces its
+    # frequencies linearly from fmin to fmax, and the multitaper one needs two
+    # frequencies a bandwidth apart, so both need fmin < fmax.
     spectral.CoherenceMagnitude(fmin=0.25, fmax=0.25)
-    wavelet.WaveletCoherence(fmin=0.25, fmax=0.25)
-    with pytest.raises(ValueError, match="fmin must be < fmax"):
-        wavelet.PhaseSlopeIndex(fmin=0.25, fmax=0.25)
+    wavelet.WaveletCoherence(fmin=65 / 256, fmax=65 / 256)
+    for cls in (wavelet.PhaseSlopeIndex, spectral.PhaseSlopeIndex):
+        with pytest.raises(ValueError, match="fmin must be < fmax"):
+            cls(fmin=0.25, fmax=0.25)
 
 
 def test_spectral_gc_reads_fmin_zero_as_the_lowest_positive_frequency():
@@ -115,25 +120,26 @@ def test_spectral_gc_reads_fmin_zero_as_the_lowest_positive_frequency():
     (spectral.DirectedCoherence(fmin=0.101, fmax=0.109), "no frequency of the series' grid"),
     (spectral.SpectralGrangerCausality(fmin=0.101, fmax=0.109), "no frequency of the series' grid"),
     (spectral.PhaseLockingValue(fmin=0.101, fmax=0.109), "no frequency of the series' grid"),
-    (spectral.PhaseLockingValue(fmin=0, fmax=0), "only the real-valued bins"),
-    (spectral.GroupDelay(statistic="delay", fmin=0.5, fmax=0.5), "only the real-valued bins"),
+    # At T = 100 these hold only 0 Hz and only fs / 2; longer series fill them.
+    (spectral.PhaseLockingValue(fmin=0, fmax=0.004), "only the real-valued bins"),
+    (spectral.GroupDelay(statistic="delay", fmin=0.495, fmax=0.5), "only the real-valued bins"),
     # 5 fs / T = 0.05 at T = 100.
     (wavelet.PhaseSlopeIndex(fmin=0, fmax=0.04), "no frequency of the series' grid"),
 ], ids=lambda x: getattr(x, "identifier", ""))
-def test_an_empty_band_raises_when_computed(spi, detail):
-    with pytest.raises(ValueError, match=re.escape(
+def test_an_empty_band_is_not_appropriate_when_computed(spi, detail):
+    with pytest.raises(NotAppropriate, match=re.escape(
             f"{type(spi).__name__}: the band [{spi._fmin}, {spi._fmax}] holds {detail}")):
         spi.multivariate(_data(T=100))
 
 
-def test_wavelet_coherence_empty_band_raises_when_computed():
+def test_wavelet_coherence_empty_band_is_not_appropriate_when_computed():
     spi = wavelet.WaveletCoherence(fmin=0, fmax=0.01)
-    with pytest.raises(ValueError, match=re.escape(
+    with pytest.raises(NotAppropriate, match=re.escape(
             "WaveletCoherence: the band [0, 0.01] holds no frequency of the series' grid")):
         spi.multivariate(_data(T=100))
 
 
-def test_calculator_records_an_empty_band_as_a_failed_spi(tmp_path):
+def test_calculator_records_an_empty_band_as_not_appropriate(tmp_path):
     config = tmp_path / "empty_band.yaml"
     config.write_text(
         ".statistics.spectral:\n"
@@ -149,10 +155,11 @@ def test_calculator_records_an_empty_band_as_a_failed_spi(tmp_path):
     with pytest.warns(UserWarning, match="Caught error"):
         calc.compute()
     empty = "cohmag_multitaper_mean_fs-1_fmin-0-101_fmax-0-109"
+    assert calc.errors[empty].startswith("NotAppropriate: CoherenceMagnitude: ")
     assert "holds no frequency of the series' grid" in calc.errors[empty]
     q = calc.quality[empty].to_numpy()
     off = ~np.eye(q.shape[0], dtype=bool)
-    assert (q[off] == Quality.ERROR).all()
+    assert (q[off] == Quality.NAN).all()
     assert "cohmag_multitaper_mean_fs-1_fmin-0_fmax-0-5" not in calc.errors
 
 

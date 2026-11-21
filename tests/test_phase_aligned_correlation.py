@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 from scipy import signal
 
+from pyspi.base import NotAppropriate
 from pyspi.data import Data
 from pyspi.statistics.basic import CrossCorrelation
 from pyspi.statistics.spectral import PhaseAlignedCorrelation
@@ -75,7 +76,7 @@ def test_automatic_segment_length():
     assert [spi._segment_length(T) for T in (20, 30, 64, 100, 1000, 2047, 2048,
                                              20000)] == \
         [8, 8, 8, 8, 64, 128, 256, 256]
-    with pytest.raises(ValueError, match="T >= 20"):
+    with pytest.raises(NotAppropriate, match="T >= 20"):
         spi._segment_length(19)
 
 
@@ -93,7 +94,7 @@ def test_parameters_are_validated_and_reach_the_identifier():
     for bad, err in ((True, TypeError), (2.5, TypeError), (1, ValueError)):
         with pytest.raises(err):
             PhaseAlignedCorrelation(nperseg=bad)
-    with pytest.raises(ValueError, match="exceeds the series length"):
+    with pytest.raises(NotAppropriate, match="exceeds the series length"):
         PhaseAlignedCorrelation(nperseg=512).multivariate(_data(_coupled(2, 500, 0)))
 
 
