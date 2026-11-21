@@ -273,8 +273,9 @@ def _installed_versions():
 
 
 # Version of the .npz layout; 0 is a file without the field. Schema 2 adds
-# `quality`, the per-cell codes, and `pair_errors`; a schema-1 file still
-# loads, with its codes derived from its values and `errors`.
+# `quality`, the per-cell codes, `pair_errors`, and `directedness`, each SPI's
+# symmetry trait; a schema-1 file still loads, with its codes derived from its
+# values and `errors` and its traits rebuilt from the config it names.
 _NPZ_SCHEMA = 2
 
 
@@ -356,6 +357,9 @@ def _read_npz(path):
         quality = f["quality"] if "quality" in f.files else None
         spis = [str(s) for s in f["spis"]]
         procs = [str(p) for p in f["processes"]]
+        directedness = (
+            [str(t) for t in f["directedness"]] if "directedness" in f.files else None
+        )
         # Provenance: which SPIs and pairs failed, and what produced the file.
         meta = {name: str(f[name])
                 for name in ("run_spec", "run_digest", "errors", "pair_errors")
@@ -372,6 +376,15 @@ def _read_npz(path):
             f"{path} is malformed: quality has shape {quality.shape}, expected "
             f"{values.shape}."
         )
+    if directedness is not None:
+        unknown = sorted(set(directedness) - set(DIRECTEDNESS_TRAITS))
+        if len(directedness) != len(spis) or unknown:
+            raise ValueError(
+                f"{path} is malformed: directedness holds {len(directedness)} "
+                f"entries for {len(spis)} SPIs"
+                + (f", and unknown traits {unknown}" if unknown else "") + "."
+            )
+        directedness = dict(zip(spis, directedness))
     parsed = {}
     for name in ("run_spec", "errors", "pair_errors"):
         if name in meta:
@@ -380,7 +393,8 @@ def _read_npz(path):
             except json.JSONDecodeError:
                 parsed[name] = meta[name]
     return dict(schema=schema, values=values, quality=quality, spis=spis,
-                procs=procs, run_digest=meta.get("run_digest"), **parsed)
+                procs=procs, run_digest=meta.get("run_digest"),
+                directedness=directedness, **parsed)
 
 
 def load_table(path):
@@ -400,7 +414,9 @@ def load_table(path):
     pandas.DataFrame
         The table as ``Calculator.table`` holds it: rows are processes,
         columns a ``(spi, process)`` MultiIndex. ``table.attrs`` holds the
-        file's ``schema``, ``run_spec``, ``run_digest`` and ``errors``.
+        file's ``schema``, ``run_spec``, ``run_digest`` and ``errors``, and
+        ``directedness``, ``{identifier: trait}`` with each SPI's symmetry
+        trait, which :func:`feature_vector` uses.
     """
     return _table_from_parts(_read_npz(path))
 
@@ -416,6 +432,8 @@ def _table_from_parts(parts):
             table.attrs[name] = parts[name]
     if parts["run_digest"] is not None:
         table.attrs["run_digest"] = parts["run_digest"]
+    if parts["directedness"] is not None:
+        table.attrs["directedness"] = parts["directedness"]
     return table
 
 
@@ -479,12 +497,13 @@ def feature_vector(table, directedness=None, include_self=False):
         :attr:`Calculator.table`, or the frame :func:`load_table` returns.
     directedness : dict, optional
         ``{identifier: trait}``, with the trait one of ``'undirected'``,
-        ``'antisymmetric'``, ``'directed'`` or ``'asymmetric'``. If None, it
-        is rebuilt from the config named in ``table.attrs["run_spec"]`` (set
-        by :func:`load_table`), using each SPI's
-        :meth:`~pyspi.base.Directed.directedness`. Identifiers missing from
-        the mapping are treated as ``'directed'``, which keeps both
-        orientations. Default: None.
+        ``'antisymmetric'``, ``'directed'`` or ``'asymmetric'``. If None, the
+        traits :meth:`Calculator.save` recorded are used, which
+        :func:`load_table` puts in ``table.attrs["directedness"]``; for a
+        file that does not record them, they are rebuilt from the config
+        named in ``table.attrs["run_spec"]``, using each SPI's
+        :meth:`~pyspi.base.Directed.directedness`. An SPI of the table with
+        no trait raises ``ValueError``. Default: None.
     include_self : bool, optional
         Also keep the self-pairs ``(i, i)``, one per process and SPI. The
         diagonal is NaN for pairwise SPIs and a constant for the few
@@ -499,9 +518,24 @@ def feature_vector(table, directedness=None, include_self=False):
         are kept so the length is fixed; a feature is NaN wherever its cell in
         :attr:`Calculator.quality` is not ``GOOD``, and that code says why.
     """
+    source = ""
+    if directedness is None:
+        directedness = getattr(table, "attrs", {}).get("directedness")
     if directedness is None:
         directedness = _directedness_from_table(table)
+        source = (f" The file records no traits, and the config it names, "
+                  f"{table.attrs['run_spec']['config']!r}, does not hold them.")
     spis = list(table.columns.unique(level="spi"))
+    missing = [spi for spi in spis if spi not in directedness]
+    if missing:
+        shown = ", ".join(missing[:5]) + (f", +{len(missing) - 5} more"
+                                          if len(missing) > 5 else "")
+        raise ValueError(
+            f"No symmetry trait for {len(missing)} SPI(s) of the table "
+            f"({shown}), so it is unknown whether each holds one value per "
+            f"pair or two.{source} Pass directedness={{identifier: trait}} "
+            f"with a trait for every SPI."
+        )
     procs = list(table.index)
     M = len(procs)
     if list(table.columns.unique(level="process")) != procs:
@@ -517,7 +551,7 @@ def feature_vector(table, directedness=None, include_self=False):
     keys, sources, targets, values = [], [], [], []
     src_idx, tgt_idx = np.indices((M, M))
     for spi in spis:
-        trait = directedness.get(spi, "directed")
+        trait = directedness[spi]
         if trait not in DIRECTEDNESS_TRAITS:
             raise ValueError(
                 f"Unknown directedness {trait!r} for SPI {spi!r}; expected one "
@@ -546,7 +580,7 @@ def feature_vector(table, directedness=None, include_self=False):
 
 def _directedness_from_table(table):
     """
-    Recover ``{identifier: trait}`` for a table loaded from disk.
+    Recover ``{identifier: trait}`` for a table from a file that does not record it.
 
     ``table.attrs["run_spec"]["config"]`` names the bundled config or YAML
     path the SPIs were built from; they are instantiated again to read their
@@ -1203,8 +1237,10 @@ class Calculator:
         ``.npz`` (recommended) stores the values as an ``(n_spis, M, M)`` array
         with the SPI and process names, and round-trips exactly through
         :func:`pyspi.load_table`. It also stores :attr:`quality`,
-        :attr:`errors`, :attr:`pair_errors` and the run's provenance, which
-        :func:`pyspi.load_results` reads back. ``.csv`` holds the values only,
+        :attr:`errors`, :attr:`pair_errors`, the run's provenance, which
+        :func:`pyspi.load_results` reads back, and each SPI's symmetry trait
+        (:meth:`~pyspi.base.Directed.directedness`), which
+        :func:`pyspi.feature_vector` uses. ``.csv`` holds the values only,
         for looking at small results.
 
         Parameters
@@ -1230,6 +1266,9 @@ class Calculator:
                 # dtype='U', not object, which would need allow_pickle to load.
                 spis=np.array(keys, dtype="U"),
                 processes=np.array(self.dataset.procnames, dtype="U"),
+                directedness=np.array(
+                    [self.spis[k].directedness() for k in keys], dtype="U"
+                ),
                 schema=np.array(_NPZ_SCHEMA),
                 run_spec=np.array(
                     json.dumps(self.run_spec, sort_keys=True, default=str), dtype="U"

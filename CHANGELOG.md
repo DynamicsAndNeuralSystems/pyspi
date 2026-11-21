@@ -243,7 +243,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The filename stem is the lookup key, so the cost-pruned sets are reachable by name.
 - `load_dataset()` exposes only the three demo datasets (`forex`, `cml`, `standard_normal`); `available_datasets()` lists them.
 - Per-SPI timings are printed after `compute()` (total and slowest five).
-- **`Calculator.save()` and `pyspi.load_table()`** store results as `.npz`: the results in their natural `(n_spis, M, M)` shape plus names, the run spec, digest and errors, round-tripping exactly with nothing beyond numpy.
+- **`Calculator.save()` and `pyspi.load_table()`** store results as `.npz`: the results in their natural `(n_spis, M, M)` shape plus names, each SPI's symmetry trait, the run spec, digest and errors, round-tripping exactly with nothing beyond numpy.
   Names are stored as `dtype='U'` and loaded with `allow_pickle=False`.
   `.csv` remains as a one-way human-readable export.
 - **Dropped pickle and parquet output.**
@@ -355,7 +355,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **Feature vectors.**
   `Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature: only `i < j` for `undirected` and `antisymmetric` SPIs, both orientations for `directed` and `asymmetric` ones.
   Self-pairs are dropped unless `include_self=True`, and NaNs are kept, so the length and order depend only on the config and `M`.
-  `pyspi.feature_vector(table)` rebuilds each SPI's trait from the config recorded in `table.attrs["run_spec"]`, or takes an explicit `directedness={identifier: trait}`.
+  `pyspi.feature_vector(table)` uses the traits saved in the `.npz` (`table.attrs["directedness"]`), or an explicit `directedness={identifier: trait}`; an SPI with no known trait raises `ValueError`.
 - **`Directed.directedness()`** returns the one symmetry trait an SPI carries: `undirected`, `antisymmetric` (`A[i, j] == -A[j, i]`, a new label), `directed` or `asymmetric`.
 - **Parallel computation and checkpoints.**
   `Calculator.compute(n_jobs=...)` follows the joblib convention (see Breaking changes), and `compute(checkpoint_dir=...)` writes each SPI as it finishes and resumes from it.
