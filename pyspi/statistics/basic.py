@@ -89,9 +89,36 @@ class Estimators(Undirected, Signed):
         """Copy of the cached fit's ``M x M`` matrix, so the cache is not modified."""
         return getattr(mycov, self._kind + "_").copy()
 
+    def _pseudo_inverse_rank(self, mycov):
+        """Rank of the fitted covariance if the precision is its pseudo-inverse, else None.
+
+        scikit-learn sets ``precision_ = pinvh(covariance_)`` for every
+        estimator except the graphical lasso, which solves for the precision
+        directly. The rank uses the same cutoff as ``pinvh`` and
+        ``np.linalg.matrix_rank``: eigenvalues of ``covariance_`` at most
+        ``M * eps * max|eigenvalue|`` count as zero.
+        """
+        if isinstance(mycov, (cov.GraphicalLasso, cov.GraphicalLassoCV)):
+            return None
+        rank = int(np.linalg.matrix_rank(mycov.covariance_, hermitian=True))
+        return rank if rank < mycov.covariance_.shape[0] else None
+
     @parse_multivariate
     def multivariate(self, data):
-        matrix = self._matrix(self._from_cache(data))
+        mycov = self._from_cache(data)
+        if self._kind != "covariance":
+            # A singular covariance has no inverse: its pseudo-inverse gives
+            # finite values that are not a precision or partial correlation.
+            rank = self._pseudo_inverse_rank(mycov)
+            if rank is not None:
+                M = mycov.covariance_.shape[0]
+                warnings.warn(
+                    f"The {self._estimator} covariance estimate is singular "
+                    f"(rank {rank} < M = {M}: no more samples than processes, or "
+                    f"collinear processes), so {self.identifier} is NaN."
+                )
+                return np.full((M, M), np.nan)
+        matrix = self._matrix(mycov)
         np.fill_diagonal(matrix, np.nan)
         if self._squared:
             return np.square(matrix)
@@ -109,6 +136,13 @@ class Covariance(Estimators):
 
 
 class Precision(Estimators):
+    """Precision (inverse covariance) matrix of the ``M`` processes.
+
+    ``P = C^-1`` with ``C`` the covariance as estimated by the scikit-learn
+    covariance ``estimator``; ``squared=True`` squares the result (unsigned).
+    The result is NaN when the covariance estimate is singular (for example
+    when there are no more samples than processes).
+    """
 
     name = "Precision"
     identifier = "prec"
@@ -134,7 +168,9 @@ class PartialCorrelation(Estimators):
     ``estimator`` is any ``sklearn.covariance`` estimator that ``Precision``
     accepts, and ``squared=True`` squares the result (unsigned). The
     covariance fit is shared with ``Covariance`` and ``Precision``
-    (``data.covariance[estimator]``).
+    (``data.covariance[estimator]``). The result is NaN when the covariance
+    estimate is singular (for example when there are no more samples than
+    processes).
     """
 
     name = "Partial correlation"
@@ -175,8 +211,9 @@ def _xcorr_profile(data, i, j):
 
     Stored in ``data.xcorr`` under both orientations (``(j, i)`` is the reversed
     sequence) and shared by :class:`CrossCorrelation` and
-    :class:`LagResolvedCorrelation`. The returned array *is* the cache entry:
-    read it, do not modify it in place.
+    :class:`LagResolvedCorrelation`. All NaN when either series is constant.
+    The returned array *is* the cache entry: read it, do not modify it in
+    place.
     """
     try:
         return data.xcorr[(i, j)]
@@ -189,19 +226,24 @@ def _xcorr_profile(data, i, j):
     hi, lo = max(i, j), min(i, j)
     x, y = data.to_numpy(squeeze=True)[[hi, lo]]
 
-    # Biased estimator (demeaned, divided by T, as statsmodels'
-    # `ccf(adjusted=False)`): |r| <= 1 and the zero lag is Pearson's r.
-    x = x - x.mean()
-    y = y - y.mean()
-    scale = T * np.sqrt(np.mean(x ** 2) * np.mean(y ** 2))
-
-    # Force FFT method: O(N log N) vs O(N^2) direct for short signals.
-    r_full = signal.correlate(x, y, "full", method="fft") / scale
-
-    # correlate(x, y, "full")[T - 1 + l] == sum_t x[t + l] * y[t], so the
-    # zero lag sits at T - 1.
     lag_max = T // _XCORR_MAX_LAG_FRACTION
-    r_hilo = r_full[T - 1 - lag_max: T + lag_max]
+    if np.ptp(x) == 0 or np.ptp(y) == 0:
+        # Undefined; rounding in the mean of a float constant would otherwise
+        # give arbitrary finite values.
+        r_hilo = np.full(2 * lag_max + 1, np.nan)
+    else:
+        # Biased estimator (demeaned, divided by T, as statsmodels'
+        # `ccf(adjusted=False)`): |r| <= 1 and the zero lag is Pearson's r.
+        x = x - x.mean()
+        y = y - y.mean()
+        scale = T * np.sqrt(np.mean(x ** 2) * np.mean(y ** 2))
+
+        # Force FFT method: O(N log N) vs O(N^2) direct for short signals.
+        r_full = signal.correlate(x, y, "full", method="fft") / scale
+
+        # correlate(x, y, "full")[T - 1 + l] == sum_t x[t + l] * y[t], so the
+        # zero lag sits at T - 1.
+        r_hilo = r_full[T - 1 - lag_max: T + lag_max]
 
     try:
         data.xcorr[(hi, lo)] = r_hilo
@@ -224,7 +266,7 @@ class CrossCorrelation(Undirected, Signed):
     ``|r(l)| > 1.96/sqrt(T)`` -- and not a significance test: the band is not
     inflated for the series' own autocorrelation, and it is not corrected for
     being applied at every lag in the window. When no lag clears it the
-    statistic is 0.
+    statistic is 0. NaN when either series is constant.
     """
 
     name = "Cross correlation"
@@ -250,6 +292,9 @@ class CrossCorrelation(Undirected, Signed):
     def bivariate(self, data, i=None, j=None):
         T = data.n_observations
         r_ij = _xcorr_profile(data, i, j)
+        if np.isnan(r_ij).all():
+            # Undefined, and `sigonly` would otherwise turn it into 0.
+            return np.nan
 
         # `sigonly` is a pointwise amplitude threshold, not an inferential
         # test. The name is historical and kept for compatibility: it keeps

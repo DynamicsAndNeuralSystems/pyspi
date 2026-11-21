@@ -502,10 +502,12 @@ def test_too_short_for_any_lag_raises():
         LagResolvedCorrelation("lag").bivariate(_data(X), i=0, j=1)
 
 
-def test_a_constant_process_voids_only_its_own_pairs():
+@pytest.mark.parametrize("constant", [5.0, 0.3])
+def test_a_constant_process_voids_only_its_own_pairs(constant):
+    # 0.3 is a float constant whose demeaned series is not exactly zero.
     rng = np.random.default_rng(1)
     X = rng.standard_normal((4, 200))
-    X[2] = 5.0
+    X[2] = constant
     for params in ({"statistic": "lag"}, {"statistic": "peak"}, {"statistic": "asym"},
                    {"statistic": "onesided"}, {"statistic": "onesided", "tau": "1e"},
                    {"statistic": "onesidedpeak"}):
@@ -519,8 +521,7 @@ def test_a_constant_process_voids_only_its_own_pairs():
         assert np.isfinite(A[good]).all()
         msgs = [str(w.message) for w in caught if "undefined and set to NaN" in str(w.message)]
         assert len(msgs) == 1 and spi.identifier in msgs[0]
-        # 0/0 in the profile's normalisation (CrossCorrelation's own warning).
-        with np.errstate(invalid="ignore"), pytest.raises(ValueError, match="not finite"):
+        with pytest.raises(ValueError, match="not finite"):
             spi.bivariate(_data(X, zscore=False), i=0, j=2)
 
 
