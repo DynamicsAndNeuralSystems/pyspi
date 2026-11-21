@@ -365,6 +365,10 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   They are partial directed coherence (Baccalá & Sameshima 2001), generalised PDC (Baccalá et al. 2007), the direct directed transfer function (Korzeniewska et al. 2003) and the squared partial coherence (Dahlhaus 2000), each on the scale of its bivariate counterpart (`pdcoh`, `gpdcoh`, `ddtf`, `cohmag`).
   Unlike those, they condition on every other process, so an indirect link gives about 0.
   Bundled as the band mean over [0, 0.5], [0, 0.25] and [0.25, 0.5] cycles per sample at `order=bic` (12 SPIs); `cpdc_p-bic_mean_fmin-0_fmax-0-5` and `pcohmag_p-bic_mean_fmin-0_fmax-0-5` are also in `fast`.
+- **`EdgeTimeSeries`** (`edge_excessvar`, `edge_topshare_f-0-05`, `edge_acf1`; `pyspi/statistics/misc.py`): whether a correlation is steady or bursty.
+  The edge time series `e_t = z_x(t) z_y(t)` resolves Pearson's r into per-frame contributions (Faskowitz et al., 2020; Esfahlani et al., 2020).
+  `excessvar` is its excess variance, `topshare` the excess share of `sum |e|` carried by the 5% highest-amplitude frames, and `acf1` its excess lag-1 autocorrelation.
+  Each is referenced to a Gaussian pair with the sample r, so it is ~0 in expectation for Gaussian data; `edge_excessvar` is also in `fast`.
 
 ### Dependencies
 
