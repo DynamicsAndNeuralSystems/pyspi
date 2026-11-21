@@ -1341,8 +1341,13 @@ class Calculator:
         n_jobs : int or None, optional
             Number of worker processes: ``1`` runs serially in this process,
             ``-1`` uses every core available to it and ``-2`` all but one;
-            ``0`` raises ``ValueError``. Default: None, the ``PYSPI_N_JOBS``
-            environment variable, or 1 if it is unset.
+            ``0`` raises ``ValueError``. Under the spawn or forkserver start
+            method each worker re-imports the program's main module, so a
+            script must call ``compute`` with ``n_jobs > 1`` inside an
+            ``if __name__ == "__main__":`` block, and a program read from
+            standard input cannot use it; either raises ``RuntimeError``.
+            Default: None, the ``PYSPI_N_JOBS`` environment variable, or 1 if
+            it is unset.
         checkpoint_dir : str or path-like or None, optional
             Directory to which each finished SPI is written as
             ``<identifier>.npy``, so an interrupted run can resume. A
@@ -1368,6 +1373,9 @@ class Calculator:
             )
 
         n_jobs = _parallel.resolve_n_jobs(n_jobs)
+        if n_jobs > 1:
+            _parallel.refuse_start_while_bootstrapping(
+                mp_context or _parallel.default_mp_context())
         _parallel.guard_oversubscription(n_jobs)
 
         spi_keys = list(self.spis.keys())

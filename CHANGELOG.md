@@ -371,6 +371,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`Directed.directedness()`** returns the one symmetry trait an SPI carries: `undirected`, `antisymmetric` (`A[i, j] == -A[j, i]`, a new label), `directed` or `asymmetric`.
 - **Parallel computation and checkpoints.**
   `Calculator.compute(n_jobs=...)` follows the joblib convention (see Breaking changes), and `compute(checkpoint_dir=...)` writes each SPI as it finishes and resumes from it.
+  Under the spawn start method (the default on macOS and Windows), a script without an `if __name__ == "__main__":` guard, or one read from standard input, raises a `RuntimeError` that says so.
   A checkpoint directory carries a `run.json` manifest bound to `Calculator.run_digest`, which hashes the config contents, the dataset bytes and the computation version, so a different dataset, config, preprocessing or process order is refused rather than reused; failed checkpoints are retried by default.
   Checkpoint files are named after SPI identifiers, so a config with two identifiers that are equal ignoring letter case is refused, as they would share one file on a case-insensitive file system (the macOS and Windows defaults).
 - **Run records.**
