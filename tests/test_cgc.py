@@ -366,9 +366,9 @@ def test_identifiers_and_labels():
 
     F, coef = CGC(), CGC(statistic="coef")
     assert not F.issigned() and coef.issigned()
-    assert {"directed", "linear", "multivariate", "unsigned"} <= set(F.labels)
-    assert "signed" in coef.labels and "unsigned" not in coef.labels
-    assert "unsigned" in CGC.labels                  # the class list is not mutated
+    assert {"directed", "linear", "multivariate"} <= set(F.labels)
+    assert "signed" not in F.labels and "signed" in coef.labels
+    assert "signed" not in CGC.labels                # the class list is not mutated
 
 
 # --------------------------------------------------------------------------
@@ -434,7 +434,7 @@ def test_calculator_round_trip(tmp_path):
 def test_bundled_configs_construct():
     full = Calculator(config="full").spis
     assert {s for s in full if s.startswith("cgc_")} == set(BUNDLED)
-    assert "unsigned" in full["cgc_p-bic"].labels
+    assert "signed" not in full["cgc_p-bic"].labels
     fast = Calculator(config="fast").spis
     assert "cgc_p-bic" in fast
     assert not {"cgc_p-1", "cgc_p-2", "cgc_p-bic_coef"} & set(fast)

@@ -290,7 +290,7 @@ class Undirected(Directed):
 
     name = 'Base class'
     identifier = 'base'
-    labels = ['unsigned']
+    labels = []
 
     def ispositive(self):
         return False
@@ -320,11 +320,30 @@ class Undirected(Directed):
                              mirror=True)
 
 class Signed:
-    """Mixin for SPIs whose sign carries information."""
+    """
+    Mixin for signed SPIs, which carry the ``signed`` label.
+
+    Zero has a special meaning (no relationship, or no lead) and the sign says
+    which of two opposite cases holds, so the absolute value is the size of
+    the effect. Covariance (positive or negative coupling) is the model case.
+    ``signed`` combines with the default one-ended strength and with the
+    flags ``timing`` (a lead/lag whose sign says which process leads) and
+    ``profile``.
+    """
     def issigned(self):
         return True
 
 class Unsigned:
-    """Mixin for SPIs whose sign carries no information."""
+    """
+    Mixin for every SPI that is not signed, which carries no sign label.
+
+    By default its value is a one-ended strength of dependence, higher meaning
+    stronger (with the flag ``inverted``, lower meaning stronger, as for a
+    distance or an entropy; with ``timing`` or ``profile``, an offset or a
+    description of how the dependence is distributed), whatever values it
+    takes: it can be negative through estimator bias, a floor that is not 0
+    (soft-DTW, a differential entropy) or an inverted scale (the Engle-Granger
+    t-statistic, more negative for stronger evidence).
+    """
     def issigned(self):
         return False

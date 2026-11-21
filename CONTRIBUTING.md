@@ -114,7 +114,7 @@ A note on where pyspi differs from an upstream implementation is worth keeping.
 ## How an SPI behaves
 
 - **Orientation:** the output is an `M x M` matrix with row = source and column = target.
-  The class's base (`Directed` or `Undirected`, `Signed` or `Unsigned`) and its config labels must agree with what it returns.
+  The class's base (`Directed` or `Undirected`, `Signed` or `Unsigned`) and its config labels must agree with what it returns; `Signed` classes carry the `signed` label.
 - **Input it can't handle:** too few samples or a fit that doesn't exist gives NaN, not an ordinary exception.
   Where the reason is worth keeping (the series is too short for the embedding, ties cannot be broken), raise `pyspi.base.NotAppropriate` with a message that names the numbers: the Calculator stores NaN with `Quality.NAN` and records the message as the reason.
   Raise an ordinary exception only for invalid arguments, at construction, or for a bug: the Calculator labels those `Quality.ERROR`.
@@ -126,8 +126,19 @@ A note on where pyspi differs from an upstream implementation is worth keeping.
 ## Configs
 
 The bundled configs live in `pyspi/configs/`.
-Each class entry carries its labels: directedness (`directed`, `undirected` or `antisymmetric`), `signed` or `unsigned`, `linear` or `nonlinear`, `bivariate` or `multivariate`, `contemporaneous`, `time-dependent` or `frequency-dependent`, and one module code (`M01` to `M14`).
+Each class entry carries its labels: directedness (`directed`, `undirected` or `antisymmetric`), `linear` or `nonlinear`, `bivariate` or `multivariate`, `contemporaneous`, `time-dependent` or `frequency-dependent`, and one module code (`M01` to `M14`).
+An SPI not assigned to a module carries the code `MXX` instead.
 Each config entry adds the labels that depend on its parameters.
+Merged with the class's own labels, every SPI ends up with exactly one label from each of these groups, spelled as here.
+Four optional flags say what an SPI's value is.
+By default, with no flag, the value is a one-ended strength of dependence, higher meaning stronger, whatever values it takes: it answers "how much".
+`timing` marks a value that is a time or phase offset, such as a lag in samples or a phase in radians, not a strength: it answers "when".
+`profile` marks a value that describes how the dependence is distributed, over time or over the range of values, not how strong it is.
+`signed` marks a value for which zero has a special meaning (no relationship, or no lead) and the sign says which of two opposite cases holds, so that its absolute value is the size of the effect, as for a covariance; it combines with the default, with `timing` (a lag whose sign says which process leads) and with `profile`.
+`inverted` marks a one-ended strength whose scale runs the other way, so that lower means stronger dependence or stronger evidence, as for a distance, an entropy or the Engle-Granger t-statistic, whose values can be negative without the SPI being `signed`; it never combines with `signed`, `timing` or `profile`.
+An SPI carries at most one of `timing` and `profile`, and `unsigned` is not a label.
+`timing` says what the value is; `time-dependent` and the descriptive tag `lagged` say how the SPI is computed.
+A class may also carry descriptive tags: `basic`, `causal`, `distance`, `embedding`, `infotheory`, `lagged`, `misc`, `normal`, `rank`, `spectral`, `symbolic`, `temporal`, `unordered` and `wavelet`.
 Comments in a config are one or two lines per class.
 
 ## Tests and values

@@ -15,9 +15,11 @@ Checked here:
   lower one, preserving the lead/lag sign.
 * ``hhg`` is symmetric; ``ce``, ``dcorrx`` and ``mgcx`` are directed.
 
-The symmetry check reads the committed baseline matrices, so it costs no
-computation.
+The checks against matrices read the committed drift baselines of all three
+fixtures, from every archive, so they cost no computation and cover every SPI
+in ``full``.
 """
+import glob
 import os
 
 import numpy as np
@@ -27,9 +29,44 @@ from pyspi.calculator import load_spis_from_yaml, resolve_config
 from pyspi.data import Data
 from pyspi.statistics.misc import Cointegration
 
-BASELINE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "data", "baselines", "var1_M3_T100.npz"
-)
+BASELINE_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "baselines")
+BASELINE = os.path.join(BASELINE_DIR, "var1_M3_T100.npz")
+DATASETS = ("var1_M3_T100", "cml_M5_T100", "kuramoto_M7_T100")
+
+
+def _baselines(dataset):
+    """Every SPI's baseline matrix for ``dataset``, merged over its archives."""
+    paths = [os.path.join(BASELINE_DIR, f"{dataset}.npz")] + sorted(
+        glob.glob(os.path.join(BASELINE_DIR, f"{dataset}.*.npz")))
+    out = {}
+    for path in paths:
+        with np.load(path, allow_pickle=False) as archive:
+            for key in archive.files:
+                if not key.startswith("__"):
+                    assert key not in out, f"{key} is in two archives of {dataset}"
+                    out[key] = np.asarray(archive[key], dtype=float)
+    return out
+
+
+@pytest.fixture(scope="module")
+def full_spis():
+    return load_spis_from_yaml(resolve_config("full"), quiet=True)
+
+
+@pytest.fixture(scope="module")
+def baseline_matrices(full_spis):
+    """``{dataset: {identifier: matrix}}`` for every SPI in ``full``.
+
+    An SPI of ``full`` with no baseline in a fixture fails here, so no SPI is
+    silently left out of the checks below.
+    """
+    out = {dataset: _baselines(dataset) for dataset in DATASETS}
+    missing = [f"{dataset}/{ident}" for dataset in DATASETS
+               for ident in full_spis if ident not in out[dataset]]
+    assert not missing, "SPIs of full with no baseline:\n  " + "\n  ".join(missing)
+    return {dataset: {ident: out[dataset][ident] for ident in full_spis}
+            for dataset in DATASETS}
 
 
 def _offdiag(a):
@@ -63,25 +100,29 @@ def test_aeg_value_is_independent_of_process_order():
     )
 
 
-def test_aeg_declared_symmetry_matches_the_statistic():
-    """If AEG is labelled undirected, the underlying statistic must be symmetric."""
+def test_aeg_computes_each_orientation_separately():
+    """``A[i, j]`` regresses process ``j`` on process ``i``, and ``A[j, i]``
+    is its own computation, not a copy of the opposite orientation."""
     from statsmodels.tsa import stattools
 
     rng = np.random.default_rng(1)
     x = rng.standard_normal(200).cumsum()
-    y = rng.standard_normal(200).cumsum()
+    y = 0.5 * x + rng.standard_normal(200).cumsum()
+    w = rng.standard_normal(200).cumsum()
+    arr = np.vstack([x, y, w])
 
-    fwd = stattools.coint(x, y, autolag="aic", maxlag=10, trend="c")[0]
-    rev = stattools.coint(y, x, autolag="aic", maxlag=10, trend="c")[0]
-
-    spi = Cointegration(method="aeg")
-    declared_undirected = "undirected" in getattr(spi, "labels", [])
-
-    if declared_undirected:
-        assert np.isclose(fwd, rev), (
-            f"Cointegration(method='aeg') is labelled undirected, but the AEG "
-            f"t-statistic is asymmetric: coint(x,y)={fwd:.6g} vs coint(y,x)={rev:.6g}."
-        )
+    spi = Cointegration(method="aeg", statistic="tstat")
+    assert spi.directedness() == "directed"
+    A = spi.multivariate(Data(data=arr, dim_order="ps", zscore=False))
+    for i in range(3):
+        for j in range(3):
+            if i == j:
+                continue
+            # statsmodels regresses its first argument (the column) on its second.
+            want = stattools.coint(arr[j], arr[i], autolag="aic", maxlag=10,
+                                   trend="c")[0]
+            assert A[i, j] == pytest.approx(want, rel=1e-12), (i, j)
+    assert not np.allclose(_offdiag(A), _offdiag(A.T))
 
 
 # --------------------------------------------------------------------------
@@ -109,73 +150,47 @@ def _classify(mat):
     return "asymmetric"
 
 
-def _label_symmetry_violations():
-    """Return {identifier: (declared, observed)} disagreements from baselines."""
-    z = np.load(BASELINE, allow_pickle=False)
-    spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
-
-    disagreements = {}
-    for ident, spi in spis.items():
-        if ident not in z.files:
-            continue
-        mat = np.asarray(z[ident], dtype=float)
-        if mat.ndim != 2 or mat.shape[0] != mat.shape[1]:
-            continue
-
-        observed = _classify(mat)
-        if observed in ("undetermined", "degenerate"):
-            continue  # covered by the degeneracy tests, not by this one
-
-        # Only undirected -> asymmetric is a contradiction. A *directed*
-        # measure may legitimately produce a symmetric matrix on a particular
-        # dataset: lmfit_* and gpfit_DotProduct are symmetric on z-scored data
-        # because a linear model's R^2 is, yet asymmetric with zscore=False.
-        labels = set(getattr(spi, "labels", []) or [])
-        if "undirected" in labels and observed == "asymmetric":
-            disagreements[ident] = ("undirected", observed)
-    return disagreements
-
-
-def test_declared_symmetry_matches_observed_matrices():
-    bad = _label_symmetry_violations()
-    assert not bad, "Declared/observed symmetry disagreements:\n" + "\n".join(
-        f"  {k}: declared {v[0]}, observed {v[1]}" for k, v in sorted(bad.items())
+def test_declared_symmetry_matches_observed_matrices(full_spis, baseline_matrices):
+    # Only undirected -> asymmetric is a contradiction. A *directed* measure
+    # may legitimately produce a symmetric matrix on a particular dataset:
+    # gpfit_DotProduct is symmetric on z-scored data because a linear model's
+    # R^2 is, yet asymmetric with zscore=False.
+    bad = sorted(
+        f"  {dataset}/{ident}: declared undirected, observed asymmetric"
+        for dataset, matrices in baseline_matrices.items()
+        for ident, mat in matrices.items()
+        if "undirected" in full_spis[ident].labels
+        and _classify(mat) == "asymmetric"
     )
+    assert not bad, "Declared/observed symmetry disagreements:\n" + "\n".join(bad)
 
 
-def test_antisymmetric_measures_are_labelled_as_such():
+def test_antisymmetric_measures_are_labelled_as_such(full_spis, baseline_matrices):
     """PLI/wPLI/PSI encode lead-lag in their sign; 'undirected' misdescribes them."""
-    z = np.load(BASELINE, allow_pickle=False)
-    spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
-
-    mislabelled = []
-    for ident, spi in spis.items():
-        if ident not in z.files:
-            continue
-        if _classify(np.asarray(z[ident], dtype=float)) != "antisymmetric":
-            continue
-        labels = set(getattr(spi, "labels", []) or [])
-        if "antisymmetric" not in labels:
-            mislabelled.append(f"{ident} (labelled: {sorted(labels & {'directed', 'undirected'})})")
-
+    mislabelled = sorted({
+        f"{ident} (labelled: "
+        f"{sorted(set(full_spis[ident].labels) & {'directed', 'undirected'})})"
+        for matrices in baseline_matrices.values()
+        for ident, mat in matrices.items()
+        if _classify(mat) == "antisymmetric"
+        and "antisymmetric" not in full_spis[ident].labels
+    })
     assert not mislabelled, (
         "Antisymmetric SPIs carry no 'antisymmetric' label:\n  "
-        + "\n  ".join(sorted(mislabelled))
+        + "\n  ".join(mislabelled)
     )
 
 
-def test_no_bundled_spi_returns_a_constant_matrix():
+def test_no_bundled_spi_returns_a_constant_matrix(baseline_matrices):
     """A constant matrix carries no pairwise information."""
-    z = np.load(BASELINE, allow_pickle=False)
-    spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
-
-    degenerate = [
-        ident for ident in spis
-        if ident in z.files
-        and _classify(np.asarray(z[ident], dtype=float)) == "degenerate"
-    ]
+    degenerate = sorted(
+        f"{dataset}/{ident}"
+        for dataset, matrices in baseline_matrices.items()
+        for ident, mat in matrices.items()
+        if _classify(mat) == "degenerate"
+    )
     assert not degenerate, (
-        "SPIs returning a constant matrix on var1_M3_T100: " + ", ".join(sorted(degenerate))
+        "SPIs returning a constant matrix: " + ", ".join(degenerate)
     )
 
 
@@ -242,7 +257,7 @@ def test_spectral_coherence_phase_uses_a_circular_mean_and_is_permutation_covari
     base = calculate([0, 1, 2])
     spi = CoherencePhase(statistic="mean", fmin=0, fmax=0.5)
     assert "signed" in spi.labels and "antisymmetric" in spi.labels
-    assert "unsigned" not in spi.labels and "undirected" not in spi.labels
+    assert "undirected" not in spi.labels
     assert spi.issigned()
     expected = np.angle(np.mean(np.exp(1j * full[:, 1, 0])))
     assert base[1, 0] == pytest.approx(expected)
@@ -332,27 +347,26 @@ def test_wavelet_psi_is_permutation_invariant(statistic):
 def test_antisymmetric_spis_report_themselves_as_signed():
     """`issigned()` drives a transform, so it cannot disagree with the values.
 
-    `Calculator._rmmin` subtracts the minimum from every SPI that reports
-    unsigned. On an antisymmetric matrix that shifts A[i,j] and A[j,i] by the
-    same amount, destroying the antisymmetry that carries the lead/lag;
-    `set_group` separately correlates unsigned SPIs through `abs()`, folding
-    lead onto lag. This covers `phase`, `pli`, `wpli`, `psi` (both the
-    multitaper and wavelet families), `gd` and `ccm_*_diff`, which configs may
-    label `unsigned`.
+    `Calculator._rmmin` subtracts the minimum from every SPI that is not
+    signed. On an antisymmetric matrix that shifts A[i,j] and A[j,i] by the
+    same amount, destroying the antisymmetry that carries the lead/lag. This
+    covers `phase`, `pli`, `wpli`, `psi` (both the multitaper and wavelet
+    families), `gd` and `ccm_*_diff`.
     """
     spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
     bad = [
         ident for ident, spi in spis.items()
         if ({"antisymmetric", "asymmetric"} & set(spi.labels)) and not spi.issigned()
     ]
-    assert not bad, "antisymmetric SPIs reporting unsigned:\n  " + "\n  ".join(sorted(bad))
+    assert not bad, "antisymmetric SPIs not reporting signed:\n  " + "\n  ".join(sorted(bad))
 
 
-def test_no_spi_declares_both_signed_and_unsigned():
-    """One authority. `_merge_spi_labels` resolves the label from `issigned()`."""
+def test_signed_label_follows_issigned():
+    """One authority. `_merge_spi_labels` sets the flag from `issigned()`."""
     spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
-    bad = [i for i, s in spis.items() if {"signed", "unsigned"} <= set(s.labels)]
-    assert not bad, "contradictory signedness labels:\n  " + "\n  ".join(sorted(bad))
+    bad = [i for i, s in spis.items()
+           if ("signed" in s.labels) != s.issigned() or "unsigned" in s.labels]
+    assert not bad, "sign label disagrees with issigned():\n  " + "\n  ".join(sorted(bad))
 
 
 def test_every_bundled_spi_declares_a_signedness():
@@ -383,7 +397,7 @@ _GROUP_DELAY_YAML = """.statistics.spectral:
 _EXPECTED_GD_TRAITS = {
     "delay": ({"antisymmetric", "signed"}, True),
     "slope": ({"antisymmetric", "signed"}, True),
-    "rvalue": ({"undirected", "unsigned"}, False),
+    "rvalue": ({"undirected"}, False),
 }
 _TRAITS = {"directed", "undirected", "antisymmetric", "asymmetric",
            "signed", "unsigned"}
@@ -444,10 +458,9 @@ def test_yaml_cannot_add_a_competing_structural_trait(tmp_path):
     spis = load_spis_from_yaml(str(config), quiet=True)
     assert set(spis) == set(expected)
     for identifier, trait in expected.items():
-        assert set(spis[identifier].labels) & set(_TRAITS) == {
-            trait,
-            "signed" if trait in {"antisymmetric", "asymmetric"} else "unsigned",
-        }
+        assert set(spis[identifier].labels) & set(_TRAITS) == (
+            {trait, "signed"} if trait in {"antisymmetric", "asymmetric"}
+            else {trait})
 
 
 def test_no_spi_in_any_bundled_config_declares_two_directedness_traits():
@@ -510,6 +523,19 @@ def test_additive_noise_model_is_not_labelled_linear():
     assert "nonlinear" in labels and "linear" not in labels
 
 
+@pytest.mark.parametrize("estimator,linearity", [
+    ("pearson", "linear"), ("spearman", "nonlinear"), ("kendall", "nonlinear")])
+@pytest.mark.parametrize("squared", [False, True])
+def test_lagged_correlation_linearity_follows_the_estimator(estimator, linearity,
+                                                            squared):
+    """Rank correlations capture any monotone dependence, so are nonlinear."""
+    from pyspi.statistics.basic import LaggedCorrelation
+
+    labels = LaggedCorrelation(estimator=estimator, tau=1, squared=squared).labels
+    assert set(labels) & {"linear", "nonlinear"} == {linearity}
+    assert ("signed" in labels) is not squared and "unsigned" not in labels
+
+
 def test_igci_stays_out_of_the_bundled_configs():
     """A metadata correction, not a claim that the heuristic is reliable."""
     from pyspi.calculator import bundled_configs, load_spis_from_yaml, resolve_config
@@ -554,7 +580,7 @@ def test_squared_barycenter_is_unsigned():
 
     for stat in ("mean", "max"):
         spi = Barycenter(mode="euclidean", squared=True, statistic=stat)
-        assert not spi.issigned() and "unsigned" in spi.labels
+        assert not spi.issigned()
         assert "signed" not in spi.labels
     assert Barycenter(mode="euclidean", statistic="max").issigned()
 
