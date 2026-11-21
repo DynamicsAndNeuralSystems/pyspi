@@ -226,7 +226,7 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
 - **`CalculatorFrame` and `CorrelationFrame` bookkeeping.**
   `init_from_yaml` appended a dataset's name and labels before loading it, so after one failed entry every later dataset carried its predecessor's name and labels; they are now appended only once the dataset loads.
   `get_correlation_df(rmmin=True)` shifted the calculator's table in place, so a later `save()` wrote the shifted values; it now shifts a copy.
-  `CorrelationFrame.ddf` averaged datasets that share a name (including several unnamed ones) into one; it now raises `ValueError`.
+  `CorrelationFrame.ddf` averaged datasets that share a name into one, including several unnamed ones (all keyed `None`); unnamed datasets are now named by their position in the frame (`dataset_0`, `dataset_1`, ...), and a name given to two datasets raises `ValueError`.
   The SPI-by-SPI correlation is computed as two whole-matrix Spearman correlations instead of one call per pair (identical output, about 60x faster for 163 SPIs).
 
 ### Changed

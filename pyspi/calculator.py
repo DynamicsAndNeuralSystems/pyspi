@@ -999,19 +999,16 @@ class Calculator:
         return {k: v.labels for k, v in zip(self._spis.keys(), self._spis.values())}
 
     def _get_correlation_df(self, with_labels=False, rmmin=False):
-        # Sorts out pesky numerical issues in the unsigned spis. On a copy:
-        # shifting `self.table` in place would make a later `save()` write the
-        # shifted values.
+        # Shift unsigned SPIs to a minimum of 0 on a copy, so the stored table
+        # (and `save()`) keeps the raw values.
         table = self._min_shifted_table() if rmmin else self.table
 
         # Flatten (get Edge-by-SPI matrix). future_stack=True keeps all-NaN
         # rows, so dropna removes the self-pairs (the SPI diagonals are NaN).
         edges = table.stack(future_stack=True).dropna(how="all")
 
-        # Spearman correlation of every SPI pair. Two signed SPIs are compared
-        # as they are; a pair with an unsigned SPI is compared through abs()
-        # so like is compared with like. Both whole matrices use pairwise
-        # complete observations, as the per-pair calls they replace did.
+        # Spearman correlation of every SPI pair, on pairwise complete values:
+        # two signed SPIs as they are, a pair with an unsigned SPI through abs().
         signed = np.array([self.spis[s].issigned() for s in edges.columns])
         cf = edges.abs().corr(method="spearman")
         if signed.any():
@@ -1164,9 +1161,8 @@ class CalculatorFrame:
                 except Exception as err:
                     warnings.warn(f"Loading dataset: {config} failed ({err}).")
                     continue
-                # Appended together, only once the dataset has loaded, so a
-                # failed entry cannot shift later names and labels onto the
-                # wrong datasets.
+                # Appended only once the dataset loads, so a failed entry cannot
+                # shift later names and labels onto the wrong datasets.
                 datasets.append(dataset)
                 names.append(config["name"])
                 labels.append(labels_i)
@@ -1246,8 +1242,11 @@ class CalculatorFrame:
 
         shapes = pd.DataFrame()
         mdf = pd.DataFrame()
-        for calc in [c[0] for c in self.calculators.values]:
+        for i, calc in enumerate(c[0] for c in self.calculators.values):
             out = calc._get_correlation_df(with_labels=with_labels, **kwargs)
+            # An unnamed dataset is labelled by its position in the frame, so
+            # several unnamed datasets stay apart instead of sharing one key.
+            name = calc.name if calc.name not in (None, "") else f"dataset_{i}"
 
             s = pd.Series(
                 dict(
@@ -1255,21 +1254,17 @@ class CalculatorFrame:
                     n_observations=calc.dataset.n_observations,
                 )
             )
-            if calc.name is not None:
-                s.name = calc.name
-                shapes = pd.concat([shapes, pd.DataFrame(s).T])
-            else:
-                s.name = "N/A"
-                shapes = pd.concat([shapes, pd.DataFrame(s).T])
+            s.name = name
+            shapes = pd.concat([shapes, pd.DataFrame(s).T])
             if with_labels:
-                df = pd.concat({calc.name: out[0]}, names=["Dataset"])
+                df = pd.concat({name: out[0]}, names=["Dataset"])
                 try:
                     mlabels = mlabels | out[1]
                 except TypeError:
                     mlabels.update(out[1])
-                dlabels[calc.name] = calc.labels
+                dlabels[name] = calc.labels
             else:
-                df = pd.concat({calc.name: out}, names=["Dataset"])
+                df = pd.concat({name: out}, names=["Dataset"])
 
             # Adds another hierarchical level giving the dataset name
             mdf = pd.concat([mdf, df])
