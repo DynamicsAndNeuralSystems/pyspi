@@ -355,6 +355,12 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   For each ordered pair and each prediction horizon `Tp` in `[-k, k]` it computes the cross-map skill at the largest library size, with the target's shadow manifold at time t estimating the source at `t + Tp`.
   `tp` is the horizon of peak skill: negative for a causal row -> column link (the target's manifold recovers the source's past), `>= 0` under synchrony.
   `skill` is the peak skill.
+- **Conditional Granger causality, `cgc_*`** (new module `pyspi/statistics/var.py`).
+  One OLS VAR(p) is fitted to all processes, and `F[i, j] = ln(var_r / var_f)` compares target j's residual variance with and without the lags of source i (Geweke 1984; Barnett & Seth 2014).
+  Conditioning on every other process means an indirect link or a common driver gives about 0.
+  It is on Geweke's scale, twice that of `gc_gaussian_*`.
+  Bundled as `cgc_p-1`, `cgc_p-2` and `cgc_p-bic` (order 1-10 chosen by BIC; also in `fast`).
+  The signed net lagged coefficient is available as `statistic='coef'` (e.g. `cgc_p-bic_coef`) but is not bundled.
 
 ### Dependencies
 

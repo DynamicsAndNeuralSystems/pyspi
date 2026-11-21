@@ -115,6 +115,7 @@ class Data:
         "spectral_gc",
         "spectral_mv",
         "theiler",
+        "var",
         "xcorr",
     )
 
