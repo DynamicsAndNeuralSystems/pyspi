@@ -1,5 +1,6 @@
 from pyspi.calculator import (Calculator, Data, CalculatorFrame, CorrelationFrame,
-                              load_spis_from_yaml, resolve_config, bundled_configs)
+                              load_spis_from_yaml, load_config_yaml, resolve_config,
+                              bundled_configs)
 from pyspi.data import available_datasets, load_dataset
 import numpy as np
 import os
@@ -223,6 +224,31 @@ def test_missing_config_path_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         Calculator(config=str(tmp_path / "nope.yaml"))
 
+@pytest.mark.parametrize("name", bundled_configs())
+def test_bundled_configs_pass_strict_loading(name):
+    """No bundled config repeats a key or carries an unknown entry key."""
+    assert load_config_yaml(resolve_config(name))
+
+def test_config_misspelt_configs_key_is_refused(tmp_path):
+    """`config:` instead of `configs:` must not fall back to default parameters."""
+    cfg = tmp_path / "typo.yaml"
+    cfg.write_text(".statistics.basic:\n  SpearmanR:\n    config:\n      - squared: true\n")
+    with pytest.raises(ValueError, match="unknown key"):
+        Calculator(config=str(cfg))
+
+def test_config_repeated_module_is_refused(tmp_path):
+    """A module named twice must not silently drop its first block."""
+    cfg = tmp_path / "dup.yaml"
+    cfg.write_text(".statistics.basic:\n  Covariance:\n    configs:\n      - squared: false\n"
+                   ".statistics.basic:\n  SpearmanR:\n    configs:\n      - squared: false\n")
+    with pytest.raises(Exception, match="duplicate key"):
+        Calculator(config=str(cfg))
+
+def test_config_bare_class_entry_uses_defaults(tmp_path):
+    cfg = tmp_path / "bare.yaml"
+    cfg.write_text(".statistics.basic:\n  SpearmanR:\n")
+    assert list(load_spis_from_yaml(str(cfg))) == ["spearmanr"]
+
 @pytest.mark.parametrize("config, procs, obs", [
     ("full", 2, 100),
     ("full", 5, 100),
@@ -326,6 +352,13 @@ def test_load_valid_dataset(dataset_name):
     """Every dataset advertised by available_datasets() must actually load."""
     dataset = load_dataset(dataset_name)
     assert isinstance(dataset, Data), f"Could not load dataset: {dataset_name}"
+
+def test_load_csv_dataset(tmp_path):
+    arr = np.random.default_rng(0).standard_normal((3, 50))
+    path = tmp_path / "x.csv"
+    np.savetxt(path, arr, delimiter=",")
+    data = Data(str(path), zscore=False)
+    np.testing.assert_allclose(data.to_numpy(squeeze=True), arr)
 
 def test_load_invalid_dataset():
     """Test whether the load_dataset function throws the correct error/message when trying to load non-existent dataset."""
@@ -536,7 +569,9 @@ def test_a_successful_recomputation_clears_a_stale_error():
     calc.compute()
     key = next(iter(calc.spis))
     calc._errors[key] = "ValueError: stale"
-    calc._record(key, calc.table[key].to_numpy(), None, [], 0.0)
+    from pyspi import _parallel
+    calc._record(key, _parallel.SPIResult(calc.table[key].to_numpy(),
+                                          calc.quality[key].to_numpy(), None, [], [], 0.0))
     assert key not in calc.errors
 
 
@@ -612,3 +647,79 @@ def test_run_digest_tracks_data_order_preprocessing_and_computation_version(
     finally:
         _parallel.COMPUTATION_VERSION = original
     assert base.run_digest == reference
+
+
+def test_init_from_yaml_keeps_names_and_labels_on_their_datasets(tmp_path):
+    """A dataset that fails to load must not shift names onto later datasets."""
+    rng = np.random.default_rng(0)
+    np.save(tmp_path / "a.npy", rng.standard_normal((3, 50)))
+    np.save(tmp_path / "c.npy", rng.standard_normal((3, 50)))
+    doc = tmp_path / "ds.yaml"
+    doc.write_text(
+        f"- {{file: {tmp_path / 'a.npy'}, dim_order: ps, name: a, labels: [la]}}\n"
+        f"- {{file: {tmp_path / 'missing.npy'}, dim_order: ps, name: b, labels: [lb]}}\n"
+        f"- {{file: {tmp_path / 'c.npy'}, dim_order: ps, name: c, labels: [lc]}}\n"
+    )
+    frame = CalculatorFrame()
+    with pytest.warns(UserWarning, match="Loading dataset"):
+        frame.init_from_yaml(str(doc), config="fabfour")
+    calcs = [c[0] for c in frame.calculators.values]
+    assert [(c.name, c.labels) for c in calcs] == [("a", ["la"]), ("c", ["lc"])]
+    assert calcs[1].dataset.name == "c"
+
+
+def test_correlation_with_rmmin_leaves_the_table_unchanged():
+    """`rmmin=True` shifts a copy; the table (and so `save()`) keeps raw values."""
+    calc = Calculator(dataset=np.random.default_rng(1).standard_normal((4, 100)),
+                      config="fabfour")
+    calc.compute()
+    before = calc.table.copy()
+    calc._get_correlation_df(rmmin=True)
+    assert calc.table.equals(before)
+
+
+def test_correlation_compares_unsigned_pairs_through_abs():
+    """Signed pairs are correlated as is; a pair with an unsigned SPI via abs()."""
+    calc = Calculator(dataset=np.random.default_rng(2).standard_normal((5, 100)),
+                      config="fabfour")
+    calc.compute()
+    edges = calc.table.stack(future_stack=True).dropna(how="all")
+    cf = calc._get_correlation_df()
+    for s0 in edges.columns:
+        for s1 in edges.columns:
+            if s0 == s1:
+                continue
+            pair = edges[[s0, s1]]
+            if not (calc.spis[s0].issigned() and calc.spis[s1].issigned()):
+                pair = pair.abs()
+            expected = pair.corr(method="spearman").iloc[0, 1]
+            assert np.isclose(cf.loc[s0, s1], expected, equal_nan=True), (s0, s1)
+
+
+def test_duplicate_dataset_names_are_refused():
+    """Two datasets with one name must not be averaged into one."""
+    rng = np.random.default_rng(3)
+    frame = CalculatorFrame(datasets=[Data(rng.standard_normal((3, 100))) for _ in range(2)],
+                            names=["same", "same"], labels=[[], []], config="fabfour")
+    frame.compute()
+    corr = CorrelationFrame(frame)
+    with pytest.raises(ValueError, match="Dataset names must be unique"):
+        corr.ddf
+
+
+def test_unnamed_datasets_are_named_by_position():
+    """Unnamed datasets get positional names rather than sharing one key."""
+    rng = np.random.default_rng(4)
+    datasets = [Data(rng.standard_normal((3, 100))) for _ in range(3)]
+    frame = CalculatorFrame(datasets=datasets, names=[None, "mine", None],
+                            labels=[[], [], []], config="fabfour")
+    frame.compute()
+    corr = CorrelationFrame(frame)
+    names = ["dataset_0", "mine", "dataset_2"]
+    assert sorted(corr.ddf.columns) == sorted(names)
+    assert list(corr.shapes.index) == names
+    # Each column is its own dataset's SPI-by-SPI correlation, not an average.
+    for name, calc in zip(names, (c[0] for c in frame.calculators.values)):
+        own = calc._get_correlation_df().stack(future_stack=True)
+        col = corr.ddf[name].reindex(own.index)
+        assert np.allclose(col.to_numpy(float), own.to_numpy(float), equal_nan=True)

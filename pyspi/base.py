@@ -1,6 +1,8 @@
 import numpy as np
 from pyspi.data import Data
 import warnings, copy
+import contextlib
+from contextvars import ContextVar
 
 """
 Some parsing functions for decorating so that we can either input the time series directly or use the data structure
@@ -89,6 +91,39 @@ def parse_multivariate(function):
 
     return parsed_function
 
+# Pair-level failures of the SPI being computed. `_parallel.execute_spi` opens a
+# collector around `SPI.multivariate` (`collect_pair_failures`), and
+# `fill_pairwise` appends `(i, j, message)` to it for each cell whose `compute`
+# raised, so the Calculator can label those cells `Quality.ERROR` instead of
+# leaving them indistinguishable from a NaN the estimator returned. A ContextVar
+# rather than a return value, because `multivariate` returns only the matrix
+# and its signature is public. It is set per call in whichever process runs the
+# SPI, so the serial path and the parallel workers behave the same. Outside a
+# collector (an SPI called directly) nothing is recorded.
+_PAIR_FAILURES: ContextVar = ContextVar("pyspi_pair_failures", default=None)
+
+
+@contextlib.contextmanager
+def collect_pair_failures():
+    """Collect the pair failures that `fill_pairwise` reports inside the block.
+
+    Yields a list that fills with ``(i, j, message)`` tuples, one per matrix
+    cell whose value could not be computed (both cells of a mirrored pair).
+    """
+    failures = []
+    token = _PAIR_FAILURES.set(failures)
+    try:
+        yield failures
+    finally:
+        _PAIR_FAILURES.reset(token)
+
+
+def _report_pair_failure(i, j, err):
+    failures = _PAIR_FAILURES.get()
+    if failures is not None:
+        failures.append((int(i), int(j), f"{type(err).__name__}: {err}"))
+
+
 def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     """Evaluate ``compute(i, j)`` into ``A[i, j]`` for each pair, isolating failures.
 
@@ -97,6 +132,13 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     That pair alone is set to NaN, and the failures are reported in one
     warning. If every pair fails, the first exception is re-raised so the SPI
     is recorded as failed with the estimator's own message.
+
+    Each failed cell is also reported to the collector opened by
+    :func:`collect_pair_failures`, if one is open, so the Calculator labels it
+    ``Quality.ERROR`` and keeps its message in ``Calculator.pair_errors``.
+
+    With ``mirror=True`` each value is also written to ``A[j, i]``, and a
+    failure is reported for both cells but counted once, as one pair.
     """
     failures = []
     for i, j in pairs:
@@ -110,6 +152,10 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
             A[j, i] = value
     if failures and len(failures) == len(pairs):
         raise failures[0][1]
+    for (i, j), err in failures:
+        _report_pair_failure(i, j, err)
+        if mirror:
+            _report_pair_failure(j, i, err)
     if failures:
         (i, j), err = failures[0]
         warnings.warn(
@@ -120,6 +166,14 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     return A
 
 
+# The four symmetry traits a matrix can declare, in the order `_merge_spi_labels`
+# resolves them. Exactly one survives on every configured SPI.
+DIRECTEDNESS_TRAITS = ("antisymmetric", "asymmetric", "undirected", "directed")
+# Traits whose matrix holds one independent value per unordered pair: the lower
+# triangle is the upper one copied (undirected) or negated (antisymmetric).
+ONE_VALUE_PER_PAIR = ("undirected", "antisymmetric")
+
+
 class Directed:
     """ Base class for directed statistics
     """
@@ -127,6 +181,31 @@ class Directed:
     name = 'Bivariate base class'
     identifier = 'bivariate_base'
     labels = ['signed']
+
+    def directedness(self):
+        """The one symmetry trait this SPI's matrix ``A`` obeys.
+
+        One of ``"undirected"`` (``A[i, j] == A[j, i]``), ``"antisymmetric"``
+        (``A[i, j] == -A[j, i]``), ``"directed"`` or ``"asymmetric"`` (no
+        relation between the two orientations). The first two carry one
+        independent value per pair, the last two carry two;
+        :func:`pyspi.calculator.feature_vector` keys on this.
+
+        Read from the instance's labels, which hold exactly one trait once
+        ``Calculator`` has merged them. With no trait declared,
+        :class:`Undirected` subclasses are ``"undirected"`` and anything else
+        is ``"directed"``.
+
+        Returns
+        -------
+        str
+            ``'undirected'``, ``'antisymmetric'``, ``'directed'`` or
+            ``'asymmetric'``.
+        """
+        own = [t for t in DIRECTEDNESS_TRAITS if t in self.labels]
+        if own:
+            return own[0]
+        return "undirected" if isinstance(self, Undirected) else "directed"
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
@@ -170,7 +249,7 @@ class Directed:
         return None
 
 class Undirected(Directed):
-    """ Base class for directed statistics
+    """ Base class for undirected statistics
     """
 
     name = 'Base class'
@@ -182,11 +261,26 @@ class Undirected(Directed):
 
     @parse_multivariate
     def multivariate(self,data):
-        A = super(Undirected,self).multivariate(data)
+        """``bivariate(i, j)`` for each pair ``i < j``, mirrored onto ``(j, i)``.
 
-        li = np.tril_indices(data.n_processes,-1)
-        A[li] = A.T[li]
-        return A
+        Each unordered pair is evaluated once. A failed pair is NaN in both
+        cells, with an error reported for both and counted once in the warning;
+        the SPI raises if every pair fails.
+
+        The pairs are visited column by column, ``(0, 1), (0, 2), (1, 2),
+        (0, 3), ...``: the order in which ``Directed.multivariate`` reaches the
+        upper triangle. An SPI whose ``bivariate`` caches
+        a result for the opposite orientation must compute it in an
+        orientation that does not depend on which of ``(i, j)`` and ``(j, i)``
+        comes first (see ``Barycenter``, ``CrossCorrelation`` and
+        ``InfoTheoryBase._compute_joint_entropy``).
+        """
+        M = data.n_processes
+        A = np.full((M, M), np.nan)
+        pairs = [(i, j) for j in range(M) for i in range(j)]
+        return fill_pairwise(self.identifier, A, pairs,
+                             lambda i, j: self.bivariate(data, i=i, j=j),
+                             mirror=True)
 
 class Signed:
     """ Base class for signed SPIs

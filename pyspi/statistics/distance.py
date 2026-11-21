@@ -1,6 +1,7 @@
 import functools
 import os
 import warnings
+import numba
 import numpy as np
 from scipy.stats import rankdata
 from sklearn.metrics import pairwise_distances, pairwise_kernels
@@ -11,16 +12,18 @@ from tslearn.barycenters import (
     dtw_barycenter_averaging_subgradient,
     softdtw_barycenter,
 )
-from hyppo.independence import (
-    MGC,
-    Dcorr,
-)
+from hyppo.independence import MGC
+# hyppo's compiled centring and sum, unchanged from 0.4.0 to 0.5.2. Its final
+# step changed across those releases, so pyspi applies it itself
+# (`_dcorr_centred`).
+from hyppo.independence.dcorr import _center_distmat, _dcov
 
 from pyspi.base import (
     Directed,
     Undirected,
     Unsigned,
     Signed,
+    fill_pairwise,
     parse_bivariate,
     parse_multivariate,
 )
@@ -43,24 +46,6 @@ def _auto_sakoe_radius(length):
     radius = min(linear, sqrt_scaled)
     radius = max(1, _DTW_SAKOE_MIN_RADIUS, radius)
     return min(radius, length - 1)
-
-
-class _RetainedHalf:
-    """Evaluate only the half of the pairs that `Undirected` keeps.
-
-    `Undirected.multivariate` evaluates both orders of every pair and keeps
-    bivariate(i, j) with i < j. For a stateless statistic this gives the same
-    matrix at half the cost. List it before `Undirected` in the bases.
-    """
-
-    @parse_multivariate
-    def multivariate(self, data):
-        M = data.n_processes
-        A = np.full((M, M), np.nan)
-        for j in range(M):
-            for i in range(j):
-                A[i, j] = A[j, i] = self.bivariate(data, i=i, j=j)
-        return A
 
 
 class PairwiseDistance(Undirected, Unsigned):
@@ -102,6 +87,151 @@ class PairwiseDistance(Undirected, Unsigned):
 """ TODO: include optional kernels in each method
 """
 
+# ---------------------------------------------------------------------------
+# Itakura-constrained DTW
+# ---------------------------------------------------------------------------
+def _itakura_mask(n, m, max_slope=2.0):
+    """``tslearn.metrics.itakura_mask(n, m, max_slope)``, vectorised.
+
+    The same arithmetic, column by column, as tslearn's numba version, without
+    its per-process compilation.
+    """
+    min_slope = 1 / float(max_slope)
+    max_slope = max_slope * (float(n) / float(m))
+    min_slope = min_slope * (float(n) / float(m))
+    j = np.arange(m)
+    lower = np.ceil(np.maximum(
+        np.round(min_slope * j, decimals=2),
+        np.round((n - 1) - max_slope * (m - 1) + max_slope * j, decimals=2)))
+    upper = np.floor(np.minimum(
+        np.round(max_slope * j, decimals=2),
+        np.round((n - 1) - min_slope * (m - 1) + min_slope * j, decimals=2)) + 1)
+    rows = np.arange(n)[:, None]
+    mask = (rows >= lower) & (rows < upper)
+    if not (mask.any(axis=1).all() and mask.any(axis=0).all()):
+        raise RuntimeWarning(
+            "'itakura_max_slope' constraint is unfeasible "
+            "(ie. leads to no admissible path) for the "
+            "provided time series sizes",
+        )
+    return mask
+
+
+@functools.lru_cache(maxsize=8)
+def _itakura_rows(n, m):
+    """Each row's admitted columns ``lo[i]:hi[i]`` (the parallelogram is convex)."""
+    band = _itakura_mask(n, m)
+    lo = band.argmax(axis=1)
+    hi = m - band[:, ::-1].argmax(axis=1)
+    return lo, hi
+
+
+@numba.njit(cache=True, nogil=True)
+def _banded_dtw(x, y, lo, hi):
+    """tslearn's DTW recursion over row ``i``'s columns ``lo[i]:hi[i]`` only.
+
+    Each cell is ``(x_i - y_j)^2 + min(up, left, diagonal)`` in tslearn's
+    order, so the value is bitwise tslearn's; cells outside the band stay at
+    +inf as in tslearn's masked accumulated-cost matrix.
+    """
+    m = y.shape[0]
+    prev = np.full(m + 1, np.inf)
+    prev[0] = 0.0
+    cur = np.empty(m + 1)
+    for i in range(x.shape[0]):
+        cur[:] = np.inf
+        for j in range(lo[i], hi[i]):
+            d = x[i] - y[j]
+            cur[j + 1] = d * d + min(prev[j + 1], cur[j], prev[j])
+        prev, cur = cur, prev
+    return np.sqrt(prev[m])
+
+
+def _itakura_dtw(x, y):
+    """``tslearn.metrics.dtw(x, y, global_constraint="itakura")`` for 1-D series."""
+    lo, hi = _itakura_rows(len(x), len(y))
+    return _banded_dtw(x, y, lo, hi)
+
+
+# ---------------------------------------------------------------------------
+# Distance correlation from per-series centred distance matrices
+# ---------------------------------------------------------------------------
+# Upper bound on the centred matrices one SPI call holds at a time.
+_DCORR_CACHE_BYTES = 2**28
+
+
+def _centred(dist, bias):
+    """hyppo's centred distance matrix and its sum of squares."""
+    C = _center_distmat(np.ascontiguousarray(dist), bias)
+    return C, _dcov(C, C, bias, False)
+
+
+def _dcorr_centred(cx, cy, bias):
+    """hyppo 0.5.2's ``_dcorr`` on two `_centred` results, bit for bit.
+
+    0 when a variance is not positive, or (biased only) the covariance is
+    not; the biased ratio is square-rooted (dCor), the unbiased one is the
+    U-centred estimate of dCor^2 and can be negative. hyppo 0.4.0 did not take
+    the square root and 0.5.0 also zeroed a negative unbiased value, so the
+    rule is applied here, not taken from whichever hyppo is installed.
+    """
+    (x, vx), (y, vy) = cx, cy
+    covar = _dcov(x, y, bias, False)
+    if vx <= 0 or vy <= 0 or (covar <= 0 and bias):
+        return 0.0
+    stat = covar / np.sqrt(np.real(vx * vy))
+    return np.sqrt(stat) if bias else stat
+
+
+def _cached_pairs(identifier, M, prepare, combine, item_bytes, directed=False):
+    """`fill_pairwise` of ``combine(prepare(i), prepare(j))`` over every pair.
+
+    Each series is prepared once per block of series it is paired within,
+    and at most two blocks (about `_DCORR_CACHE_BYTES`) are held at a time.
+    When every series fits in one block, each is prepared once and the
+    pairs are visited in `Undirected.multivariate`'s order. Undirected:
+    ``i < j``, mirrored.
+    """
+    b = int(max(1, _DCORR_CACHE_BYTES // (2 * item_bytes)))
+    blocks = [range(s, min(s + b, M)) for s in range(0, M, b)]
+    pairs = []
+    for p, P in enumerate(blocks):
+        for Q in blocks[p:]:
+            for j in Q:
+                for i in P:
+                    if i < j:
+                        pairs += [(i, j), (j, i)] if directed else [(i, j)]
+    cache = {}
+
+    def get(s, keep):
+        if s not in cache:
+            for k in [k for k in cache if k // b not in keep]:
+                del cache[k]
+            cache[s] = prepare(s)
+        return cache[s]
+
+    def compute(i, j):
+        keep = (i // b, j // b)
+        return combine(get(i, keep), get(j, keep))
+
+    A = np.full((M, M), np.nan)
+    return fill_pairwise(identifier, A, pairs, compute, mirror=not directed)
+
+
+def _dcorr_spi_matrix(spi, data, distance):
+    """``dcorr(distance(z_i), distance(z_j))`` for every pair ``i < j``."""
+    z = data.to_numpy()
+    M, T = z.shape[0], z.shape[1]
+    return _cached_pairs(
+        spi.identifier, M,
+        lambda s: _centred(distance(z[s]), spi._biased),
+        lambda a, b: _dcorr_centred(a, b, spi._biased),
+        item_bytes=8 * T * T)
+
+
+def _euclidean_distance(v):
+    return pairwise_distances(v, metric="euclidean")
+
 
 def _median_gaussian_distance(v):
     """``1 - K / max(K)`` for a Gaussian kernel ``K`` of median-heuristic width.
@@ -120,7 +250,7 @@ def _median_gaussian_distance(v):
     return 1 - K / np.max(K)
 
 
-class HilbertSchmidtIndependenceCriterion(_RetainedHalf, Undirected, Unsigned):
+class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
     """Normalised Hilbert-Schmidt Independence Criterion (HSIC).
 
     hyppo's statistic: dcorr of the distances ``1 - K / max(K)`` induced by a
@@ -140,9 +270,13 @@ class HilbertSchmidtIndependenceCriterion(_RetainedHalf, Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        dx = _median_gaussian_distance(x)
-        dy = _median_gaussian_distance(y)
-        return Dcorr(bias=self._biased, compute_distance=None).statistic(dx, dy)
+        return _dcorr_centred(
+            _centred(_median_gaussian_distance(x), self._biased),
+            _centred(_median_gaussian_distance(y), self._biased), self._biased)
+
+    @parse_multivariate
+    def multivariate(self, data):
+        return _dcorr_spi_matrix(self, data, _median_gaussian_distance)
 
 
 def _row_dominance_counts(rx, ry):
@@ -224,7 +358,7 @@ def _hhg_statistic(x, y):
     return np.sum(S[mask])
 
 
-class HellerHellerGorfine(_RetainedHalf, Undirected, Unsigned):
+class HellerHellerGorfine(Undirected, Unsigned):
     """Heller-Heller-Gorfine independence criterion (see `_hhg_statistic`)."""
 
     name = "Heller-Heller-Gorfine Independence Criterion"
@@ -238,7 +372,7 @@ class HellerHellerGorfine(_RetainedHalf, Undirected, Unsigned):
         return _hhg_statistic(x, y)
 
 
-class DistanceCorrelation(_RetainedHalf, Undirected, Unsigned):
+class DistanceCorrelation(Undirected, Unsigned):
     """Distance correlation"""
 
     name = "Distance correlation"
@@ -252,13 +386,17 @@ class DistanceCorrelation(_RetainedHalf, Undirected, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        """ """
         x, y = data.to_numpy()[[i, j]]
-        stat = Dcorr(bias=self._biased).statistic(x, y)
-        return stat
+        return _dcorr_centred(_centred(_euclidean_distance(x), self._biased),
+                              _centred(_euclidean_distance(y), self._biased),
+                              self._biased)
+
+    @parse_multivariate
+    def multivariate(self, data):
+        return _dcorr_spi_matrix(self, data, _euclidean_distance)
 
 
-class MultiscaleGraphCorrelation(_RetainedHalf, Undirected, Unsigned):
+class MultiscaleGraphCorrelation(Undirected, Unsigned):
     """Multiscale graph correlation"""
 
     name = "Multiscale graph correlation"
@@ -297,7 +435,8 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
     ``A[i, j] = sum_{l=0}^{max_lag} (T - l)/T * dcorr(z_j[l:], z_i[:T - l])``,
     the unbiased distance correlation of target ``j`` with the lagged source
-    ``i``, summed over lags (see `_lagged_sum`).
+    ``i``, summed over lags (see `_lagged_sum`). Each series' centred
+    distance matrices are computed once per lag, not once per pair.
     """
 
     name = "Cross-distance correlation"
@@ -308,13 +447,46 @@ class CrossDistanceCorrelation(Directed, Unsigned):
         self._max_lag = max_lag
         self.identifier += f"_maxlag-{max_lag}"
 
+    def _prepare(self, z, lag):
+        """Centred distances of ``z[lag:]`` (as target) and ``z[:n - lag]``
+        (as source), the blocks `_lagged_sum` crops."""
+        d = _euclidean_distance(z)
+        if lag == 0:
+            c = _centred(d, False)
+            return c, c
+        m = d.shape[0] - lag
+        return _centred(d[lag:, lag:], False), _centred(d[:m, :m], False)
+
+    @staticmethod
+    def _weighted_sum(stats, n):
+        # `_lagged_sum`'s terms and summation, so the value is bit-identical.
+        return np.sum([stats[0]] + [(n - lag) * stats[lag] / n
+                                    for lag in range(1, len(stats))])
+
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        # `_lagged_sum(x, y)` measures y -> x, so the source i goes second.
+        # Source i, target j: the target's present against the source's past.
         z = data.to_numpy()
-        x = z[j]
-        y = z[i]
-        return _lagged_sum(Dcorr(compute_distance=None), x, y, self._max_lag)
+        stats = [_dcorr_centred(self._prepare(z[j], lag)[0],
+                                self._prepare(z[i], lag)[1], False)
+                 for lag in range(self._max_lag + 1)]
+        return self._weighted_sum(stats, z.shape[1])
+
+    @parse_multivariate
+    def multivariate(self, data):
+        z = data.to_numpy()
+        M, n = z.shape[0], z.shape[1]
+        S = [_cached_pairs(self.identifier, M,
+                           lambda s, lag=lag: self._prepare(z[s], lag),
+                           lambda src, tgt: _dcorr_centred(tgt[0], src[1], False),
+                           item_bytes=16 * (n - lag) ** 2, directed=True)
+             for lag in range(self._max_lag + 1)]
+        A = np.full((M, M), np.nan)
+        for i in range(M):
+            for j in range(M):
+                if i != j:
+                    A[i, j] = self._weighted_sum([s[i, j] for s in S], n)
+        return A
 
 
 class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
@@ -340,7 +512,7 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
         return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)
 
 
-class TimeWarping(_RetainedHalf, Undirected, Unsigned):
+class TimeWarping(Undirected, Unsigned):
 
     labels = ["unsigned", "distance", "temporal", "undirected", "nonlinear"]
 
@@ -369,7 +541,8 @@ class TimeWarping(_RetainedHalf, Undirected, Unsigned):
 class DynamicTimeWarping(TimeWarping):
     """DTW with optional dtaidistance C backend and Sakoe-Chiba band constraint.
 
-    Falls back to tslearn if dtaidistance is not available or for itakura constraint.
+    The Itakura constraint, which dtaidistance lacks, uses `_itakura_dtw`;
+    tslearn is the fallback when dtaidistance is not available.
     """
 
     name = "Dynamic time warping"
@@ -400,7 +573,6 @@ class DynamicTimeWarping(TimeWarping):
         self._sakoe_chiba_radius = sakoe_chiba_radius
         self._sakoe_chiba_ratio = sakoe_chiba_ratio
         self._normalise = normalise
-        self._warned_itakura_fallback = False
         self._warned_c_fallback = False
 
         if global_constraint == "sakoe_chiba":
@@ -430,15 +602,7 @@ class DynamicTimeWarping(TimeWarping):
         n = min(len(x), len(y))
 
         if constraint == "itakura":
-            if not self._warned_itakura_fallback:
-                warnings.warn(
-                    "DynamicTimeWarping(itakura) falls back to tslearn; "
-                    "dtaidistance C backend does not support itakura.",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-                self._warned_itakura_fallback = True
-            d = tslearn.metrics.dtw(x, y, global_constraint="itakura")
+            d = _itakura_dtw(x, y)
             return d / np.sqrt(n) if self._normalise else d
 
         radius = None
@@ -489,13 +653,11 @@ class DynamicTimeWarping(TimeWarping):
         constraint = self._global_constraint
 
         if constraint == "itakura":
-            # dtaidistance doesn't support itakura; fall back to bivariate loop
+            # dtaidistance doesn't support itakura.
             A = np.full((M, M), np.nan)
             for i in range(M):
                 for j in range(i + 1, M):
-                    d = tslearn.metrics.dtw(
-                        series[i], series[j], global_constraint="itakura"
-                    )
+                    d = _itakura_dtw(series[i], series[j])
                     A[i, j] = d
                     A[j, i] = d
             # Divide by sqrt(T) under `normalise`, as the bivariate and
@@ -562,7 +724,7 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
     if global_constraint == "sakoe_chiba":
         band = tslearn.metrics.sakoe_chiba_mask(n, m)
     elif global_constraint == "itakura":
-        band = tslearn.metrics.itakura_mask(n, m)
+        band = _itakura_mask(n, m)
     else:
         raise ValueError(f"Unknown LCSS global constraint: {global_constraint}")
     match = np.asarray(band, dtype=bool) & (np.abs(x[:, None] - y[None, :]) <= eps)
@@ -674,6 +836,12 @@ class Barycenter(Undirected, Signed):
         else:
             raise NameError(f"Unknown statistic: {statistic}")
 
+        # A squared barycenter and an argmax index are non-negative; `_rmmin`
+        # and the abs() comparison in correlation analyses read `issigned()`.
+        if squared or statistic == "max_time":
+            self.labels = [l for l in self.labels if l != "signed"] + ["unsigned"]
+            self.issigned = lambda: False
+
         self.identifier += f"_{mode}_{statistic}"
 
     @parse_bivariate
@@ -700,7 +868,7 @@ class Barycenter(Undirected, Signed):
         return self._statfn(bc)
 
 
-class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
+class GromovWassersteinTau(Undirected, Unsigned):
     """GW_tau (Kravtsova, McGee & Dawes 2023, Bull. Math. Biol. 85, 71).
 
     Each series becomes the planar trajectory ``(t, x_t)``; ``vec_geo_dist``
@@ -712,8 +880,6 @@ class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
     The distance vector has one entry per point, the first being 0 for the
     start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``; the authors'
     MATLAB omits it, which only rescales the value by a constant).
-
-    The class name keeps its misspelling because configs refer to it.
     """
 
     name = "Gromov-Wasserstein distance (GW_tau)"
@@ -759,9 +925,9 @@ class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
         traji = np.column_stack([timei, xi])
         trajj = np.column_stack([timej, xj])
 
-        vi = GromovWasserstainTau.vec_geo_dist(traji)
-        vj = GromovWasserstainTau.vec_geo_dist(trajj)
-        gw = GromovWasserstainTau.wass_sorted(vi, vj)
+        vi = GromovWassersteinTau.vec_geo_dist(traji)
+        vj = GromovWassersteinTau.vec_geo_dist(trajj)
+        gw = GromovWassersteinTau.wass_sorted(vi, vj)
 
         return gw
 
@@ -770,6 +936,23 @@ class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
         x, y = data.to_numpy()[[i, j]]
         stat = self.gwtau(x, y)
         return stat
+
+
+class GromovWasserstainTau(GromovWassersteinTau):
+    """Deprecated alias for :class:`GromovWassersteinTau`.
+
+    The old name is misspelled. Kept so existing configs and scripts keep
+    working; the identifier (`gwtau`) and the computation are unchanged.
+    """
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "GromovWasserstainTau is deprecated and will be removed in pyspi "
+            "4.0; use GromovWassersteinTau. The identifier and the computed "
+            "values are identical.",
+            DeprecationWarning, stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
 
 # ---------------------------------------------------------------------------

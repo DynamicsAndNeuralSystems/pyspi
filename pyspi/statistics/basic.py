@@ -89,9 +89,36 @@ class Estimators(Undirected, Signed):
         """Copy of the cached fit's ``M x M`` matrix, so the cache is not modified."""
         return getattr(mycov, self._kind + "_").copy()
 
+    def _pseudo_inverse_rank(self, mycov):
+        """Rank of the fitted covariance if the precision is its pseudo-inverse, else None.
+
+        scikit-learn sets ``precision_ = pinvh(covariance_)`` for every
+        estimator except the graphical lasso, which solves for the precision
+        directly. The rank uses the same cutoff as ``pinvh`` and
+        ``np.linalg.matrix_rank``: eigenvalues of ``covariance_`` at most
+        ``M * eps * max|eigenvalue|`` count as zero.
+        """
+        if isinstance(mycov, (cov.GraphicalLasso, cov.GraphicalLassoCV)):
+            return None
+        rank = int(np.linalg.matrix_rank(mycov.covariance_, hermitian=True))
+        return rank if rank < mycov.covariance_.shape[0] else None
+
     @parse_multivariate
     def multivariate(self, data):
-        matrix = self._matrix(self._from_cache(data))
+        mycov = self._from_cache(data)
+        if self._kind != "covariance":
+            # A singular covariance has no inverse: its pseudo-inverse gives
+            # finite values that are not a precision or partial correlation.
+            rank = self._pseudo_inverse_rank(mycov)
+            if rank is not None:
+                M = mycov.covariance_.shape[0]
+                warnings.warn(
+                    f"The {self._estimator} covariance estimate is singular "
+                    f"(rank {rank} < M = {M}: no more samples than processes, or "
+                    f"collinear processes), so {self.identifier} is NaN."
+                )
+                return np.full((M, M), np.nan)
+        matrix = self._matrix(mycov)
         np.fill_diagonal(matrix, np.nan)
         if self._squared:
             return np.square(matrix)
@@ -109,6 +136,13 @@ class Covariance(Estimators):
 
 
 class Precision(Estimators):
+    """Precision (inverse covariance) matrix of the ``M`` processes.
+
+    ``P = C^-1`` with ``C`` the covariance as estimated by the scikit-learn
+    covariance ``estimator``; ``squared=True`` squares the result (unsigned).
+    The result is NaN when the covariance estimate is singular (for example
+    when there are no more samples than processes).
+    """
 
     name = "Precision"
     identifier = "prec"
@@ -134,7 +168,9 @@ class PartialCorrelation(Estimators):
     ``estimator`` is any ``sklearn.covariance`` estimator that ``Precision``
     accepts, and ``squared=True`` squares the result (unsigned). The
     covariance fit is shared with ``Covariance`` and ``Precision``
-    (``data.covariance[estimator]``).
+    (``data.covariance[estimator]``). The result is NaN when the covariance
+    estimate is singular (for example when there are no more samples than
+    processes).
     """
 
     name = "Partial correlation"
@@ -175,38 +211,47 @@ def _xcorr_profile(data, i, j):
 
     Stored in ``data.xcorr`` under both orientations (``(j, i)`` is the reversed
     sequence) and shared by :class:`CrossCorrelation` and
-    :class:`LagResolvedCorrelation`. The returned array *is* the cache entry:
-    read it, do not modify it in place.
+    :class:`LagResolvedCorrelation`. All NaN when either series is constant.
+    The returned array *is* the cache entry: read it, do not modify it in
+    place.
     """
     try:
         return data.xcorr[(i, j)]
     except (KeyError, AttributeError):
         pass
 
+    # Computed for (larger, smaller) and reversed for the other orientation,
+    # so a value does not depend on the order the pairs are visited in.
     T = data.n_observations
-    x, y = data.to_numpy(squeeze=True)[[i, j]]
+    hi, lo = max(i, j), min(i, j)
+    x, y = data.to_numpy(squeeze=True)[[hi, lo]]
 
-    # Biased estimator (demeaned, divided by T, as statsmodels'
-    # `ccf(adjusted=False)`): |r| <= 1 and the zero lag is Pearson's r.
-    x = x - x.mean()
-    y = y - y.mean()
-    scale = T * np.sqrt(np.mean(x ** 2) * np.mean(y ** 2))
-
-    # Force FFT method: O(N log N) vs O(N^2) direct for short signals.
-    r_full = signal.correlate(x, y, "full", method="fft") / scale
-
-    # correlate(x, y, "full")[T - 1 + l] == sum_t x[t + l] * y[t], so the
-    # zero lag sits at T - 1.
     lag_max = T // _XCORR_MAX_LAG_FRACTION
-    r_ij = r_full[T - 1 - lag_max: T + lag_max]
+    if np.ptp(x) == 0 or np.ptp(y) == 0:
+        # Undefined; rounding in the mean of a float constant would otherwise
+        # give arbitrary finite values.
+        r_hilo = np.full(2 * lag_max + 1, np.nan)
+    else:
+        # Biased estimator (demeaned, divided by T, as statsmodels'
+        # `ccf(adjusted=False)`): |r| <= 1 and the zero lag is Pearson's r.
+        x = x - x.mean()
+        y = y - y.mean()
+        scale = T * np.sqrt(np.mean(x ** 2) * np.mean(y ** 2))
+
+        # Force FFT method: O(N log N) vs O(N^2) direct for short signals.
+        r_full = signal.correlate(x, y, "full", method="fft") / scale
+
+        # correlate(x, y, "full")[T - 1 + l] == sum_t x[t + l] * y[t], so the
+        # zero lag sits at T - 1.
+        r_hilo = r_full[T - 1 - lag_max: T + lag_max]
 
     try:
-        data.xcorr[(i, j)] = r_ij
+        data.xcorr[(hi, lo)] = r_hilo
     except AttributeError:
-        data.xcorr = {(i, j): r_ij}
+        data.xcorr = {(hi, lo): r_hilo}
     # r_yx(l) == r_xy(-l): the opposite orientation is the reversed sequence.
-    data.xcorr[(j, i)] = r_ij[::-1]
-    return r_ij
+    data.xcorr[(lo, hi)] = r_hilo[::-1]
+    return data.xcorr[(i, j)]
 
 
 class CrossCorrelation(Undirected, Signed):
@@ -221,7 +266,7 @@ class CrossCorrelation(Undirected, Signed):
     ``|r(l)| > 1.96/sqrt(T)`` -- and not a significance test: the band is not
     inflated for the series' own autocorrelation, and it is not corrected for
     being applied at every lag in the window. When no lag clears it the
-    statistic is 0.
+    statistic is 0. NaN when either series is constant.
     """
 
     name = "Cross correlation"
@@ -247,6 +292,9 @@ class CrossCorrelation(Undirected, Signed):
     def bivariate(self, data, i=None, j=None):
         T = data.n_observations
         r_ij = _xcorr_profile(data, i, j)
+        if np.isnan(r_ij).all():
+            # Undefined, and `sigonly` would otherwise turn it into 0.
+            return np.nan
 
         # `sigonly` is a pointwise amplitude threshold, not an inferential
         # test. The name is historical and kept for compatibility: it keeps
@@ -315,79 +363,91 @@ def _round_to_lag(v, cap):
 
 
 class LagResolvedCorrelation(Directed, Signed):
-    """Directed, lag-resolved cross-correlation (Mitra et al. 2014).
+    """Directed, lag-resolved cross-correlation [1]_.
 
     Reads the lag profile that :class:`CrossCorrelation` caches in
-    ``data.xcorr`` -- the biased (divide-by-T) sample cross-correlation of the
-    demeaned series over lags ``-T//4 .. +T//4`` -- and reports where on the
-    lag axis a pair's linear coupling sits and which way it runs.
+    ``data.xcorr`` and reports where on the lag axis a pair's linear coupling
+    sits and which way it runs.
 
-    **Lead correlation.** For a lag ``tau`` (in samples),
+    For a lag ``tau`` (in samples),
     ``r_{i->j}(tau) = sum_t (x_i[t] - m_i)(x_j[t + tau] - m_j) / (T s_i s_j)``,
     summed over the ``T - |tau|`` overlapping samples, with ``m`` the mean and
-    ``s`` the divide-by-T standard deviation. ``tau > 0`` is ``i`` leading ``j``
-    by ``tau``, ``r_{i->j}(-tau) = r_{j->i}(tau)``, and ``r_{i->j}(0)`` is
-    Pearson's r. The denominator is ``T``, not ``T - |tau|`` (Box & Jenkins'
-    estimator, as in ``CrossCorrelation``), so ``|r| <= 1`` and a pure delay of
-    ``d`` samples gives ``1 - d/T`` at its lag.
+    ``s`` the divide-by-T standard deviation. ``tau > 0`` is ``i`` leading
+    ``j``, ``r_{i->j}(-tau) = r_{j->i}(tau)``, and ``r_{i->j}(0)`` is
+    Pearson's r. The denominator is ``T``, not ``T - |tau|`` (the biased
+    estimator of [2]_, as in ``CrossCorrelation``), so ``|r| <= 1`` and a pure
+    delay of ``d`` samples gives ``1 - d/T`` at its lag. Every statistic uses
+    the lags ``-L .. L`` with ``L = min(max_lag, T // 4)``.
 
-    **Window.** All statistics use the lags ``-L .. L`` with
-    ``L = min(max_lag, T // 4)`` (``max_lag=None`` is the full cached window
-    ``T // 4``).
-
-    **Correlation length.** ``l_i`` is the first lag ``k >= 1`` at which the
-    sample autocorrelation of ``x_i`` (``pyspi.utils.acf``, biased) falls below
-    ``1/e`` -- hctsa's ``CO_f1ecac`` (Fulcher et al. 2013) on the integer lags
-    -- searched out to ``T // 4``. A process whose autocorrelation stays at or
-    above ``1/e`` that far has an unbounded length. The adaptive statistics
-    below set one lag or window per pair from ``l_i`` and ``l_j`` and clip it
-    to ``1 .. C`` with ``C = max(1, min(T // 10, L))``, so an unbounded length
-    gives ``C``. The lag follows the pair's correlation times, so it adapts to
-    the sampling rate: sampling the same system more finely lengthens it in
-    samples and leaves it about the same in time.
+    The correlation length ``l_i`` is the first lag ``k >= 1`` at which the
+    biased sample autocorrelation of ``x_i`` falls below ``1/e`` (hctsa's
+    ``CO_f1ecac`` [3]_), searched out to ``T // 4``; it is unbounded if the
+    autocorrelation stays at or above ``1/e`` that far. The adaptive
+    statistics set one lag or window per pair from ``l_i`` and ``l_j`` and clip
+    it to ``1 .. C`` with ``C = max(1, min(T // 10, L))``, so an unbounded
+    length gives ``C``. In samples it follows the sampling rate, so in time it
+    stays about the same.
 
     ``A[i, j]`` is row ``i`` (source) to column ``j`` (target):
 
     ``lag``
         ``l* = argmax_{l in -L..L} |r_{i->j}(l)|``, the signed lag of the
-        strongest linear coupling, an integer number of samples, positive when
-        the row leads the column. Antisymmetric, ``A[i, j] = -A[j, i]``. Exact
-        ties go to the smallest ``|l|``. The lag is on the sample grid (Mitra et
-        al. 2014 interpolate between samples). Under independence ``l*`` is
-        spread over the whole window, so on weakly coupled pairs prefer a short
+        strongest linear coupling in samples, positive when the row leads the
+        column. Antisymmetric: ``A[i, j] = -A[j, i]``. Exact ties go to the
+        smallest ``|l|``. The lag is on the sample grid, where [1]_
+        interpolates between samples. Under independence ``l*`` is spread over
+        the whole window, so on weakly coupled pairs prefer a short
         ``max_lag``.
     ``peak``
-        ``r_{i->j}(l*)``: the signed correlation at that lag. Undirected (the
-        same extremum is found from either orientation), signed.
+        ``r_{i->j}(l*)``, the signed correlation at that lag. Undirected and
+        signed.
     ``onesided``
         ``A[i, j] = r_{i->j}(tau)`` and ``A[j, i] = r_{j->i}(tau)`` at one lag
-        ``tau`` shared by both cells of the pair: directed and signed. ``tau``
-        is an integer in ``1 .. L`` (default 1), or ``"1e"`` for the pair lag
-        ``tau_ij = round(sqrt(l_i l_j))``, the geometric mean of the two
-        correlation lengths, clipped to ``1 .. C``. The lag is one per pair
-        because lags that differ by direction report a direction on correlated
-        pairs with no directed coupling: ``|r|`` decays with the lag, so the
-        direction read at the shorter lag wins.
+        ``tau`` shared by both cells of the pair: directed and signed. With
+        ``tau="1e"`` the lag is ``round(sqrt(l_i l_j))``, clipped to
+        ``1 .. C``. The lag is shared because ``|r|`` decays with the lag, so
+        lags that differ by direction would report a direction on correlated
+        pairs with no directed coupling.
     ``onesidedpeak``
-        ``max_{1 <= k <= w} |r_{i->j}(k)|``: the largest lead correlation from
-        row to column within ``w`` lags, directed and unsigned. The window
-        ``w = l_i + l_j`` (twice the pair's mean correlation length) is shared
-        by both cells and clipped to ``1 .. C``. Lag 0 is excluded.
+        ``max_{1 <= k <= w} |r_{i->j}(k)|``, the largest lead correlation from
+        row to column within ``w = l_i + l_j`` lags (shared by both cells,
+        clipped to ``1 .. C``): directed and unsigned. Lag 0 is excluded.
     ``asym``
         ``(S_{i->j} - S_{j->i}) / (S_{i->j} + S_{j->i})`` with
-        ``S_{i->j} = sum_{l=1..L} r_{i->j}(l)^2``: a lead/lag asymmetry index in
-        ``[-1, 1]``, antisymmetric, positive when the lagged coupling runs
-        mostly from row to column (0 when both sums are 0). Lag 0 enters
-        neither sum. It does not condition on the target's own past, so it is
-        a lead/lag index, not a Granger-causality test: a common driver
-        reaching ``i`` before ``j`` also makes it positive.
+        ``S_{i->j} = sum_{l=1..L} r_{i->j}(l)^2``, a lead/lag asymmetry index
+        in ``[-1, 1]``: antisymmetric, positive when the lagged coupling runs
+        mostly from row to column, and 0 when both sums are 0. It does not
+        condition on the target's own past, so a common driver that reaches
+        ``i`` before ``j`` also makes it positive.
 
-    ``statistic`` is one of the five above. ``max_lag`` (an integer >= 1, or
-    ``None`` for ``T // 4``) caps the window, and ``tau`` (an integer >= 1 or
-    ``"1e"``, default 1) is used only by ``onesided``. The identifier is
-    ``lagcorr_<statistic>[_tau-<tau>]_L-<max_lag>``, e.g.
-    ``lagcorr_lag_L-None``, ``lagcorr_onesided_tau-1e_L-None``,
-    ``lagcorr_onesidedpeak_L-None``.
+    The identifier is ``lagcorr_<statistic>[_tau-<tau>]_L-<max_lag>``, e.g.
+    ``lagcorr_lag_L-None`` or ``lagcorr_onesided_tau-1e_L-None``. NaN for a
+    pair with a constant process.
+
+    References
+    ----------
+    .. [1] A. Mitra, A.Z. Snyder, C.D. Hacker, M.E. Raichle, "Lag structure in
+           resting-state fMRI", Journal of Neurophysiology 111(11), 2374-2391
+           (2014).
+    .. [2] G.E.P. Box, G.M. Jenkins, G.C. Reinsel, G.M. Ljung, "Time Series
+           Analysis: Forecasting and Control", 5th edition, Wiley (2015).
+    .. [3] B.D. Fulcher, M.A. Little, N.S. Jones, "Highly comparative
+           time-series analysis: the empirical structure of time series and
+           their methods", Journal of the Royal Society Interface 10(83),
+           20130048 (2013).
+
+    Parameters
+    ----------
+    statistic : str, optional
+        ``'lag'``, ``'peak'``, ``'onesided'``, ``'onesidedpeak'`` or
+        ``'asym'``, as above. Default: ``'lag'``.
+    max_lag : int or None, optional
+        Cap on the lag window, at least 1; None uses ``T // 4``.
+        Default: None.
+    tau : int or str, optional
+        The lag of ``'onesided'``: an integer from 1 to ``L``, or ``'1e'`` for
+        the pair's correlation lengths. Only ``'onesided'`` takes it.
+        Default: 1.
     """
 
     name = "Lag-resolved cross-correlation"
@@ -523,9 +583,8 @@ class LagResolvedCorrelation(Directed, Signed):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         L = self._window(data.n_observations)
-        # One orientation per pair (the lower index first), as in
-        # `multivariate`, so the two agree exactly and `lag`/`asym` are
-        # exactly antisymmetric and `peak` exactly symmetric.
+        # The lower index first, as in `multivariate`, so the two agree exactly
+        # and the antisymmetric and symmetric statistics are exactly so.
         a, b = (i, j) if i <= j else (j, i)
         v_ab, v_ba = self._pair(data, a, b, L, self._pair_lag(data, L))
         return v_ab if i <= j else v_ba
@@ -539,10 +598,11 @@ class LagResolvedCorrelation(Directed, Signed):
         pair_lag = self._pair_lag(data, L)
         pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
         both = np.full((M, M, 2), np.nan)
-        # A failing pair is NaN in both of its cells (the scalar NaN that
-        # fill_pairwise stores broadcasts over the last axis).
+        # A failing pair is NaN, and reported as a failure, in both of its
+        # cells; only the upper triangle of `both` is read.
         fill_pairwise(self.identifier, both, pairs,
-                      lambda i, j: self._pair(data, i, j, L, pair_lag))
+                      lambda i, j: self._pair(data, i, j, L, pair_lag),
+                      mirror=True)
         A = np.full((M, M), np.nan)
         iu = np.triu_indices(M, 1)
         A[iu] = both[..., 0][iu]

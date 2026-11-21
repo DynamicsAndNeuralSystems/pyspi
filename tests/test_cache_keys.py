@@ -127,7 +127,7 @@ def test_cache_sharing_never_changes_a_value():
         isolated = np.asarray(spi.multivariate(Data(data=fixture, dim_order="sp")),
                               dtype=float)
         got = shared.table[identifier].to_numpy(dtype=float)
-        # Off-diagonal only: `_parallel.run_spi` NaNs the diagonal on the way
+        # Off-diagonal only: `_parallel.execute_spi` NaNs the diagonal on the way
         # into the table, and several `multivariate` implementations do not.
         off = ~np.eye(got.shape[0], dtype=bool)
         if not np.allclose(isolated[off], got[off], rtol=1e-9, atol=1e-12,

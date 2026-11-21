@@ -192,7 +192,7 @@ def _full_yaml_configs(cls):
 @pytest.mark.parametrize("zscore", [True, False])
 @pytest.mark.parametrize(
     "params", [
-        # The six configurations bundled in 2.0.2 (no longer in `full`).
+        # The six configurations 2.0.2 bundled, and `max` without `sigonly`.
         {"statistic": "max"},
         {"statistic": "max", "squared": True},
         {"statistic": "mean"},

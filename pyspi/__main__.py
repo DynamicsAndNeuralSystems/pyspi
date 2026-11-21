@@ -82,6 +82,8 @@ def main(argv=None) -> int:
     out = args.output or args.data.with_suffix(".spi.npz")
     if out.suffix not in _OUTPUT_SUFFIXES:
         parser.error(f"unsupported output suffix {out.suffix!r}; use .npz or .csv.")
+    if not out.parent.is_dir():
+        parser.error(f"output directory {str(out.parent)!r} does not exist.")
     try:
         _parallel.resolve_n_jobs(args.n_jobs)
     except (TypeError, ValueError) as err:

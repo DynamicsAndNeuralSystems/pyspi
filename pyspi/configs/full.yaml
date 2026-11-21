@@ -12,44 +12,7 @@
     dependencies:
     configs:
       - estimator: EmpiricalCovariance
-      - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
       - estimator: MinCovDet
-      - estimator: GraphicalLassoCV
-        squared: True
-
-  # Precision
-  Precision:
-    labels:
-      - undirected
-      - linear
-      - signed
-      - multivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-      - estimator: EmpiricalCovariance
-      - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
-      - estimator: LedoitWolf
-      - estimator: MinCovDet
-      - estimator: OAS
-      - estimator: ShrunkCovariance
-      - estimator: EmpiricalCovariance
-        squared: True
-      - estimator: GraphicalLasso
-        squared: True
-      - estimator: GraphicalLassoCV
-        squared: True
-      - estimator: LedoitWolf
-        squared: True
-      - estimator: MinCovDet
-        squared: True
-      - estimator: OAS
-        squared: True
-      - estimator: ShrunkCovariance
-        squared: True
 
   # Partial correlation
   PartialCorrelation:
@@ -64,7 +27,6 @@
     configs:
       - estimator: EmpiricalCovariance
       - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
       - estimator: LedoitWolf
       - estimator: MinCovDet
       - estimator: OAS
@@ -81,7 +43,6 @@
       - M14
     dependencies:
     configs:
-      - squared: True
       - squared: False
 
   # Chatterjee's rank correlation xi
@@ -306,54 +267,14 @@
       - M14
     dependencies:
     configs:
-      - mode: euclidean
-        statistic: max
       - mode: dtw
         statistic: corr
         labels:
           - M09
-      - mode: dtw
-        statistic: max
-      - mode: sgddtw
-        statistic: corr
-        labels:
-          - M09
-      - mode: sgddtw
-        statistic: max
       - mode: softdtw
         statistic: corr
         labels:
           - M09
-      - mode: softdtw
-        statistic: max
-
-      - mode: euclidean
-        statistic: max
-        squared: True
-
-      - mode: dtw
-        statistic: max
-        squared: True
-
-      - mode: sgddtw
-        statistic: max
-        squared: True
-
-      - mode: softdtw
-        statistic: max
-        squared: True
-
-  # Gromov-Wasserstein distance (GW_tau)
-  GromovWasserstainTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
 
 # Causal inference statistics
 .statistics.causal:
@@ -406,19 +327,94 @@
     configs:
       - statistic: mean
       - statistic: max
-      - statistic: diff
       - statistic: mean
         embedding_dimension: 1
       - statistic: max
-        embedding_dimension: 1
-      - statistic: diff
         embedding_dimension: 1
       - statistic: mean
         embedding_dimension: 10
       - statistic: max
         embedding_dimension: 10
-      - statistic: diff
+      - statistic: convergence
+      - statistic: convergence
+        embedding_dimension: 1
+      - statistic: convergence
         embedding_dimension: 10
+
+  # Lagged convergent cross-mapping
+  LaggedConvergentCrossMapping:
+    labels:
+      - directed
+      - nonlinear
+      - signed
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: tp
+        max_lag: 5
+      - statistic: skill
+        max_lag: 5
+
+  # Nonlinear interdependence
+  NonlinearInterdependence:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: L
+        m: 5
+        tau: 1
+        k: 5
+      - statistic: N
+        m: 5
+        tau: 1
+        k: 5
+      - statistic: H
+        m: 5
+        tau: 1
+        k: 5
+      - statistic: L
+        m: 3
+        tau: 1
+        k: 5
+
+  # Liang-Kleeman information flow
+  LiangInformationFlow:
+    labels:
+      - directed
+      - linear
+      - signed
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - k: 1
+        conditional: False
+        statistic: rate
+        labels:
+          - bivariate
+      - k: 1
+        conditional: False
+        statistic: normalised
+        labels:
+          - bivariate
+      - k: 1
+        conditional: True
+        statistic: rate
+        labels:
+          - multivariate
+      - k: 1
+        conditional: True
+        statistic: normalised
+        labels:
+          - multivariate
 
 # Information-theoretic statistics
 .statistics.infotheory:
@@ -432,7 +428,6 @@
       - contemporaneous
       - M14
     configs:
-      - estimator: gaussian
       - estimator: kozachenko
       - estimator: kernel
 
@@ -446,7 +441,6 @@
       - contemporaneous
       - M14
     configs:
-      - estimator: gaussian
       - estimator: kozachenko
       - estimator: kernel
 
@@ -540,6 +534,10 @@
       - estimator: kernel
         kernel_width: 0.25
 
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
+
   # Time-lagged mutual information
   TimeLaggedMutualInfo:
     labels:
@@ -561,6 +559,10 @@
 
       - estimator: kernel
         kernel_width: 0.25
+
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
 
   # Transfer entropy
   TransferEntropy:
@@ -605,6 +607,13 @@
       - estimator: kernel
         kernel_width: 0.25
         k_history: 1
+        labels:
+          - M14
+
+      - estimator: kernel
+        kernel_width: 0.25
+        k_history: 1
+        dyn_corr_excl: AUTO
         labels:
           - M14
 
@@ -787,6 +796,18 @@
         fmax: 0.5
         statistic: max
 
+  # Hilbert phase consistency, band-averaged with weights from the pair's shared rhythmic power
+  AdaptivePhaseConsistency:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - frequency-dependent
+      - MXX
+    dependencies:
+    configs:
+
   # Phase lag index
   PhaseLagIndex:
     labels:
@@ -887,36 +908,6 @@
         labels:
           - M12
 
-  # Directed transfer function
-  DirectedTransferFunction:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-      - fs: 1
-
-      - fmin: 0
-        fmax: 0.25
-
-      - fmin: 0.25
-        fmax: 0.5
-
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
-
   # Directed coherence
   DirectedCoherence:
     labels:
@@ -946,59 +937,6 @@
       - fmin: 0.25
         fmax: 0.5
         statistic: max
-
-  # Direct directed transfer function
-  DirectDirectedTransferFunction:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-      - fs: 1
-
-      - fmin: 0
-        fmax: 0.25
-
-      - fmin: 0.25
-        fmax: 0.5
-
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
-
-  # Group delay
-  GroupDelay:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M01
-    dependencies:
-    configs:
-      - fmin: 0
-        fmax: 0.5
-        statistic: delay
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: delay
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: delay
 
   # Spectral Granger causality
   SpectralGrangerCausality:
@@ -1181,6 +1119,27 @@
       - fmin: 0.25
         fmax: 0.5
 
+# Cross-frequency statistics
+.statistics.crossfreq:
+  # Phase-amplitude coupling
+  PhaseAmplitudeCoupling:
+    labels:
+      - directed
+      - nonlinear
+      - signed
+      - bivariate
+      - frequency-dependent
+      - M11
+    dependencies:
+    configs:
+      - phase_band: [0.01, 0.05]
+        amp_band: [0.15, 0.4]
+        statistic: mi_excess
+
+      - phase_band: [0.05, 0.1]
+        amp_band: [0.2, 0.45]
+        statistic: mi_excess
+
 # Miscellaneous statistics
 .statistics.misc:
   # Gaussian process regression
@@ -1300,6 +1259,22 @@
         log: True
         absolute: True
 
+  # Edge time series (coupling nonstationarity)
+  EdgeTimeSeries:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - time-dependent
+      - M11
+    dependencies:
+    configs:
+      - statistic: excessvar
+      - statistic: topshare
+        frac: 0.05
+      - statistic: acf1
+
   # Interdependence score
   InterDependenceScore:
     labels:
@@ -1311,3 +1286,140 @@
       - terms: 6
         pnorm: 'max'
         bandwidth: 0.5
+
+# Vector autoregressive (VAR) model statistics
+.statistics.var:
+  # Conditional Granger causality
+  ConditionalGrangerCausality:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - time-dependent
+      - M05
+    dependencies:
+    configs:
+      - order: 1
+      - order: 2
+      - order: bic
+
+  # Conditional partial directed coherence
+  ConditionalPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
+
+  # Conditional generalized partial directed coherence
+  ConditionalGeneralizedPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
+
+  # Conditional direct directed transfer function
+  ConditionalDirectDirectedTransferFunction:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
+
+  # Partial coherence
+  PartialCoherence:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M12
+    dependencies:
+    configs:
+      - order: bic
+
+      - order: bic
+        fmin: 0
+        fmax: 0.25
+
+      - order: bic
+        fmin: 0.25
+        fmax: 0.5
+
+# Event and extreme-value statistics
+.statistics.events:
+  # Event synchronisation
+  EventSynchronisation:
+    labels:
+      - undirected
+      - nonlinear
+      - signed/unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: Q
+        quantile: 0.95
+      - statistic: q
+        quantile: 0.95
+      - statistic: Q
+        quantile: 0.9
+      - statistic: q
+        quantile: 0.9
+
+  # Tail-dependence asymmetry
+  TailDependenceAsymmetry:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - quantile: 0.95
+      - quantile: 0.9

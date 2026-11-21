@@ -1,21 +1,22 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (234 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (228 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
 | 2.0.2 `config.yaml` | 285 |
-| identifier unchanged | 181 |
-| renamed (same class and parameters; identifier changed) | 23 |
-| removed | 81 |
-| added | 30 |
-| 3.0.0 `full.yaml` | 234 |
+| identifier unchanged | 135 |
+| renamed (same class and parameters; identifier changed) | 22 |
+| removed | 128 |
+| added | 71 |
+| 3.0.0 `full.yaml` | 228 |
 
-285 - 81 removed + 30 added = 234; 181 + 23 renamed + 30 added = 234.
-The 81 removals are 14 made while porting away from JIDT, 24 duplicate, constant or degenerate SPIs, 37 unbundled because an SPI that stays carries them, and the 6 `xcorr` SPIs, replaced by the directed `lagcorr` SPIs; all are in the table below.
+285 - 128 removed + 71 added = 228; 135 + 22 renamed + 71 added = 228.
+The removals include 14 made while porting away from JIDT, 24 duplicate, constant or degenerate SPIs, 37 unbundled because an SPI that stays carries them, and the 6 `xcorr` SPIs, replaced by the directed `lagcorr` SPIs.
 The last 43 are removed from the bundled configs only: their classes are unchanged, and each can still be computed from a custom config.
+The default kernel SPIs `mi_kernel_W-0.25`, `tlmi_kernel_W-0.25` and `te_kernel_W-0.25_k-1` keep their identifiers, but their values differ from 2.0.2: each point is now left out of its own neighbour counts.
 
-## Added (30)
+## Added (71)
 
 | Family | Count | Identifiers |
 |:--|--:|:--|
@@ -27,6 +28,7 @@ The last 43 are removed from the bundled configs only: their classes are unchang
 | `DirectedInfo` (KSG/Frenzel-Pompe) | 1 | `di_kraskov_NN-4_n-5` |
 | `PhaseAlignedCorrelation` (Welch, automatic segment length) | 1 | `phasealigned_welch_nperseg-auto` |
 | `TransferEntropy` (symbolic, 3-sample ordinal patterns) | 1 | `te_symbolic_k-3` |
+| `MutualInfo`, `TimeLaggedMutualInfo`, `TransferEntropy` (box kernel with AUTO dynamic correlation exclusion) | 3 | `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO`, `te_kernel_W-0.25_DCE-AUTO_k-1` |
 
 Full list:
 
@@ -60,8 +62,11 @@ Full list:
 - `xi_tau-0`
 - `xi_tau-1`
 - `te_symbolic_k-3`
+- `mi_kernel_W-0.25_DCE-AUTO`
+- `tlmi_kernel_W-0.25_DCE-AUTO`
+- `te_kernel_W-0.25_DCE-AUTO_k-1`
 
-## Removed (81)
+## Removed (128)
 
 | Identifier (2.0.2) | Class | Why |
 |:--|:--|:--|

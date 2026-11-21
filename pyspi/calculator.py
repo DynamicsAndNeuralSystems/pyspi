@@ -1,16 +1,19 @@
 # Science/maths/computing tools
 import numpy as np
 import pandas as pd
-import copy, yaml, importlib, time, warnings, os
+import copy, yaml, importlib, importlib.metadata, re, time, warnings, os
 import functools
 import hashlib, json
 from pathlib import Path
+from typing import NamedTuple, Optional
 from tqdm import tqdm
 
 # From this package
 from .data import Data
+from .base import DIRECTEDNESS_TRAITS, ONE_VALUE_PER_PAIR
 from .utils import convert_mdf_to_ddf, inspect_calc_results, require_int
 from . import _parallel
+from .quality import Quality
 from ._logging import get_logger, configure as _configure_logging
 from ._compat import resolve_zscore, resolve_config_arg, translate_calculator_kwargs
 
@@ -78,13 +81,12 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
     # both ways for one SPI: `gd_*` would otherwise carry the class's
     # `antisymmetric` and the config's `directed` together, and
     # `gd_*_rvalue` (symmetric, since it stores |r|) both labels.
-    _DIRECTEDNESS = ("antisymmetric", "asymmetric", "undirected", "directed")
-    own = [label for label in _DIRECTEDNESS if label in labels]
+    own = [label for label in DIRECTEDNESS_TRAITS if label in labels]
     if own:
         trait = own[0]
         merged = [
             label for label in merged
-            if label not in _DIRECTEDNESS or label == trait
+            if label not in DIRECTEDNESS_TRAITS or label == trait
         ]
 
     # Likewise for linear/nonlinear: if the class commits to one, the other
@@ -230,21 +232,89 @@ def warn_partial_cache_buckets(spis):
 # computes. They are recorded for provenance and deliberately kept out of
 # `run_digest`, which is a content hash: the same config contents and the same
 # data must digest the same from a checkout, a wheel or a temporary directory.
-_DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({"config", "configfile", "dataset_name"})
+# The version fields are excluded too: `COMPUTATION_VERSION` is hashed
+# separately, so an upgrade that changes no computed value still resumes.
+_DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({
+    "config", "configfile", "dataset_name",
+    "computation_version", "pyspi_version", "dependency_versions",
+})
 
 
-# Bumped whenever the .npz layout changes incompatibly. Schema 0 means "written
-# before the field existed", i.e. a pre-3.0.0 pickled file.
-_NPZ_SCHEMA = 1
+@functools.cache
+def _installed_versions():
+    """pyspi's version and the installed version of each runtime dependency.
 
-
-def load_table(path):
-    """Load a results table written by :meth:`Calculator.save`.
-
-    Returns the same DataFrame ``Calculator.table`` returns: rows are
-    processes, columns are a ``(spi, process)`` MultiIndex. Only ``.npz``
-    round-trips exactly -- ``.csv`` is a one-way human-readable export.
+    The dependency list is pyspi's own declared requirements (extras
+    excluded), so it does not drift from `pyproject.toml`. ``None`` marks a
+    package that is not installed or carries no metadata.
     """
+    def version(name):
+        try:
+            return importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+
+    try:
+        requires = importlib.metadata.requires("pyspi") or []
+    except importlib.metadata.PackageNotFoundError:
+        requires = []
+    deps = sorted({
+        re.match(r"[A-Za-z0-9_.\-]+", req).group(0)
+        for req in requires if "extra ==" not in req
+    }, key=str.lower)
+    return version("pyspi"), {name: version(name) for name in deps}
+
+
+# Bumped whenever the .npz layout changes. Schema 0 means "written before the
+# field existed", i.e. a pre-3.0.0 pickled file. Schema 2 adds `quality`, the
+# per-cell codes, and `pair_errors`; a schema-1 file still loads, with its
+# codes derived from its values and `errors`.
+_NPZ_SCHEMA = 2
+
+
+class Results(NamedTuple):
+    """Everything :meth:`Calculator.save` writes to ``.npz``, as :func:`load_results` returns it.
+
+    ``table`` is what :func:`load_table` returns. ``quality`` is a ``uint8``
+    DataFrame with the same index and columns, holding one
+    :class:`pyspi.quality.Quality` code per cell (``Calculator.quality``).
+    ``errors`` is the SPI-level ``{identifier: message}`` mapping
+    (``Calculator.errors``), ``run_spec`` the resolved run specification, and
+    ``pair_errors`` the per-pair messages (``Calculator.pair_errors``). A field
+    the file does not record is ``None``.
+    """
+    table: pd.DataFrame
+    quality: pd.DataFrame
+    errors: Optional[dict]
+    run_spec: Optional[dict]
+    pair_errors: Optional[dict]
+
+
+def _frame_from_matrices(matrices, spis, procs):
+    """``(n_spis, M, M)`` -> the wide ``M x (n_spis * M)`` frame :attr:`Calculator.table` uses.
+
+    The one builder for :attr:`Calculator.table`, :attr:`Calculator.quality`
+    and what :func:`load_table` / :func:`load_results` return, so their index
+    and columns cannot drift apart. The dtype of ``matrices`` is kept.
+    """
+    spis, procs = list(spis), list(procs)
+    matrices = np.asarray(matrices)
+    n, M = len(spis), len(procs)
+    if matrices.shape != (n, M, M):
+        raise ValueError(f"matrices have shape {matrices.shape}, expected ({n}, {M}, {M})")
+    # Row r is [matrices[0][r], matrices[1][r], ...]: the matrices side by side.
+    data = matrices.transpose(1, 0, 2).reshape(M, n * M).copy()
+    frame = pd.DataFrame(
+        data=data,
+        columns=pd.MultiIndex.from_product([spis, procs], names=["spi", "process"]),
+        index=procs,
+    )
+    frame.columns.name = "process"
+    return frame
+
+
+def _read_npz(path):
+    """Read and validate a ``.npz`` results file; return its parts as a dict."""
     path = Path(path)
     if path.suffix != ".npz":
         raise ValueError(
@@ -267,11 +337,13 @@ def load_table(path):
                 f"understands up to {_NPZ_SCHEMA}. Upgrade pyspi."
             )
         values = f["values"]
+        quality = f["quality"] if "quality" in f.files else None
         spis = [str(s) for s in f["spis"]]
         procs = [str(p) for p in f["processes"]]
-        # Provenance. `save()` writes these three, so a loaded table can report
-        # which SPIs failed, what produced it, and whether it matches a rerun.
-        meta = {name: str(f[name]) for name in ("run_spec", "run_digest", "errors")
+        # Provenance. `save()` writes these, so a loaded table can report which
+        # SPIs (and pairs) failed, what produced it, and whether it matches a rerun.
+        meta = {name: str(f[name])
+                for name in ("run_spec", "run_digest", "errors", "pair_errors")
                 if name in f.files}
 
     # The whole shape, not just `ndim` and axis 0, so a file of the wrong width
@@ -282,25 +354,247 @@ def load_table(path):
             f"{path} is malformed: values has shape {values.shape}, expected "
             f"({len(spis)}, {len(procs)}, {len(procs)})."
         )
-    table = pd.DataFrame(
-        data=np.concatenate(list(values), axis=1),
-        columns=pd.MultiIndex.from_product([spis, procs], names=["spi", "process"]),
-        index=procs,
-    )
-    table.columns.name = "process"
-    # `DataFrame.attrs` rather than a wrapper type: it is pandas' documented
-    # place for exactly this, and it keeps `load_table` returning the same
-    # object `Calculator.table` does.
-    table.attrs["schema"] = schema
-    for name in ("run_spec", "errors"):
+    if quality is not None and quality.shape != values.shape:
+        raise ValueError(
+            f"{path} is malformed: quality has shape {quality.shape}, expected "
+            f"{values.shape}."
+        )
+    parsed = {}
+    for name in ("run_spec", "errors", "pair_errors"):
         if name in meta:
             try:
-                table.attrs[name] = json.loads(meta[name])
+                parsed[name] = json.loads(meta[name])
             except json.JSONDecodeError:
-                table.attrs[name] = meta[name]
-    if "run_digest" in meta:
-        table.attrs["run_digest"] = meta["run_digest"]
+                parsed[name] = meta[name]
+    return dict(schema=schema, values=values, quality=quality, spis=spis,
+                procs=procs, run_digest=meta.get("run_digest"), **parsed)
+
+
+def load_table(path):
+    """Load a results table written by :meth:`Calculator.save`.
+
+    Returns the same DataFrame ``Calculator.table`` returns: rows are
+    processes, columns are a ``(spi, process)`` MultiIndex. Only ``.npz``
+    round-trips exactly -- ``.csv`` is a one-way human-readable export.
+
+    ``table.attrs`` carries the file's small metadata: ``schema``,
+    ``run_spec``, ``run_digest`` and ``errors``. The per-cell quality codes are
+    not among them; use :func:`load_results` for those.
+    """
+    return _table_from_parts(_read_npz(path))
+
+
+def _table_from_parts(parts):
+    table = _frame_from_matrices(parts["values"], parts["spis"], parts["procs"])
+    # `DataFrame.attrs` rather than a wrapper type: it is pandas' documented
+    # place for exactly this, and it keeps `load_table` returning the same
+    # object `Calculator.table` does. Only small values go here: pandas
+    # deep-copies `attrs` on every derived frame and compares them with `==`
+    # in `concat`, so a DataFrame in `attrs` (the quality codes) made slicing
+    # slower and made `pd.concat` of two tables raise.
+    table.attrs["schema"] = parts["schema"]
+    for name in ("run_spec", "errors"):
+        if name in parts:
+            table.attrs[name] = parts[name]
+    if parts["run_digest"] is not None:
+        table.attrs["run_digest"] = parts["run_digest"]
     return table
+
+
+def load_results(path):
+    """Load everything :meth:`Calculator.save` wrote to ``.npz`` as a :class:`Results`.
+
+    ``Results(table, quality, errors, run_spec, pair_errors)``: ``table`` is
+    what :func:`load_table` returns, ``quality`` the matching ``uint8``
+    DataFrame of :class:`pyspi.quality.Quality` codes, and the rest as in
+    :class:`Results`.
+
+    A file written before quality codes existed (schema < 2) has its codes
+    derived from its values and ``errors``: a cell is GOOD, NaN or +/-Inf by its
+    value, the diagonal is NaN, and every non-finite off-diagonal cell of an
+    SPI recorded as failed is ERROR. Pair-level failures were not recorded in
+    those files, so those cells read as NaN and ``pair_errors`` is ``None``.
+    """
+    parts = _read_npz(path)
+    table = _table_from_parts(parts)
+    as_dict = lambda x: x if isinstance(x, dict) else None
+    errors = as_dict(parts.get("errors"))
+    quality = parts["quality"]
+    if quality is None:
+        quality = np.empty(parts["values"].shape, dtype=np.uint8)
+        for n, (key, values) in enumerate(zip(parts["spis"], parts["values"])):
+            quality[n] = _parallel.derive_quality(values, (errors or {}).get(key))
+    quality = _frame_from_matrices(quality.astype(np.uint8, copy=False),
+                                   parts["spis"], parts["procs"])
+    pair_errors = as_dict(parts.get("pair_errors"))
+    if pair_errors is not None:
+        pair_errors = {k: [tuple(p) for p in v] for k, v in pair_errors.items()}
+    return Results(table=table, quality=quality, errors=errors,
+                   run_spec=as_dict(parts.get("run_spec")), pair_errors=pair_errors)
+
+
+def feature_vector(table, directedness=None, include_self=False):
+    """Flatten a results table to one value per independent pairwise feature.
+
+    :attr:`Calculator.table` stores every SPI as a full ``M x M`` matrix. For
+    an ``undirected`` SPI the lower triangle is a copy of the upper one and
+    for an ``antisymmetric`` SPI it is its negation, so each holds
+    ``M(M-1)/2`` independent values. For these two traits the vector keeps the
+    pairs ``(i, j)`` with ``i < j`` (in process order); ``directed`` and
+    ``asymmetric`` SPIs keep both orientations. Rows are sources, so a
+    positive antisymmetric value at ``(i, j)`` means process ``i`` leads
+    process ``j``.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        :attr:`Calculator.table`, or the frame :func:`load_table` returns.
+    directedness : dict, optional
+        ``{identifier: trait}``, with the trait one of ``'undirected'``,
+        ``'antisymmetric'``, ``'directed'`` or ``'asymmetric'``. If None, it
+        is rebuilt from the config named in ``table.attrs["run_spec"]`` (set
+        by :func:`load_table`), using each SPI's
+        :meth:`~pyspi.base.Directed.directedness`. Identifiers missing from
+        the mapping are treated as ``'directed'``, which keeps both
+        orientations. Default: None.
+    include_self : bool, optional
+        Also keep the self-pairs ``(i, i)``, one per process and SPI. The
+        diagonal is NaN for pairwise SPIs and a constant for the few
+        multivariate SPIs that fill it. Default: False.
+
+    Returns
+    -------
+    pandas.Series
+        Named ``"value"`` and indexed by ``(spi, source, target)``, in table
+        column order and then row-major pair order, so vectors from datasets
+        with the same processes and config line up element for element. NaNs
+        are kept so the length is fixed; a feature is NaN wherever its cell in
+        :attr:`Calculator.quality` is not ``GOOD``, and that code says why.
+    """
+    if directedness is None:
+        directedness = _directedness_from_table(table)
+    spis = list(table.columns.unique(level="spi"))
+    procs = list(table.index)
+    M = len(procs)
+    if list(table.columns.unique(level="process")) != procs:
+        raise ValueError(
+            "table columns and rows name different processes; "
+            "feature_vector needs the square (spi, process) layout "
+            "Calculator.table and load_table produce."
+        )
+    upper = np.triu(np.ones((M, M), dtype=bool), k=1)
+    offdiag = ~np.eye(M, dtype=bool)
+    diag = np.eye(M, dtype=bool)
+
+    keys, sources, targets, values = [], [], [], []
+    src_idx, tgt_idx = np.indices((M, M))
+    for spi in spis:
+        trait = directedness.get(spi, "directed")
+        if trait not in DIRECTEDNESS_TRAITS:
+            raise ValueError(
+                f"Unknown directedness {trait!r} for SPI {spi!r}; expected one "
+                f"of {list(DIRECTEDNESS_TRAITS)}."
+            )
+        mask = upper if trait in ONE_VALUE_PER_PAIR else offdiag
+        if include_self:
+            mask = mask | diag
+        A = table[spi].to_numpy(dtype=float)
+        if A.shape != (M, M):
+            raise ValueError(
+                f"SPI {spi!r} occupies {A.shape[1]} columns, expected {M}."
+            )
+        n = int(mask.sum())
+        keys.extend([spi] * n)
+        sources.extend(np.asarray(procs, dtype=object)[src_idx[mask]])
+        targets.extend(np.asarray(procs, dtype=object)[tgt_idx[mask]])
+        values.append(A[mask])
+
+    index = pd.MultiIndex.from_arrays(
+        [keys, sources, targets], names=["spi", "source", "target"]
+    )
+    data = np.concatenate(values) if values else np.empty(0)
+    return pd.Series(data, index=index, name="value")
+
+
+def _directedness_from_table(table):
+    """Recover ``{identifier: trait}`` for a table loaded from disk.
+
+    ``table.attrs["run_spec"]["config"]`` names the bundled config or YAML
+    path the SPIs were built from; they are instantiated again to read their
+    traits. Raises if the config is missing or does not resolve, rather than
+    falling back to both orientations for every SPI.
+    """
+    spec = table.attrs.get("run_spec") if hasattr(table, "attrs") else None
+    config = spec.get("config") if isinstance(spec, dict) else None
+    if config is None:
+        raise ValueError(
+            "This table does not record the config it was computed with, so "
+            "the symmetry of each SPI is unknown. Pass directedness= "
+            "{identifier: trait}, e.g. {k: s.directedness() for k, s in "
+            "Calculator(config=...).spis.items()}."
+        )
+    try:
+        spis = load_spis_from_yaml(resolve_config(config), quiet=True)
+    except Exception as err:
+        raise ValueError(
+            f"Could not rebuild the SPIs from config {config!r} recorded in "
+            f"the table ({type(err).__name__}: {err}). Pass directedness= "
+            f"explicitly."
+        ) from err
+    return {k: spi.directedness() for k, spi in spis.items()}
+
+
+class _ConfigLoader(yaml.FullLoader):
+    """FullLoader that refuses a key repeated within one mapping.
+
+    PyYAML keeps the last of two equal keys, so a module named twice in a
+    config would silently lose its first block of SPIs.
+    """
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    f"found duplicate key {key!r}", key_node.start_mark)
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
+_CONFIG_ENTRY_KEYS = ("labels", "configs", "dependencies")
+
+
+def load_config_yaml(configfile):
+    """Read an SPI config as ``{module: {class: entry}}``, refusing malformed ones.
+
+    A key other than ``labels``, ``configs`` or ``dependencies`` in a class
+    entry is refused rather than ignored: a misspelt ``config:`` would
+    otherwise build the class with its default parameters. A bare ``Class:``
+    line is an entry with no keys.
+    """
+    with open(configfile) as f:
+        yf = yaml.load(f, Loader=_ConfigLoader)
+    if not isinstance(yf, dict):
+        raise ValueError(f"{configfile}: expected a mapping of modules to SPI classes.")
+    out = {}
+    for module_name, module_spis in yf.items():
+        module_spis = module_spis or {}
+        if not isinstance(module_spis, dict):
+            raise ValueError(f"{configfile}: {module_name} must map class names to entries.")
+        out[module_name] = {}
+        for fcn, entry in module_spis.items():
+            entry = entry or {}
+            if not isinstance(entry, dict):
+                raise ValueError(f"{configfile}: {module_name}.{fcn} must be a mapping.")
+            unknown = sorted(set(entry) - set(_CONFIG_ENTRY_KEYS))
+            if unknown:
+                raise ValueError(
+                    f"{configfile}: {module_name}.{fcn} has unknown key(s) "
+                    f"{unknown}; allowed: {list(_CONFIG_ENTRY_KEYS)}.")
+            out[module_name][fcn] = entry
+    return out
 
 
 def load_spis_from_yaml(configfile, quiet=False):
@@ -316,12 +610,11 @@ def load_spis_from_yaml(configfile, quiet=False):
     spis = {}
     log = (lambda *a, **k: None) if quiet else logger.info
     log("Loading configuration file: %s", configfile)
-    with open(configfile) as f:
-        yf = yaml.load(f, Loader=yaml.FullLoader)
+    yf = load_config_yaml(configfile)
     for module_name, module_spis in yf.items():
         log("Importing module %s", module_name)
         module = importlib.import_module(module_name, __package__)
-        for fcn, entry in (module_spis or {}).items():
+        for fcn, entry in module_spis.items():
             family_labels = entry.get("labels")
             configs = entry.get("configs")
             if fcn == "LaggedCorrelation" and configs is not None:
@@ -436,6 +729,7 @@ class Calculator:
         self._detrend = detrend
         self._timings = {}
         self._errors = {}
+        self._pair_errors = {}
         self._verbose = verbose
 
         # verbose maps to a process-global pyspi logger level (INFO vs WARNING).
@@ -487,8 +781,26 @@ class Calculator:
         A failed SPI still occupies its column in :attr:`table`, filled with
         NaN. Consult this before interpreting a table: a NaN column is
         otherwise indistinguishable from a legitimately undefined statistic.
+        :attr:`quality` says the same per cell.
+
+        An SPI whose every off-diagonal value is undefined (NaN, Inf, ...) is
+        listed too, with ``"ValueError: SPI returned no finite off-diagonal
+        values"``, although its cells keep the codes of what it returned.
+        Failures of single pairs are in :attr:`pair_errors`, not here.
         """
         return dict(self._errors)
+
+    @property
+    def pair_errors(self):
+        """``{identifier: [(source, target, "ExcType: message"), ...]}`` for failed pairs.
+
+        A pair whose computation raised inside an SPI that otherwise succeeded
+        (see :func:`pyspi.base.fill_pairwise`) is NaN in :attr:`table` and
+        ``Quality.ERROR`` in :attr:`quality`; this keeps its message.
+        ``source`` and ``target`` are process names: the row and column of the
+        cell. SPIs with no failed pair are absent.
+        """
+        return {k: list(v) for k, v in self._pair_errors.items()}
 
     @property
     def run_digest(self):
@@ -554,6 +866,9 @@ class Calculator:
             "procnames": list(dataset.procnames) if dataset is not None else None,
             "dataset_name": dataset.name if dataset is not None else None,
             "spi_identifiers": sorted(self._spis),
+            "computation_version": _parallel.COMPUTATION_VERSION,
+            "pyspi_version": _installed_versions()[0],
+            "dependency_versions": dict(_installed_versions()[1]),
         }
 
     @property
@@ -597,11 +912,36 @@ class Calculator:
 
     @property
     def table(self):
-        """Results table for all pairwise interactions."""
+        """Results table for all pairwise interactions.
+
+        Rows are processes and columns a ``(spi, process)`` MultiIndex, so
+        ``table[spi]`` is that SPI's full ``M x M`` matrix, row = source.
+        :meth:`feature_vector` flattens it to one value per independent pair.
+        """
         return self._table
 
     @table.setter
     def table(self, a):
+        raise Exception(
+            "Do not set this property externally. Use the compute() method."
+        )
+
+    @property
+    def quality(self):
+        """Per-cell quality codes: a ``uint8`` DataFrame shaped like :attr:`table`.
+
+        Each cell holds a :class:`pyspi.quality.Quality` code. ``GOOD`` (0)
+        means the value in :attr:`table` is a real, finite number; every other
+        code means the value is NaN and says why: ``ERROR`` (the SPI, or that
+        pair, raised), ``NAN`` (the SPI returned NaN: undefined or not
+        appropriate here; also every diagonal cell), ``INF`` / ``NEG_INF``,
+        ``COMPLEX``, or ``NOT_COMPUTED`` (255) before :meth:`compute` reaches
+        the SPI. ``pyspi.quality.quality_labels`` turns the codes into text.
+        """
+        return self._quality
+
+    @quality.setter
+    def quality(self, q):
         raise Exception(
             "Do not set this property externally. Use the compute() method."
         )
@@ -645,7 +985,9 @@ class Calculator:
         labels. This is the same data with one value per row.
 
         Self-pairs are dropped (their diagonal is NaN by construction); with
-        ``dropna=False`` failed SPIs keep their NaN rows.
+        ``dropna=False`` failed SPIs keep their NaN rows. Both orientations of
+        every pair are listed, so an undirected SPI appears twice per pair;
+        use :meth:`feature_vector` for one value per independent feature.
         """
         long = (
             self.table.rename_axis(index="source")
@@ -658,6 +1000,35 @@ class Calculator:
         if dropna:
             long = long.dropna(subset=["value"])
         return long[["spi", "source", "target", "value"]].reset_index(drop=True)
+
+    def feature_vector(self, include_self=False):
+        """One value per independent pairwise feature, as a ``pandas.Series``.
+
+        Turns :attr:`table` into features for classification or regression
+        across datasets. For ``undirected`` and ``antisymmetric`` SPIs only the
+        pairs ``(i, j)`` with ``i < j`` are kept (the other triangle is a copy,
+        or a copy with the sign flipped; a positive value means ``i`` leads
+        ``j``). ``directed`` and ``asymmetric`` SPIs keep both orientations.
+        The trait comes from each SPI's
+        :meth:`~pyspi.base.Directed.directedness`.
+
+        :func:`pyspi.feature_vector` does the same for a table loaded with
+        :func:`pyspi.load_table`.
+
+        Parameters
+        ----------
+        include_self : bool, optional
+            Also keep the self-pairs ``(i, i)``. Default: False.
+
+        Returns
+        -------
+        pandas.Series
+            Indexed by ``(spi, source, target)``, as in :meth:`to_frame`.
+            NaNs are kept, so the vector has the same length and order for
+            every dataset computed with this config and number of processes.
+        """
+        directedness = {k: spi.directedness() for k, spi in self.spis.items()}
+        return feature_vector(self.table, directedness, include_self=include_self)
 
     def summary(self):
         """One-line-per-fact overview of the last :meth:`compute` call.
@@ -738,28 +1109,25 @@ class Calculator:
 
         # Results belong to the dataset that produced them.
         self._errors = {}
+        self._pair_errors = {}
         self._timings = {}
 
-        columns = pd.MultiIndex.from_product(
-            [self.spis.keys(), self._dataset.procnames], names=["spi", "process"]
-        )
-        self._table = pd.DataFrame(
-            data=np.full(
-                (self.dataset.n_processes, self.n_spis * self.dataset.n_processes),
-                np.nan,
-            ),
-            columns=columns,
-            index=self._dataset.procnames,
-        )
-        self._table.columns.name = "process"
+        shape = (self.n_spis, self.dataset.n_processes, self.dataset.n_processes)
+        procs = self._dataset.procnames
+        self._table = _frame_from_matrices(np.full(shape, np.nan), self.spis, procs)
+        self._quality = _frame_from_matrices(
+            np.full(shape, Quality.NOT_COMPUTED, dtype=np.uint8), self.spis, procs)
 
     def save(self, path):
         """Write the results table to ``path``; the format follows the suffix.
 
         ``.npz`` (recommended) stores the results in their natural shape -- an
         ``(n_spis, M, M)`` float array plus the SPI and process names -- and
-        round-trips exactly through :func:`pyspi.load_table`. ``.csv`` is for
-        eyeballing small results; it is impractical for the full SPI set.
+        round-trips exactly through :func:`pyspi.load_table`. It also stores
+        :attr:`quality` as an ``(n_spis, M, M)`` ``uint8`` array, with
+        :attr:`errors`, :attr:`pair_errors` and the run's provenance; all of it
+        comes back from :func:`pyspi.load_results`. ``.csv`` is for eyeballing
+        small results (values only); it is impractical for the full SPI set.
         """
         path = Path(path)
         M = self.dataset.n_processes
@@ -768,8 +1136,9 @@ class Calculator:
         elif path.suffix == ".npz":
             keys = list(self.spis)
             values = np.stack([self.table[k].to_numpy(dtype=float) for k in keys])
+            quality = np.stack([self.quality[k].to_numpy(dtype=np.uint8) for k in keys])
             np.savez_compressed(
-                path, values=values,
+                path, values=values, quality=quality,
                 # dtype='U', not object: object arrays are only loadable with
                 # allow_pickle=True, which allows arbitrary code execution on load.
                 spis=np.array(keys, dtype="U"),
@@ -781,6 +1150,9 @@ class Calculator:
                 run_digest=np.array(self.run_digest, dtype="U"),
                 errors=np.array(
                     json.dumps(self.errors, sort_keys=True, default=str), dtype="U"
+                ),
+                pair_errors=np.array(
+                    json.dumps(self.pair_errors, sort_keys=True, default=str), dtype="U"
                 ),
             )
         else:
@@ -864,8 +1236,8 @@ class Calculator:
             done, spi_keys = _parallel.load_checkpoints(
                 cp_dir, spi_keys, M, retry_failed=retry_failed
             )
-            for key, (S, err, warns, _t) in done.items():
-                self._record(key, S, err, warns, 0.0)
+            for key, res in done.items():
+                self._record(key, res)
             if done:
                 logger.info("Resumed %d SPI(s) from %s", len(done), cp_dir)
 
@@ -891,8 +1263,8 @@ class Calculator:
                 configfile=self._configfile,
                 config_bytes=self._config_bytes,
             )
-            for key, (S, err, warns, elapsed) in results.items():
-                self._record(key, S, err, warns, elapsed)
+            for key, res in results.items():
+                self._record(key, res)
 
         elapsed = time.perf_counter() - t_start
         logger.info("Calculation complete. Time taken: %.4fs", elapsed)
@@ -906,16 +1278,24 @@ class Calculator:
                 iterable.set_description(f"Processing [{self._name}: {key}]")
             # Same primitive the workers use, so both paths agree on what
             # counts as a failure and on what the caller is shown.
-            S, err, warns, elapsed = _parallel.run_spi(
-                self._spis[key], self.dataset, key, M
-            )
-            self._record(key, S, err, warns, elapsed)
-            _parallel.write_checkpoint(cp_dir, key, S, err)
+            res = _parallel.execute_spi(self._spis[key], self.dataset, key, M)
+            self._record(key, res)
+            _parallel.write_checkpoint(cp_dir, key, res.values, res.err,
+                                       res.quality, res.pair_errors)
 
-    def _record(self, key, S, err, warns, elapsed):
-        """Commit one SPI result, its error, and its warnings."""
+    def _record(self, key, res):
+        """Commit one SPI result (a ``_parallel.SPIResult``): values, quality
+        codes, errors and warnings."""
+        S, err, warns = res.values, res.err, res.warns
         self._table[key] = S
-        self._timings[key] = elapsed
+        self._quality[key] = np.asarray(res.quality, dtype=np.uint8)
+        self._timings[key] = res.elapsed
+        procs = list(self._dataset.procnames)
+        if res.pair_errors:
+            self._pair_errors[key] = [(procs[i], procs[j], msg)
+                                      for i, j, msg in res.pair_errors]
+        else:
+            self._pair_errors.pop(key, None)
         for w in warns:
             warnings.warn(f'SPI "{key}": {w}')
         if err is not None:
@@ -928,10 +1308,16 @@ class Calculator:
 
     def _rmmin(self):
         """Iterate through all spis and remove the minimum (fixes absolute value errors when correlating)"""
+        self._table = self._min_shifted_table()
+
+    def _min_shifted_table(self):
+        """A copy of the table with each unsigned SPI shifted to a minimum of 0."""
+        table = self.table.copy()
         for spi in self.spis:
-            mpi = self.table[spi]
             if not self.spis[spi].issigned():
-                self.table[spi] = mpi - np.nanmin(mpi)
+                mpi = table[spi]
+                table[spi] = mpi - np.nanmin(mpi)
+        return table
 
     def set_group(self, classes):
         """Assigns a numeric value to this instance based on list of classes.
@@ -993,32 +1379,21 @@ class Calculator:
         return {k: v.labels for k, v in zip(self._spis.keys(), self._spis.values())}
 
     def _get_correlation_df(self, with_labels=False, rmmin=False):
-        # Sorts out pesky numerical issues in the unsigned spis
-        if rmmin:
-            self._rmmin()
+        # Shift unsigned SPIs to a minimum of 0 on a copy, so the stored table
+        # (and `save()`) keeps the raw values.
+        table = self._min_shifted_table() if rmmin else self.table
 
         # Flatten (get Edge-by-SPI matrix). future_stack=True keeps all-NaN
         # rows, so dropna removes the self-pairs (the SPI diagonals are NaN).
-        edges = self.table.stack(future_stack=True).dropna(how="all")
+        edges = table.stack(future_stack=True).dropna(how="all")
 
-        # Correlate the edge matrix (using pearson and/or spearman correlation)
-        cf = pd.DataFrame(
-            index=[c for c in edges.columns], columns=[c for c in edges.columns]
-        )
-        # Need to iterate through each pair to handle unsigned/signed statistics
-        for i, s0 in enumerate(edges.columns):
-            for j, s1 in enumerate(edges.columns[i + 1 :]):
-
-                if self.spis[s0].issigned() and self.spis[s1].issigned():
-                    # When they're both signed, just take the correlation
-                    cf.iloc[[i, i + j + 1], [i, i + j + 1]] = edges[[s0, s1]].corr(
-                        method="spearman"
-                    )
-                else:
-                    # Otherwise, take the absolute value to make sure we compare like-for-like
-                    cf.iloc[[i, i + j + 1], [i, i + j + 1]] = (
-                        edges[[s0, s1]].abs().corr(method="spearman")
-                    )
+        # Spearman correlation of every SPI pair, on pairwise complete values:
+        # two signed SPIs as they are, a pair with an unsigned SPI through abs().
+        signed = np.array([self.spis[s].issigned() for s in edges.columns])
+        cf = edges.abs().corr(method="spearman")
+        if signed.any():
+            cols = edges.columns[signed]
+            cf.loc[cols, cols] = edges[cols].corr(method="spearman")
 
         cf.index.name = "SPI-1"
         cf.columns.name = "SPI-2"
@@ -1153,23 +1528,24 @@ class CalculatorFrame:
 
             for config in yf:
                 try:
-                    file = config["file"]
-                    dim_order = config["dim_order"]
-                    names.append(config["name"])
-                    labels.append(config["labels"])
-                    datasets.append(
-                        Data(
-                            data=file,
-                            dim_order=dim_order,
-                            name=names[-1],
-                            detrend=detrend,
-                            zscore=zscore,
-                            n_processes=n_processes,
-                            n_observations=n_observations,
-                        )
+                    dataset = Data(
+                        data=config["file"],
+                        dim_order=config["dim_order"],
+                        name=config["name"],
+                        detrend=detrend,
+                        zscore=zscore,
+                        n_processes=n_processes,
+                        n_observations=n_observations,
                     )
+                    labels_i = config["labels"]
                 except Exception as err:
                     warnings.warn(f"Loading dataset: {config} failed ({err}).")
+                    continue
+                # Appended only once the dataset loads, so a failed entry cannot
+                # shift later names and labels onto the wrong datasets.
+                datasets.append(dataset)
+                names.append(config["name"])
+                labels.append(labels_i)
 
         self.init_from_list(datasets, names, labels, **kwargs)
 
@@ -1246,8 +1622,11 @@ class CalculatorFrame:
 
         shapes = pd.DataFrame()
         mdf = pd.DataFrame()
-        for calc in [c[0] for c in self.calculators.values]:
+        for i, calc in enumerate(c[0] for c in self.calculators.values):
             out = calc._get_correlation_df(with_labels=with_labels, **kwargs)
+            # An unnamed dataset is labelled by its position in the frame, so
+            # several unnamed datasets stay apart instead of sharing one key.
+            name = calc.name if calc.name not in (None, "") else f"dataset_{i}"
 
             s = pd.Series(
                 dict(
@@ -1255,21 +1634,17 @@ class CalculatorFrame:
                     n_observations=calc.dataset.n_observations,
                 )
             )
-            if calc.name is not None:
-                s.name = calc.name
-                shapes = pd.concat([shapes, pd.DataFrame(s).T])
-            else:
-                s.name = "N/A"
-                shapes = pd.concat([shapes, pd.DataFrame(s).T])
+            s.name = name
+            shapes = pd.concat([shapes, pd.DataFrame(s).T])
             if with_labels:
-                df = pd.concat({calc.name: out[0]}, names=["Dataset"])
+                df = pd.concat({name: out[0]}, names=["Dataset"])
                 try:
                     mlabels = mlabels | out[1]
                 except TypeError:
                     mlabels.update(out[1])
-                dlabels[calc.name] = calc.labels
+                dlabels[name] = calc.labels
             else:
-                df = pd.concat({calc.name: out}, names=["Dataset"])
+                df = pd.concat({name: out}, names=["Dataset"])
 
             # Adds another hierarchical level giving the dataset name
             mdf = pd.concat([mdf, df])

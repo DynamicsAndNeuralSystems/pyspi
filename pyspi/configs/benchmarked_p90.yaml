@@ -3,10 +3,13 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 192 SPIs: 179 of the 296 benchmarked, plus the 13 lagcorr SPIs (timed separately, about 0.03 s in all at M=16 T=800) (including two manual te_kraskov DCE variants).
+# Current set: 239 SPIs; 227 of the 296 SPIs benchmarked (including two manual te_kraskov DCE variants), plus 12 timed separately (below).
 # Cutoff        : fastest kept <= 5.520s ; slowest dropped >= 6.790s.
 #
 # Manual edit: te_kraskov_NN-4_DCE_k-{1,2}_kt-1_l-1_lt-1 are kept for coverage;
+# re-apply after re-running bench/cut_config.py.
+# Manual edit: added after a separate timing run on the same protocol: xi_tau-{0,1}, pcorr_<estimator> (6), te_symbolic_k-3,
+# {mi,tlmi}_kernel_W-0.25_DCE-AUTO and te_kernel_W-0.25_DCE-AUTO_k-1;
 # re-apply after re-running bench/cut_config.py.
 #
 .statistics.basic:
@@ -21,13 +24,10 @@
     dependencies:
     configs:
     - estimator: EmpiricalCovariance
-    - estimator: GraphicalLasso
-    - estimator: GraphicalLassoCV
     - estimator: MinCovDet
-    - estimator: GraphicalLassoCV
-      squared: true
 
-  Precision:
+  # Partial correlation
+  PartialCorrelation:
     labels:
       - undirected
       - linear
@@ -39,26 +39,10 @@
     configs:
     - estimator: EmpiricalCovariance
     - estimator: GraphicalLasso
-    - estimator: GraphicalLassoCV
     - estimator: LedoitWolf
     - estimator: MinCovDet
     - estimator: OAS
     - estimator: ShrunkCovariance
-    - estimator: EmpiricalCovariance
-      squared: true
-      squared: true
-    - estimator: GraphicalLasso
-      squared: true
-    - estimator: GraphicalLassoCV
-      squared: true
-    - estimator: LedoitWolf
-      squared: true
-    - estimator: MinCovDet
-      squared: true
-    - estimator: OAS
-      squared: true
-    - estimator: ShrunkCovariance
-      squared: true
 
   SpearmanR:
     labels:
@@ -70,9 +54,26 @@
       - M14
     dependencies:
     configs:
-    - squared: true
     - squared: false
 
+  # Chatterjee's rank correlation xi
+  ChatterjeeXi:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - M14
+    dependencies:
+    configs:
+    - tau: 0
+      labels:
+      - contemporaneous
+    - tau: 1
+      labels:
+      - time-dependent
+
+  # Lag-resolved cross-correlation
   LagResolvedCorrelation:
     labels:
       - directed
@@ -189,41 +190,10 @@
       - M14
     dependencies:
     configs:
-    - mode: euclidean
-      statistic: max
     - mode: dtw
       statistic: corr
       labels:
       - M09
-    - mode: dtw
-      statistic: max
-    - mode: sgddtw
-      statistic: corr
-      labels:
-      - M09
-    - mode: sgddtw
-      statistic: max
-    - mode: euclidean
-      statistic: max
-      squared: true
-    - mode: dtw
-      statistic: max
-      squared: true
-    - mode: sgddtw
-      statistic: max
-      squared: true
-
-  GromovWasserstainTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
-
 
 .statistics.causal:
   ConditionalDistributionSimilarity:
@@ -259,7 +229,6 @@
       - contemporaneous
       - M14
     configs:
-    - estimator: gaussian
     - estimator: kozachenko
     - estimator: kernel
 
@@ -272,7 +241,6 @@
       - contemporaneous
       - M14
     configs:
-    - estimator: gaussian
     - estimator: kozachenko
     - estimator: kernel
 
@@ -349,6 +317,9 @@
       dyn_corr_excl: AUTO
     - estimator: kernel
       kernel_width: 0.25
+    - estimator: kernel
+      kernel_width: 0.25
+      dyn_corr_excl: AUTO
 
   TimeLaggedMutualInfo:
     labels:
@@ -367,6 +338,9 @@
       dyn_corr_excl: AUTO
     - estimator: kernel
       kernel_width: 0.25
+    - estimator: kernel
+      kernel_width: 0.25
+      dyn_corr_excl: AUTO
 
   TransferEntropy:
     labels:
@@ -384,6 +358,12 @@
     - estimator: kernel
       kernel_width: 0.25
       k_history: 1
+      labels:
+      - M14
+    - estimator: kernel
+      kernel_width: 0.25
+      k_history: 1
+      dyn_corr_excl: AUTO
       labels:
       - M14
     - estimator: gaussian
@@ -407,6 +387,10 @@
       k_history: 1
       l_history: 1
       dyn_corr_excl: AUTO
+    - estimator: symbolic
+      k_history: 3
+      labels:
+      - M05
 
   IntegratedInformation:
     labels:
@@ -616,30 +600,6 @@
       labels:
       - M12
 
-  DirectedTransferFunction:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-    - fs: 1
-    - fmin: 0
-      fmax: 0.25
-    - fmin: 0.25
-      fmax: 0.5
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
-
   DirectedCoherence:
     labels:
       - directed
@@ -663,50 +623,6 @@
     - fmin: 0.25
       fmax: 0.5
       statistic: max
-
-  DirectDirectedTransferFunction:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-    - fs: 1
-    - fmin: 0
-      fmax: 0.25
-    - fmin: 0.25
-      fmax: 0.5
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
-
-  GroupDelay:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M01
-    dependencies:
-    configs:
-    - fmin: 0
-      fmax: 0.5
-      statistic: delay
-    - fmin: 0
-      fmax: 0.25
-      statistic: delay
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: delay
 
   SpectralGrangerCausality:
     labels:

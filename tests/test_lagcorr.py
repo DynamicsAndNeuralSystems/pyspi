@@ -502,10 +502,12 @@ def test_too_short_for_any_lag_raises():
         LagResolvedCorrelation("lag").bivariate(_data(X), i=0, j=1)
 
 
-def test_a_constant_process_voids_only_its_own_pairs():
+@pytest.mark.parametrize("constant", [5.0, 0.3])
+def test_a_constant_process_voids_only_its_own_pairs(constant):
+    # 0.3 is a float constant whose demeaned series is not exactly zero.
     rng = np.random.default_rng(1)
     X = rng.standard_normal((4, 200))
-    X[2] = 5.0
+    X[2] = constant
     for params in ({"statistic": "lag"}, {"statistic": "peak"}, {"statistic": "asym"},
                    {"statistic": "onesided"}, {"statistic": "onesided", "tau": "1e"},
                    {"statistic": "onesidedpeak"}):
@@ -519,9 +521,24 @@ def test_a_constant_process_voids_only_its_own_pairs():
         assert np.isfinite(A[good]).all()
         msgs = [str(w.message) for w in caught if "undefined and set to NaN" in str(w.message)]
         assert len(msgs) == 1 and spi.identifier in msgs[0]
-        # 0/0 in the profile's normalisation (CrossCorrelation's own warning).
-        with np.errstate(invalid="ignore"), pytest.raises(ValueError, match="not finite"):
+        with pytest.raises(ValueError, match="not finite"):
             spi.bivariate(_data(X, zscore=False), i=0, j=2)
+
+
+def test_a_failed_pair_is_reported_in_both_of_its_cells():
+    """Both cells of a failed pair are pair failures, so both are labelled ERROR."""
+    from pyspi.base import collect_pair_failures
+
+    rng = np.random.default_rng(1)
+    X = rng.standard_normal((4, 200))
+    X[2] = 5.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with collect_pair_failures() as failures:
+            A = LagResolvedCorrelation("lag").multivariate(_data(X, zscore=False))
+    off = ~np.eye(4, dtype=bool)
+    assert sorted((i, j) for i, j, _ in failures) == sorted(zip(*np.where(np.isnan(A) & off)))
+    assert len(failures) == 6
 
 
 def test_shares_the_xcorr_cache_and_scheduling_bucket():

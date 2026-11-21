@@ -18,6 +18,7 @@ corrupt baseline can never break collection of unrelated tests.
 | --- | --- |
 | `test_infotheory_analytic.py` | **Closed-form correctness** of the pure-NumPy info-theory estimators: bivariate-Gaussian MI vs `-0.5*ln(1-rho^2)` for all four estimators, differential entropy of `N(0, sigma^2)`, Gaussian TE on an analytic AR(1), independence collapsing to ~0, and the entropy identities. The only place a `return np.zeros(...)` stub would be caught. |
 | `test_calculator.py` | `Calculator` / `Data` API: `config=` resolution, `zscore=`, labels, grouping, dataset loading. |
+| `test_feature_vector.py` | `feature_vector` keeps one triangle for undirected and antisymmetric SPIs and both for directed ones; `directedness()` of every configured SPI; NaN features match non-GOOD quality codes; `load_table` and `load_results` round trips. |
 | `test_utils.py` | Utility helpers. |
 | `test_smoke.py` | Cheap shape / finiteness / sign checks across SPI families. Sanity, not correctness. |
 | `test_parallel.py` | `Calculator.compute()` parallel path, checkpointing, per-SPI failure isolation. |
@@ -27,8 +28,10 @@ corrupt baseline can never break collection of unrelated tests.
 | `test_cache_keys.py` | Parameterised statistic caches must key on every parameter that reaches the identifier. |
 | `test_run_identity.py` | Checkpoints must identify the run that produced them; identifier collisions must be rejected at insertion. |
 | `test_execution_parity.py` | Serial and parallel must agree on *failure* semantics, not only on numbers. Uses `failing_spis.py` + `parity_failure_config.yaml`. |
+| `test_quality.py` | Per-cell quality codes (`calc.quality`) for each kind of misbehaving SPI, serial/parallel parity of the codes, checkpoint resume, `.npz` round-trip, and loading files written before the codes existed. Uses the stubs in `failing_spis.py` + `quality_config.yaml`. |
 | `test_estimator_contracts.py` | An SPI must compute the estimator it advertises, or refuse. Symbolic/KSG preconditions. |
 | `test_structural_traits.py` | Declared symmetry labels vs observed baseline matrices; AEG process-order dependence. |
+| `test_undirected_pairs.py` | `Undirected.multivariate` evaluates each unordered pair once (call counts for a stub and for every bundled undirected SPI), mirrors values, codes and pair errors, raises when every pair fails, and matches the old both-orders loop bit for bit, including the SPIs that cache the opposite orientation. |
 
 ### Contract tests
 
@@ -96,10 +99,10 @@ reproduces.
    A session-end summary table lists these failures.
 
 Two further gates run per fixture: no SPI may raise (`calc.errors` must be
-empty) and none may produce an entirely non-finite column. The single
-documented exception lives in `KNOWN_UNESTIMABLE`, shared with the baseline
-generator so the two cannot disagree, and the suite fails if a listed exception
-starts succeeding.
+empty) and none may produce an entirely non-finite column. Documented
+exceptions, each with its statistical reason, live in `KNOWN_UNESTIMABLE`,
+shared with the baseline generator so the two cannot disagree, and the suite
+fails if a listed exception starts succeeding.
 
 Tolerances default to `1e-9` relative / `1e-12` absolute, including for `causal` and `misc`, whose optimisers and permutation tests reproduce bit-exactly.
 Looser tolerances cover cross-platform BLAS/LAPACK sensitivity only: per SPI in `LOOSE_SPIS` (`anm`) and per estimator family in `LOOSE_PREFIXES`.
