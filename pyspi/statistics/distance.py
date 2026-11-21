@@ -282,7 +282,7 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
     ----------
     .. [1] A. Gretton, O. Bousquet, A. Smola, B. Schölkopf, "Measuring
            statistical dependence with Hilbert-Schmidt norms", Algorithmic
-           Learning Theory (ALT 2005), Lecture Notes in Computer Science 3734,
+           Learning Theory (ALT 2005), Lecture Notes in Computer Science,
            63-77 (2005).
     .. [2] A. Gretton, K. Fukumizu, C. H. Teo, L. Song, B. Schölkopf,
            A. J. Smola, "A kernel statistical test of independence", Advances
@@ -831,7 +831,7 @@ class DynamicTimeWarping(TimeWarping):
 
     @parse_multivariate
     def multivariate(self, data):
-        """Every pair at once, with dtaidistance's ``distance_matrix`` when installed."""
+        """Every pair, with dtaidistance's ``distance_matrix`` when installed."""
         Z = data.to_numpy(squeeze=True)  # (M, T)
         M = Z.shape[0]
         series = [np.ascontiguousarray(Z[i], dtype=np.double) for i in range(M)]
