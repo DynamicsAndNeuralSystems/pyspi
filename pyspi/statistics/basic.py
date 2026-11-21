@@ -583,9 +583,8 @@ class LagResolvedCorrelation(Directed, Signed):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         L = self._window(data.n_observations)
-        # One orientation per pair (the lower index first), as in
-        # `multivariate`, so the two agree exactly and `lag`/`asym` are
-        # exactly antisymmetric and `peak` exactly symmetric.
+        # The lower index first, as in `multivariate`, so the two agree exactly
+        # and the antisymmetric and symmetric statistics are exactly so.
         a, b = (i, j) if i <= j else (j, i)
         v_ab, v_ba = self._pair(data, a, b, L, self._pair_lag(data, L))
         return v_ab if i <= j else v_ba
