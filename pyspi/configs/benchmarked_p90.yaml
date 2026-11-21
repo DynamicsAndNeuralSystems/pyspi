@@ -49,7 +49,6 @@
     - estimator: ShrunkCovariance
     - estimator: EmpiricalCovariance
       squared: true
-      squared: true
     - estimator: GraphicalLasso
       squared: true
     - estimator: GraphicalLassoCV

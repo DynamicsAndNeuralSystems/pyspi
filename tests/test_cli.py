@@ -23,6 +23,15 @@ def test_bad_output_suffix_fails_before_computing(monkeypatch, data_file, capsys
     assert "unsupported output suffix" in capsys.readouterr().err
 
 
+def test_missing_output_directory_fails_before_computing(monkeypatch, data_file, tmp_path, capsys):
+    monkeypatch.setattr(cli, "Calculator", _boom)
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["compute", "--data", str(data_file),
+                  "--output", str(tmp_path / "missing" / "out.npz")])
+    assert exc.value.code == 2
+    assert "does not exist" in capsys.readouterr().err
+
+
 def test_zero_n_jobs_fails_before_computing(monkeypatch, data_file, capsys):
     monkeypatch.setattr(cli, "Calculator", _boom)
     with pytest.raises(SystemExit) as exc:
