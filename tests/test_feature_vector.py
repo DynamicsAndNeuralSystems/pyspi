@@ -87,10 +87,10 @@ def test_nans_are_kept_so_the_length_is_fixed():
     assert v["u"].isna().all()
 
 
-def test_unknown_spi_falls_back_to_both_orientations():
-    """A missing trait must not drop data: it is treated as directed."""
-    v = feature_vector(_table({"x": U}), {})
-    assert len(v) == 6
+def test_spi_without_a_trait_raises_rather_than_guessing():
+    """A guessed trait would change the vector's length, so none is guessed."""
+    with pytest.raises(ValueError, match="No symmetry trait for 1 SPI"):
+        feature_vector(_table({"x": U, "u": U}), {"u": "undirected"})
 
 
 def test_unknown_trait_raises():
@@ -221,7 +221,7 @@ def test_calculator_feature_vector_loses_nothing(computed):
 
 
 def test_saved_table_gives_the_same_vector(computed, tmp_path):
-    """``load_table`` and ``load_results`` keep the config in ``attrs``; the traits are rebuilt from it."""
+    """``load_table`` and ``load_results`` carry the saved traits in ``attrs``."""
     path = computed.save(tmp_path / "fv.npz")
     loaded = pyspi.load_table(path)
     direct = computed.feature_vector()
@@ -247,3 +247,55 @@ def test_a_feature_is_nan_exactly_where_its_cell_is_not_good(tmp_path):
     for (spi, s, t), val in v.items():
         good = calc.quality[spi].loc[s, t] == Quality.GOOD
         assert np.isnan(val) != good, (spi, s, t)
+
+
+def test_saved_traits_are_read_back_and_need_no_config(computed, tmp_path):
+    """The traits travel in the file, so the config need not exist where it is read."""
+    path = computed.save(tmp_path / "fv.npz")
+    with np.load(path) as f:
+        assert list(f["directedness"]) == [
+            spi.directedness() for spi in computed.spis.values()]
+    loaded = pyspi.load_table(path)
+    assert loaded.attrs["directedness"] == {
+        k: spi.directedness() for k, spi in computed.spis.items()}
+    # The config the run names is gone, as for a file read in another
+    # directory or after the config file changed.
+    loaded.attrs["run_spec"]["config"] = str(tmp_path / "gone.yaml")
+    v = pyspi.feature_vector(loaded)
+    assert v.equals(computed.feature_vector())
+
+
+def _without_directedness(path, out):
+    with np.load(path) as f:
+        parts = {k: f[k] for k in f.files if k != "directedness"}
+    np.savez_compressed(out, **parts)
+    return out
+
+
+def test_file_without_traits_falls_back_on_its_config(computed, tmp_path):
+    path = _without_directedness(computed.save(tmp_path / "fv.npz"),
+                                 tmp_path / "old.npz")
+    loaded = pyspi.load_table(path)
+    assert "directedness" not in loaded.attrs
+    # The config the run names still exists, so the traits are rebuilt from it.
+    assert pyspi.feature_vector(loaded).equals(computed.feature_vector())
+
+
+def test_file_without_traits_whose_config_lacks_an_spi_raises(computed, tmp_path):
+    """An SPI the named config no longer holds is refused, never kept as directed."""
+    path = _without_directedness(computed.save(tmp_path / "fv.npz"),
+                                 tmp_path / "old.npz")
+    loaded = pyspi.load_table(path)
+    loaded.attrs["run_spec"]["config"] = "fabfour"
+    with pytest.raises(ValueError, match="No symmetry trait for 3 SPI.*fabfour"):
+        pyspi.feature_vector(loaded)
+
+
+def test_malformed_traits_are_refused(computed, tmp_path):
+    path = computed.save(tmp_path / "fv.npz")
+    with np.load(path) as f:
+        parts = {k: f[k] for k in f.files}
+    parts["directedness"] = np.array(["symmetric"] * computed.n_spis, dtype="U")
+    np.savez_compressed(tmp_path / "bad.npz", **parts)
+    with pytest.raises(ValueError, match="malformed: directedness"):
+        pyspi.load_table(tmp_path / "bad.npz")

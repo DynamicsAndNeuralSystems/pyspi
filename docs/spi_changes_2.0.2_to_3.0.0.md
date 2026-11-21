@@ -40,7 +40,7 @@ The default kernel SPIs `mi_kernel_W-0.25`, `tlmi_kernel_W-0.25` and `te_kernel_
 | `EdgeTimeSeries`: burstiness of a correlation | 3 | `edge_excessvar`, `edge_topshare_f-0-05`, `edge_acf1` |
 | `ConditionalGrangerCausality`: Granger causality from one VAR of all processes | 3 | `cgc_p-{1,2,bic}` |
 | `ConditionalPartialDirectedCoherence`, `ConditionalGeneralizedPartialDirectedCoherence`, `ConditionalDirectDirectedTransferFunction`, `PartialCoherence`: conditional spectral measures from the same VAR, three bands each | 12 | `{cpdc,cgpdc,cddtf,pcohmag}_p-bic_mean_{fmin-0_fmax-0-5,fmin-0_fmax-0-25,fmin-0-25_fmax-0-5}` |
-| `EventSynchronisation`: synchronisation strength and delay asymmetry of extremes | 4 | `es_{Q,q}_q-{0-95,0-9}` |
+| `EventSynchronisation`: synchronisation strength and delay asymmetry of extremes | 4 | `es_{strength,asym}_q-{0-95,0-9}` |
 | `TailDependenceAsymmetry`: upper minus lower tail dependence | 2 | `tailasym_q-{0-95,0-9}` |
 
 Full list:
@@ -113,10 +113,10 @@ Full list:
 - `pcohmag_p-bic_mean_fmin-0_fmax-0-5`
 - `pcohmag_p-bic_mean_fmin-0_fmax-0-25`
 - `pcohmag_p-bic_mean_fmin-0-25_fmax-0-5`
-- `es_Q_q-0-95`
-- `es_q_q-0-95`
-- `es_Q_q-0-9`
-- `es_q_q-0-9`
+- `es_strength_q-0-95`
+- `es_asym_q-0-95`
+- `es_strength_q-0-9`
+- `es_asym_q-0-9`
 - `tailasym_q-0-95`
 - `tailasym_q-0-9`
 

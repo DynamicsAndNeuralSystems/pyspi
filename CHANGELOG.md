@@ -15,6 +15,7 @@ The Java/JIDT dependency is gone, the `Calculator` API is simplified, and severa
   The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
   A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
 - The old `Calculator(subset=, configfile=, normalise=)` spellings still work, with a `DeprecationWarning`, until 4.0.
+  Every `Calculator` argument after `dataset` is keyword-only, so a 2.x positional call raises `TypeError` rather than binding to other arguments.
   See [Breaking changes and deprecations](#breaking-changes-and-deprecations).
 - Results tables written by 2.x (pickle) do not load; the directed spectral SPIs are transposed; many estimator values change (see [Changed](#changed) and "Further value changes").
 - The license is **GPL-3.0-or-later** (2.0.2: GPL-3.0), agreed by the maintainer, Ben Fulcher.
@@ -36,15 +37,17 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 
 **Deprecated, not removed.** These 2.x spellings still work in 3.x with a `DeprecationWarning` and will be removed in 4.0:
 
-- `subset="all"` becomes `config="full"`; other `subset` names are unchanged.
+- `subset="all"` becomes `config="full"`; other `subset` names are unchanged, and `config="all"` raises `ValueError` naming `config="full"`.
 - `configfile=p` becomes `config=p`.
 - `normalise=` becomes `zscore=`, on `Calculator`, `Data` and `CalculatorFrame`.
 - The SPI class `GromovWasserstainTau` (misspelled) becomes `GromovWassersteinTau`, in Python and in YAML configs; the identifier `gwtau` and its values are unchanged.
 - Passing both an old and a new form raises `TypeError`.
-- **Positional arguments after `subset`** (2.x `configfile`, `detrend`, `normalise`) no longer line up; pass them as keywords.
 
 **Breaking, with no shim:**
 
+- **Every `Calculator` argument after `dataset` is keyword-only.**
+  2.x's positional order (`dataset, name, labels, subset, configfile, detrend, normalise`) does not match 3.0's arguments, so a positional call such as `Calculator(X, "name", None, "fast")` raises Python's `TypeError` for too many positional arguments; pass `name=`, `labels=`, `config=`, `detrend=` and `zscore=` as keywords.
+  `Data` and `CalculatorFrame` keep their 2.x positional order.
 - SPI constructors raise on parameters their estimator ignores. For example the symbolic and kernel TE calculators refuse `k_tau`, `l_history` and `l_tau`, so 2.x YAML files that set them now fail.
 - `CorrelationFrame.get_pvalues()`, `compute_significant_values()` and `get_average_correlation(remove_insig=True)` raise `NotImplementedError` (the p-values were invalid; see Fixed).
 - `Data` copies and freezes its input, and `Data.to_numpy()` is read-only.
@@ -82,6 +85,9 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Statistics cache results on the `Data` instance, keyed by their own parameters; `set_data`, `add_process` and `remove_process` did not invalidate them, so cached statistics served the previous dataset's numbers.
   Every cache is now dropped on mutation, and `Data` copies and freezes its input.
 - **Spectral caches ignored `fs`**, so two SPIs differing only in sampling rate could share a cached spectrum.
+- **Equal parameters give equal SPI identifiers.**
+  A numpy scalar names the same SPI as the equal Python number (`fmax=np.float64(0.25)` and `fmax=0.25` both give `_fmax-0-25`), and an integral float the same as the integer (`fs=1.0` and `fs=1` both give `_fs-1`), so a config built in Python and the same config in YAML share table columns and checkpoints.
+  No bundled identifier changes.
 - **Importing pyspi reseeded NumPy's global RNG** (`pyspi.lib.ids` called `np.random.seed(1717)` at import), overriding the caller's seed.
 - **Process names** are coerced to `str` and must be unique; `Data(procnames=...)` was validated and then discarded, so custom names never reached the results table.
   `Data.add_process()` no longer creates a duplicate name.
@@ -176,6 +182,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   **The three `phase_multitaper_mean_*` values change.**
 - **Spectral Granger causality ignored `fs`** in its parametric branch and mis-oriented its NaN mask, so an estimable cell could be blanked; no value changes at the shipped `fs=1`.
   Eleven `sgc_*` identifiers named `fmin=0`, which is overridden to 1e-5 because spectral GC is undefined at zero frequency: **`sgc_*_fmin-0_*` is renamed `sgc_*_fmin-1e-05_*`** (values unchanged).
+  Its default `fmax` was 0.5 whatever `fs` was, so at `fs=100` the default band was 0 to 0.5 Hz; it is now `fs / 2`, as for every other spectral SPI (no change at `fs=1`).
+  An unknown `method` raises `ValueError`; any value other than `"nonparametric"` ran the parametric method.
 - **Parametric spectral Granger causality (`sgc_parametric_*`) was fitted on an indefinite autocovariance.**
   The VAR is now fitted on the Yule-Walker autocovariance, which is positive semidefinite, the band uses the frequencies the model is evaluated at, and the automatic order search terminates.
 - **Directed spectral measures used an open frequency band.**
@@ -244,7 +252,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The filename stem is the lookup key, so the cost-pruned sets are reachable by name.
 - `load_dataset()` exposes only the three demo datasets (`forex`, `cml`, `standard_normal`); `available_datasets()` lists them.
 - Per-SPI timings are printed after `compute()` (total and slowest five).
-- **`Calculator.save()` and `pyspi.load_table()`** store results as `.npz`: the results in their natural `(n_spis, M, M)` shape plus names, the run spec, digest and errors, round-tripping exactly with nothing beyond numpy.
+- **`Calculator.save()` and `pyspi.load_table()`** store results as `.npz`: the results in their natural `(n_spis, M, M)` shape plus names, each SPI's symmetry trait, the run spec, digest and errors, round-tripping exactly with nothing beyond numpy.
   Names are stored as `dtype='U'` and loaded with `allow_pickle=False`.
   `.csv` remains as a one-way human-readable export.
 - **Dropped pickle and parquet output.**
@@ -328,7 +336,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   - **`PartialCorrelation`** (6): `pcorr_<estimator>`, `-P_ij / sqrt(P_ii P_jj)` from the precision matrix of each bundled covariance estimator (`EmpiricalCovariance`, `GraphicalLasso`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`), the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011) (all in the `benchmarked_p*` sets; `EmpiricalCovariance` and `LedoitWolf` in `fast`).
   - **`NonlinearInterdependence`** (4): `nli_{L,N,H}_m-5_tau-1_k-5` and `nli_L_m-3_tau-1_k-5`, how well close delay vectors of the column process map onto close delay vectors of the row process (Arnhold et al. 1999; Quian Quiroga et al. 2002; Chicharro & Andrzejak 2009); only the asymmetry `A[i, j] - A[j, i]` indicates direction (`nli_L_m-5_tau-1_k-5` in `fast`).
   - **`LiangInformationFlow`** (4): `liang_{rate,norm}_k-1` and `liang-cond_{rate,norm}_k-1`, the Liang-Kleeman rate of information flow under a linear stochastic model, in nats per sample and signed, pairwise (Liang 2014) or conditioned on every other series (Liang 2021); `norm` divides by the target's entropy budget (Liang 2015) (`liang_norm_k-1` in `fast`).
-  - **`EventSynchronisation`** (4): `es_Q_q-{0-95,0-9}`, the synchronisation strength of extremes in [0, 1] (undirected), and `es_q_q-{0-95,0-9}`, their delay asymmetry in [-1, 1] (antisymmetric; positive when the extremes of the row precede those of the column) (Quian Quiroga, Kreuz & Grassberger 2002; Odenweller & Donner 2020) (`es_q_q-0-95` in `fast`).
+  - **`EventSynchronisation`** (4): `es_strength_q-{0-95,0-9}`, the synchronisation strength of extremes in [0, 1] (undirected), and `es_asym_q-{0-95,0-9}`, their delay asymmetry in [-1, 1] (antisymmetric; positive when the extremes of the row precede those of the column) (Quian Quiroga, Kreuz & Grassberger 2002; Odenweller & Donner 2020) (`es_asym_q-0-95` in `fast`).
   - **`TailDependenceAsymmetry`** (2): `tailasym_q-{0-95,0-9}`, the empirical upper minus lower tail-dependence coefficient on ranks, in [-1, 1], zero under any elliptical copula (Joe 1997; Schmidt & Stadtmueller 2006) (`tailasym_q-0-95` in `fast`).
   - **`EdgeTimeSeries`** (3): `edge_excessvar`, `edge_topshare_f-0-05` and `edge_acf1`, whether a correlation is steady or bursty, from the edge time series `e_t = z_x(t) z_y(t)` (Faskowitz et al. 2020; Esfahlani et al. 2020), each about 0 for a Gaussian pair (`edge_excessvar` in `fast`).
   - **Convergent cross-mapping** (5): `ccm_E-{None,1,10}_convergence`, the cross-map skill at the largest library size minus that at the smallest (Sugihara et al. 2012), and lagged CCM `lccm_E-None_k-5_{tp,skill}` (Ye et al. 2015), the prediction horizon in `[-5, 5]` of peak skill (negative for a causal row -> column link) and that peak skill.
@@ -353,14 +361,21 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   Every multitaper SPI in `pyspi/statistics/spectral.py` takes `time_halfbandwidth_product` (`NW`, default 3, the value every bundled SPI uses).
   A larger `NW` averages more tapers (`floor(2 NW) - 1`), lowering the variance and upward bias of coherence-type measures at the cost of frequency resolution.
   A value other than 3 is appended to the identifier as `_nw-<value>`, with dots written as dashes.
+- **Input with time along rows.**
+  `Calculator(dim_order=...)`, `Calculator.load_dataset(..., dim_order=...)` and the command line's `--dim-order` pass the layout to `Data`, so `dim_order="sp"` reads a `(T, M)` array or a DataFrame with one column per process; the default stays `"ps"`, `(M, T)`.
+  When `dim_order` is not given and the data are read as more processes than observations, which 2.0.2 accepted silently, `Data` warns and names both ways out: `dim_order="sp"` for the other layout, or `dim_order="ps"` to state that this one is intended.
+  An explicit `dim_order` never warns.
+  A DataFrame's index (`"ps"`) or columns (`"sp"`) name the processes, unless they are a `RangeIndex`; 2.0.2 dropped them.
+  Equal values give bit-identical results whatever array holds them: a DataFrame, a Fortran-ordered or a strided array is read into one memory layout before preprocessing, since z-scoring a differently laid-out array can differ in the last bit.
 - **Feature vectors.**
   `Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature: only `i < j` for `undirected` and `antisymmetric` SPIs, both orientations for `directed` and `asymmetric` ones.
   Self-pairs are dropped unless `include_self=True`, and NaNs are kept, so the length and order depend only on the config and `M`.
-  `pyspi.feature_vector(table)` rebuilds each SPI's trait from the config recorded in `table.attrs["run_spec"]`, or takes an explicit `directedness={identifier: trait}`.
+  `pyspi.feature_vector(table)` uses the traits saved in the `.npz` (`table.attrs["directedness"]`), or an explicit `directedness={identifier: trait}`; an SPI with no known trait raises `ValueError`.
 - **`Directed.directedness()`** returns the one symmetry trait an SPI carries: `undirected`, `antisymmetric` (`A[i, j] == -A[j, i]`, a new label), `directed` or `asymmetric`.
 - **Parallel computation and checkpoints.**
   `Calculator.compute(n_jobs=...)` follows the joblib convention (see Breaking changes), and `compute(checkpoint_dir=...)` writes each SPI as it finishes and resumes from it.
   A checkpoint directory carries a `run.json` manifest bound to `Calculator.run_digest`, which hashes the config contents, the dataset bytes and the computation version, so a different dataset, config, preprocessing or process order is refused rather than reused; failed checkpoints are retried by default.
+  Checkpoint files are named after SPI identifiers, so a config with two identifiers that are equal ignoring letter case is refused, as they would share one file on a case-insensitive file system (the macOS and Windows defaults).
 - **Run records.**
   `Calculator.errors`, `Calculator.run_spec`, `Calculator.run_digest`, `Calculator.to_frame()` (long-form results, one row per `(spi, source, target)`), `Calculator.summary()` and a `repr` for `Calculator`.
   `run_spec` records `computation_version`, `pyspi_version` and `dependency_versions`, saved with every `.npz` and returned by `load_table` in `attrs`.
@@ -444,7 +459,7 @@ Definitions the corrected measures are checked against:
 | `Calculator(subset="fast")` (also `fabfour`, `sonnet`) | `Calculator(config="fast")` (other names unchanged) |
 | `Calculator(configfile="my.yaml")` | `Calculator(config="my.yaml")` (deprecated shim as above) |
 | `Calculator(normalise=False)` | `Calculator(zscore=False)` (deprecated shim; also on `Data` and `CalculatorFrame`) |
-| `Calculator(dataset, name, labels, "all", "my.yaml", False, False)` (positional) | pass `config=`, `detrend=`, `zscore=` as keywords; positions after `subset` no longer line up |
+| `Calculator(dataset, name, labels, "all", "my.yaml", False, False)` (positional) | raises `TypeError`; pass every argument after `dataset` as a keyword |
 | `Data(..., normalise=False)` | `Data(..., zscore=False)` |
 | `pyspi/config.yaml` | `pyspi/configs/full.yaml` |
 | `pyspi/fast_config.yaml` | `pyspi/configs/fast.yaml` |
