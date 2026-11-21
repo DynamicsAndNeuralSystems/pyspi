@@ -62,101 +62,39 @@
         labels:
           - time-dependent
 
-  # Lagged correlation coefficient
-  LaggedCorrelation:
+  # Lag-resolved cross-correlation
+  LagResolvedCorrelation:
     labels:
-      - undirected
+      - directed
       - linear
-      - signed/unsigned
-      - bivariate
-      - time-dependent
-      - MXX
-    dependencies:
-    configs:
-      - estimator: pearson
-        max_tau: 5
-        squared: False
-      - estimator: pearson
-        max_tau: 5
-        squared: True
-      - estimator: pearson
-        tau: 10
-        squared: False
-      - estimator: pearson
-        tau: 10
-        squared: True
-      - estimator: pearson
-        tau: 20
-        squared: False
-      - estimator: pearson
-        tau: 20
-        squared: True
-      - estimator: spearman
-        max_tau: 5
-        squared: False
-      - estimator: spearman
-        max_tau: 5
-        squared: True
-      - estimator: spearman
-        tau: 10
-        squared: False
-      - estimator: spearman
-        tau: 10
-        squared: True
-      - estimator: spearman
-        tau: 20
-        squared: False
-      - estimator: spearman
-        tau: 20
-        squared: True
-      - estimator: kendall
-        max_tau: 5
-        squared: False
-      - estimator: kendall
-        max_tau: 5
-        squared: True
-      - estimator: kendall
-        tau: 10
-        squared: False
-      - estimator: kendall
-        tau: 10
-        squared: True
-      - estimator: kendall
-        tau: 20
-        squared: False
-      - estimator: kendall
-        tau: 20
-        squared: True
-
-  # Cross correlation
-  CrossCorrelation:
-    labels:
-      - undirected
-      - linear
-      - signed/unsigned
+      - signed
       - bivariate
       - time-dependent
       - M14
     dependencies:
     configs:
-      - statistic: "max"
-        labels:
-          - M10
-
-      - statistic: "max"
-        squared: True
-
-      - statistic: "mean"
-
-      - statistic: "mean"
-        squared: True
-
-      - statistic: "mean"
-        sigonly: False
-
-      - statistic: "mean"
-        squared: True
-        sigonly: False
+      - statistic: lag
+      - statistic: peak
+      - statistic: asym
+      - statistic: onesided
+        tau: 1
+      - statistic: onesided
+        tau: 2
+      - statistic: onesided
+        tau: 3
+      - statistic: onesided
+        tau: 5
+      - statistic: onesided
+        tau: 10
+      - statistic: onesided
+        tau: "1e"
+      - statistic: onesidedpeak
+      - statistic: lag
+        max_lag: 10
+      - statistic: peak
+        max_lag: 10
+      - statistic: asym
+        max_lag: 10
 
 # Distance-based statistics
 .statistics.distance:
@@ -1171,6 +1109,25 @@
       - time/frequency dependent
       - bivariate
       - M08
+    dependencies:
+    configs:
+      - fs: 1
+
+      - fmin: 0
+        fmax: 0.25
+
+      - fmin: 0.25
+        fmax: 0.5
+
+  # Wavelet coherence
+  WaveletCoherence:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - bivariate
+      - time/frequency dependent
+      - MXX
     dependencies:
     configs:
       - fs: 1

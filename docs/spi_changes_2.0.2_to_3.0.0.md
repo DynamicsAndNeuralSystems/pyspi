@@ -1,26 +1,26 @@
 # SPI set changes: pyspi 2.0.2 to 3.0.0
 
-Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (272 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
+Computed by instantiating `Calculator(subset="all")` under pyspi 2.0.2 (285 SPIs; Java/JIDT available) and `Calculator(config="full")` under 3.0.0 (231 SPIs), without computing, and comparing the identifiers. Renames are matched by class and parameters.
 
 | | count |
 |:--|--:|
 | 2.0.2 `config.yaml` | 285 |
-| identifier unchanged | 187 |
-| renamed (same class and parameters; identifier changed) | 23 |
-| removed | 75 |
-| added | 62 |
-| 3.0.0 `full.yaml` | 272 |
+| identifier unchanged | 135 |
+| renamed (same class and parameters; identifier changed) | 22 |
+| removed | 128 |
+| added | 74 |
+| 3.0.0 `full.yaml` | 231 |
 
-285 - 75 removed + 62 added = 272; 187 + 23 renamed + 62 added = 272.
-The 75 removals are 14 made while porting away from JIDT, 24 duplicate, constant or degenerate SPIs, and 37 unbundled because an SPI that stays carries them; all are in the table below.
-The 37 are removed from the bundled configs only: their classes are unchanged, and each can still be computed from a custom config.
+285 - 128 removed + 74 added = 231; 135 + 22 renamed + 74 added = 231.
+The removals include 14 made while porting away from JIDT, 24 duplicate, constant or degenerate SPIs, 37 unbundled because an SPI that stays carries them, and the 6 `xcorr` SPIs, replaced by the directed `lagcorr` SPIs.
+The last 43 are removed from the bundled configs only: their classes are unchanged, and each can still be computed from a custom config.
 The default kernel SPIs `mi_kernel_W-0.25`, `tlmi_kernel_W-0.25` and `te_kernel_W-0.25_k-1` keep their identifiers, but their values differ from 2.0.2: each point is now left out of its own neighbour counts.
 
-## Added (62)
+## Added (74)
 
 | Family | Count | Identifiers |
 |:--|--:|:--|
-| `LaggedCorrelation` (Pearson, Spearman, Kendall at lags 1, 2, 3, 4, 5, 10, 20; each plain and squared) | 42 | `corr_{pearson,spearman,kendall}_tau-{1,2,3,4,5,10,20}[-sq]` |
+| `LagResolvedCorrelation` (directed, lag-resolved cross-correlation: peak lag, peak value, lead/lag asymmetry, and the one-sided correlation at lags 1, 2, 3, 5, 10 and one set by the autocorrelation lengths) | 13 | `lagcorr_{lag,peak,asym}_L-{None,10}`, `lagcorr_onesided_tau-{1,2,3,5,10,1e}_L-None`, `lagcorr_onesidedpeak_L-None` |
 | `PartialCorrelation` (`-P_ij / sqrt(P_ii P_jj)` from each bundled covariance estimator's precision matrix) | 7 | `pcorr_{EmpiricalCovariance,GraphicalLasso,GraphicalLassoCV,LedoitWolf,MinCovDet,OAS,ShrunkCovariance}` |
 | `ChatterjeeXi` (Chatterjee's rank correlation xi at lags 0 and 1) | 2 | `xi_tau-0`, `xi_tau-1` |
 | `CrossPairwiseDistance` | 2 | `xpdist_euclidean_tau-1_mean_rmse`, `xpdist_euclidean_tau-1_min_rmse` |
@@ -29,51 +29,23 @@ The default kernel SPIs `mi_kernel_W-0.25`, `tlmi_kernel_W-0.25` and `te_kernel_
 | `PhaseAlignedCorrelation` (Welch, automatic segment length) | 1 | `phasealigned_welch_nperseg-auto` |
 | `TransferEntropy` (symbolic, 3-sample ordinal patterns) | 1 | `te_symbolic_k-3` |
 | `MutualInfo`, `TimeLaggedMutualInfo`, `TransferEntropy` (box kernel with AUTO dynamic correlation exclusion) | 3 | `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO`, `te_kernel_W-0.25_DCE-AUTO_k-1` |
+| `WaveletCoherence` (Morlet coherence smoothed in time and scale, three bands) | 3 | `wtc_wavelet_mean_fs-1_fmin-0_fmax-0-5`, `wtc_wavelet_mean_fs-1_fmin-0_fmax-0-25`, `wtc_wavelet_mean_fs-1_fmin-0-25_fmax-0-5` |
 
 Full list:
 
-- `corr_kendall_tau-1`
-- `corr_kendall_tau-1-sq`
-- `corr_kendall_tau-10`
-- `corr_kendall_tau-10-sq`
-- `corr_kendall_tau-2`
-- `corr_kendall_tau-2-sq`
-- `corr_kendall_tau-20`
-- `corr_kendall_tau-20-sq`
-- `corr_kendall_tau-3`
-- `corr_kendall_tau-3-sq`
-- `corr_kendall_tau-4`
-- `corr_kendall_tau-4-sq`
-- `corr_kendall_tau-5`
-- `corr_kendall_tau-5-sq`
-- `corr_pearson_tau-1`
-- `corr_pearson_tau-1-sq`
-- `corr_pearson_tau-10`
-- `corr_pearson_tau-10-sq`
-- `corr_pearson_tau-2`
-- `corr_pearson_tau-2-sq`
-- `corr_pearson_tau-20`
-- `corr_pearson_tau-20-sq`
-- `corr_pearson_tau-3`
-- `corr_pearson_tau-3-sq`
-- `corr_pearson_tau-4`
-- `corr_pearson_tau-4-sq`
-- `corr_pearson_tau-5`
-- `corr_pearson_tau-5-sq`
-- `corr_spearman_tau-1`
-- `corr_spearman_tau-1-sq`
-- `corr_spearman_tau-10`
-- `corr_spearman_tau-10-sq`
-- `corr_spearman_tau-2`
-- `corr_spearman_tau-2-sq`
-- `corr_spearman_tau-20`
-- `corr_spearman_tau-20-sq`
-- `corr_spearman_tau-3`
-- `corr_spearman_tau-3-sq`
-- `corr_spearman_tau-4`
-- `corr_spearman_tau-4-sq`
-- `corr_spearman_tau-5`
-- `corr_spearman_tau-5-sq`
+- `lagcorr_lag_L-None`
+- `lagcorr_peak_L-None`
+- `lagcorr_asym_L-None`
+- `lagcorr_onesided_tau-1_L-None`
+- `lagcorr_onesided_tau-2_L-None`
+- `lagcorr_onesided_tau-3_L-None`
+- `lagcorr_onesided_tau-5_L-None`
+- `lagcorr_onesided_tau-10_L-None`
+- `lagcorr_onesided_tau-1e_L-None`
+- `lagcorr_onesidedpeak_L-None`
+- `lagcorr_lag_L-10`
+- `lagcorr_peak_L-10`
+- `lagcorr_asym_L-10`
 - `di_kraskov_NN-4_n-5`
 - `phasealigned_welch_nperseg-auto`
 - `bary_dtw_corr`
@@ -94,8 +66,11 @@ Full list:
 - `mi_kernel_W-0.25_DCE-AUTO`
 - `tlmi_kernel_W-0.25_DCE-AUTO`
 - `te_kernel_W-0.25_DCE-AUTO_k-1`
+- `wtc_wavelet_mean_fs-1_fmin-0_fmax-0-5`
+- `wtc_wavelet_mean_fs-1_fmin-0_fmax-0-25`
+- `wtc_wavelet_mean_fs-1_fmin-0-25_fmax-0-5`
 
-## Removed (75)
+## Removed (128)
 
 | Identifier (2.0.2) | Class | Why |
 |:--|:--|:--|
@@ -135,6 +110,7 @@ Full list:
 | `pdist_cosine`, `pdist_euclidean` | `PairwiseDistance` | Unbundled: on z-scored series, `1 − r` and `sqrt(2T(1 − r))` of the Pearson correlation r. |
 | `bary-sq_euclidean_mean` | `Barycenter` | Unbundled: `(1 + r)/2` on z-scored series. |
 | `phi_Geo_t-1_norm-1`, `phi_star_t-1_norm-1` | `IntegratedInformation` | Unbundled: the `norm-0` value divided by a constant under z-scoring. |
+| `xcorr_max_sig-True`, `xcorr_mean_sig-True`, `xcorr_mean_sig-False`, `xcorr-sq_max_sig-True`, `xcorr-sq_mean_sig-True`, `xcorr-sq_mean_sig-False` | `CrossCorrelation` | Unbundled: replaced by the directed `lagcorr` SPIs, which read the same cross-correlation profile. |
 
 ## Renamed (23)
 

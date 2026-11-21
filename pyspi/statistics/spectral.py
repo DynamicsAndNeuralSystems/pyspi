@@ -1,5 +1,6 @@
 import functools
 import logging
+import numbers
 import warnings
 from contextlib import contextmanager
 from copy import deepcopy
@@ -121,13 +122,42 @@ def _closed_band(freq, fmin, fmax):
     return above & below
 
 
+# spectral_connectivity's default time-halfbandwidth product, which the bundled
+# identifiers leave unnamed.
+_DEFAULT_NW = 3
+
+
+def _check_time_halfbandwidth_product(nw):
+    """Validated ``NW``: a real number of at least 1.5, so that there are two or
+    more tapers (``floor(2 NW) - 1``); integral values are returned as ``int``."""
+    if (isinstance(nw, bool) or not isinstance(nw, numbers.Real)
+            or not np.isfinite(nw) or nw < 1.5):
+        raise ValueError(
+            f"time_halfbandwidth_product must be a real number >= 1.5 (at least "
+            f"two tapers), got {nw!r}.")
+    return int(nw) if float(nw).is_integer() else float(nw)
+
+
+def _nw_suffix(nw):
+    """Identifier suffix for a non-default time-halfbandwidth product."""
+    if nw == _DEFAULT_NW:
+        return ""
+    return f"_nw-{fmt_param(nw)}".replace(".", "-")
+
+
 class NonparametricSpectral(Unsigned):
     """
     Base class of the multitaper spectral SPIs, computed with spectral_connectivity.
 
-    The spectral matrix is a multitaper estimate over the whole record, with
-    the backend's defaults (time-halfbandwidth product 3, five DPSS tapers),
-    on the grid ``k fs / n_fft``. Each subclass reduces its spectrum over the
+    The spectral matrix is a whole-record multitaper estimate [1]_ with
+    ``floor(2 NW) - 1`` DPSS tapers, on the grid ``k fs / n_fft``, with a
+    frequency resolution of ``2 NW / T`` cycles per sample. A larger ``NW``
+    averages more tapers, which lowers the variance and the upward bias of
+    coherence-type measures on independent series, at the cost of frequency
+    resolution. PhaseSlopeIndex and GroupDelay space their independent
+    frequencies one bandwidth, ``2 NW`` FFT bins, apart.
+
+    Each subclass reduces its spectrum over the
     closed band ``fmin <= f <= fmax``, compared with a relative tolerance of
     1e-9 at both edges (``_closed_band``) so that a grid point such as Nyquist
     is kept. Phase measures (``_phase_based``) also leave out the real-valued
@@ -139,6 +169,21 @@ class NonparametricSpectral(Unsigned):
     (``_antisymmetric_spectrum``), ``statistic='mean'`` keeps
     ``A[i, j] = -A[j, i]`` and ``'max'`` does not (``max(-x) != -max(x)``),
     so the ``max`` variants are labelled asymmetric. Both are signed.
+
+    References
+    ----------
+    .. [1] D.J. Thomson, "Spectrum estimation and harmonic analysis",
+           Proceedings of the IEEE 70(9), 1055-1096 (1982).
+
+    Parameters
+    ----------
+    time_halfbandwidth_product : float, optional
+        Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5 (two
+        or more tapers). Every multitaper class takes it, including
+        SpectralGrangerCausality with ``method="nonparametric"``; the
+        parametric method refuses a value other than 3. A value other than 3
+        is appended to the identifier as ``_nw-<value>``, with dots written as
+        dashes (``_nw-8``, ``_nw-2-5``). Default: 3.
     """
 
     # The `statistic` values a class can apply. A band statistic reduces a
@@ -149,13 +194,15 @@ class NonparametricSpectral(Unsigned):
     # real-valued bins (see the class docstring).
     _phase_based = False
 
-    def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean"):
+    def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean",
+                 time_halfbandwidth_product=_DEFAULT_NW):
         if fmax is None:
             fmax = fs / 2
 
         # `fs` reaches the multitaper estimate, the frequency grid, every cache
         # key and GroupDelay's conversion to samples.
         self._fs = fs
+        self._nw = _check_time_halfbandwidth_product(time_halfbandwidth_product)
         self._fmin = fmin
         self._fmax = fmax
         if statistic == "mean":
@@ -192,7 +239,13 @@ class NonparametricSpectral(Unsigned):
                 ".", "-"
             )
         )
-        self.identifier += paramstr
+        self.identifier += paramstr + _nw_suffix(self._nw)
+
+    @property
+    def _frequency_step(self):
+        """One multitaper bandwidth, ``2 NW`` FFT bins: estimates closer than
+        this share the tapers' main lobes and carry no independent phase."""
+        return max(1, int(round(2 * self._nw)))
 
     @property
     def key(self):
@@ -200,12 +253,13 @@ class NonparametricSpectral(Unsigned):
         Cache key: every parameter that changes the cached result.
 
         ``fs`` is part of the key because it is passed to ``sc.Multitaper`` and
-        therefore changes both the connectivity estimate and the frequency grid.
+        therefore changes both the connectivity estimate and the frequency grid;
+        ``NW`` because it sets the tapers.
 
         GroupDelay and PhaseSlopeIndex additionally cache a band-dependent
         statistic, so their key carries fmin/fmax as well.
         """
-        base = (self.measure, self._fs)
+        base = (self.measure, self._fs, self._nw)
         if isinstance(self, (GroupDelay, PhaseSlopeIndex)):
             return base + (self._fmin, self._fmax)
         return base
@@ -257,9 +311,9 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
 
     @property
     def _cache_subkey(self):
-        # One entry per (class, fs); GroupDelay and PhaseSlopeIndex also key on
-        # the band. fs mirrors `key`.
-        return (type(self).__name__, self._fs)
+        # One entry per (class, fs, NW); GroupDelay and PhaseSlopeIndex also
+        # key on the band. fs and NW mirror `key`.
+        return (type(self).__name__, self._fs, self._nw)
 
     def _get_cache(self, data):
         # One key type throughout: written and read under the tuple self.key.
@@ -272,7 +326,8 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
 
         z = np.transpose(data.to_numpy(squeeze=True))
         z = _ensure_time_series_3d(z)
-        m = sc.Multitaper(z, sampling_frequency=self._fs)
+        m = sc.Multitaper(z, sampling_frequency=self._fs,
+                          time_halfbandwidth_product=self._nw)
         conn = sc.Connectivity.from_multitaper(m)
         # `_recompute` replaces a backend measure outright, not only when the
         # backend raises. Connectivity is lazy, so the factorisation (and its
@@ -375,15 +430,17 @@ class _FactoredConnectivity(sc.Connectivity):
 
 
 @functools.lru_cache(maxsize=8)
-def _whole_record_tapers(n_time_samples, fs):
+def _whole_record_tapers(n_time_samples, fs, nw):
     """
     The DPSS tapers ``sc.Multitaper`` uses for one whole-record window.
 
-    They depend on the record length and sampling rate only, so they are
-    computed once rather than for every pair's Multitaper.
+    They depend on the record length, sampling rate and time-halfbandwidth
+    product only, so they are computed once rather than for every pair's
+    Multitaper.
     """
     tapers = sc.Multitaper(np.zeros((n_time_samples, 1, 1)),
-                           sampling_frequency=fs).tapers
+                           sampling_frequency=fs,
+                           time_halfbandwidth_product=nw).tapers
     tapers.setflags(write=False)
     return tapers
 
@@ -415,9 +472,9 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
         etc.) share the same Multitaper+Connectivity for a given (i,j), and with
         it the spectral factorisation every one of them is derived from.
         """
-        # fs belongs in both keys: it is passed to Multitaper, so it changes the
-        # Connectivity object and the frequency grid as well as the measure.
-        measure_key = (self.measure, self._fs, i, j)
+        # fs and NW belong in both keys: they are passed to Multitaper, so they
+        # change the Connectivity object as well as the measure.
+        measure_key = (self.measure, self._fs, self._nw, i, j)
         cache = getattr(data, "spectral_bv", None)
         if cache is None:
             cache = data.spectral_bv = {}
@@ -425,7 +482,7 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
         if measure_key in cache:
             return cache[measure_key], cache[self._freq_key]
 
-        conn_key = (self._fs, i, j)
+        conn_key = (self._fs, self._nw, i, j)
         conns = getattr(data, "_spectral_bv_conn", None)
         if conns is None:
             conns = data._spectral_bv_conn = {}
@@ -433,8 +490,10 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
         if conn is None:
             z = np.transpose(data.to_numpy(squeeze=True)[[i, j]])
             z = _ensure_time_series_3d(z)
-            m = sc.Multitaper(z, sampling_frequency=self._fs,
-                              tapers=_whole_record_tapers(z.shape[0], self._fs))
+            m = sc.Multitaper(
+                z, sampling_frequency=self._fs,
+                time_halfbandwidth_product=self._nw,
+                tapers=_whole_record_tapers(z.shape[0], self._fs, self._nw))
             conn = _FactoredConnectivity.from_multitaper(m)
             conns[conn_key] = conn
 
@@ -1179,9 +1238,9 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     grows with the lag between two processes. Antisymmetric and signed:
     ``A[i, j] = -A[j, i]``; positive means process ``i`` leads.
 
-    ``df`` is the multitaper bandwidth, ``_FREQUENCY_STEP`` (six) FFT bins:
-    closer frequencies share tapers and carry no independent phase. The sign
-    is reliable for lags up to ``T / (2 * _FREQUENCY_STEP)`` samples, beyond
+    ``df`` is the multitaper bandwidth, ``2 NW`` FFT bins (six at the default
+    ``NW = 3``): closer frequencies share tapers and carry no independent
+    phase. The sign is reliable for lags up to ``T / (4 NW)`` samples, beyond
     which the phase difference wraps. The band leaves out 0 Hz and ``fs / 2``
     and must hold at least two frequencies one bandwidth apart, or the class
     raises ``ValueError``.
@@ -1224,10 +1283,6 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     _statistics = ("mean",)
     _phase_based = True
 
-    # Frequency resolution of the multitaper estimate in FFT bins: twice the
-    # backend's default time-halfbandwidth product of 3.
-    _FREQUENCY_STEP = 6
-
     def __init__(self, **kwargs):
         self.identifier = "psi"
         super().__init__(**kwargs)
@@ -1238,15 +1293,15 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
 
     @property
     def _cache_subkey(self):
-        # (class, fs, fmin, fmax), as in `key`.
-        return (type(self).__name__, self._fs, self._fmin, self._fmax)
+        # (class, fs, NW, fmin, fmax), as in `key`.
+        return (type(self).__name__, self._fs, self._nw, self._fmin, self._fmax)
 
     def _get_statistic(self, C):
         freq = np.asarray(C.frequencies)
         # The closed band less the real-valued bins, thinned to one bin per
         # multitaper bandwidth.
         inside = self._band(freq)
-        coherency = C.coherency()[..., inside[::self._FREQUENCY_STEP], :, :]
+        coherency = C.coherency()[..., inside[::self._frequency_step], :, :]
         if coherency.shape[-3] < 2:
             raise ValueError(
                 f"Phase slope index needs at least two independent frequencies "
@@ -1297,7 +1352,7 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
     ``b = 1/(2n - 2)``, so the null z-score is ``(arctanh|C| - b) / sqrt(b)``.
     Benjamini-Hochberg is applied over the in-band frequencies, the longest
     contiguous run of significant bins is kept and thinned to one bin per
-    multitaper bandwidth (six FFT bins), and, if at least three bins remain,
+    multitaper bandwidth (``2 NW`` FFT bins), and, if at least three bins remain,
     the unwrapped coherency phase is regressed on frequency. The band leaves
     out 0 Hz and ``fs / 2``, where the phase is forced to 0 or pi. The
     per-bin screen is liberal with few tapers, so false estimates are
@@ -1369,8 +1424,8 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
 
     @property
     def _cache_subkey(self):
-        # (class, fs, fmin, fmax), as in `key`.
-        return (type(self).__name__, self._fs, self._fmin, self._fmax)
+        # (class, fs, NW, fmin, fmax), as in `key`.
+        return (type(self).__name__, self._fs, self._nw, self._fmin, self._fmax)
 
     def _get_statistic(self, C):
         """
@@ -1395,7 +1450,7 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
 
         # Independent frequency spacing: one multitaper bandwidth, as for
         # PhaseSlopeIndex (closer estimates share the tapers' main lobes).
-        step = PhaseSlopeIndex._FREQUENCY_STEP
+        step = self._frequency_step
 
         bias = 1.0 / (2 * C.n_observations - 2)
         magnitude = np.minimum(np.abs(coh), 1 - np.finfo(float).eps)
@@ -1552,8 +1607,14 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         statistic="mean",
         ignore_nan=True,
         nan_threshold=0.5,
+        time_halfbandwidth_product=_DEFAULT_NW,
     ):
         self._fs = fs  # Reaches the multitaper estimate and the frequency labels.
+        self._nw = _check_time_halfbandwidth_product(time_halfbandwidth_product)
+        if method != "nonparametric" and self._nw != _DEFAULT_NW:
+            raise ValueError(
+                "time_halfbandwidth_product sets the multitaper estimate, which "
+                "method='parametric' does not use.")
         self._fmin = fmin
         self._fmax = fmax
         self.ignore_nan = ignore_nan
@@ -1586,7 +1647,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                         f"_fmin-{fmt_param(self._fmin)}"
                         f"_fmax-{fmt_param(fmax)}").replace(
                 ".", "-"
-            )
+            ) + _nw_suffix(self._nw)
         else:
             self._order = order
             self._max_order = max_order
@@ -1611,9 +1672,9 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     def _getkey(self):
         # fs is passed to the spectral transform, so it must key the cache.
         if self._method == "nonparametric":
-            return (self._method, self._fs, -1, -1)
+            return (self._method, self._fs, self._nw, -1, -1)
         else:
-            return (self._method, self._fs, self._order, self._max_order)
+            return (self._method, self._fs, None, self._order, self._max_order)
 
     def _get_cache(self, data):
         key = self._getkey()
@@ -1830,7 +1891,7 @@ def _flattened_power(x):
     """
     T = x.size
     m = sc.Multitaper(x[:, np.newaxis, np.newaxis], sampling_frequency=1,
-                      tapers=_whole_record_tapers(T, 1))
+                      tapers=_whole_record_tapers(T, 1, _DEFAULT_NW))
     n = m.n_fft_samples
     S = np.mean(np.abs(m.fft()[0, 0, :, :, 0]) ** 2, axis=0)[: n // 2 + 1]
     f = np.arange(S.size) / n

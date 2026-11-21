@@ -557,3 +557,25 @@ def test_squared_barycenter_is_unsigned():
         assert not spi.issigned() and "unsigned" in spi.labels
         assert "signed" not in spi.labels
     assert Barycenter(mode="euclidean", statistic="max").issigned()
+
+
+def test_multitaper_identifier_names_a_non_default_bandwidth():
+    """NW = 3 leaves every identifier as it is; another NW is appended as _nw-<value>."""
+    from pyspi.statistics import spectral as sp
+
+    for cls in (sp.CoherenceMagnitude, sp.PhaseLagIndex, sp.PhaseSlopeIndex,
+                sp.DirectedTransferFunction):
+        base = cls().identifier
+        assert "_nw-" not in base
+        assert cls(time_halfbandwidth_product=3.0).identifier == base
+        assert cls(time_halfbandwidth_product=8).identifier == base + "_nw-8"
+        assert cls(time_halfbandwidth_product=2.5).identifier == base + "_nw-2-5"
+    assert (sp.GroupDelay(statistic="delay", time_halfbandwidth_product=4).identifier
+            == sp.GroupDelay(statistic="delay").identifier + "_nw-4")
+    sgc = sp.SpectralGrangerCausality
+    assert sgc(time_halfbandwidth_product=8).identifier == sgc().identifier + "_nw-8"
+    with pytest.raises(ValueError):
+        sgc(method="parametric", time_halfbandwidth_product=8)
+    for bad in (1, 1.4, True, "3", float("nan")):
+        with pytest.raises(ValueError):
+            sp.CoherenceMagnitude(time_halfbandwidth_product=bad)

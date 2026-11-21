@@ -54,35 +54,22 @@
         labels:
           - contemporaneous
 
-  # Cross correlation
-  CrossCorrelation:
+  # Lag-resolved cross-correlation
+  LagResolvedCorrelation:
     labels:
-      - undirected
+      - directed
       - linear
-      - signed/unsigned
+      - signed
       - bivariate
       - time-dependent
       - M14
     dependencies:
     configs:
-      - statistic: "max"
-        labels:
-          - M10
-
-      - statistic: "max"
-        squared: True
-
-      - statistic: "mean"
-
-      - statistic: "mean"
-        squared: True
-
-      - statistic: "mean"
-        sigonly: False
-
-      - statistic: "mean"
-        squared: True
-        sigonly: False
+      - statistic: lag
+      - statistic: peak
+      - statistic: asym
+      - statistic: onesided
+        tau: 1
 
 # Distance-based statistics
 .statistics.distance:

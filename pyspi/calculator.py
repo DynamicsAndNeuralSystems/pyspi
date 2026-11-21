@@ -20,6 +20,7 @@ import yaml
 from . import _parallel
 from ._compat import resolve_config_arg, resolve_zscore, translate_calculator_kwargs
 from ._logging import configure as _configure_logging, get_logger
+from .base import DIRECTEDNESS_TRAITS, ONE_VALUE_PER_PAIR
 from .data import Data
 from .quality import Quality
 from .utils import convert_mdf_to_ddf, inspect_calc_results, require_int
@@ -72,14 +73,14 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
 
     # The SPI's own structural trait (set by its class and __init__, before
     # the config's labels are merged) overrides any the config declares, so
-    # exactly one of the four survives and `filter_spis` gives one answer.
-    _DIRECTEDNESS = ("antisymmetric", "asymmetric", "undirected", "directed")
-    own = [label for label in _DIRECTEDNESS if label in labels]
+    # exactly one of DIRECTEDNESS_TRAITS survives and `filter_spis` gives one
+    # answer.
+    own = [label for label in DIRECTEDNESS_TRAITS if label in labels]
     if own:
         trait = own[0]
         merged = [
             label for label in merged
-            if label not in _DIRECTEDNESS or label == trait
+            if label not in DIRECTEDNESS_TRAITS or label == trait
         ]
 
     # Likewise for linear/nonlinear: if the class commits to one, the other
@@ -457,6 +458,117 @@ def load_results(path):
         pair_errors = {k: [tuple(p) for p in v] for k, v in pair_errors.items()}
     return Results(table=table, quality=quality, errors=errors,
                    run_spec=as_dict(parts.get("run_spec")), pair_errors=pair_errors)
+
+
+def feature_vector(table, directedness=None, include_self=False):
+    """Flatten a results table to one value per independent pairwise feature.
+
+    :attr:`Calculator.table` stores every SPI as a full ``M x M`` matrix. For
+    an ``undirected`` SPI the lower triangle is a copy of the upper one and
+    for an ``antisymmetric`` SPI it is its negation, so each holds
+    ``M(M-1)/2`` independent values. For these two traits the vector keeps the
+    pairs ``(i, j)`` with ``i < j`` (in process order); ``directed`` and
+    ``asymmetric`` SPIs keep both orientations. Rows are sources, so a
+    positive antisymmetric value at ``(i, j)`` means process ``i`` leads
+    process ``j``.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        :attr:`Calculator.table`, or the frame :func:`load_table` returns.
+    directedness : dict, optional
+        ``{identifier: trait}``, with the trait one of ``'undirected'``,
+        ``'antisymmetric'``, ``'directed'`` or ``'asymmetric'``. If None, it
+        is rebuilt from the config named in ``table.attrs["run_spec"]`` (set
+        by :func:`load_table`), using each SPI's
+        :meth:`~pyspi.base.Directed.directedness`. Identifiers missing from
+        the mapping are treated as ``'directed'``, which keeps both
+        orientations. Default: None.
+    include_self : bool, optional
+        Also keep the self-pairs ``(i, i)``, one per process and SPI. The
+        diagonal is NaN for pairwise SPIs and a constant for the few
+        multivariate SPIs that fill it. Default: False.
+
+    Returns
+    -------
+    pandas.Series
+        Named ``"value"`` and indexed by ``(spi, source, target)``, in table
+        column order and then row-major pair order, so vectors from datasets
+        with the same processes and config line up element for element. NaNs
+        are kept so the length is fixed; a feature is NaN wherever its cell in
+        :attr:`Calculator.quality` is not ``GOOD``, and that code says why.
+    """
+    if directedness is None:
+        directedness = _directedness_from_table(table)
+    spis = list(table.columns.unique(level="spi"))
+    procs = list(table.index)
+    M = len(procs)
+    if list(table.columns.unique(level="process")) != procs:
+        raise ValueError(
+            "table columns and rows name different processes; "
+            "feature_vector needs the square (spi, process) layout "
+            "Calculator.table and load_table produce."
+        )
+    upper = np.triu(np.ones((M, M), dtype=bool), k=1)
+    offdiag = ~np.eye(M, dtype=bool)
+    diag = np.eye(M, dtype=bool)
+
+    keys, sources, targets, values = [], [], [], []
+    src_idx, tgt_idx = np.indices((M, M))
+    for spi in spis:
+        trait = directedness.get(spi, "directed")
+        if trait not in DIRECTEDNESS_TRAITS:
+            raise ValueError(
+                f"Unknown directedness {trait!r} for SPI {spi!r}; expected one "
+                f"of {list(DIRECTEDNESS_TRAITS)}."
+            )
+        mask = upper if trait in ONE_VALUE_PER_PAIR else offdiag
+        if include_self:
+            mask = mask | diag
+        A = table[spi].to_numpy(dtype=float)
+        if A.shape != (M, M):
+            raise ValueError(
+                f"SPI {spi!r} occupies {A.shape[1]} columns, expected {M}."
+            )
+        n = int(mask.sum())
+        keys.extend([spi] * n)
+        sources.extend(np.asarray(procs, dtype=object)[src_idx[mask]])
+        targets.extend(np.asarray(procs, dtype=object)[tgt_idx[mask]])
+        values.append(A[mask])
+
+    index = pd.MultiIndex.from_arrays(
+        [keys, sources, targets], names=["spi", "source", "target"]
+    )
+    data = np.concatenate(values) if values else np.empty(0)
+    return pd.Series(data, index=index, name="value")
+
+
+def _directedness_from_table(table):
+    """Recover ``{identifier: trait}`` for a table loaded from disk.
+
+    ``table.attrs["run_spec"]["config"]`` names the bundled config or YAML
+    path the SPIs were built from; they are instantiated again to read their
+    traits. Raises if the config is missing or does not resolve, rather than
+    falling back to both orientations for every SPI.
+    """
+    spec = table.attrs.get("run_spec") if hasattr(table, "attrs") else None
+    config = spec.get("config") if isinstance(spec, dict) else None
+    if config is None:
+        raise ValueError(
+            "This table does not record the config it was computed with, so "
+            "the symmetry of each SPI is unknown. Pass directedness= "
+            "{identifier: trait}, e.g. {k: s.directedness() for k, s in "
+            "Calculator(config=...).spis.items()}."
+        )
+    try:
+        spis = load_spis_from_yaml(resolve_config(config), quiet=True)
+    except Exception as err:
+        raise ValueError(
+            f"Could not rebuild the SPIs from config {config!r} recorded in "
+            f"the table ({type(err).__name__}: {err}). Pass directedness= "
+            f"explicitly."
+        ) from err
+    return {k: spi.directedness() for k, spi in spis.items()}
 
 
 class _ConfigLoader(yaml.FullLoader):
@@ -855,6 +967,7 @@ class Calculator:
         A DataFrame with processes as rows and a ``(spi, process)`` column
         MultiIndex, so ``table[identifier]`` is that SPI's ``M x M`` matrix,
         row = source and column = target. NaN until :meth:`compute` has run.
+        :meth:`feature_vector` flattens it to one value per independent pair.
         """
         return self._table
 
@@ -918,6 +1031,10 @@ class Calculator:
         The same values as :attr:`table`, in the shape suited to plotting,
         ``groupby`` and joins. Self-pairs are dropped.
 
+        Both orientations of every pair are listed, so an undirected SPI
+        appears twice per pair; :meth:`feature_vector` gives one value per
+        independent pair.
+
         Parameters
         ----------
         dropna : bool, optional
@@ -939,6 +1056,35 @@ class Calculator:
         if dropna:
             long = long.dropna(subset=["value"])
         return long[["spi", "source", "target", "value"]].reset_index(drop=True)
+
+    def feature_vector(self, include_self=False):
+        """One value per independent pairwise feature, as a ``pandas.Series``.
+
+        Turns :attr:`table` into features for classification or regression
+        across datasets. For ``undirected`` and ``antisymmetric`` SPIs only the
+        pairs ``(i, j)`` with ``i < j`` are kept (the other triangle is a copy,
+        or a copy with the sign flipped; a positive value means ``i`` leads
+        ``j``). ``directed`` and ``asymmetric`` SPIs keep both orientations.
+        The trait comes from each SPI's
+        :meth:`~pyspi.base.Directed.directedness`.
+
+        :func:`pyspi.feature_vector` does the same for a table loaded with
+        :func:`pyspi.load_table`.
+
+        Parameters
+        ----------
+        include_self : bool, optional
+            Also keep the self-pairs ``(i, i)``. Default: False.
+
+        Returns
+        -------
+        pandas.Series
+            Indexed by ``(spi, source, target)``, as in :meth:`to_frame`.
+            NaNs are kept, so the vector has the same length and order for
+            every dataset computed with this config and number of processes.
+        """
+        directedness = {k: spi.directedness() for k, spi in self.spis.items()}
+        return feature_vector(self.table, directedness, include_self=include_self)
 
     def summary(self):
         """

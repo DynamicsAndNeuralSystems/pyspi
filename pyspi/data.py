@@ -99,6 +99,7 @@ class Data:
     #   grep -rhoE "\bdata\.[a-z_][a-z0-9_]*\s*=" pyspi/statistics/*.py
     _CACHE_ATTRS = (
         "_spectral_bv_conn",
+        "acf_1e",
         "ais_embedding",
         "barycenter",
         "causal_entropy",
@@ -118,6 +119,7 @@ class Data:
         "spectral_mv",
         "theiler",
         "var",
+        "wavelet_coherence",
         "xcorr",
     )
 

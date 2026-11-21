@@ -86,6 +86,7 @@ calc.compute()                         # compute every SPI
 
 calc.table                             # rows = processes, columns = (SPI, process)
 calc.table["cov_EmpiricalCovariance"]  # one SPI's 5x5 matrix
+calc.feature_vector()                  # one value per independent pair, for ML
 
 calc.quality                           # one code per cell: 0 good, else why it is NaN
 calc.save("results.npz")               # canonical on-disk format
@@ -99,6 +100,13 @@ Every value in `calc.table` is a real, finite number or NaN.
 Results are stored as an `(n_spis, M, M)` array plus the SPI and process names,
 which is the data's natural shape. `.csv` is also accepted for eyeballing small
 results, but it is one-way and impractical for the full SPI set.
+
+`feature_vector()` turns a table into features for classification or regression, one value per independent pair.
+Undirected SPIs store each pair twice (the lower triangle mirrors the upper), and antisymmetric SPIs such as `phase`, `pli`, `wpli`, `psi` and `es_q` store it twice with the sign flipped.
+For these the vector keeps only the pairs `(i, j)` with `i < j`, and a positive antisymmetric value means process `i` leads process `j`.
+Directed SPIs keep both orientations.
+Self-pairs are dropped unless `include_self=True`.
+`pyspi.feature_vector(pyspi.load_table("results.npz"))` does the same for a saved table.
 
 Or from the command line, writing a results table next to your data:
 
@@ -130,18 +138,18 @@ Walkthrough tutorials in the full documentation:
 
 ## Choosing an SPI set
 
-Computing all 272 SPIs is expensive, and cost grows steeply in both the number
+Computing all 231 SPIs is expensive, and cost grows steeply in both the number
 of processes *M* and the series length *T*. `config=` takes either a bundled
 name or a path to your own YAML:
 
 | `config=` | SPIs | Use when |
 |:----------|-----:|:---------|
-| `"full"` (default) | 272 | You want everything and can afford it. |
-| `"fast"` | 165 | General use; drops the slowest SPIs. |
-| `"benchmarked_p99"` | 266 | Near-complete, with only the worst cost outliers removed. |
-| `"benchmarked_p95"` | 253 | Good coverage/cost trade-off. |
-| `"benchmarked_p90"` | 239 | Recommended default for large batches. |
-| `"benchmarked_p80"` | 217 | Cost-constrained sweeps. |
+| `"full"` (default) | 231 | You want everything and can afford it. |
+| `"fast"` | 138 | General use; drops the slowest SPIs. |
+| `"benchmarked_p99"` | 183 | Near-complete, with only the worst cost outliers removed. |
+| `"benchmarked_p95"` | 173 | Good coverage/cost trade-off. |
+| `"benchmarked_p90"` | 161 | Recommended default for large batches. |
+| `"benchmarked_p80"` | 145 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14). |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |
 
