@@ -110,7 +110,7 @@ def main(argv=None) -> int:
             verbose=not args.quiet,
         )
     except ValueError as err:
-        # Input the data or config cannot be computed on: say why, without a traceback.
+        # Invalid data or config: print the reason and exit 1, without a traceback.
         raise SystemExit(f"error: {err}") from err
     calc.compute(
         n_jobs=args.n_jobs,

@@ -763,9 +763,8 @@ def run_parallel(
     ctx = mp.get_context(mp_context)
     try:
         shared = shm.SharedMemory(create=True, size=arr.nbytes)
-        # The manager is the first process started with this start method, so
-        # a main module the workers could not re-import fails here, before any
-        # worker starts: the child dies and the parent reads EOF.
+        # The manager is the first process started with this start method, so a main
+        # module the workers cannot re-import fails here, before any worker starts.
         try:
             manager = ctx.Manager()
         except (EOFError, ConnectionError) as err:

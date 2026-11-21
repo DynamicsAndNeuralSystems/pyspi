@@ -60,9 +60,8 @@ def _frame_procnames(data, dim_order):
     return list(labels)
 
 
-# A detrended series counts as constant when its largest residual is at most
-# this many machine epsilons of its largest absolute value. Removing the line
-# from an exactly linear series leaves rounding errors of tens of epsilons.
+# A detrended series is constant when its largest residual is at most this many
+# epsilons of its largest absolute value (detrending a line leaves tens).
 _DETRENDED_CONSTANT_EPS = 1e4
 
 
