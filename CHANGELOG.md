@@ -232,6 +232,10 @@ Further fixes, each pinned by a test against a closed form, a textbook implement
   `anm`, `cds` and `xcorr_*` are NaN for a pair involving a constant series, where they gave 0 (read as independence, or no cross-correlation) or an arbitrary number.
 - **`prec_*`, `prec-sq_*` and `pcorr_*` reported a pseudo-inverse as the precision when the covariance estimate is singular** (no more samples than processes, or collinear processes).
   For `EmpiricalCovariance` and `MinCovDet` these values are now NaN, with a warning giving the rank; `cov_*` and the shrinkage and graphical-lasso estimators are unchanged.
+- **Loading and config errors that were silent or late.**
+  A `.csv` dataset never loaded (`np.genfromtxt` was given `","` as its dtype), so `Data("x.csv")` raised and `CalculatorFrame.init_from_yaml` dropped the dataset with a warning; it now loads.
+  A config entry with an unknown key (for example `config:` for `configs:`) built the class with its default parameters, and a module or class named twice silently lost the first block; both now raise, and a bare `Class:` entry means the defaults instead of crashing.
+  `python -m pyspi compute` now checks that the output directory exists before computing rather than failing in `save` afterwards.
 - **`pec`, `pec_log`, `pec_orth` and `pec_orth_log` are now labelled signed** (a correlation in [-1, 1]), and `Cointegration` is labelled linear.
 - **Smaller fixes with no value changes:** `Covariance`/`Precision` return a copy of the cached array; `SpearmanR` and `LaggedCorrelation(spearman)` handle a constant series in any position; `LaggedCorrelation.bivariate` returns NaN when either direction is undefined, as `multivariate` does; `CrossmapEntropy` and `StochasticInteraction` reject non-positive `history_length`/`delay`; the wavelet PSI frequency floor is in Hz; spectral classes reject a `statistic` they cannot apply.
 - **`CalculatorFrame` and `CorrelationFrame` bookkeeping.**
