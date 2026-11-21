@@ -334,6 +334,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   As in JIDT (`DYN_CORR_EXCL = w + 1`), each probability is normalised by the number of samples compared and an empty joint box contributes 0; if every joint box is empty the result is NaN (JIDT gives 0).
   The window removes the dependence that autocorrelation adds and can take MI below zero, so read values against surrogates.
   New SPIs `mi_kernel_W-0.25_DCE-AUTO` and `tlmi_kernel_W-0.25_DCE-AUTO` (in `full`, `fast` and `benchmarked_p90`/`p95`/`p99`) and `te_kernel_W-0.25_DCE-AUTO_k-1` (in `full` and `benchmarked_p90`/`p95`/`p99`). The other kernel measures are composed from marginal entropies and refuse `dyn_corr_excl`.
+- **`run_spec` records the versions that produced a result**: `computation_version` (`COMPUTATION_VERSION`), `pyspi_version` and `dependency_versions` (the installed version of each runtime requirement).
+  They are saved with every `.npz` and returned by `load_table` in `attrs["run_spec"]`, so a corpus can be checked for mixed computation versions from the files alone.
+  They are kept out of `run_digest`, which already hashes `COMPUTATION_VERSION`, so existing checkpoints still resume.
 
 ### Dependencies
 
