@@ -195,6 +195,12 @@ class Directed:
         ``Calculator`` has merged them. With no trait declared,
         :class:`Undirected` subclasses are ``"undirected"`` and anything else
         is ``"directed"``.
+
+        Returns
+        -------
+        str
+            ``'undirected'``, ``'antisymmetric'``, ``'directed'`` or
+            ``'asymmetric'``.
         """
         own = [t for t in DIRECTEDNESS_TRAITS if t in self.labels]
         if own:

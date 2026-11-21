@@ -445,28 +445,31 @@ def feature_vector(table, directedness=None, include_self=False):
     positive antisymmetric value at ``(i, j)`` means process ``i`` leads
     process ``j``.
 
-    Returns a ``pandas.Series`` named ``"value"`` indexed by
-    ``(spi, source, target)``, in table column order and then row-major pair
-    order, so vectors from datasets with the same processes and config line up
-    element for element. NaNs are kept so the length is fixed; a feature is
-    NaN wherever its cell in :attr:`Calculator.quality` is not ``GOOD``, and
-    that code says why.
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        :attr:`Calculator.table`, or the frame :func:`load_table` returns.
+    directedness : dict, optional
+        ``{identifier: trait}``, with the trait one of ``'undirected'``,
+        ``'antisymmetric'``, ``'directed'`` or ``'asymmetric'``. If None, it
+        is rebuilt from the config named in ``table.attrs["run_spec"]`` (set
+        by :func:`load_table`), using each SPI's
+        :meth:`~pyspi.base.Directed.directedness`. Identifiers missing from
+        the mapping are treated as ``'directed'``, which keeps both
+        orientations. Default: None.
+    include_self : bool, optional
+        Also keep the self-pairs ``(i, i)``, one per process and SPI. The
+        diagonal is NaN for pairwise SPIs and a constant for the few
+        multivariate SPIs that fill it. Default: False.
 
-    Args:
-        table (pandas.DataFrame):
-            :attr:`Calculator.table` or the frame :func:`load_table` returns.
-        directedness (dict, optional):
-            ``{identifier: trait}`` with the trait one of ``"undirected"``,
-            ``"antisymmetric"``, ``"directed"`` or ``"asymmetric"``. If
-            omitted, it is rebuilt from the config named in the table's
-            ``attrs["run_spec"]`` (set by :func:`load_table`), using
-            :meth:`~pyspi.base.Directed.directedness` of each SPI.
-            Identifiers absent from the mapping are treated as
-            ``"directed"``, which keeps both orientations.
-        include_self (bool, optional):
-            Also keep the self-pairs ``(i, i)``, one per process and SPI.
-            Default False: the diagonal is NaN for pairwise SPIs, and a
-            constant for the few multivariate SPIs that fill it.
+    Returns
+    -------
+    pandas.Series
+        Named ``"value"`` and indexed by ``(spi, source, target)``, in table
+        column order and then row-major pair order, so vectors from datasets
+        with the same processes and config line up element for element. NaNs
+        are kept so the length is fixed; a feature is NaN wherever its cell in
+        :attr:`Calculator.quality` is not ``GOOD``, and that code says why.
     """
     if directedness is None:
         directedness = _directedness_from_table(table)
@@ -1009,13 +1012,20 @@ class Calculator:
         The trait comes from each SPI's
         :meth:`~pyspi.base.Directed.directedness`.
 
-        Self-pairs are dropped unless ``include_self=True``. NaNs are kept,
-        so the vector has the same length and order for every dataset
-        computed with this config and number of processes. The index is
-        ``(spi, source, target)``, as in :meth:`to_frame`.
-
         :func:`pyspi.feature_vector` does the same for a table loaded with
         :func:`pyspi.load_table`.
+
+        Parameters
+        ----------
+        include_self : bool, optional
+            Also keep the self-pairs ``(i, i)``. Default: False.
+
+        Returns
+        -------
+        pandas.Series
+            Indexed by ``(spi, source, target)``, as in :meth:`to_frame`.
+            NaNs are kept, so the vector has the same length and order for
+            every dataset computed with this config and number of processes.
         """
         directedness = {k: spi.directedness() for k, spi in self.spis.items()}
         return feature_vector(self.table, directedness, include_self=include_self)
