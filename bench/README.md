@@ -62,6 +62,9 @@ repeat of the full config is already a multi-day job — so its
 `report.md`) stands in for a within-cell error bar. Raw per-cell JSON is
 machine-specific and intentionally untracked; retain it locally or archive it
 externally if the campaign may need to be reanalysed.
+The reference campaign's cells are not in the repository, so `cut_config` and
+`analyse_cells` cannot be rerun on them from a clone; `report.md`,
+`scaling.csv` and `cell_summary.csv` are the tracked record of that campaign.
 
 ## Cut a benchmarked config
 
@@ -85,10 +88,18 @@ Output goes to `pyspi/configs/benchmarked_p<N>.yaml`. Dropped SPIs are left
 out of the YAML and listed with their cost in the `# --- DROPPED ---` footer.
 Pass `--preserve-dropped` to keep them as commented-out blocks instead.
 
-**`benchmarked_p90.yaml` carries a hand edit**: the two `te_kraskov_..._DCE_k-{1,2}`
-variants were added back after the cut for methodological reasons. Re-running
-`cut_config` overwrites it, so re-apply it by hand afterwards (the config's
-header names the two variants).
+**The shipped cuts carry hand edits**, named in each config's header: the two
+`te_kraskov_..._DCE_k-{1,2}` variants were added back to `benchmarked_p90`
+after the cut for methodological reasons, and `xi_tau-{0,1}`, the seven
+`pcorr_<estimator>`, `te_symbolic_k-3` and the three kernel `_DCE-AUTO` SPIs,
+added since the last bench, are in `p90`/`p95`/`p99` untimed. Re-running
+`cut_config` overwrites them, so re-apply them by hand afterwards.
+
+**A new SPI goes into `benchmarked_p90`** (and so `p95` and `p99`, keeping
+the sets nested; `p80` too if it clears that cutoff) unless its cost, timed or
+estimated from a timed sibling at M=16, T=800, exceeds the p90 cutoff. Record
+it as a hand edit in each header. `benchmarked_p90` is the recommended default,
+so an SPI left out of it is rarely computed.
 
 ## Analyse
 
@@ -149,7 +160,7 @@ modules to load) — all documented in the script header. Every run is
 `--resume`, so resubmitting skips cells that already have a JSON.
 
 **`bench/physics/run_bench.pbs`** is a worked example to copy and adapt: the
-USYD Physics queue configuration that produced the committed
+USYD Physics queue configuration that produced the (untracked)
 `physics_config_M*_T*_n1.json` cells (full config, `repeats=1`, `n_jobs=1`,
 M={4,8,16,32,64} x T={200,400,800,1600,3200}, one cell per array task). It
 pins those defaults and delegates to `run_benchmark.pbs`.
