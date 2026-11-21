@@ -1,0 +1,36 @@
+# SPIs with special values at known cells, plus one that raises and one healthy
+# SPI. Used by tests/test_quality.py to pin the per-cell quality codes in both
+# execution paths.
+failing_spis:
+  AlwaysRaises:
+    labels: [test]
+    configs:
+      - message: deliberate test failure
+
+  OneInfinite:
+    labels: [test]
+    configs:
+
+  ComplexOutput:
+    labels: [test]
+    configs:
+
+  AllNaN:
+    labels: [test]
+    configs:
+
+  OnePairRaises:
+    labels: [test]
+    configs:
+
+  OnePairRaisesUndirected:
+    labels: [test]
+    configs:
+      - bad: [0, 1]
+      - bad: [1, 0]
+
+.statistics.basic:
+  Covariance:
+    labels: [undirected, linear, signed]
+    configs:
+      - estimator: EmpiricalCovariance

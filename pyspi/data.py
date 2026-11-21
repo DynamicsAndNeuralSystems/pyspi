@@ -108,14 +108,17 @@ class Data:
         "coint",
         "covariance",
         "entropy",
+        "events",
         "joint_entropy",
         "liang",
         "mne",
         "mne_psi",
+        "nli",
         "spectral_bv",
         "spectral_gc",
         "spectral_mv",
         "theiler",
+        "var",
         "xcorr",
     )
 

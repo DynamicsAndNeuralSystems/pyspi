@@ -85,11 +85,17 @@ def _fast_hsic_test_gamma(X, Y, sig=(-1, -1), maxpnt=200):
     Lc = np.dot(H, np.dot(_rbf_dot(Ym, sig[1]), H))
 
     stat = (1.0 / m) * (Kc.T * Lc).sum()
-    return 0 if not np.isfinite(stat) else stat
+    # cdt returns 0 here, which would read as perfect independence.
+    return stat if np.isfinite(stat) else np.nan
 
 
 def normalized_hsic(x, y):
-    """HSIC between standardised `x` and `y`. Lower means more independent."""
+    """HSIC between standardised `x` and `y`. Lower means more independent.
+
+    NaN when either input is constant, as it cannot be standardised.
+    """
+    if np.ptp(x) == 0 or np.ptp(y) == 0:
+        return np.nan
     x = (x - np.mean(x)) / np.std(x)
     y = (y - np.mean(y)) / np.std(y)
     return _fast_hsic_test_gamma(x, y)
@@ -126,9 +132,13 @@ def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12, min_conditionals=0):
     """Std. of the rescaled y values after binning in x; lower favours x -> y.
 
     The statistic is the spread of P(y | x = a) across the x-bins ``a`` holding
-    more than ``minc`` points. Returns NaN when fewer than ``min_conditionals``
-    such bins exist; the default of 0 keeps cdt's behaviour, which returns 0.
+    more than ``minc`` points. Returns NaN when either input is constant, when
+    no such bin exists, or when fewer than ``min_conditionals`` exist (cdt
+    returns 0 in the first two cases).
     """
+    if (np.ptp(np.asarray(x_te, dtype=float)) == 0
+            or np.ptp(np.asarray(y_te, dtype=float)) == 0):
+        return np.nan
     if isinstance(x_te, np.ndarray):
         x_te = pd.Series(np.asarray(x_te).reshape(-1))
         y_te = pd.Series(np.asarray(y_te).reshape(-1))
@@ -166,10 +176,8 @@ def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12, min_conditionals=0):
                             dtype=float)
         pyx.append(pyxa / pyxa.sum())
 
-    if len(pyx) < min_conditionals:
+    if not pyx or len(pyx) < min_conditionals:
         return np.nan
-    if not pyx:
-        return 0
     pyx = np.array(pyx)
     return float(np.std(pyx - pyx.mean(axis=0)))
 

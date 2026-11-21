@@ -88,9 +88,36 @@ class Estimators(Undirected, Signed):
         """Copy of the cached fit's ``M x M`` matrix, so the cache is not modified."""
         return getattr(mycov, self._kind + "_").copy()
 
+    def _pseudo_inverse_rank(self, mycov):
+        """Rank of the fitted covariance if the precision is its pseudo-inverse, else None.
+
+        scikit-learn sets ``precision_ = pinvh(covariance_)`` for every
+        estimator except the graphical lasso, which solves for the precision
+        directly. The rank uses the same cutoff as ``pinvh`` and
+        ``np.linalg.matrix_rank``: eigenvalues of ``covariance_`` at most
+        ``M * eps * max|eigenvalue|`` count as zero.
+        """
+        if isinstance(mycov, (cov.GraphicalLasso, cov.GraphicalLassoCV)):
+            return None
+        rank = int(np.linalg.matrix_rank(mycov.covariance_, hermitian=True))
+        return rank if rank < mycov.covariance_.shape[0] else None
+
     @parse_multivariate
     def multivariate(self, data):
-        matrix = self._matrix(self._from_cache(data))
+        mycov = self._from_cache(data)
+        if self._kind != "covariance":
+            # A singular covariance has no inverse: its pseudo-inverse gives
+            # finite values that are not a precision or partial correlation.
+            rank = self._pseudo_inverse_rank(mycov)
+            if rank is not None:
+                M = mycov.covariance_.shape[0]
+                warnings.warn(
+                    f"The {self._estimator} covariance estimate is singular "
+                    f"(rank {rank} < M = {M}: no more samples than processes, or "
+                    f"collinear processes), so {self.identifier} is NaN."
+                )
+                return np.full((M, M), np.nan)
+        matrix = self._matrix(mycov)
         np.fill_diagonal(matrix, np.nan)
         if self._squared:
             return np.square(matrix)
@@ -108,6 +135,13 @@ class Covariance(Estimators):
 
 
 class Precision(Estimators):
+    """Precision (inverse covariance) matrix of the ``M`` processes.
+
+    ``P = C^-1`` with ``C`` the covariance as estimated by the scikit-learn
+    covariance ``estimator``; ``squared=True`` squares the result (unsigned).
+    The result is NaN when the covariance estimate is singular (for example
+    when there are no more samples than processes).
+    """
 
     name = "Precision"
     identifier = "prec"
@@ -133,7 +167,9 @@ class PartialCorrelation(Estimators):
     ``estimator`` is any ``sklearn.covariance`` estimator that ``Precision``
     accepts, and ``squared=True`` squares the result (unsigned). The
     covariance fit is shared with ``Covariance`` and ``Precision``
-    (``data.covariance[estimator]``).
+    (``data.covariance[estimator]``). The result is NaN when the covariance
+    estimate is singular (for example when there are no more samples than
+    processes).
     """
 
     name = "Partial correlation"
@@ -169,7 +205,7 @@ class CrossCorrelation(Undirected, Signed):
     ``|r(l)| > 1.96/sqrt(T)`` -- and not a significance test: the band is not
     inflated for the series' own autocorrelation, and it is not corrected for
     being applied at every lag in the window. When no lag clears it the
-    statistic is 0.
+    statistic is 0. NaN when either series is constant.
     """
 
     name = "Cross correlation"
@@ -201,7 +237,16 @@ class CrossCorrelation(Undirected, Signed):
         try:
             r_ij = data.xcorr[(i, j)]
         except (KeyError, AttributeError):
-            x, y = data.to_numpy(squeeze=True)[[i, j]]
+            # Computed for (larger, smaller) and reversed for the other
+            # orientation, whichever of (i, j) and (j, i) is asked for first,
+            # so a value does not depend on the order the pairs are visited
+            # in (the FFT of (x, y) and of (y, x) differ in the last bit).
+            # (larger, smaller) is the orientation the stored baselines use.
+            hi, lo = max(i, j), min(i, j)
+            x, y = data.to_numpy(squeeze=True)[[hi, lo]]
+            if np.ptp(x) == 0 or np.ptp(y) == 0:
+                # Undefined, and `sigonly` would otherwise turn it into 0.
+                return np.nan
 
             # Demeaned, and divided by T (the biased estimator) rather than
             # T - |l|: the result is a correlation, so it stays in [-1, 1], the
@@ -221,15 +266,16 @@ class CrossCorrelation(Undirected, Signed):
             # off-centre window would make `max` depend on the order of the
             # pair, for a measure that is undirected.
             lag_max = T // self._MAX_LAG_FRACTION
-            r_ij = r_full[T - 1 - lag_max: T + lag_max]
+            r_hilo = r_full[T - 1 - lag_max: T + lag_max]
 
             try:
-                data.xcorr[(i, j)] = r_ij
+                data.xcorr[(hi, lo)] = r_hilo
             except AttributeError:
-                data.xcorr = {(i, j): r_ij}
+                data.xcorr = {(hi, lo): r_hilo}
             # r_yx(l) == r_xy(-l), so the opposite orientation is the reversed
             # sequence, not the same one.
-            data.xcorr[(j, i)] = r_ij[::-1]
+            data.xcorr[(lo, hi)] = r_hilo[::-1]
+            r_ij = data.xcorr[(i, j)]
 
         # `sigonly` is a pointwise amplitude threshold, not an inferential
         # test. The name is historical and kept for compatibility: it keeps
