@@ -73,36 +73,73 @@
   # Lag-resolved cross-correlation
   LagResolvedCorrelation:
     labels:
-      - directed
       - linear
-      - signed
       - bivariate
       - time-dependent
       - M14
     dependencies:
     configs:
       - statistic: lag
+        labels:
+          - antisymmetric
+          - signed
       - statistic: peak
+        labels:
+          - undirected
+          - signed
       - statistic: asym
+        labels:
+          - antisymmetric
+          - signed
       - statistic: onesided
         tau: 1
+        labels:
+          - directed
+          - signed
       - statistic: onesided
         tau: 2
+        labels:
+          - directed
+          - signed
       - statistic: onesided
         tau: 3
+        labels:
+          - directed
+          - signed
       - statistic: onesided
         tau: 5
+        labels:
+          - directed
+          - signed
       - statistic: onesided
         tau: 10
+        labels:
+          - directed
+          - signed
       - statistic: onesided
         tau: "1e"
+        labels:
+          - directed
+          - signed
       - statistic: onesidedpeak
+        labels:
+          - directed
+          - unsigned
       - statistic: lag
         max_lag: 10
+        labels:
+          - antisymmetric
+          - signed
       - statistic: peak
         max_lag: 10
+        labels:
+          - undirected
+          - signed
       - statistic: asym
         max_lag: 10
+        labels:
+          - antisymmetric
+          - signed
 
 .statistics.distance:
   PairwiseDistance:
@@ -154,10 +191,9 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
+      - signed
       - bivariate
       - time-dependent
-      - M14
     dependencies:
     configs:
     - mode: dtw
@@ -206,7 +242,7 @@
   CausalEntropy:
     labels:
       - directed
-      - nonlinear
+      - linear
       - unsigned
       - bivariate
       - time-dependent
@@ -234,7 +270,7 @@
   DirectedInfo:
     labels:
       - directed
-      - nonlinear
+      - linear
       - unsigned
       - bivariate
       - time-dependent
@@ -245,7 +281,6 @@
   StochasticInteraction:
     labels:
       - undirected
-      - nonlinear
       - unsigned
       - bivariate
       - time-dependent
@@ -259,7 +294,6 @@
   MutualInfo:
     labels:
       - undirected
-      - nonlinear
       - unsigned
       - bivariate
       - contemporaneous
@@ -280,7 +314,6 @@
   TimeLaggedMutualInfo:
     labels:
       - directed
-      - nonlinear
       - unsigned
       - bivariate
       - time-dependent
@@ -296,11 +329,9 @@
   TransferEntropy:
     labels:
       - directed
-      - nonlinear
       - unsigned
       - bivariate
       - time-dependent
-      - M04
     configs:
     - estimator: gaussian
       auto_embed_method: MAX_CORR_AIS
@@ -316,12 +347,13 @@
     - estimator: symbolic
       k_history: 3
       labels:
+      - nonlinear
       - M05
 
   IntegratedInformation:
     labels:
       - undirected
-      - nonlinear
+      - linear
       - unsigned
       - bivariate
       - time-dependent
@@ -398,8 +430,9 @@
 
   PhaseSlopeIndex:
     labels:
+      - antisymmetric
       - linear/nonlinear
-      - unsigned
+      - signed
       - bivariate
       - frequency-dependent
       - M01
@@ -442,11 +475,11 @@
 
   PhaseLagIndex:
     labels:
+      - antisymmetric
       - linear
-      - unsigned
+      - signed
       - bivariate
       - frequency-dependent
-      - M07
     dependencies:
     configs:
     - fs: 1
@@ -463,11 +496,11 @@
 
   WeightedPhaseLagIndex:
     labels:
+      - antisymmetric
       - linear
-      - unsigned
+      - signed
       - bivariate
       - frequency-dependent
-      - M07
     dependencies:
     configs:
     - fs: 1
@@ -489,7 +522,6 @@
       - unsigned
       - bivariate
       - frequency-dependent
-      - M07
     dependencies:
     configs:
     - fs: 1
@@ -511,7 +543,6 @@
       - unsigned
       - bivariate
       - frequency-dependent
-      - M07
     dependencies:
     configs:
     - fs: 1
@@ -692,7 +723,8 @@
 .statistics.wavelet:
   PhaseSlopeIndex:
     labels:
-      - unsigned
+      - antisymmetric
+      - signed
       - time/frequency dependent
       - bivariate
       - M08
@@ -705,9 +737,7 @@
 .statistics.misc:
   Cointegration:
     labels:
-      - undirected
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M13
@@ -717,55 +747,87 @@
       statistic: max_eig_stat
       det_order: 0
       k_ar_diff: 10
+      labels:
+        - undirected
+        - unsigned
     - method: johansen
       statistic: trace_stat
       det_order: 0
       k_ar_diff: 10
+      labels:
+        - undirected
+        - unsigned
     - method: johansen
       statistic: max_eig_stat
       det_order: 0
       k_ar_diff: 1
+      labels:
+        - undirected
+        - unsigned
     - method: johansen
       statistic: trace_stat
       det_order: 0
       k_ar_diff: 1
+      labels:
+        - undirected
+        - unsigned
     - method: johansen
       statistic: max_eig_stat
       det_order: 1
       k_ar_diff: 10
+      labels:
+        - undirected
+        - unsigned
     - method: johansen
       statistic: trace_stat
       det_order: 1
       k_ar_diff: 10
+      labels:
+        - undirected
+        - unsigned
     - method: johansen
       statistic: max_eig_stat
       det_order: 1
       k_ar_diff: 1
+      labels:
+        - undirected
+        - unsigned
     - method: johansen
       statistic: trace_stat
       det_order: 1
       k_ar_diff: 1
+      labels:
+        - undirected
+        - unsigned
     - method: aeg
       statistic: tstat
       autolag: aic
       maxlag: 10
       trend: c
+      labels:
+        - directed
+        - signed
     - method: aeg
       statistic: tstat
       autolag: aic
       maxlag: 10
       trend: ct
+      labels:
+        - directed
+        - signed
     - method: aeg
       statistic: tstat
       autolag: bic
       maxlag: 10
       trend: ct
+      labels:
+        - directed
+        - signed
 
   PowerEnvelopeCorrelation:
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M11
@@ -774,27 +836,40 @@
     - orth: false
       log: false
       absolute: false
+      labels:
+        - signed
     - orth: true
       log: false
       absolute: false
+      labels:
+        - signed
     - orth: false
       log: true
       absolute: false
+      labels:
+        - signed
     - orth: true
       log: true
       absolute: false
+      labels:
+        - signed
     - orth: true
       log: false
       absolute: true
+      labels:
+        - unsigned
     - orth: true
       log: true
       absolute: true
+      labels:
+        - unsigned
 
   InterDependenceScore:
     labels:
       - unsigned
       - undirected
       - nonlinear
+      - MXX
     dependencies:
     configs:
     - terms: 6

@@ -33,10 +33,9 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
+      - signed
       - bivariate
       - time-dependent
-      - M14
     dependencies:
     configs:
       - mode: dtw
@@ -66,7 +65,7 @@
   DirectedInfo:
     labels:
       - directed
-      - nonlinear
+      - linear
       - unsigned
       - bivariate
       - time-dependent
@@ -96,7 +95,7 @@
   IntegratedInformation:
     labels:
       - undirected
-      - nonlinear
+      - linear
       - unsigned
       - bivariate
       - time-dependent
@@ -124,8 +123,9 @@
   # Phase slope index
   PhaseSlopeIndex:
     labels:
+      - antisymmetric
       - linear/nonlinear
-      - unsigned
+      - signed
       - bivariate
       - frequency-dependent
       - M01
@@ -137,11 +137,11 @@
   # Phase lag index
   PhaseLagIndex:
     labels:
+      - antisymmetric
       - linear
-      - unsigned
+      - signed
       - bivariate
       - frequency-dependent
-      - M07
     dependencies:
     configs:
       - fs: 1
@@ -170,7 +170,8 @@
   # Phase slope index (wavelet)
   PhaseSlopeIndex:
     labels:
-      - unsigned
+      - antisymmetric
+      - signed
       - time/frequency dependent
       - bivariate
       - M08
@@ -183,8 +184,9 @@
   # Cointegration
   Cointegration:
     labels:
+      - directed
       - linear
-      - unsigned
+      - signed
       - bivariate
       - time-dependent
       - M13
@@ -201,7 +203,7 @@
     labels:
       - undirected
       - linear
-      - unsigned
+      - signed
       - bivariate
       - time-dependent
       - M11

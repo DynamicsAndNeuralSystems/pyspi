@@ -4,13 +4,29 @@ The same SPI must carry the same labels whichever config it is loaded from,
 no SPI may carry a contradictory pair, and every label must belong to the
 vocabulary used by ``full.yaml`` and the SPI classes (which catches typos
 such as ``unisgned`` or a stray ``directed,``).
+The labels a config writes for an SPI must also agree with the SPI itself:
+its sign with ``issigned()``, its directedness with the class trait, its
+linearity with the class where the class declares one, and each SPI carries
+exactly one module label.
 """
 import collections
+import copy
+import importlib
 import re
 
 import pytest
 
-from pyspi.calculator import bundled_configs, load_spis_from_yaml, resolve_config
+from pyspi.base import DIRECTEDNESS_TRAITS, Undirected
+from pyspi.calculator import (
+    _expand_lagged_correlation_configs,
+    _is_module_label,
+    _merge_spi_labels,
+    _split_config_params,
+    bundled_configs,
+    load_config_yaml,
+    load_spis_from_yaml,
+    resolve_config,
+)
 
 CONTRADICTORY = (
     ("linear", "nonlinear"),
@@ -94,3 +110,120 @@ def test_class_trait_wins_over_config_linearity():
     spi = Nonlinear()
     _merge_spi_labels(spi, config_labels=["linear"])
     assert spi.labels == ["nonlinear"]
+
+
+def _config_entries(name):
+    """
+    Each SPI of a bundled config with the labels the config writes for it.
+
+    The written labels are the family's followed by the entry's, with the
+    family's module label dropped when the entry sets its own, as
+    ``_merge_spi_labels`` does.
+
+    Parameters
+    ----------
+    name : str
+        Name of a bundled config.
+
+    Returns
+    -------
+    list of tuple
+        ``(written labels, SPI as constructed, SPI with merged labels)`` per
+        SPI, in config order.
+    """
+    out = []
+    for module_name, module_spis in load_config_yaml(resolve_config(name)).items():
+        module = importlib.import_module(module_name, "pyspi")
+        for fcn, entry in module_spis.items():
+            family_labels = list(entry.get("labels") or [])
+            configs = entry.get("configs")
+            if fcn == "LaggedCorrelation" and configs is not None:
+                configs = _expand_lagged_correlation_configs(configs)
+            for params in configs if configs is not None else [{}]:
+                params, config_labels = _split_config_params(params)
+                config_labels = list(config_labels or [])
+                written = family_labels
+                if any(_is_module_label(label) for label in config_labels):
+                    written = [l for l in written if not _is_module_label(l)]
+                spi = getattr(module, fcn)(**params)
+                merged = copy.copy(spi)
+                _merge_spi_labels(merged, family_labels, config_labels)
+                out.append((written + config_labels, spi, merged))
+    return out
+
+
+@pytest.fixture(scope="module")
+def entries_by_config():
+    return {name: _config_entries(name) for name in bundled_configs()}
+
+
+def _class_trait(spi):
+    """
+    The directedness the SPI settles before any config label is merged.
+
+    Parameters
+    ----------
+    spi : object
+        An SPI as constructed.
+
+    Returns
+    -------
+    str or None
+        The trait among the SPI's own labels, else ``'undirected'`` for an
+        :class:`~pyspi.base.Undirected` subclass, else None (the config
+        decides).
+    """
+    own = [t for t in DIRECTEDNESS_TRAITS if t in spi.labels]
+    if own:
+        return own[0]
+    return "undirected" if isinstance(spi, Undirected) else None
+
+
+def test_config_sign_label_agrees_with_issigned(entries_by_config):
+    bad = []
+    for config, entries in entries_by_config.items():
+        for written, spi, merged in entries:
+            expected = "signed" if spi.issigned() else "unsigned"
+            declared = [l for l in written if l in ("signed", "unsigned")]
+            own = [l for l in spi.labels if l in ("signed", "unsigned")]
+            if declared != [expected] or own not in ([], [expected]):
+                bad.append(f"{config}/{merged.identifier}: config {declared}, "
+                           f"class labels {own}, issigned() -> {expected}")
+    assert not bad, "\n".join(bad)
+
+
+def test_config_directedness_agrees_with_the_class(entries_by_config):
+    bad = []
+    for config, entries in entries_by_config.items():
+        for written, spi, merged in entries:
+            declared = [l for l in written if l in DIRECTEDNESS_TRAITS]
+            trait = _class_trait(spi)
+            if len(declared) != 1 or trait not in (None, declared[0]) \
+                    or merged.directedness() != declared[0]:
+                bad.append(f"{config}/{merged.identifier}: config {declared}, "
+                           f"class {trait}, directedness() -> "
+                           f"{merged.directedness()}")
+    assert not bad, "\n".join(bad)
+
+
+def test_config_linearity_agrees_with_the_class(entries_by_config):
+    bad = []
+    for config, entries in entries_by_config.items():
+        for written, spi, merged in entries:
+            own = [l for l in spi.labels if l in ("linear", "nonlinear")]
+            declared = [l for l in written if l in ("linear", "nonlinear")]
+            if len(declared) > 1 or (own and declared and declared != own):
+                bad.append(f"{config}/{merged.identifier}: config {declared}, "
+                           f"class {own}")
+    assert not bad, "\n".join(bad)
+
+
+def test_every_spi_has_one_module_label(entries_by_config):
+    bad = [
+        f"{config}/{merged.identifier}: "
+        f"{[l for l in merged.labels if _is_module_label(l)]}"
+        for config, entries in entries_by_config.items()
+        for _, _, merged in entries
+        if sum(_is_module_label(l) for l in merged.labels) != 1
+    ]
+    assert not bad, "\n".join(bad)

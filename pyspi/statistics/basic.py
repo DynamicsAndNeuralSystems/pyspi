@@ -691,7 +691,7 @@ class SpearmanR(Undirected, Signed):
 
     name = "Spearman's correlation coefficient"
     identifier = "spearmanr"
-    labels = ["basic", "unordered", "rank", "linear", "undirected"]
+    labels = ["basic", "unordered", "rank", "nonlinear", "undirected"]
 
     def __init__(self, squared=False):
         self._squared = squared
@@ -746,7 +746,7 @@ class KendallTau(Undirected, Signed):
 
     name = "Kendall's tau"
     identifier = "kendalltau"
-    labels = ["basic", "unordered", "rank", "linear", "undirected"]
+    labels = ["basic", "unordered", "rank", "nonlinear", "undirected"]
 
     def __init__(self, squared=False):
         self._squared = squared

@@ -150,7 +150,7 @@ name or a path to your own YAML:
 | `"benchmarked_p95"` | 173 | Good coverage/cost trade-off. |
 | `"benchmarked_p90"` | 161 | Recommended default for large batches. |
 | `"benchmarked_p80"` | 145 | Cost-constrained sweeps. |
-| `"sonnet"` | 14 | One representative SPI per module (M01-M14). |
+| `"sonnet"` | 14 | One representative SPI per module (M01-M14); M07 has no bundled SPI, so M14 has two. |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |
 
 The `benchmarked_p<N>` sets keep the fastest *N*% of SPIs by **measured**
