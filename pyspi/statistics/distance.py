@@ -1,22 +1,22 @@
 import functools
 import os
 import warnings
+
+from hyppo.independence import MGC
+# hyppo's compiled centring and sum; pyspi applies the final step itself
+# (`_dcorr_centred`), so the value does not depend on the hyppo version.
+from hyppo.independence.dcorr import _center_distmat, _dcov
 import numba
 import numpy as np
 from scipy.stats import rankdata
 from sklearn.metrics import pairwise_distances, pairwise_kernels
-import tslearn.metrics
 from tslearn.barycenters import (
     euclidean_barycenter,
     dtw_barycenter_averaging,
     dtw_barycenter_averaging_subgradient,
     softdtw_barycenter,
 )
-from hyppo.independence import MGC
-# hyppo's compiled centring and sum, unchanged from 0.4.0 to 0.5.2. Its final
-# step changed across those releases, so pyspi applies it itself
-# (`_dcorr_centred`).
-from hyppo.independence.dcorr import _center_distmat, _dcov
+import tslearn.metrics
 
 from pyspi.base import (
     Directed,
@@ -39,6 +39,7 @@ _DTW_SAKOE_MIN_RADIUS = int(os.getenv("PYSPI_DTW_SAKOE_MIN_RADIUS", "10"))
 
 
 def _auto_sakoe_radius(length):
+    """``min(ceil(0.1 T), ceil(1.5 sqrt(T)))``, at least 10, at most ``T - 1``."""
     if length <= 1:
         return 1
     linear = int(np.ceil(max(0.0, _DTW_SAKOE_LINEAR_FRAC) * length))
@@ -49,18 +50,28 @@ def _auto_sakoe_radius(length):
 
 
 class PairwiseDistance(Undirected, Unsigned):
-    """``metric`` distance between each pair of processes, optionally / sqrt(T).
+    """Distance between two time series, treated as vectors of length T.
 
-    ``normalise=True`` divides by ``sqrt(T)`` and adds ``_rmse`` to the
-    identifier. For ``metric="euclidean"`` that is exactly the root mean square
-    difference, ``sqrt(mean((x - y)**2))``, and the name is literal. For the
-    other metrics -- cityblock, cosine, chebyshev, canberra, braycurtis -- the
-    suffix is pyspi's house label for "divided by sqrt(T)" and nothing more.
-    Those quantities are not root *mean* squares, and dividing them by sqrt(T)
-    does **not** make them comparable across record lengths either -- only the
-    Euclidean norm grows as sqrt(T) under i.i.d. differences, so only for
-    `euclidean` is the division the right power. Read `_rmse` as the name of the
-    normalisation that was applied, not as a claim about the metric.
+    ``A[i, j]`` is ``d(x_i, x_j)`` for the chosen ``metric``, computed with
+    scikit-learn's ``pairwise_distances``. Undirected and unsigned (zero for
+    identical series).
+
+    ``normalise=True`` divides by ``sqrt(T)`` and appends ``_rmse`` to the
+    identifier. For the Euclidean metric that is the root mean square
+    difference, ``sqrt(mean((x_i - x_j)**2))``. For the other metrics
+    ``_rmse`` only names the division by ``sqrt(T)``: the result is not a
+    root mean square, and only the Euclidean distance grows as ``sqrt(T)``
+    with independent differences, so only it becomes comparable across
+    record lengths.
+
+    Parameters
+    ----------
+    metric : str, optional
+        Any metric that ``sklearn.metrics.pairwise_distances`` accepts, such
+        as ``'euclidean'``, ``'cityblock'``, ``'chebyshev'``, ``'canberra'``,
+        ``'braycurtis'`` or ``'cosine'``. Default: ``'euclidean'``.
+    normalise : bool, optional
+        Divide by ``sqrt(T)``. Default: False.
     """
 
     name = "Pairwise distance"
@@ -84,8 +95,7 @@ class PairwiseDistance(Undirected, Unsigned):
         return D
 
 
-""" TODO: include optional kernels in each method
-"""
+# TODO: include optional kernels in each method.
 
 # ---------------------------------------------------------------------------
 # Itakura-constrained DTW
@@ -171,9 +181,9 @@ def _dcorr_centred(cx, cy, bias):
 
     0 when a variance is not positive, or (biased only) the covariance is
     not; the biased ratio is square-rooted (dCor), the unbiased one is the
-    U-centred estimate of dCor^2 and can be negative. hyppo 0.4.0 did not take
-    the square root and 0.5.0 also zeroed a negative unbiased value, so the
-    rule is applied here, not taken from whichever hyppo is installed.
+    U-centred estimate of dCor^2 and can be negative. Other hyppo releases
+    differ in this final step, so it is applied here rather than taken from
+    the installed hyppo.
     """
     (x, vx), (y, vy) = cx, cy
     covar = _dcov(x, y, bias, False)
@@ -237,9 +247,9 @@ def _median_gaussian_distance(v):
     """``1 - K / max(K)`` for a Gaussian kernel ``K`` of median-heuristic width.
 
     hyppo's ``Hsic`` statistic is dcorr of these induced distances. Here each
-    variable's width is the median distance between its own samples (Gretton
-    et al. 2005, 2008); hyppo applies ``x``'s width to ``y`` as well, which
-    makes its statistic depend on argument order.
+    variable's width is the median distance between its own samples; hyppo
+    applies ``x``'s width to ``y`` as well, which makes its statistic depend
+    on argument order.
     """
     l2 = pairwise_distances(v, metric="l2")
     n = l2.shape[0]
@@ -251,11 +261,42 @@ def _median_gaussian_distance(v):
 
 
 class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
-    """Normalised Hilbert-Schmidt Independence Criterion (HSIC).
+    """Normalised Hilbert-Schmidt Independence Criterion (HSIC) [1]_ [2]_.
 
-    hyppo's statistic: dcorr of the distances ``1 - K / max(K)`` induced by a
-    Gaussian kernel, each variable with its own median-heuristic width (see
-    `_median_gaussian_distance`).
+    The statistic of hyppo's ``Hsic``: the distance correlation (as
+    `DistanceCorrelation`) of the distances ``1 - K / max(K)`` induced by a
+    Gaussian kernel ``K``, which equals a normalised HSIC [3]_. Each series is
+    one sample of ``T`` scalar observations, so time order is ignored.
+
+    Unlike hyppo, which applies the first variable's kernel width to both,
+    each variable gets its own median-heuristic width (the median distance
+    between its own samples), so the value is symmetric in the pair. A zero
+    median (mostly tied samples) falls back to width 1, as in hyppo.
+
+    Undirected and unsigned. With ``biased=False`` the value is the U-centred
+    estimate of the squared statistic and can be slightly negative under
+    independence; with ``biased=True`` it is the square root of the
+    V-statistic ratio, in ``[0, 1]``. The two are on different scales.
+
+    References
+    ----------
+    .. [1] A. Gretton, O. Bousquet, A. Smola, B. Schölkopf, "Measuring
+           statistical dependence with Hilbert-Schmidt norms", Algorithmic
+           Learning Theory (ALT 2005), Lecture Notes in Computer Science 3734,
+           63-77 (2005).
+    .. [2] A. Gretton, K. Fukumizu, C. H. Teo, L. Song, B. Schölkopf,
+           A. J. Smola, "A kernel statistical test of independence", Advances
+           in Neural Information Processing Systems 20, 585-592 (2007).
+    .. [3] D. Sejdinovic, B. Sriperumbudur, A. Gretton, K. Fukumizu,
+           "Equivalence of distance-based and RKHS-based statistics in
+           hypothesis testing", Annals of Statistics 41(5), 2263-2291 (2013).
+
+    Parameters
+    ----------
+    biased : bool, optional
+        Use the biased (V-statistic) estimator instead of the unbiased
+        (U-centred) one, and append ``_biased`` to the identifier.
+        Default: False.
     """
 
     name = "Hilbert-Schmidt Independence Criterion"
@@ -359,11 +400,28 @@ def _hhg_statistic(x, y):
 
 
 class HellerHellerGorfine(Undirected, Unsigned):
-    """Heller-Heller-Gorfine independence criterion (see `_hhg_statistic`)."""
+    """Heller-Heller-Gorfine independence statistic [1]_.
+
+    For each ordered pair of time points ``(s, t)``, ``s != t``, the other
+    samples are split by whether they lie within ``|x_s - x_t|`` of ``x_s``
+    and within ``|y_s - y_t|`` of ``y_s``; the statistic is the sum over all
+    ``(s, t)`` of Pearson's chi-square for that 2x2 table. Each series is one
+    sample of ``T`` scalar observations, so time order is ignored. The value
+    equals hyppo's ``HHG().statistic``, computed in ``O(T^2 log T)`` from
+    row-wise ranks and dominance counts instead of hyppo's ``O(T^3)`` loop.
+
+    Undirected and unsigned (``hhg(x, y) == hhg(y, x)`` exactly). The sum is
+    not normalised, so it grows with ``T``.
+
+    References
+    ----------
+    .. [1] R. Heller, Y. Heller, M. Gorfine, "A consistent multivariate test
+           of association based on ranks of distances", Biometrika 100(2),
+           503-510 (2013).
+    """
 
     name = "Heller-Heller-Gorfine Independence Criterion"
     identifier = "hhg"
-    # Symmetric by construction: hhg(x, y) == hhg(y, x) exactly.
     labels = ["unsigned", "distance", "unordered", "nonlinear", "undirected"]
 
     @parse_bivariate
@@ -373,7 +431,36 @@ class HellerHellerGorfine(Undirected, Unsigned):
 
 
 class DistanceCorrelation(Undirected, Unsigned):
-    """Distance correlation"""
+    """Distance correlation [1]_.
+
+    The distance correlation of two series, each treated as one sample of
+    ``T`` scalar observations (time order is ignored), from their ``T x T``
+    Euclidean distance matrices. It is zero in the population if and only if
+    the two are independent, so it detects nonlinear as well as linear
+    dependence.
+
+    With ``biased=False`` the value is the unbiased (U-centred) estimate of
+    the squared distance correlation [2]_, which can be slightly negative
+    under independence. With ``biased=True`` it is the square root of the
+    double-centred (V-statistic) ratio of [1]_, in ``[0, 1]``. The two are
+    on different scales. Values match hyppo's ``Dcorr`` (0.5.2) statistic.
+    Undirected and unsigned.
+
+    References
+    ----------
+    .. [1] G. J. Székely, M. L. Rizzo, N. K. Bakirov, "Measuring and testing
+           dependence by correlation of distances", Annals of Statistics
+           35(6), 2769-2794 (2007).
+    .. [2] G. J. Székely, M. L. Rizzo, "Partial distance correlation with
+           methods for dissimilarities", Annals of Statistics 42(6),
+           2382-2412 (2014).
+
+    Parameters
+    ----------
+    biased : bool, optional
+        Use the biased (V-statistic) estimator instead of the unbiased one,
+        and append ``_biased`` to the identifier. Default: False.
+    """
 
     name = "Distance correlation"
     identifier = "dcorr"
@@ -397,7 +484,22 @@ class DistanceCorrelation(Undirected, Unsigned):
 
 
 class MultiscaleGraphCorrelation(Undirected, Unsigned):
-    """Multiscale graph correlation"""
+    """Multiscale graph correlation (MGC) [1]_.
+
+    hyppo's ``MGC().statistic`` on the two series, each treated as one sample
+    of ``T`` scalar observations (time order is ignored), with Euclidean
+    distances. MGC computes local distance correlations restricted to each
+    sample's ``k`` and ``l`` nearest neighbours in the two variables, over
+    all ``(k, l)``, and reports a smoothed maximum, so it is sensitive to
+    nonlinear dependence that the global distance correlation dilutes.
+    Undirected.
+
+    References
+    ----------
+    .. [1] C. Shen, C. E. Priebe, J. T. Vogelstein, "From distance
+           correlation to multiscale graph correlation", Journal of the
+           American Statistical Association 115(529), 280-291 (2020).
+    """
 
     name = "Multiscale graph correlation"
     identifier = "mgc"
@@ -411,13 +513,13 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
 
 
 def _lagged_sum(test, x, y, max_lag):
-    """``sum_{l=0}^{L} (n - l)/n * S(x[l:], y[:n - l])`` (Mehta et al. 2020).
+    """``sum_{l=0}^{L} (n - l)/n * S(x[l:], y[:n - l])``, as in DcorrX and MGCX.
 
     The cross-distance statistic of hyppo's ``DcorrX`` and ``MGCX`` as their
     docstrings define it: the present of ``x`` against the past of ``y``, i.e.
     the dependence of ``x`` on the history of ``y``. The distance matrix of
-    ``x[l:]`` is the block ``distx[l:, l:]``. (hyppo 0.5.2's own ``l >= 1``
-    terms treat rows of the distance matrices as points, so it is not used.)
+    ``x[l:]`` is the block ``distx[l:, l:]``. hyppo 0.5.2's own ``l >= 1``
+    terms treat rows of the distance matrices as points, so it is not used.
     """
     distx = pairwise_distances(x, metric="euclidean")
     disty = pairwise_distances(y, metric="euclidean")
@@ -431,12 +533,30 @@ def _lagged_sum(test, x, y, max_lag):
 
 
 class CrossDistanceCorrelation(Directed, Unsigned):
-    """Cross-distance correlation (DcorrX; Mehta et al. 2020).
+    """Cross-distance correlation (DcorrX) [1]_.
 
-    ``A[i, j] = sum_{l=0}^{max_lag} (T - l)/T * dcorr(z_j[l:], z_i[:T - l])``,
-    the unbiased distance correlation of target ``j`` with the lagged source
-    ``i``, summed over lags (see `_lagged_sum`). Each series' centred
-    distance matrices are computed once per lag, not once per pair.
+    ``A[i, j] = sum_{l=0}^{max_lag} (T - l)/T * dcorr(x_j[l:], x_i[:T - l])``:
+    the unbiased distance correlation (as `DistanceCorrelation` with
+    ``biased=False``) between the target's present and the source's value
+    ``l`` samples earlier, weighted by the overlap and summed over lags.
+    Row = source, column = target; unsigned.
+
+    This is the statistic as hyppo's ``DcorrX`` docstring defines it, with
+    the distance matrix of ``x_j[l:]`` taken as the block ``D[l:, l:]`` of
+    the full one. hyppo 0.5.2's own lagged terms treat rows of the distance
+    matrices as points, so its implementation is not used. Each series'
+    centred distance matrices are computed once per lag, not once per pair.
+
+    References
+    ----------
+    .. [1] C. Shen, J. Chung, R. Mehta, T. Xu, J. T. Vogelstein,
+           "Independence testing for temporal data", Transactions on Machine
+           Learning Research (2024).
+
+    Parameters
+    ----------
+    max_lag : int, optional
+        Largest lag ``l``, in samples. Default: 1.
     """
 
     name = "Cross-distance correlation"
@@ -490,9 +610,24 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
 
 class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
-    """Cross-multiscale graph correlation (MGCX; Mehta et al. 2020).
+    """Cross-multiscale graph correlation (MGCX) [1]_.
 
-    As `CrossDistanceCorrelation`, with MGC in place of dcorr.
+    As `CrossDistanceCorrelation`, with hyppo's MGC statistic (as
+    `MultiscaleGraphCorrelation`) in place of the distance correlation:
+    ``A[i, j] = sum_{l=0}^{max_lag} (T - l)/T * mgc(x_j[l:], x_i[:T - l])``.
+    Row = source, column = target; hyppo's ``MGCX`` implementation is not
+    used, for the same reason.
+
+    References
+    ----------
+    .. [1] C. Shen, J. Chung, R. Mehta, T. Xu, J. T. Vogelstein,
+           "Independence testing for temporal data", Transactions on Machine
+           Learning Research (2024).
+
+    Parameters
+    ----------
+    max_lag : int, optional
+        Largest lag ``l``, in samples. Default: 1.
     """
 
     name = "Cross-multiscale graph correlation"
@@ -513,8 +648,14 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
 
 
 class TimeWarping(Undirected, Unsigned):
+    """Base for the elastic alignment measures (DTW, soft-DTW, LCSS).
 
-    labels = ["unsigned", "distance", "temporal", "undirected", "nonlinear"]
+    A subclass sets ``_simfn(x, y, global_constraint=...)``. A
+    ``global_constraint`` other than None is appended to the identifier as
+    ``_constraint-sakoe-chiba`` or ``_constraint-itakura``.
+    """
+
+    labels =["unsigned", "distance", "temporal", "undirected", "nonlinear"]
 
     def __init__(self, global_constraint=None):
         gcstr = global_constraint
@@ -539,10 +680,55 @@ class TimeWarping(Undirected, Unsigned):
 
 
 class DynamicTimeWarping(TimeWarping):
-    """DTW with optional dtaidistance C backend and Sakoe-Chiba band constraint.
+    """Dynamic time warping (DTW) distance [1]_.
 
-    The Itakura constraint, which dtaidistance lacks, uses `_itakura_dtw`;
-    tslearn is the fallback when dtaidistance is not available.
+    ``A[i, j] = sqrt(min_pi sum_{(a, b) in pi} (x_i[a] - x_j[b])^2)``, the
+    minimum over warping paths ``pi`` (monotone, continuous, matched
+    endpoints) of the accumulated squared difference, square-rooted as in
+    tslearn and dtaidistance. Undirected and unsigned; zero for identical
+    series.
+
+    ``global_constraint`` restricts the paths to a band around the diagonal:
+    a Sakoe-Chiba band of fixed radius [1]_ or an Itakura parallelogram of
+    maximum slope 2 [2]_. Without ``sakoe_chiba_radius`` or
+    ``sakoe_chiba_ratio`` the Sakoe-Chiba radius is
+    ``min(ceil(0.1 T), ceil(1.5 sqrt(T)))``, at least 10 and at most
+    ``T - 1`` (identifier suffix ``_radius-auto``); the environment variables
+    ``PYSPI_DTW_SAKOE_LINEAR_FRAC``, ``PYSPI_DTW_SAKOE_SQRT_COEFF`` and
+    ``PYSPI_DTW_SAKOE_MIN_RADIUS`` change the 0.1, 1.5 and 10. tslearn's own
+    default radius is 1.
+
+    The distance is computed with dtaidistance's C backend when it is
+    installed and with tslearn otherwise, with the same band in either. The
+    Itakura constraint, which dtaidistance lacks, uses a banded version of
+    tslearn's recursion that gives tslearn's value.
+
+    References
+    ----------
+    .. [1] H. Sakoe, S. Chiba, "Dynamic programming algorithm optimization
+           for spoken word recognition", IEEE Transactions on Acoustics,
+           Speech, and Signal Processing 26(1), 43-49 (1978).
+    .. [2] F. Itakura, "Minimum prediction residual principle applied to
+           speech recognition", IEEE Transactions on Acoustics, Speech, and
+           Signal Processing 23(1), 67-72 (1975).
+
+    Parameters
+    ----------
+    global_constraint : str or None, optional
+        ``None`` (no constraint), ``'sakoe_chiba'`` or ``'itakura'``.
+        Default: None.
+    sakoe_chiba_radius : int, optional
+        Sakoe-Chiba radius in samples (at least 1, capped at ``T - 1``).
+        Used only with ``global_constraint='sakoe_chiba'``; set at most one
+        of this and ``sakoe_chiba_ratio``. Default: None (the automatic
+        radius).
+    sakoe_chiba_ratio : float, optional
+        Sakoe-Chiba radius as a fraction of ``T``, rounded up (at least 1,
+        capped at ``T - 1``). Used only with
+        ``global_constraint='sakoe_chiba'``. Default: None.
+    normalise : bool, optional
+        Divide by ``sqrt(T)`` and append ``_rmse`` to the identifier, the
+        same normalisation as `PairwiseDistance`. Default: False.
     """
 
     name = "Dynamic time warping"
@@ -558,9 +744,8 @@ class DynamicTimeWarping(TimeWarping):
     ):
         if sakoe_chiba_radius is not None and sakoe_chiba_ratio is not None:
             raise ValueError("Set only one of sakoe_chiba_radius or sakoe_chiba_ratio.")
-        # Validated, not coerced: `int(2.7)` silently becomes a band of 2 and
-        # `float(True)` a ratio of 1.0, both of which look like the caller's
-        # intent and are not.
+        # Validated rather than coerced, so 2.7 or True is rejected instead
+        # of silently becoming a radius of 2 or a ratio of 1.0.
         if sakoe_chiba_radius is not None:
             sakoe_chiba_radius = require_int("sakoe_chiba_radius",
                                              sakoe_chiba_radius, minimum=1)
@@ -586,6 +771,7 @@ class DynamicTimeWarping(TimeWarping):
             self.identifier += "_rmse"
 
     def _resolve_radius(self, n):
+        """Sakoe-Chiba radius for series of length ``n``."""
         if self._sakoe_chiba_radius is not None:
             return min(self._sakoe_chiba_radius, max(1, n - 1))
         if self._sakoe_chiba_ratio is not None:
@@ -619,7 +805,7 @@ class DynamicTimeWarping(TimeWarping):
                 kwargs["window"] = window
             d = _dtw_c.distance(x, y, **kwargs)
         except ImportError:
-            # dtaidistance not installed — use tslearn
+            # dtaidistance not installed: use tslearn.
             if constraint == "sakoe_chiba":
                 d = tslearn.metrics.dtw(
                     x, y, global_constraint="sakoe_chiba", sakoe_chiba_radius=radius,
@@ -645,7 +831,7 @@ class DynamicTimeWarping(TimeWarping):
 
     @parse_multivariate
     def multivariate(self, data):
-        """Batch DTW via dtaidistance.dtw.distance_matrix when available."""
+        """Every pair at once, with dtaidistance's ``distance_matrix`` when installed."""
         Z = data.to_numpy(squeeze=True)  # (M, T)
         M = Z.shape[0]
         series = [np.ascontiguousarray(Z[i], dtype=np.double) for i in range(M)]
@@ -660,8 +846,7 @@ class DynamicTimeWarping(TimeWarping):
                     d = _itakura_dtw(series[i], series[j])
                     A[i, j] = d
                     A[j, i] = d
-            # Divide by sqrt(T) under `normalise`, as the bivariate and
-            # dtaidistance paths do, so every entry point agrees.
+            # The same sqrt(T) normalisation as the other paths.
             if self._normalise:
                 A = A / np.sqrt(Z.shape[1])
             return A
@@ -691,7 +876,7 @@ class DynamicTimeWarping(TimeWarping):
             return dm_sym
 
         except ImportError:
-            # Fall back to bivariate loop with tslearn
+            # dtaidistance not installed: tslearn, pair by pair.
             A = np.full((M, M), np.nan)
             for i in range(M):
                 for j in range(i + 1, M):
@@ -706,15 +891,14 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
 
     The band (tslearn's own Sakoe-Chiba radius-1 or Itakura slope-2 mask)
     restricts which pairs count as matches, not where the recursion may pass
-    (Vlachos et al. 2002). tslearn's own LCSS is not used: before 0.10 it
-    ignores the band, and 0.10 holds every masked cell at zero, which for the
-    Itakura parallelogram (a single cell at each end) scores any pair whose
-    last samples differ by more than `eps` as exactly 0.
+    (Vlachos et al. 2002). tslearn's own banded LCSS is not used: depending
+    on the version it ignores the band, or holds every masked cell at zero,
+    which for the Itakura parallelogram (a single cell at each end) scores
+    any pair whose last samples differ by more than `eps` as exactly 0.
 
     A row of the LCSS table is non-decreasing, and a match cell's
     `A[i-1, j-1] + 1` is never below its left or upper neighbour, so each row
-    is the running maximum of its candidates; that is one vectorised pass per
-    row instead of a Python loop per cell.
+    is the running maximum of its candidates, computed in one vectorised pass.
     """
     if global_constraint is None:
         return tslearn.metrics.lcss(x, y, eps=eps)
@@ -736,6 +920,32 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
 
 
 class LongestCommonSubsequence(TimeWarping):
+    """Longest common subsequence (LCSS) similarity [1]_.
+
+    Two samples match when ``|x_i[a] - x_j[b]| <= 1`` (tslearn's ``eps``,
+    in the units of the data, so one standard deviation after z-scoring).
+    The length of the longest subsequence of matching pairs, monotone in both
+    series, is divided by ``min(T_i, T_j)``, so the value is in ``[0, 1]``,
+    with 1 for identical series. Undirected; a similarity, so larger means
+    more alike.
+
+    Under a ``global_constraint`` only pairs inside the band (tslearn's
+    Sakoe-Chiba radius 1 or Itakura slope 2) may match, as in [1]_; this is
+    computed by pyspi, since tslearn's own banded LCSS does not apply the
+    band this way. Without a constraint the value is tslearn's ``lcss``.
+
+    References
+    ----------
+    .. [1] M. Vlachos, G. Kollios, D. Gunopulos, "Discovering similar
+           multidimensional trajectories", Proceedings of the 18th
+           International Conference on Data Engineering, 673-684 (2002).
+
+    Parameters
+    ----------
+    global_constraint : str or None, optional
+        ``None`` (no constraint), ``'sakoe_chiba'`` or ``'itakura'``.
+        Default: None.
+    """
 
     name = "Longest common subsequence"
     identifier = "lcss"
@@ -746,13 +956,36 @@ class LongestCommonSubsequence(TimeWarping):
 
 
 class SoftDynamicTimeWarping(TimeWarping):
-    """Soft-DTW (Cuturi & Blondel 2017) at tslearn's default ``gamma = 1``.
+    """Soft dynamic time warping (soft-DTW) [1]_.
 
-    This is the raw soft-minimum alignment cost, which is **not a distance**:
-    it can be negative, and ``softdtw(x, x)`` is not 0. The non-negative
-    soft-DTW *divergence* of Blondel, Mensch & Vert (2021),
-    ``D(x, y) - (D(x, x) + D(y, y)) / 2``, is a different quantity and is not
-    what pyspi ships under this identifier.
+    tslearn's ``soft_dtw`` at its default ``gamma = 1``: the DTW recursion
+    on squared differences with the minimum replaced by the soft minimum
+    ``-gamma log sum exp(-a / gamma)``, so every warping path contributes.
+    Undirected.
+
+    This is the raw soft-minimum alignment cost, which is not a distance: it
+    can be negative, and ``softdtw(x, x)`` is not 0. It is not the
+    non-negative soft-DTW divergence ``D(x, y) - (D(x, x) + D(y, y)) / 2``
+    of [2]_.
+
+    A ``global_constraint`` uses tslearn's defaults: Sakoe-Chiba radius 1,
+    Itakura maximum slope 2.
+
+    References
+    ----------
+    .. [1] M. Cuturi, M. Blondel, "Soft-DTW: a differentiable loss function
+           for time-series", Proceedings of the 34th International
+           Conference on Machine Learning, PMLR 70, 894-903 (2017).
+    .. [2] M. Blondel, A. Mensch, J.-P. Vert, "Differentiable divergences
+           between time series", Proceedings of the 24th International
+           Conference on Artificial Intelligence and Statistics, PMLR 130,
+           3853-3861 (2021).
+
+    Parameters
+    ----------
+    global_constraint : str or None, optional
+        ``None`` (no constraint), ``'sakoe_chiba'`` or ``'itakura'``.
+        Default: None.
     """
 
     name = "Soft dynamic time warping"
@@ -760,26 +993,67 @@ class SoftDynamicTimeWarping(TimeWarping):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        # tslearn's defaults apply: Sakoe-Chiba radius 1, Itakura slope 2.
-        z = data.to_numpy(squeeze=True)
+        z =data.to_numpy(squeeze=True)
         return tslearn.metrics.soft_dtw(
             z[i], z[j], global_constraint=self._global_constraint)
 
 
 class Barycenter(Undirected, Signed):
-    """A statistic of the barycenter of the pair under the Euclidean, DTW
-    (DBA), subgradient-DBA or soft-DTW geometry. The barycenter of {x, y} is a
+    """A statistic of the barycenter (average series) of the pair [1]_ [2]_ [3]_.
+
+    The barycenter ``b`` of ``{x_i, x_j}`` is computed with tslearn under one
+    of four geometries: Euclidean (``(x_i + x_j) / 2``), DTW (DTW barycenter
+    averaging, DBA [1]_), subgradient DBA [2]_ or soft-DTW [3]_. It is a
     function of the unordered pair, so the measure is undirected.
 
-    ``statistic="corr"`` is the alignment-adjusted correlation
-    ``2 * mean(b**2) / mean_energy - 1`` of the barycenter ``b``, where
-    ``mean_energy`` is the average of ``mean(x**2)`` and ``mean(y**2)``. For
-    the Euclidean barycenter ``(x + y) / 2`` of two zero-mean series this is
-    exactly Pearson's r; for the DTW geometries it is the share of the pair's
-    amplitude that survives averaging after optimal alignment, in [-1, 1]
-    (soft-DTW smooths the barycenter, so identical series give less than 1).
-    The barycenter of two zero-mean series has mean ~0, so ``corr`` is
-    preferred to ``mean``.
+    ``statistic='corr'`` is the alignment-adjusted correlation
+    ``2 mean(b^2) / e - 1``, where ``e`` is the average of ``mean(x_i^2)``
+    and ``mean(x_j^2)``. For the Euclidean barycenter of two zero-mean series
+    this is ``2 cov / (var_i + var_j)``, which is Pearson's r when the two
+    variances are equal, as after pyspi's default z-scoring. For the DTW
+    geometries it is the share of the pair's amplitude that survives
+    averaging after optimal alignment, in ``[-1, 1]`` (soft-DTW smooths the
+    barycenter, so identical series give less than 1). The barycenter of two
+    zero-mean series has mean near 0, so ``corr`` is more informative than
+    ``mean``.
+
+    ``'mean'`` and ``'max'`` are the mean and maximum of ``b`` (of ``b^2``
+    with ``squared=True``), and ``'max_time'`` is the index of the maximum.
+    Since ``rms(b) = sqrt(e (1 + corr) / 2)``, with ``e`` close to 1 for
+    z-scored inputs, ``max`` is mostly ``corr`` scaled by the barycenter's
+    crest factor ``max(b) / rms(b)``. Squared barycenters and
+    ``max_time`` are unsigned; the other statistics are signed.
+
+    tslearn's DBA starts from the Euclidean mean and stays near it when the
+    pair is out of phase, so under ``mode='dtw'`` a time-shifted copy of a
+    smooth series can score as low as an independent pair. The subgradient
+    fit uses a fixed seed (42), and each pair is fitted once, in a fixed
+    order, and shared by every statistic of the same mode.
+
+    References
+    ----------
+    .. [1] F. Petitjean, A. Ketterlin, P. Gançarski, "A global averaging
+           method for dynamic time warping, with applications to
+           clustering", Pattern Recognition 44(3), 678-693 (2011).
+    .. [2] D. Schultz, B. J. Jain, "Nonsmooth analysis and subgradient methods
+           for averaging in dynamic time warping spaces", Pattern Recognition
+           74, 340-358 (2018).
+    .. [3] M. Cuturi, M. Blondel, "Soft-DTW: a differentiable loss function
+           for time-series", Proceedings of the 34th International
+           Conference on Machine Learning, PMLR 70, 894-903 (2017).
+
+    Parameters
+    ----------
+    mode : str, optional
+        Barycenter geometry: ``'euclidean'``, ``'dtw'``, ``'sgddtw'``
+        (subgradient DBA) or ``'softdtw'``. Default: ``'euclidean'``.
+    squared : bool, optional
+        Square the barycenter before ``'mean'``, ``'max'`` or ``'max_time'``,
+        and append ``-sq`` to the identifier. Not allowed with ``'corr'``.
+        Default: False.
+    statistic : str, optional
+        ``'mean'``, ``'max'``, ``'max_time'`` or ``'corr'``.
+        Default: ``'mean'``.
     """
 
     name = "Barycenter"
@@ -789,9 +1063,8 @@ class Barycenter(Undirected, Signed):
 
     @property
     def _cache_subkey(self):
-        # Actual cache is keyed (mode, pair); statistic/squared are post-lookup
-        # transforms. Sub-bucket amortization by mode so 4 separate caches don't
-        # get lumped into one and mis-cost the cheap modes.
+        # The cache is keyed by (mode, pair); statistic and squared act after
+        # the lookup. Grouping by mode keeps the cheap modes' costs separate.
         return (self._mode,)
 
     def __init__(self, mode="euclidean", squared=False, statistic="mean"):
@@ -800,10 +1073,8 @@ class Barycenter(Undirected, Signed):
         elif mode == "dtw":
             self._fn = dtw_barycenter_averaging
         elif mode == "sgddtw":
-            # A generator of its own for every fit. Left to its default,
-            # tslearn draws the update order from the global NumPy stream, so
-            # a pair's barycenter would depend on process order, on which SPIs
-            # ran earlier, and on serial versus parallel execution.
+            # A fixed seed per fit: tslearn's default draws from NumPy's
+            # global stream, which would make the result depend on run order.
             self._fn = functools.partial(
                 dtw_barycenter_averaging_subgradient, random_state=42)
         elif mode == "softdtw":
@@ -823,9 +1094,7 @@ class Barycenter(Undirected, Signed):
             if squared:
                 raise ValueError("statistic='corr' already squares the barycenter; "
                                  "squared=True is not meaningful with it.")
-            # 2 E[b^2] / E[energy] - 1, with the pair's energy supplied by
-            # `bivariate`: Pearson's r for the Euclidean barycenter, an
-            # alignment-adjusted correlation otherwise.
+            # 2 E[b^2] / e - 1, with the pair's mean energy e from `bivariate`.
             self._statfn = lambda x, e: 2.0 * np.nanmean(x ** 2) / e - 1.0
         elif statistic == "mean":
             self._statfn = lambda x: np.nanmean(self._preproc(x))
@@ -836,8 +1105,7 @@ class Barycenter(Undirected, Signed):
         else:
             raise NameError(f"Unknown statistic: {statistic}")
 
-        # A squared barycenter and an argmax index are non-negative; `_rmmin`
-        # and the abs() comparison in correlation analyses read `issigned()`.
+        # A squared barycenter and an argmax index are non-negative.
         if squared or statistic == "max_time":
             self.labels = [l for l in self.labels if l != "signed"] + ["unsigned"]
             self.issigned = lambda: False
@@ -869,17 +1137,32 @@ class Barycenter(Undirected, Signed):
 
 
 class GromovWassersteinTau(Undirected, Unsigned):
-    """GW_tau (Kravtsova, McGee & Dawes 2023, Bull. Math. Biol. 85, 71).
+    """Gromov-Wasserstein distance GW_tau between two time series [1]_.
 
     Each series becomes the planar trajectory ``(t, x_t)``; ``vec_geo_dist``
     is the vector of intrinsic (arc-length) distances of every point from the
     trajectory's start, and ``wass_sorted`` the closed-form 2-Wasserstein
-    distance between the two sorted vectors (Proposition 1(e) of the paper:
+    distance between the two sorted vectors (Proposition 1(e) of [1]_:
     ``sqrt(mean((sorted v_i - sorted v_j)^2))`` at equal lengths).
+    Undirected and unsigned; zero for identical series.
 
     The distance vector has one entry per point, the first being 0 for the
-    start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``; the authors'
-    MATLAB omits it, which only rescales the value by a constant).
+    start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``). The
+    authors' MATLAB code omits it, which only rescales the value by a
+    constant.
+
+    The arc lengths are cumulative sums of the steps
+    ``sqrt(1 + (x_{t+1} - x_t)^2)``, so GW_tau depends on each series only
+    through its sequence of absolute increments (it is 0 for ``x_j = -x_i``).
+    For z-scored series the mean squared increment is about ``2 (1 - r_1)``,
+    with ``r_1`` the lag-1 autocorrelation, so the value largely reflects the
+    difference between the two series' lag-1 autocorrelations.
+
+    References
+    ----------
+    .. [1] N. Kravtsova, R. L. McGee II, A. T. Dawes, "Scalable
+           Gromov-Wasserstein based comparison of biological time series",
+           Bulletin of Mathematical Biology 85(8), 77 (2023).
     """
 
     name = "Gromov-Wasserstein distance (GW_tau)"
@@ -895,7 +1178,7 @@ class GromovWassersteinTau(Undirected, Unsigned):
 
     @staticmethod
     def wass_sorted(x1, x2):
-        x1 = np.sort(x1)[::-1] # sort in descending order
+        x1 = np.sort(x1)[::-1]  # descending
         x2 = np.sort(x2)[::-1]
 
         if len(x1) == len(x2):
@@ -939,10 +1222,10 @@ class GromovWassersteinTau(Undirected, Unsigned):
 
 
 class GromovWasserstainTau(GromovWassersteinTau):
-    """Deprecated alias for :class:`GromovWassersteinTau`.
+    """Deprecated, misspelled alias of `GromovWassersteinTau`.
 
-    The old name is misspelled. Kept so existing configs and scripts keep
-    working; the identifier (`gwtau`) and the computation are unchanged.
+    The identifier (``gwtau``) and the values are the same; it warns on use
+    and will be removed in pyspi 4.0.
     """
 
     def __init__(self, *args, **kwargs):
@@ -960,26 +1243,32 @@ class GromovWasserstainTau(GromovWassersteinTau):
 # ---------------------------------------------------------------------------
 
 class CrossPairwiseDistance(Undirected, Unsigned):
-    """Root-T-normalised cost of a lag-shifted alignment path, over lags 0..tau.
+    """Smallest (or mean) root-T-normalised distance over lag shifts up to ``tau``.
 
     At each lag ``t`` the two series are paired with an offset of ``t``, the
-    ``t`` samples that fall off each end are stuttered against the opposite
-    series' boundary sample, and the cost is
-    ``sqrt(sum(differences**2) / T)``. The forward and backward offsets are
-    minimised over, so the result is symmetric in the pair; ``min`` or ``mean``
-    then reduces over ``t``.
+    ``t`` samples that fall off each end are repeated against the opposite
+    series' boundary sample, and the cost is ``sqrt(sum(differences^2) / T)``.
+    The smaller of the forward and backward shifts is kept, so the value is
+    symmetric in the pair, and ``statistic`` then takes the minimum or the
+    mean over ``t = 0..tau`` (lags of ``T`` or more are skipped by the mean).
+    Undirected and unsigned.
 
-    The ``_rmse`` in the identifier is the same house label
-    `PairwiseDistance` uses: divided by ``sqrt(T)``. It is **not** the
-    conventional DTW "path-length RMSE", which divides by the number of steps
-    in the path -- here the divisor is the record length, and the boundary
-    stutter means the path has ``T + t`` steps rather than ``T``. The point of
-    the stutter is that the alignment is a *valid* DTW path (monotone,
-    continuous, matched endpoints), and DTW minimises over all such paths, so
-    ``dtw_rmse <= xpdist`` holds by construction rather than empirically.
+    Each shifted pairing is a valid DTW warping path, so the value is never
+    below the unconstrained DTW distance with ``normalise=True``. At
+    ``tau = 0`` it equals `PairwiseDistance` with the Euclidean metric and
+    ``normalise=True``. The ``_rmse`` in the identifier names the division
+    by ``sqrt(T)``, as there; the path has ``T + t`` steps, so it is not a
+    per-step root mean square.
 
-    At ``tau=0`` the path is the identity alignment and the value is exactly
-    ``pdist_euclidean`` with ``normalise=True``.
+    Parameters
+    ----------
+    metric : str, optional
+        Only ``'euclidean'`` is supported. Default: ``'euclidean'``.
+    tau : int, optional
+        Largest lag, in samples (at least 0). Default: 1.
+    statistic : str, optional
+        ``'min'`` or ``'mean'`` over lags (case-insensitive).
+        Default: ``'min'``.
     """
     name = "Cross pairwise distance"
     labels = ["distance", "nonlinear", "undirected", "temporal"]
@@ -987,8 +1276,7 @@ class CrossPairwiseDistance(Undirected, Unsigned):
     def __init__(self, metric="euclidean", tau=1, statistic="min"):
         if metric != "euclidean":
             raise ValueError(f"Unsupported metric: {metric!r}. Only 'euclidean' supported.")
-        # tau counts samples, so it must be an integer: `int(tau)` would turn
-        # 1.7 into 1 and True into 1, and fail opaquely on nan/inf.
+        # Validated rather than coerced, so 1.7 or True is rejected.
         tau = require_int("tau", tau, minimum=0)
         stat = str(statistic).lower()
         if stat not in {"min", "mean"}:
@@ -996,19 +1284,13 @@ class CrossPairwiseDistance(Undirected, Unsigned):
         self._metric = metric
         self._tau = tau
         self._statistic = stat
-        # `_rmse` is the house label for the sqrt(T) normalisation, shared with
-        # PairwiseDistance and DynamicTimeWarping(normalise=True). See the class
-        # docstring for what it does and does not claim.
+        # `_rmse` names the sqrt(T) normalisation, as in PairwiseDistance.
         self.identifier = f"xpdist_{metric}_tau-{self._tau}_{stat}_rmse"
 
     @staticmethod
     def _shifted_dist_rmse(x, y, s):
-        # Realises one specific DTW path: pair x[k+s] with y[k] over the overlap,
-        # then stutter the dropped boundary samples against the corner of the
-        # opposite series. Since the result is the cost of a valid DTW path and
-        # DTW minimises over all paths, the resulting xpdist satisfies
-        # dtw_rmse <= xpdist by construction. Normalise by sqrt(T) to match
-        # DynamicTimeWarping(normalise=True).
+        # One DTW path: x[k + s] against y[k] over the overlap, and the dropped
+        # boundary samples against the opposite series' end sample.
         T = len(x)
         if s == 0:
             diff = x - y
