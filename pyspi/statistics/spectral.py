@@ -16,6 +16,7 @@ from pyspi.base import (
     Directed,
     Undirected,
     Unsigned,
+    fill_pairwise,
     parse_bivariate,
     parse_multivariate,
 )
@@ -29,16 +30,17 @@ from pyspi.utils import (
 
 
 @contextmanager
-def _surface_backend_log_warnings():
+def _collect_backend_log():
     """
-    Re-emit ``spectral_connectivity``'s log warnings as Python warnings.
+    Collect the warnings ``spectral_connectivity`` logs inside the block.
 
-    When Wilson's factorisation reaches its iteration cap, the backend logs a
+    Yields a list that fills with the message of each record, in order. When
+    Wilson's factorisation reaches its iteration cap, the backend logs a
     warning and returns the unconverged factor, from which every
     Wilson-derived measure (directed coherence, DTF, dDTF, PDC, gPDC,
-    nonparametric spectral GC) is computed. pyspi records per-SPI diagnostics
-    from the ``warnings`` channel only (``_parallel.execute_spi``), so this
-    bridges the two for one backend call. It changes no value.
+    nonparametric spectral GC) is computed. The messages are kept with the
+    cached result, so that every SPI that reads it can warn for itself
+    (``_warn_factorisation_log``).
     """
     records = []
 
@@ -50,11 +52,49 @@ def _surface_backend_log_warnings():
     backend = logging.getLogger("spectral_connectivity")
     backend.addHandler(handler)
     try:
-        yield
+        yield records
     finally:
         backend.removeHandler(handler)
-    # dict.fromkeys: one warning per distinct message, not per frequency bin.
-    for message in dict.fromkeys(records):
+
+
+# The start of the message spectral_connectivity logs when Wilson's algorithm
+# stops at its iteration cap.
+_WILSON_ITERATION_CAP = "Maximum iterations reached"
+
+
+def _list_pairs(pairs, limit=10):
+    """``(0, 1), (1, 0)``: the first ``limit`` pairs, then an ellipsis."""
+    shown = ", ".join(f"({i}, {j})" for i, j in pairs[:limit])
+    return shown + (", ..." if len(pairs) > limit else "")
+
+
+def _warn_factorisation_log(records, n_pairs, unit):
+    """
+    Warn about what the backend logged while factorising.
+
+    ``records`` holds ``(pair, message)`` for each logged message, with
+    ``pair`` the process indices ``(i, j)``, or None where the backend does
+    not say which pair it was factorising. A factorisation that reached
+    Wilson's iteration cap gives one warning listing the pairs; any other
+    message is passed on as it is, once. pyspi records per-SPI diagnostics
+    from the ``warnings`` channel only (``_parallel.execute_spi``), which
+    attributes each warning to the SPI being computed, and an SPI that reads
+    a cached factorisation warns as the one that computed it did. It only
+    warns; it changes no value.
+    """
+    capped = [(pair, m) for pair, m in records
+              if m.startswith(_WILSON_ITERATION_CAP)]
+    if capped:
+        pairs = sorted(pair for pair, _ in capped if pair is not None)
+        named = f": {_list_pairs(pairs)}" if pairs else ""
+        detail = "; ".join(dict.fromkeys(m for _, m in capped))
+        warnings.warn(
+            f"Wilson's spectral factorisation did not "
+            f"converge for {len(capped)} of {n_pairs} {unit}{named}. Their "
+            f"values come from the unconverged factor (spectral_connectivity: "
+            f"{detail}).", RuntimeWarning)
+    for message in dict.fromkeys(m for _, m in records
+                                 if not m.startswith(_WILSON_ITERATION_CAP)):
         warnings.warn(f"spectral_connectivity: {message}", RuntimeWarning)
 
 
@@ -374,7 +414,7 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
         # `_recompute` replaces a backend measure outright, not only when the
         # backend raises. Connectivity is lazy, so the factorisation (and its
         # log warnings) happens inside this block.
-        with _surface_backend_log_warnings():
+        with _collect_backend_log() as log:
             if getattr(self, "_recompute", False):
                 res = self._get_statistic(conn)
             else:
@@ -386,7 +426,17 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
         freq = conn.frequencies
         cache[self.key] = res
         cache[self._freq_key] = freq
+        cache[self._log_key] = tuple(log)
         return res, freq
+
+    @property
+    def _log_key(self):
+        """Cache key of the backend's log messages from computing ``self.key``."""
+        return ("backend_log",) + self.key
+
+    def _backend_log(self, data):
+        """The messages the backend logged while computing this SPI's cached result."""
+        return getattr(data, "spectral_mv", {}).get(self._log_key, ())
 
     @parse_multivariate
     def multivariate(self, data):
@@ -406,6 +456,9 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
             adj = adj_freq[stat_id][0]
         adj = _to_source_target(self, adj)
         np.fill_diagonal(adj, np.nan)
+        M = data.n_processes
+        _warn_factorisation_log([(None, m) for m in self._backend_log(data)],
+                                M * (M - 1) // 2, "pairs")
         return adj
 
 
@@ -419,7 +472,11 @@ class _FactoredConnectivity(sc.Connectivity):
     factorisation is done once; each quantity is a deterministic function of
     the same spectrum, so no value changes. The Fourier coefficients and the
     factor are then released, since one object is held per ordered pair.
+    What the backend logged while factorising (an iteration cap reached, say)
+    is kept as ``factorisation_log``.
     """
+
+    factorisation_log = ()
 
     @functools.cached_property
     def _minimum_phase_factor(self):
@@ -430,9 +487,11 @@ class _FactoredConnectivity(sc.Connectivity):
         if "_noise_covariance" not in held:
             # The parent's properties read the factor through `self`, so it is
             # computed by the cached property above exactly once for the two.
-            transfer = np.array(super()._transfer_function)
-            held["_noise_covariance"] = np.array(super()._noise_covariance)
+            with _collect_backend_log() as log:
+                transfer = np.array(super()._transfer_function)
+                held["_noise_covariance"] = np.array(super()._noise_covariance)
             held["_transfer_function"] = transfer
+            held["factorisation_log"] = tuple(log)
             del held["_minimum_phase_factor"]
             self.fourier_coefficients = None
         return held
@@ -472,9 +531,11 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
 
     The directed spectral measures (DC, PDC, gPDC, DTF, dDTF) need the pair's
     transfer function ``H(f)``, obtained by Wilson's factorisation of the
-    pair's spectral matrix. It is computed once per ``(fs, i, j)`` and shared
-    by every subclass. The measures are evaluated pair by pair, so they are
-    bivariate, not conditioned on the other processes.
+    pair's spectral matrix. It is computed once per ``(fs, NW, i, j)`` and
+    shared by every subclass. The measures are evaluated pair by pair, so they
+    are bivariate, not conditioned on the other processes. Where Wilson's
+    algorithm reaches its iteration cap, the values come from the unconverged
+    factor, and every SPI that reads it warns, naming the ordered pairs.
     """
 
     _cache_namespace = "spectral_bv"
@@ -519,15 +580,15 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
             conns[conn_key] = conn
 
         # `_recompute` replaces a backend measure outright, not only when the
-        # backend raises.
-        with _surface_backend_log_warnings():
-            if getattr(self, "_recompute", False):
+        # backend raises. The backend logs only while factorising, and
+        # `_FactoredConnectivity` keeps those messages.
+        if getattr(self, "_recompute", False):
+            res = self._get_statistic(conn)
+        else:
+            try:
+                res = getattr(conn, self.measure)()
+            except TypeError:
                 res = self._get_statistic(conn)
-            else:
-                try:
-                    res = getattr(conn, self.measure)()
-                except TypeError:
-                    res = self._get_statistic(conn)
 
         # Only the i->j spectrum is kept. [1, 0] not [0, 1]: the sub-system is
         # built as [i, j] (local 0 = i, local 1 = j) and the backend indexes
@@ -538,11 +599,42 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
         cache[self._freq_key] = freq
         return res, freq
 
-    @parse_bivariate
-    def bivariate(self, data, i=None, j=None):
+    def _pair_value(self, data, i, j):
         bv_freq, freq = self._get_cache(data, i, j)
         # Closed band, as in NonparametricSpectralMultivariate.
         return self._statfn(bv_freq[self._band(freq)])
+
+    def _warn_factorisation(self, data, pairs, n_pairs):
+        """Warn about what the backend logged while factorising ``pairs``."""
+        conns = getattr(data, "_spectral_bv_conn", {})
+        records = []
+        for i, j in pairs:
+            conn = conns.get((self._fs, self._nw, i, j))
+            if conn is not None:
+                records += [((i, j), m) for m in conn.factorisation_log]
+        _warn_factorisation_log(records, n_pairs, "ordered pairs")
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        value = self._pair_value(data, i, j)
+        self._warn_factorisation(data, [(i, j)], 1)
+        return value
+
+    @parse_multivariate
+    def multivariate(self, data):
+        """
+        The ``M x M`` matrix of every ordered pair, with one convergence warning.
+
+        Computed pair by pair as in ``Directed``; the warning lists every
+        ordered pair whose factorisation did not converge.
+        """
+        M = data.n_processes
+        A = np.full((M, M), np.nan)
+        pairs = [(i, j) for j in range(M) for i in range(M) if i != j]
+        fill_pairwise(self.identifier, A, pairs,
+                      lambda i, j: self._pair_value(data, i, j))
+        self._warn_factorisation(data, pairs, len(pairs))
+        return A
 
 
 class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
@@ -1145,9 +1237,10 @@ class GeneralizedPartialDirectedCoherence(NonparametricSpectralBivariate, Direct
     :class:`PartialDirectedCoherence` with each target weighted by its
     innovation variance: the band statistic of
     ``(|A_ji(f)|^2 / sigma_j^2) / sum_k (|A_ki(f)|^2 / sigma_k^2)`` for source
-    ``i`` (row) and target ``j`` (column), which makes it invariant to
-    rescaling either process. The squared magnitude, as the backend reports
-    it. Directed and unsigned, in [0, 1].
+    ``i`` (row) and target ``j`` (column), with ``sigma_k^2`` the innovation
+    variance of process ``k``. The weighting makes it invariant to rescaling
+    either process. The squared magnitude, as the backend reports it.
+    Directed and unsigned, in [0, 1].
 
     References
     ----------
@@ -1194,9 +1287,10 @@ class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
     magnitude, as the backend reports it. Directed and unsigned, in [0, 1].
 
     It is not weighted by the innovation variances, so on a pair it is about
-    ``DC^2 sigma_j / sigma_i`` for weak coupling, with ``DC`` the directed
-    coherence and ``sigma`` the innovation standard deviations: its direction
-    follows which process is less predictable as well as the coupling.
+    ``DC^2 sigma_jj / sigma_ii`` for weak coupling, with ``DC`` the directed
+    coherence and ``sigma_kk`` the innovation variance of process ``k``: its
+    direction follows which process is less predictable as well as the
+    coupling.
     :class:`DirectedCoherence` applies that weighting.
 
     References
@@ -1328,6 +1422,16 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     ``Connectivity.phase_slope_index``, which in spectral_connectivity 2.0
     sums over all pairs of frequencies rather than neighbouring ones and
     whose definition differs between releases.
+
+    With a fixed ``time_halfbandwidth_product``, each frequency's estimate
+    averages the same number of tapers at any length ``T`` while ``df``
+    shrinks as ``1 / T``, so the index for a given lag stays about the same
+    as the series lengthens but its spread between independent series grows
+    with the number of frequencies summed: a longer series does not make a
+    lag easier to detect, and a long one makes it harder. For long series,
+    raise ``time_halfbandwidth_product`` in proportion to ``T`` (a fixed
+    bandwidth ``2 NW / T``), or use the wavelet ``PhaseSlopeIndex``, whose
+    time averaging gains from length.
 
     References
     ----------
@@ -1640,9 +1744,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     is computed. Spectral GC is undefined at 0 Hz, so ``fmin = 0`` means the
     lowest positive frequency, 1e-5, which the identifier names
     (``_fmin-1e-05``). A cell with more than ``nan_threshold`` of its in-band
-    frequencies NaN is set to NaN, with a warning. Automatic order selection
-    that has not converged by ``max_order`` raises ``ValueError``: the model
-    is over-fitting at that record length.
+    frequencies NaN is set to NaN, with a warning. With
+    ``method='nonparametric'``, where Wilson's factorisation of a pair reaches
+    its iteration cap, the value comes from the unconverged factor and the SPI
+    warns. Automatic order selection that has not converged by ``max_order``
+    raises ``ValueError``: the model is over-fitting at that record length.
 
     References
     ----------
@@ -1829,10 +1935,12 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                 # The frequencies the model was evaluated at, in Hz (`w` is
                 # scipy.signal.freqz's grid, k*pi/513 rad on [0, pi)).
                 freq = w * self._fs / (2 * np.pi)
+            log = (self._backend_log(data) if self._method == "nonparametric"
+                   else ())
             try:
-                data.spectral_gc[key] = {"freq": freq, "F": F}
+                data.spectral_gc[key] = {"freq": freq, "F": F, "log": log}
             except AttributeError:
-                data.spectral_gc = {key: {"freq": freq, "F": F}}
+                data.spectral_gc = {key: {"freq": freq, "F": F, "log": log}}
 
         return F, freq
 
@@ -1859,6 +1967,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                 )
                 result[isna] = np.nan
 
+            M = data.n_processes
+            cached = getattr(data, "spectral_gc", {}).get(self._getkey(), {})
+            _warn_factorisation_log(
+                [(None, m) for m in cached.get("log", ())],
+                M * (M - 1) // 2, "pairs")
             return result
         except ValueError as err:
             # The model could not be fitted: the error reaches
