@@ -132,7 +132,7 @@ def filter_spis(keywords, output_name = None, configfile= None):
         raise ValueError("Keywords must be provided as a list of strings.")
 
     # Default to the full bundled config; otherwise accept a bundled name or path.
-    from pyspi.calculator import resolve_config
+    from pyspi.calculator import resolve_config, load_config_yaml
     if configfile is None:
         configfile = resolve_config("full")
         source_file_info = f"Default bundled config '{configfile}' was used as the source file."
@@ -142,8 +142,7 @@ def filter_spis(keywords, output_name = None, configfile= None):
 
     # load in user-specified yaml
     try:
-        with open(configfile) as f:
-            yf = yaml.load(f, Loader=yaml.FullLoader)
+        yf = load_config_yaml(configfile)
     except FileNotFoundError:
         raise FileNotFoundError(f"Config file '{configfile}' not found.")
     except Exception as e:

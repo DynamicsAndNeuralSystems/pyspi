@@ -871,6 +871,51 @@ def test_itakura_dtw_normalisation_agrees_between_bivariate_and_multivariate():
         spi.multivariate(data)[0, 1], rel=1e-12)
 
 
+def test_itakura_mask_is_tslearns():
+    """pyspi's vectorised mask equals tslearn's for every size it admits.
+
+    Infeasible sizes raise in both. The rows of the parallelogram are
+    contiguous, which `_itakura_rows` relies on.
+    """
+    import tslearn.metrics
+    from pyspi.statistics.distance import _itakura_mask, _itakura_rows
+
+    sizes = [(n, n) for n in range(2, 301)] + [(800, 800), (1000, 1000)]
+    sizes += [(n, m) for n in range(2, 30) for m in range(2, 30) if n != m]
+    for n, m in sizes:
+        try:
+            ref = tslearn.metrics.itakura_mask(n, m)
+        except RuntimeWarning:
+            with pytest.raises(RuntimeWarning):
+                _itakura_mask(n, m)
+            continue
+        band = _itakura_mask(n, m)
+        assert np.array_equal(band, ref), (n, m)
+        lo, hi = _itakura_rows(n, m)
+        cols = np.arange(m)
+        assert np.array_equal(band, (cols >= lo[:, None]) & (cols < hi[:, None]))
+
+
+@pytest.mark.parametrize("T", [3, 4, 7, 100, 257])
+def test_itakura_dtw_is_bitwise_tslearns(T):
+    """Both entry points equal `tslearn.metrics.dtw(..., "itakura")` exactly."""
+    import tslearn.metrics
+    from pyspi.statistics.distance import DynamicTimeWarping
+
+    rng = np.random.default_rng(T)
+    z = rng.standard_normal((4, T))
+    z[1] = np.cumsum(z[1])  # a non-stationary series as well
+    data = Data(data=z, dim_order="ps")
+    x = data.to_numpy(squeeze=True)
+    spi = DynamicTimeWarping(global_constraint="itakura")
+    A = spi.multivariate(data)
+    for i in range(4):
+        for j in range(i + 1, 4):
+            ref = tslearn.metrics.dtw(x[i], x[j], global_constraint="itakura")
+            assert spi.bivariate(data, i=i, j=j) == ref
+            assert A[i, j] == A[j, i] == ref
+
+
 def _lcss_cell_by_cell(x, y, band, eps=1.0):
     """Textbook constrained LCSS: the band limits matches, not the recursion."""
     A = np.zeros((len(x) + 1, len(y) + 1))
@@ -1946,26 +1991,66 @@ def test_distance_correlation_equals_the_both_orders_pair_loop(case, biased):
         assert np.isnan(np.diag(retained[1])).all()
 
 
-def test_distance_correlation_calls_each_pair_once_in_the_retained_order(monkeypatch):
-    """Half the calls of the both-orders loop, each as (i, j) with i < j, in
-    the order that loop reached them."""
-    from pyspi.base import Directed
-    from pyspi.statistics.distance import DistanceCorrelation
+def _hyppo_pair_value(spi, z, i, j):
+    """The value from hyppo's public statistic, as pyspi computed it before
+    it cached each series' centred distances."""
+    from hyppo.independence import Dcorr
+    from pyspi.statistics import distance as D
 
-    data = _data(m=5, t=40)
+    if isinstance(spi, D.CrossDistanceCorrelation):
+        return D._lagged_sum(Dcorr(compute_distance=None), z[j], z[i],
+                             spi._max_lag)
+    if isinstance(spi, D.HilbertSchmidtIndependenceCriterion):
+        return Dcorr(bias=spi._biased, compute_distance=None).statistic(
+            D._median_gaussian_distance(z[i]), D._median_gaussian_distance(z[j]))
+    return Dcorr(bias=spi._biased).statistic(z[i], z[j])
+
+
+@pytest.mark.parametrize("budget", [None, 1])
+@pytest.mark.parametrize("make", [
+    lambda D: D.DistanceCorrelation(), lambda D: D.DistanceCorrelation(biased=True),
+    lambda D: D.HilbertSchmidtIndependenceCriterion(),
+    lambda D: D.HilbertSchmidtIndependenceCriterion(biased=True),
+    lambda D: D.CrossDistanceCorrelation(max_lag=1),
+    lambda D: D.CrossDistanceCorrelation(max_lag=10)])
+def test_distance_correlation_family_is_bitwise_hyppos(make, budget, monkeypatch):
+    """`multivariate` and `bivariate` equal hyppo's statistic exactly.
+
+    The cached path calls hyppo's private centring and sum, so this also
+    fails if a hyppo release changes them. ``budget=1`` holds one series
+    per block, which exercises the eviction path.
+    """
+    from pyspi.statistics import distance as D
+
+    if budget is not None:
+        monkeypatch.setattr(D, "_DCORR_CACHE_BYTES", budget)
+    rng = np.random.default_rng(11)
+    series = rng.standard_normal((5, 60))
+    series[1] = np.cumsum(series[1])
+    series[2] = np.round(series[2])  # ties
+    data = Data(data=series, dim_order="ps")
+    z = data.to_numpy()
+    spi = make(D)
+    A = spi.multivariate(data)
+    for i in range(5):
+        for j in range(5):
+            if i != j:
+                ref = _hyppo_pair_value(spi, z, i, j)
+                assert A[i, j] == ref, (i, j)
+                assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
+
+
+def test_distance_correlation_centres_each_series_once(monkeypatch):
+    """One centring per series, not two per pair, when the series fit in
+    `_DCORR_CACHE_BYTES`."""
+    from pyspi.statistics import distance as D
+
     calls = []
-    inner = DistanceCorrelation.bivariate
-    monkeypatch.setattr(
-        DistanceCorrelation, "bivariate",
-        lambda self, data, i=None, j=None: calls.append((i, j)) or inner(self, data, i=i, j=j))
-
-    spi = DistanceCorrelation()
-    spi.multivariate(data)
-    retained, calls[:] = list(calls), []
-    Directed.multivariate(spi, data)
-
-    assert len(retained) == 10 and len(calls) == 20
-    assert retained == [(i, j) for i, j in calls if i < j]
+    inner = D._centred
+    monkeypatch.setattr(D, "_centred",
+                        lambda dist, bias: calls.append(1) or inner(dist, bias))
+    D.DistanceCorrelation().multivariate(_data(m=6, t=40))
+    assert len(calls) == 6
 
 
 @pytest.mark.parametrize("biased", [False, True])
