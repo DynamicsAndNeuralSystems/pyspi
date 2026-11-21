@@ -31,7 +31,7 @@
   SpearmanR:
     labels:
       - undirected
-      - nonlinear
+      - linear
       - signed
       - bivariate
       - contemporaneous
@@ -57,7 +57,6 @@
   # Lag-resolved cross-correlation
   LagResolvedCorrelation:
     labels:
-      - directed
       - linear
       - signed
       - bivariate
@@ -66,10 +65,18 @@
     dependencies:
     configs:
       - statistic: lag
+        labels:
+          - antisymmetric
       - statistic: peak
+        labels:
+          - undirected
       - statistic: asym
+        labels:
+          - antisymmetric
       - statistic: onesided
         tau: 1
+        labels:
+          - directed
 
 # Distance-based statistics
 .statistics.distance:
@@ -242,7 +249,6 @@
   StochasticInteraction:
     labels:
       - undirected
-      - nonlinear
       - unsigned
       - bivariate
       - time-dependent
@@ -258,7 +264,6 @@
   MutualInfo:
     labels:
       - undirected
-      - nonlinear
       - unsigned
       - bivariate
       - contemporaneous
@@ -284,7 +289,6 @@
   TimeLaggedMutualInfo:
     labels:
       - directed
-      - nonlinear
       - unsigned
       - bivariate
       - time-dependent
@@ -310,7 +314,6 @@
   TransferEntropy:
     labels:
       - directed
-      - nonlinear
       - unsigned
       - bivariate
       - time-dependent
@@ -411,8 +414,9 @@
   # Phase slope index
   PhaseSlopeIndex:
     labels:
+      - antisymmetric
       - linear/nonlinear
-      - unsigned
+      - signed
       - bivariate
       - frequency-dependent
       - M01
@@ -464,11 +468,11 @@
   # Phase lag index
   PhaseLagIndex:
     labels:
+      - antisymmetric
       - linear
-      - unsigned
+      - signed
       - bivariate
       - frequency-dependent
-      - M07
     dependencies:
     configs:
       - fs: 1
@@ -489,11 +493,11 @@
   # Weighted phase lag index
   WeightedPhaseLagIndex:
     labels:
+      - antisymmetric
       - linear
-      - unsigned
+      - signed
       - bivariate
       - frequency-dependent
-      - M07
     dependencies:
     configs:
       - fs: 1
@@ -519,7 +523,6 @@
       - unsigned
       - bivariate
       - frequency-dependent
-      - M07
     dependencies:
     configs:
       - fs: 1
@@ -544,7 +547,6 @@
       - unsigned
       - bivariate
       - frequency-dependent
-      - M07
     dependencies:
     configs:
       - fs: 1
@@ -754,7 +756,8 @@
   # Phase slope index (wavelet)
   PhaseSlopeIndex:
     labels:
-      - unsigned
+      - antisymmetric
+      - signed
       - time/frequency dependent
       - bivariate
       - M08
@@ -774,7 +777,6 @@
   Cointegration:
     labels:
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M13
@@ -784,66 +786,98 @@
         statistic: max_eig_stat
         det_order: 0
         k_ar_diff: 10
+        labels:
+          - undirected
+          - unsigned
 
       - method: johansen
         statistic: trace_stat
         det_order: 0
         k_ar_diff: 10
+        labels:
+          - undirected
+          - unsigned
 
       - method: johansen
         statistic: max_eig_stat
         det_order: 0
         k_ar_diff: 1
+        labels:
+          - undirected
+          - unsigned
 
       - method: johansen
         statistic: trace_stat
         det_order: 0
         k_ar_diff: 1
+        labels:
+          - undirected
+          - unsigned
 
       - method: johansen
         statistic: max_eig_stat
         det_order: 1
         k_ar_diff: 10
+        labels:
+          - undirected
+          - unsigned
 
       - method: johansen
         statistic: trace_stat
         det_order: 1
         k_ar_diff: 10
+        labels:
+          - undirected
+          - unsigned
 
       - method: johansen
         statistic: max_eig_stat
         det_order: 1
         k_ar_diff: 1
+        labels:
+          - undirected
+          - unsigned
 
       - method: johansen
         statistic: trace_stat
         det_order: 1
         k_ar_diff: 1
+        labels:
+          - undirected
+          - unsigned
 
       - method: aeg
         statistic: tstat
         autolag: aic
         maxlag: 10
         trend: c
+        labels:
+          - directed
+          - signed
 
       - method: aeg
         statistic: tstat
         autolag: aic
         maxlag: 10
         trend: ct
+        labels:
+          - directed
+          - signed
 
       - method: aeg
         statistic: tstat
         autolag: bic
         maxlag: 10
         trend: ct
+        labels:
+          - directed
+          - signed
 
   # Power envelope correlation
   PowerEnvelopeCorrelation:
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M11
@@ -852,26 +886,38 @@
       - orth: False
         log: False
         absolute: False
+        labels:
+          - signed
 
       - orth: True
         log: False
         absolute: False
+        labels:
+          - signed
 
       - orth: False
         log: True
         absolute: False
+        labels:
+          - signed
 
       - orth: True
         log: True
         absolute: False
+        labels:
+          - signed
 
       - orth: True
         log: False
         absolute: True
+        labels:
+          - unsigned
 
       - orth: True
         log: True
         absolute: True
+        labels:
+          - unsigned
 
   # Edge time series (coupling nonstationarity)
   EdgeTimeSeries:
@@ -892,6 +938,7 @@
       - unsigned
       - undirected
       - nonlinear
+      - MXX
     dependencies:
     configs:
       - terms: 6
@@ -944,9 +991,9 @@
   # Event synchronisation
   EventSynchronisation:
     labels:
-      - undirected
+      - antisymmetric
       - nonlinear
-      - signed/unsigned
+      - signed
       - bivariate
       - time-dependent
       - M14

@@ -52,7 +52,9 @@ def _full_yaml_configs():
     return full[".statistics.basic"]["LagResolvedCorrelation"]["configs"]
 
 
-FULL_CONFIGS = [dict(c) for c in _full_yaml_configs()]
+# Constructor parameters only; the per-entry labels are config metadata.
+FULL_CONFIGS = [{k: v for k, v in c.items() if k != "labels"}
+                for c in _full_yaml_configs()]
 EXPECTED_IDS = [
     "lagcorr_lag_L-None",
     "lagcorr_peak_L-None",

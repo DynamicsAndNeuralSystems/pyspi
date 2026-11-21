@@ -17,7 +17,7 @@
   SpearmanR:
     labels:
       - undirected
-      - nonlinear
+      - linear
       - signed
       - bivariate
       - contemporaneous
@@ -31,7 +31,7 @@
   DirectedInfo:
     labels:
       - directed
-      - nonlinear
+      - linear
       - unsigned
       - bivariate
       - time-dependent
@@ -45,7 +45,7 @@
     labels:
       - undirected
       - linear
-      - unsigned
+      - signed
       - bivariate
       - time-dependent
       - M11
