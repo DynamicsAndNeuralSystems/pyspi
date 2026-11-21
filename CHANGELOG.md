@@ -361,6 +361,10 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   It is on Geweke's scale, twice that of `gc_gaussian_*`.
   Bundled as `cgc_p-1`, `cgc_p-2` and `cgc_p-bic` (order 1-10 chosen by BIC; also in `fast`).
   The signed net lagged coefficient is available as `statistic='coef'` (e.g. `cgc_p-bic_coef`) but is not bundled.
+- **Conditional spectral measures `cpdc_*`, `cgpdc_*`, `cddtf_*` and `pcohmag_*`** (`pyspi/statistics/var.py`), read off the same VAR of all processes as `cgc_*`.
+  They are partial directed coherence (Baccalá & Sameshima 2001), generalised PDC (Baccalá et al. 2007), the direct directed transfer function (Korzeniewska et al. 2003) and the squared partial coherence (Dahlhaus 2000), each on the scale of its bivariate counterpart (`pdcoh`, `gpdcoh`, `ddtf`, `cohmag`).
+  Unlike those, they condition on every other process, so an indirect link gives about 0.
+  Bundled as the band mean over [0, 0.5], [0, 0.25] and [0.25, 0.5] cycles per sample at `order=bic` (12 SPIs); `cpdc_p-bic_mean_fmin-0_fmax-0-5` and `pcohmag_p-bic_mean_fmin-0_fmax-0-5` are also in `fast`.
 
 ### Dependencies
 
