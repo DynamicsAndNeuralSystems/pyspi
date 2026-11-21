@@ -100,25 +100,29 @@ def test_aeg_value_is_independent_of_process_order():
     )
 
 
-def test_aeg_declared_symmetry_matches_the_statistic():
-    """If AEG is labelled undirected, the underlying statistic must be symmetric."""
+def test_aeg_computes_each_orientation_separately():
+    """``A[i, j]`` regresses process ``j`` on process ``i``, and ``A[j, i]``
+    is its own computation, not a copy of the opposite orientation."""
     from statsmodels.tsa import stattools
 
     rng = np.random.default_rng(1)
     x = rng.standard_normal(200).cumsum()
-    y = rng.standard_normal(200).cumsum()
+    y = 0.5 * x + rng.standard_normal(200).cumsum()
+    w = rng.standard_normal(200).cumsum()
+    arr = np.vstack([x, y, w])
 
-    fwd = stattools.coint(x, y, autolag="aic", maxlag=10, trend="c")[0]
-    rev = stattools.coint(y, x, autolag="aic", maxlag=10, trend="c")[0]
-
-    spi = Cointegration(method="aeg")
-    declared_undirected = "undirected" in getattr(spi, "labels", [])
-
-    if declared_undirected:
-        assert np.isclose(fwd, rev), (
-            f"Cointegration(method='aeg') is labelled undirected, but the AEG "
-            f"t-statistic is asymmetric: coint(x,y)={fwd:.6g} vs coint(y,x)={rev:.6g}."
-        )
+    spi = Cointegration(method="aeg", statistic="tstat")
+    assert spi.directedness() == "directed"
+    A = spi.multivariate(Data(data=arr, dim_order="ps", zscore=False))
+    for i in range(3):
+        for j in range(3):
+            if i == j:
+                continue
+            # statsmodels regresses its first argument (the column) on its second.
+            want = stattools.coint(arr[j], arr[i], autolag="aic", maxlag=10,
+                                   trend="c")[0]
+            assert A[i, j] == pytest.approx(want, rel=1e-12), (i, j)
+    assert not np.allclose(_offdiag(A), _offdiag(A.T))
 
 
 # --------------------------------------------------------------------------
