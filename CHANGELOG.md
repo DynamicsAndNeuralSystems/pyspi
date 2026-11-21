@@ -15,6 +15,7 @@ The Java/JIDT dependency is gone, the `Calculator` API is simplified, and severa
   The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
   A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
 - The old `Calculator(subset=, configfile=, normalise=)` spellings still work, with a `DeprecationWarning`, until 4.0.
+  Every `Calculator` argument after `dataset` is keyword-only, so a 2.x positional call raises `TypeError` rather than binding to other arguments.
   See [Breaking changes and deprecations](#breaking-changes-and-deprecations).
 - Results tables written by 2.x (pickle) do not load; the directed spectral SPIs are transposed; many estimator values change (see [Changed](#changed) and "Further value changes").
 - The license is **GPL-3.0-or-later** (2.0.2: GPL-3.0), agreed by the maintainer, Ben Fulcher.
@@ -41,10 +42,13 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - `normalise=` becomes `zscore=`, on `Calculator`, `Data` and `CalculatorFrame`.
 - The SPI class `GromovWasserstainTau` (misspelled) becomes `GromovWassersteinTau`, in Python and in YAML configs; the identifier `gwtau` and its values are unchanged.
 - Passing both an old and a new form raises `TypeError`.
-- **Positional arguments after `subset`** (2.x `configfile`, `detrend`, `normalise`) no longer line up; pass them as keywords.
+- `config="all"` raises `ValueError` naming `config="full"`.
 
 **Breaking, with no shim:**
 
+- **Every `Calculator` argument after `dataset` is keyword-only.**
+  2.x's positional order (`dataset, name, labels, subset, configfile, detrend, normalise`) does not match 3.0's arguments, so a positional call such as `Calculator(X, "name", None, "fast")` raises Python's `TypeError` for too many positional arguments; pass `name=`, `labels=`, `config=`, `detrend=` and `zscore=` as keywords.
+  `Data` and `CalculatorFrame` keep their 2.x positional order.
 - SPI constructors raise on parameters their estimator ignores. For example the symbolic and kernel TE calculators refuse `k_tau`, `l_history` and `l_tau`, so 2.x YAML files that set them now fail.
 - `CorrelationFrame.get_pvalues()`, `compute_significant_values()` and `get_average_correlation(remove_insig=True)` raise `NotImplementedError` (the p-values were invalid; see Fixed).
 - `Data` copies and freezes its input, and `Data.to_numpy()` is read-only.
@@ -444,7 +448,7 @@ Definitions the corrected measures are checked against:
 | `Calculator(subset="fast")` (also `fabfour`, `sonnet`) | `Calculator(config="fast")` (other names unchanged) |
 | `Calculator(configfile="my.yaml")` | `Calculator(config="my.yaml")` (deprecated shim as above) |
 | `Calculator(normalise=False)` | `Calculator(zscore=False)` (deprecated shim; also on `Data` and `CalculatorFrame`) |
-| `Calculator(dataset, name, labels, "all", "my.yaml", False, False)` (positional) | pass `config=`, `detrend=`, `zscore=` as keywords; positions after `subset` no longer line up |
+| `Calculator(dataset, name, labels, "all", "my.yaml", False, False)` (positional) | raises `TypeError`; pass every argument after `dataset` as a keyword |
 | `Data(..., normalise=False)` | `Data(..., zscore=False)` |
 | `pyspi/config.yaml` | `pyspi/configs/full.yaml` |
 | `pyspi/fast_config.yaml` | `pyspi/configs/fast.yaml` |

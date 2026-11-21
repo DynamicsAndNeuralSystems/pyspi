@@ -163,6 +163,10 @@ def resolve_config(config):
         return str(path)
 
     path = CONFIG_DIR / f"{text}.yaml"
+    if text == "all":
+        raise ValueError(
+            "Unknown config 'all'. The config of every SPI is called 'full': "
+            "pass config='full'.")
     if not path.is_file():
         raise ValueError(
             f"Unknown config '{text}'. Bundled configs are: "
@@ -777,6 +781,8 @@ class Calculator:
     row = source and column = target, and :attr:`quality`, which says why any
     value is NaN. :meth:`save` writes both to a file.
 
+    Every argument after ``dataset`` is keyword-only.
+
     Parameters
     ----------
     dataset : Data, array-like or None, optional
@@ -828,7 +834,7 @@ class Calculator:
     >>> calc.table  # one 5 x 5 block of columns per SPI
     """
     def __init__(
-        self, dataset=None, name=None, labels=None, config=None,
+        self, dataset=None, *, name=None, labels=None, config=None,
         detrend=False, zscore=None, verbose=True,
         subset=None, configfile=None, normalise=None,
     ):
