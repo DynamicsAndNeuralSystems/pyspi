@@ -704,8 +704,8 @@ def test_full_config_lists_every_identifier():
     calc = Calculator(config="full")
     assert [k for k in calc.spis if k.startswith("lagcorr_")] == EXPECTED_IDS
     keys = list(calc.spis)
-    xcorr_last = max(n for n, k in enumerate(keys) if k.startswith("xcorr"))
-    assert keys[xcorr_last + 1] == EXPECTED_IDS[0]   # right after CrossCorrelation
+    first = keys.index(EXPECTED_IDS[0])
+    assert keys[first:first + len(EXPECTED_IDS)] == EXPECTED_IDS   # one block
 
 
 def test_fast_config_lists_its_subset():

@@ -7,7 +7,7 @@ A major overhaul. The Java/JIDT dependency is gone, the `Calculator` API is simp
 **Upgrading from 2.0.2 (the current PyPI release), at a glance:**
 
 - Python **>= 3.11** (2.0.2: >= 3.8), numpy **>= 2** (2.0.2: `<2`), scikit-learn **>= 1.8**, pyEDM **>= 2.5** (2.0.2: `==1.15.2.0`), mne **>= 1.6** (2.0.2: `==0.23.0`). No Java, `jpype`, `cdt` or `torch`. See [Dependencies](#dependencies).
-- The default `full` set goes from **285 SPIs (2.0.2) to 272**: 62 added, 75 removed, 23 renamed (identifier only), 187 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
+- The default `full` set goes from **285 SPIs (2.0.2) to 228**: 71 added, 128 removed, 22 renamed (identifier only), 135 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
 - The old `Calculator(subset=, configfile=, normalise=)` spellings still work, with a `DeprecationWarning`, until 4.0. See [Breaking changes and deprecations](#breaking-changes-and-deprecations).
 - Results tables written by 2.x (pickle) do not load; six directed spectral SPIs are transposed; many estimator values change (see [Changed](#changed) and the "Values changed" table).
 - The license is **GPL-3.0-or-later** (2.0.2: GPL-3.0), agreed by the maintainer, Ben Fulcher.
@@ -64,8 +64,9 @@ Tie-free series are not changed by pyspi's tie handling (see below), and for tho
 
 - **Java and JIDT** (above): `infodynamics.jar`, `jpype1` and the JVM start-up path.
 - **`cdt` and `torch`** (see Dependencies); `setup.py` and `requirements.txt` (packaging is `pyproject.toml` only); `pyspi/phiconf.yaml`; the 2.x config filenames (see the migration table); pickle and parquet output.
-- **Seventy-five SPIs** (`full`: 285 to 272 net of 62 additions). See [SPI set changes](#spi-set-changes). Fourteen went with the port: six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`. Twenty-four more are duplicate, constant or degenerate: the four `*_EllipticEnvelope` (equal to `*_MinCovDet`), `lmfit_Lasso` and `lmfit_ElasticNet` (nearly constant at `alpha = 1`), `bary_euclidean_mean` (identically 0), `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` (box kernel in ~10 dimensions), the six `pli`/`wpli` multitaper maxima (saturate at 1), the three `psi_wavelet_max_*` (tend to their bound), and the DTW-type `bary_*_mean` and `bary-sq_*_mean` (six), replaced by `bary_{dtw,sgddtw,softdtw}_corr` (see **Changed**).
+- **128 SPIs** (`full`: 285 to 228 net of 71 additions). See [SPI set changes](#spi-set-changes). Fourteen went with the port: six `dspli`/`dswpli` multitaper maxima, three `phase_multitaper_max_*`, two `te_symbolic_*`, `di_kernel_W-0.5`, `di_kozachenko`, and `igci`. Twenty-four more are duplicate, constant or degenerate: the four `*_EllipticEnvelope` (equal to `*_MinCovDet`), `lmfit_Lasso` and `lmfit_ElasticNet` (nearly constant at `alpha = 1`), `bary_euclidean_mean` (identically 0), `cce_kernel_W-0.5_n-5` and `xme_kernel_W-0.5_k10` (box kernel in ~10 dimensions), the six `pli`/`wpli` multitaper maxima (saturate at 1), the three `psi_wavelet_max_*` (tend to their bound), and the DTW-type `bary_*_mean` and `bary-sq_*_mean` (six), replaced by `bary_{dtw,sgddtw,softdtw}_corr` (see **Changed**).
   Thirty-seven more are unbundled because an SPI that stays carries them: the shrinkage covariances and six squared covariances (9), `lmfit_*` (3), the bivariate `pdcoh_*`/`gpdcoh_*` (12), `ppc_*` (6), `kendalltau` and `kendalltau-sq`, `pdist_cosine`, `pdist_euclidean` and `bary-sq_euclidean_mean`, and `phi_{Geo,star}_t-1_norm-1`.
+  The six `xcorr_*` are unbundled in favour of the directed `lagcorr_*` (see **Added**), which read the same cross-correlation profile.
   Their classes are unchanged, so each can still be computed from a custom config.
 - **Nine wavelet classes that were never in a bundled config**: `statistics.wavelet`'s `CoherenceMagnitude`, `CoherencePhase`, `ImaginaryCoherence`, `PhaseLockingValue`, `PairwisePhaseConsistency`, `PhaseLagIndex`, `weighted_PhaseLagIndex`, `DebiasedSquaredWeightedPhaseLagIndex` and `debiased_weighted_squared_PhaseLagIndex`. Their shared estimate passed `cwt_n_cycles = cwt_freqs / 7` (about 0.03 cycles), a wavelet about one sample wide, and averaged the cross-spectrum over epochs only, of which pyspi passes one. The coherency was then exactly `1 + 0j` at every frequency and time, so a custom config got `cohmag` and `plv` of 1, `icoh` and `dwspli` of 0, `pli` and `wspli` near 1, `ppc` and `dspli` of `-inf`, and `phase` of 0 or NaN, whatever the data. The multitaper classes of the same names in `statistics.spectral` are unaffected; the wavelet `PhaseSlopeIndex` has its own estimate and is unchanged.
 
@@ -365,6 +366,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `onesided` (directed, signed) is `r_{i->j}(tau)` at one lag shared by both directions of a pair: a fixed `tau` (default 1), or `tau="1e"` for `round(sqrt(l_i l_j))`, where `l_i` is the first lag at which process i's autocorrelation falls below 1/e (hctsa's `CO_f1ecac`), clipped to `1 .. min(T // 10, L)`.
   `onesidedpeak` (directed, unsigned) is the largest `|r_{i->j}(k)|` over `1 <= k <= l_i + l_j`, with the same clipping.
   `full` bundles `lagcorr_{lag,peak,asym}_L-None`, `lagcorr_onesided_tau-{1,2,3,5,10}_L-None`, `lagcorr_onesided_tau-1e_L-None`, `lagcorr_onesidedpeak_L-None` and `lagcorr_{lag,peak,asym}_L-10` (13); `fast` bundles `lagcorr_{lag,peak,asym}_L-None` and `lagcorr_onesided_tau-1_L-None`.
+  The four `benchmarked_p*` sets bundle all 13, which read the cached profile; they replace the bundled `xcorr_*` and `corr_*_tau-k` SPIs.
+- **`LaggedCorrelation` (`corr_{pearson,spearman,kendall}_tau-<k>[-sq]`)**: the average of the two one-sided lag-k correlations, `0.5 * (corr(x[k:], y[:-k]) + corr(y[k:], x[:-k]))`, with Pearson, Spearman or Kendall correlation, so it is undirected.
+  It is not in any bundled config; `lagcorr_onesided_tau-<k>` is the directed Pearson form.
 - **Symbolic transfer entropy with 3-sample ordinal patterns** (`te_symbolic_k-3`), an amplitude-free directed coupling measure (Staniek & Lehnertz 2008).
   Its bias under independence is about 0.13, 0.03 and 0.01 nats at T = 300, 1000 and 3000.
 - **Dynamic correlation exclusion for the kernel estimators** of MI, time-lagged MI and TE: `dyn_corr_excl` (an integer or `"AUTO"`) now applies to `estimator="kernel"` as well as `"kraskov"`, with the same `_DCE-<value>` suffix and window: neighbours `|t - i| <= w` are excluded, besides the point itself (see **Changed**).
@@ -540,25 +544,25 @@ Definitions the corrected measures are checked against:
 | `parse_bivariate` with ambiguous `i`/`j` (built a `Warning` and carried on) | raises `ValueError` |
 | pickled results tables | cannot be loaded; re-save with `Calculator.save()` (`.npz`) and read with `pyspi.load_table()` |
 | `A[i, j]` of `sgc`, `dcoh`, `pdcoh`, `gpdcoh`, `dtf`, `ddtf` (influence of j on i) | transposed: row = source, column = target; transpose saved 2.x results |
-| SPI identifiers in saved 2.x results | 23 renamed, 75 removed, 62 added; see [SPI set changes](#spi-set-changes) |
+| SPI identifiers in saved 2.x results | 22 renamed, 128 removed, 71 added; see [SPI set changes](#spi-set-changes) |
 | `import pyspi` replacing `sys.stdout`/`sys.stderr`, seeding NumPy's global RNG, setting `OMP_NUM_THREADS` | no longer |
 | `phase_multitaper_max_*` | removed; `CoherencePhase(statistic="max")` raises because ordinary maxima of wrapped angles are branch-cut dependent |
 
 ### SPI set changes
 
-**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 272.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
+**Relative to pyspi 2.0.2 (the current PyPI release), `full` goes from 285 SPIs to 228.** The delta below was computed by instantiating `Calculator(subset="all")` under 2.0.2 and `Calculator(config="full")` under 3.0.0 (no computation) and comparing identifiers, with renames matched by class and parameters.
 
 | Change | SPIs | Families |
 |:-------|-----:|:---------|
 | 2.0.2 `config.yaml` | 285 | |
-| Unchanged identifier | 187 | (values may still change; see "Values changed") |
-| **Renamed** (identifier only, except DTW) | 23 | `sgc` (11), Kraskov DCE (4), `cce`/`di_gaussian` `n` (4), auto-embedding method (3), DTW Sakoe-Chiba (1) |
-| **Removed** | 75 | multitaper `dspli`/`dswpli` maxima (6), `phase_multitaper_max` (3), symbolic TE (2), `di_kernel`, `di_kozachenko`, `igci`; duplicate, constant or degenerate (24): `*_EllipticEnvelope` (4), `pli`/`wpli` multitaper maxima (6), `psi_wavelet_max_*` (3), `bary_*_mean` and `bary-sq_*_mean` (6), `lmfit_Lasso`, `lmfit_ElasticNet`, `bary_euclidean_mean`, `cce_kernel_W-0.5_n-5`, `xme_kernel_W-0.5_k10`; unbundled as redundant (37): shrinkage `cov_*` and `cov-sq_*` (9), `lmfit_*` (3), `pdcoh_*`/`gpdcoh_*` (12), `ppc_*` (6), `kendalltau`/`kendalltau-sq` (2), `pdist_cosine`/`pdist_euclidean`/`bary-sq_euclidean_mean` (3), `phi_*_t-1_norm-1` (2) |
-| **Added** | 62 | `LaggedCorrelation` (42), `PartialCorrelation` (7), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `ChatterjeeXi` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1), `te_symbolic_k-3` (1), kernel MI/TLMI/TE with dynamic correlation exclusion (3) |
-| 3.0.0 `full.yaml` | 272 | 285 − 75 + 62 |
+| Unchanged identifier | 135 | (values may still change; see "Values changed") |
+| **Renamed** (identifier only, except DTW) | 22 | `sgc` (11), Kraskov DCE (4), `cce`/`di_gaussian` `n` (4), auto-embedding method (3), DTW Sakoe-Chiba (1) |
+| **Removed** | 128 | multitaper `dspli`/`dswpli` maxima (6), `phase_multitaper_max` (3), symbolic TE (2), `di_kernel`, `di_kozachenko`, `igci`; duplicate, constant or degenerate (24): `*_EllipticEnvelope` (4), `pli`/`wpli` multitaper maxima (6), `psi_wavelet_max_*` (3), `bary_*_mean` and `bary-sq_*_mean` (6), `lmfit_Lasso`, `lmfit_ElasticNet`, `bary_euclidean_mean`, `cce_kernel_W-0.5_n-5`, `xme_kernel_W-0.5_k10`; unbundled as redundant (37): shrinkage `cov_*` and `cov-sq_*` (9), `lmfit_*` (3), `pdcoh_*`/`gpdcoh_*` (12), `ppc_*` (6), `kendalltau`/`kendalltau-sq` (2), `pdist_cosine`/`pdist_euclidean`/`bary-sq_euclidean_mean` (3), `phi_*_t-1_norm-1` (2); replaced by `lagcorr_*`: `xcorr_*` (6) |
+| **Added** | 71 | `LagResolvedCorrelation` (13), `PartialCorrelation` (7), `CrossPairwiseDistance` (2), `bary_{dtw,sgddtw,softdtw}_corr` (3), `ChatterjeeXi` (2), `di_kraskov_NN-4_n-5` (1), `PhaseAlignedCorrelation` (1), `te_symbolic_k-3` (1), kernel MI/TLMI/TE with dynamic correlation exclusion (3) |
+| 3.0.0 `full.yaml` | 228 | 285 − 128 + 71 |
 
-Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 165, `fabfour` (4) keeps its size, with `spearmanr` in place of `spearmanr-sq` (no squared rank correlation is bundled), and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`).
-The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (266, 253, 239 and 217 SPIs).
+Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 138, `fabfour` (4) keeps its size, with `spearmanr` in place of `spearmanr-sq` (no squared rank correlation is bundled), and `sonnet` keeps its 14 with two substitutions (its `pli_multitaper_max_fs-1_fmin-0_fmax-0-5`, degenerate as below, becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`).
+The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (183, 173, 161 and 145 SPIs).
 The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
 Every removal and rename below is deliberate.
@@ -582,7 +586,11 @@ Fitted on one pair, PDC equals DTF and gPDC equals DC² at every frequency, and 
 `kendalltau` ranks pairs as `spearmanr` does.
 These are removals from the bundled configs only: the classes are unchanged, and each SPI can still be computed from a custom config.
 
-**Removed (75)**
+**Replaced by `lagcorr_*` (6).**
+The six `xcorr_*` SPIs summarise the cross-correlation profile over all lags by its maximum or mean, which says nothing about which series leads.
+The `lagcorr_*` SPIs read the same cached profile and report the lag, the peak, the lead/lag asymmetry and the directed correlation at set lags.
+
+**Removed (128)**
 
 | SPI | Why |
 |:----|:----|
@@ -609,12 +617,13 @@ These are removals from the bundled configs only: the classes are unchanged, and
 | `kendalltau`, `kendalltau-sq` (2) | Unbundled. Ranks pairs as `spearmanr` does (|ρ| 0.998 within datasets). |
 | `pdist_cosine`, `pdist_euclidean`, `bary-sq_euclidean_mean` (3) | Unbundled. On z-scored series, `1 − r`, `sqrt(2T(1 − r))` and `(1 + r)/2` of the Pearson correlation r. |
 | `phi_Geo_t-1_norm-1`, `phi_star_t-1_norm-1` (2) | Unbundled. The `norm-0` value divided by a constant under z-scoring. |
+| `xcorr_max_sig-True`, `xcorr_mean_sig-{True,False}` and their `xcorr-sq_*` forms (6) | Unbundled. Replaced by the directed `lagcorr_*`, which read the same cross-correlation profile. |
 
-**Added (62)**
+**Added (71)**
 
 | SPI | Why |
 |:----|:----|
-| `corr_{pearson,spearman,kendall}_tau-{1,2,3,4,5,10,20}` and `..._tau-N-sq` (42) | `LaggedCorrelation`: the mean of the two one-sided lag-τ correlations, `0.5 * (corr(x[τ:], y[:-τ]) + corr(y[τ:], x[:-τ]))`, plain and squared, for three correlation types at seven lags. It is symmetric (hence undirected), and a pure delay `y(t) = x(t - τ)` scores about 0.5, not 1. |
+| `lagcorr_{lag,peak,asym}_L-{None,10}`, `lagcorr_onesided_tau-{1,2,3,5,10,1e}_L-None`, `lagcorr_onesidedpeak_L-None` (13) | `LagResolvedCorrelation`: directed, lag-resolved cross-correlation; see Added above. Replaces `xcorr_*`. |
 | `pcorr_<estimator>` (7) | `PartialCorrelation`: `-P_ij / sqrt(P_ii P_jj)` from the precision matrix of each bundled covariance estimator; see Added above. |
 | `xi_tau-{0,1}` (2) | `ChatterjeeXi`: Chatterjee's rank correlation xi, directed; see Added above. |
 | `xpdist_euclidean_tau-1_{mean,min}_rmse` (2) | `CrossPairwiseDistance`: shifted-path Euclidean upper bound on DTW. |

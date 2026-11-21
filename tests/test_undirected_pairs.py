@@ -147,7 +147,7 @@ def test_no_bundled_undirected_spi_evaluates_both_orders_of_a_pair(monkeypatch):
             pair_looping += 1
             assert seen == _upper_pairs(M), (key, seen)
     # Guard against the counting silently matching nothing.
-    assert pair_looping >= 20, pair_looping
+    assert pair_looping >= 15, pair_looping
 
 
 # --------------------------------------------------------------------------
