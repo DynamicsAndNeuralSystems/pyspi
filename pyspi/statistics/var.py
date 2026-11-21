@@ -184,8 +184,9 @@ def select_order_bic(Z, max_order=DEFAULT_MAX_ORDER):
     ``p_max = min(max_order, max_feasible_order(M, T))``. Ties go to the
     smaller order.
 
-    Raises ``ValueError`` if no order is feasible, or if a residual covariance
-    is singular (linearly dependent processes), where ``ln det`` is undefined.
+    Raises ``NotAppropriate`` (a ``ValueError``) if no order is feasible, or
+    if a residual covariance is singular (linearly dependent processes),
+    where ``ln det`` is undefined.
     """
     Z = np.asarray(Z, dtype=float)
     M, T = Z.shape

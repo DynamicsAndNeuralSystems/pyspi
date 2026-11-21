@@ -524,9 +524,8 @@ def _ccm_embedding(data, E, procs=None):
 
     z = data.to_numpy(squeeze=True)
     N = data.n_observations
-    # pyEDM's Simplex at dimension E fails (IndexError or RuntimeError) unless
-    # the library rows 10 .. N - 10, N - 19 of them, number at least 2(E + 1);
-    # checked here for the largest E searched, before pyEDM is called.
+    # pyEDM's Simplex at dimension E needs at least 2(E + 1) library rows in
+    # 10 .. N - 10 (N - 19 rows); checked for the largest E before pyEDM runs.
     if N - 19 < 2 * (_CCM_MAX_E + 1):
         raise NotAppropriate(
             f"CCM with E=None selects E in 1..{_CCM_MAX_E} by simplex "
