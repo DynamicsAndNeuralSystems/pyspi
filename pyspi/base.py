@@ -1,13 +1,16 @@
-import numpy as np
-from pyspi.data import Data
-import warnings, copy
+"""Base classes of the SPIs, and decorators that let an SPI take arrays or a ``Data``."""
 import contextlib
+import copy
 from contextvars import ContextVar
+import warnings
 
-"""
-Some parsing functions for decorating so that we can either input the time series directly or use the data structure
-"""
+import numpy as np
+
+from pyspi.data import Data
+
+
 def parse_univariate(function):
+    """Let a univariate method take an array or a ``Data``; ``i`` defaults to 0."""
     def parsed_function(self,data,i=None,inplace=True):
         if not isinstance(data,Data):
             data1 = data
@@ -27,6 +30,12 @@ def parse_univariate(function):
     return parsed_function
 
 def parse_bivariate(function):
+    """
+    Let ``bivariate`` take two arrays, or a ``Data`` and the indices ``i``, ``j``.
+
+    With two processes, ``i`` and ``j`` default to 0 and 1; otherwise both must
+    be given, as keywords. ``inplace=False`` works on a copy of the ``Data``.
+    """
     def parsed_function(self,data,data2=None,i=None,j=None,inplace=True):
         if not isinstance(data,Data):
             if data2 is None:
@@ -50,10 +59,8 @@ def parse_bivariate(function):
                     f'pair. (Use multivariate() for the whole matrix.)'
                 )
         elif i is None or j is None:
-            # One index alone would reach `z[None]`, which numpy reads as
-            # `np.newaxis`: the "pair" would become the whole (1, M, T) block.
-            # The signature is `(data, data2, i, j)`, so `bivariate(data, 0, 3)`
-            # -- the obvious way to write it -- lands here with i=3 and j unset.
+            # One index alone would reach `z[None]` (np.newaxis), and the
+            # positional call `bivariate(data, 0, 3)` lands here with j unset.
             raise ValueError(
                 f'Both i and j must be given (got i={i!r}, j={j!r}). Note the '
                 f'signature is bivariate(data, data2=None, i=None, j=None), so '
@@ -73,6 +80,7 @@ def parse_bivariate(function):
     return parsed_function
 
 def parse_multivariate(function):
+    """Let ``multivariate`` take a ``Data`` or an iterable of 1-D arrays."""
     def parsed_function(self,data,inplace=True):
         if not isinstance(data,Data):
             # Create a pyspi.Data object from iterable data object
@@ -91,21 +99,18 @@ def parse_multivariate(function):
 
     return parsed_function
 
-# Pair-level failures of the SPI being computed. `_parallel.execute_spi` opens a
-# collector around `SPI.multivariate` (`collect_pair_failures`), and
-# `fill_pairwise` appends `(i, j, message)` to it for each cell whose `compute`
-# raised, so the Calculator can label those cells `Quality.ERROR` instead of
-# leaving them indistinguishable from a NaN the estimator returned. A ContextVar
-# rather than a return value, because `multivariate` returns only the matrix
-# and its signature is public. It is set per call in whichever process runs the
-# SPI, so the serial path and the parallel workers behave the same. Outside a
+# Pair-level failures of the SPI being computed: `fill_pairwise` appends
+# `(i, j, message)` for each cell whose computation raised, so the Calculator
+# can label it `Quality.ERROR` rather than NaN. A ContextVar, not a return
+# value, because the public `multivariate` returns only the matrix. Outside a
 # collector (an SPI called directly) nothing is recorded.
 _PAIR_FAILURES: ContextVar = ContextVar("pyspi_pair_failures", default=None)
 
 
 @contextlib.contextmanager
 def collect_pair_failures():
-    """Collect the pair failures that `fill_pairwise` reports inside the block.
+    """
+    Collect the pair failures that `fill_pairwise` reports inside the block.
 
     Yields a list that fills with ``(i, j, message)`` tuples, one per matrix
     cell whose value could not be computed (both cells of a mirrored pair).
@@ -125,7 +130,8 @@ def _report_pair_failure(i, j, err):
 
 
 def fill_pairwise(identifier, A, pairs, compute, mirror=False):
-    """Evaluate ``compute(i, j)`` into ``A[i, j]`` for each pair, isolating failures.
+    """
+    Evaluate ``compute(i, j)`` into ``A[i, j]`` for each pair, isolating failures.
 
     A pair whose estimate is undefined (e.g., tied observations for a
     Kozachenko-Leonenko entropy, or a singular fit) raises inside ``compute``.
@@ -175,7 +181,12 @@ ONE_VALUE_PER_PAIR = ("undirected", "antisymmetric")
 
 
 class Directed:
-    """ Base class for directed statistics
+    """
+    Base class of the SPIs: a directed statistic, ``A[i, j]`` with row = source.
+
+    A subclass defines ``bivariate`` (one pair) or ``multivariate`` (the whole
+    ``M x M`` matrix); the default ``multivariate`` evaluates ``bivariate`` for
+    every ordered pair through ``fill_pairwise``.
     """
 
     name = 'Bivariate base class'
@@ -183,7 +194,8 @@ class Directed:
     labels = ['signed']
 
     def directedness(self):
-        """The one symmetry trait this SPI's matrix ``A`` obeys.
+        """
+        The one symmetry trait this SPI's matrix ``A`` obeys.
 
         One of ``"undirected"`` (``A[i, j] == A[j, i]``), ``"antisymmetric"``
         (``A[i, j] == -A[j, i]``), ``"directed"`` or ``"asymmetric"`` (no
@@ -209,14 +221,12 @@ class Directed:
 
     @parse_bivariate
     def bivariate(self,data,i=None,j=None):
-        """ Overload method for getting the pairwise dependencies
-        """
+        """The statistic of the pair ``(i, j)``; defined by each subclass."""
         raise NotImplementedError("Method not yet overloaded.")
 
     @parse_multivariate
     def multivariate(self,data):
-        """ Compute the dependency statistics for the entire multivariate dataset
-        """
+        """The ``M x M`` matrix, from ``bivariate`` on every ordered pair."""
         M = data.n_processes
         A = np.full((M, M), np.nan)
         pairs = [(i, j) for j in range(M) for i in range(M) if i != j]
@@ -224,6 +234,7 @@ class Directed:
                              lambda i, j: self.bivariate(data, i=i, j=j))
 
     def get_group(self,classes):
+        """``(index, name)`` of the one class in ``classes`` this SPI's labels match."""
         for i, i_cls in enumerate(classes):
             for j, j_cls in enumerate(classes):
                 if i == j:
@@ -249,7 +260,11 @@ class Directed:
         return None
 
 class Undirected(Directed):
-    """ Base class for undirected statistics
+    """
+    Base class of the undirected SPIs, with ``A[i, j] == A[j, i]``.
+
+    Runs ``bivariate`` once per unordered pair and mirrors the value, so a
+    subclass need only define ``bivariate``.
     """
 
     name = 'Base class'
@@ -261,7 +276,8 @@ class Undirected(Directed):
 
     @parse_multivariate
     def multivariate(self,data):
-        """``bivariate(i, j)`` for each pair ``i < j``, mirrored onto ``(j, i)``.
+        """
+        ``bivariate(i, j)`` for each pair ``i < j``, mirrored onto ``(j, i)``.
 
         Each unordered pair is evaluated once. A failed pair is NaN in both
         cells, with an error reported for both and counted once in the warning;
@@ -283,13 +299,11 @@ class Undirected(Directed):
                              mirror=True)
 
 class Signed:
-    """ Base class for signed SPIs
-    """
+    """Mixin for SPIs whose sign carries information."""
     def issigned(self):
         return True
 
 class Unsigned:
-    """ Base class for unsigned SPIs
-    """
+    """Mixin for SPIs whose sign carries no information."""
     def issigned(self):
         return False

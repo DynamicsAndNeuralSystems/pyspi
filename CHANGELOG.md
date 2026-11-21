@@ -347,6 +347,11 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `xcorr_*` and the joint-entropy cache shared by `je_*` and `ce_*` now compute a pair in one orientation, (larger, smaller), whichever is asked for first: the orientation the old loops computed it in.
   Every stored value, quality code and pair error is bit-identical on the three drift fixtures and the three bundled datasets, so `COMPUTATION_VERSION` does not move.
   A direct `bivariate(data, i=i, j=j)` call with `i < j` on a fresh `Data` can differ in the last bit for `xcorr_*`, `je_*` and `ce_*`.
+- **Every SPI class has a docstring in one layout, shared with pyhctsa**: a summary line, what is computed with its direction and sign, a `References` section and a `Parameters` section with defaults.
+  `Calculator`, `CalculatorFrame`, `CorrelationFrame`, `Data`, `load_table`, `load_results` and the functions in `pyspi.utils` gain `Parameters` and `Returns` sections.
+  Antisymmetric SPIs state their sign convention (`A[i, j] = -A[j, i]`; positive means the row leads).
+  Corrected docstrings: `Undirected` (it said "directed"), `Barycenter` (its Euclidean `corr` is Pearson's r only for equal variances, as after z-scoring), `cds_score` (its summary line described another quantity), the `GW_tau` reference, and the `Data` example.
+  No computed value changes.
 
 ### Added
 

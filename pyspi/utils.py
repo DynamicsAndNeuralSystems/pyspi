@@ -1,24 +1,36 @@
-import numpy as np
-from scipy.stats import zscore
-import warnings
-import pandas as pd
+"""Helpers for parameter checking, identifiers and result summaries."""
 import os
+import warnings
+
+import numpy as np
+import pandas as pd
+from scipy.stats import zscore
 import yaml
 
+
 def require_int(name, value, minimum=1):
-    """Return ``value`` as an ``int``, or say precisely why it is not one.
+    """
+    Check that an SPI parameter is an integer of at least ``minimum``.
 
-    Strict on three things that a bare ``int(value) < minimum`` check lets past:
+    Used for every parameter that counts samples (histories, delays,
+    neighbour counts, lag windows). Unlike ``int(value)``, it refuses a
+    ``bool``, a float such as 2.7 (rather than truncating it), and NaN or Inf
+    with a message about the parameter.
 
-    * ``bool`` is a subclass of ``int``, so ``k_history=True`` would arrive as 1.
-    * ``int(2.7)`` truncates, so a parameter the caller plainly meant as
-      something else is silently changed rather than rejected.
-    * ``float('nan')`` and ``float('inf')`` raise from ``int()`` with a message
-      about the conversion rather than about the parameter.
+    Parameters
+    ----------
+    name : str
+        Name of the parameter, for the error message.
+    value : int
+        The value to check: a Python or numpy integer, not a ``bool``.
+    minimum : int, optional
+        Smallest allowed value. Default: 1.
 
-    Shared by every public numeric parameter that indexes samples -- histories,
-    delays, neighbour counts, search bounds, lag windows -- so the rule is one
-    rule rather than a per-class habit.
+    Returns
+    -------
+    int
+        ``value`` as a Python ``int``. A ``TypeError`` is raised for a
+        non-integer and a ``ValueError`` for a value below ``minimum``.
     """
     if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
         raise TypeError(
@@ -31,12 +43,25 @@ def require_int(name, value, minimum=1):
 
 
 def require_positive_float(name, value):
-    """Return ``value`` as a strictly positive finite ``float``.
+    """
+    Check that an SPI parameter is a strictly positive, finite real number.
 
-    The companion to :func:`require_int` for the genuinely continuous
-    parameters -- kernel bandwidths, band fractions. Rejects ``bool`` (which
-    ``float()`` happily turns into 1.0), NaN and the infinities, and anything
-    that is not a real number at all.
+    The companion of :func:`require_int` for continuous parameters such as
+    kernel bandwidths. It refuses a ``bool``, a string, NaN and Inf.
+
+    Parameters
+    ----------
+    name : str
+        Name of the parameter, for the error message.
+    value : float
+        The value to check.
+
+    Returns
+    -------
+    float
+        ``value`` as a ``float``. A ``TypeError`` is raised for a value that
+        is not a real number and a ``ValueError`` for one that is not finite
+        and positive.
     """
     if isinstance(value, bool) or isinstance(value, (str, bytes)):
         raise TypeError(
@@ -58,9 +83,26 @@ def require_positive_float(name, value):
 
 
 def acf(x, mode='positive'):
-    """Return the autocorrelation function using FFT-based computation.
+    """
+    Sample autocorrelation function of a series, computed by FFT.
 
-    O(N log N) via FFT.
+    The series is demeaned and divided by its standard deviation, and the
+    autocorrelation is normalised to 1 at lag 0 (the biased estimator).
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        The series; singleton dimensions are squeezed.
+    mode : str, optional
+        ``'positive'`` for lags ``0, ..., N - 1``; any other value for the
+        symmetric function at lags ``-(N - 1), ..., N - 1``.
+        Default: ``'positive'``.
+
+    Returns
+    -------
+    numpy.ndarray
+        The autocorrelation at each lag, of length ``N`` or ``2N - 1``; all
+        zeros for a constant series.
     """
     if x.ndim > 1:
         x = np.squeeze(x)
@@ -76,7 +118,7 @@ def acf(x, mode='positive'):
     fft_size = 2 * n
     X = np.fft.rfft(x, n=fft_size)
     acf_full = np.fft.irfft(X * np.conj(X), n=fft_size)[:n]
-    acf_full = acf_full / acf_full[0]  # normalize so acf[0] = 1
+    acf_full = acf_full / acf_full[0]  # acf[0] = 1
 
     if mode == 'positive':
         return acf_full
@@ -84,19 +126,47 @@ def acf(x, mode='positive'):
     return np.concatenate([acf_full[::-1], acf_full[1:]])
 
 def swap_chars(s, i_1, i_2):
-    """Swap to characters in a string.
+    """
+    Swap two characters of a string.
 
-    Example:
-        >>> print(swap_chars('heLlotHere', 2, 6))
-        'heHlotLere'
+    Parameters
+    ----------
+    s : str
+        The string.
+    i_1, i_2 : int
+        Positions of the two characters.
+
+    Returns
+    -------
+    str
+        ``s`` with the characters at ``i_1`` and ``i_2`` exchanged.
+
+    Examples
+    --------
+    >>> swap_chars('heLlotHere', 2, 6)
+    'heHlotLere'
     """
     if i_1 > i_2:
         i_1, i_2 = i_2, i_1
     return ''.join([s[0:i_1], s[i_2], s[i_1+1:i_2], s[i_1], s[i_2+1:]])
 
 def convert_mdf_to_ddf(df):
-    # pivot_table averages duplicate keys, so two datasets sharing a name
-    # would silently become one averaged dataset.
+    """
+    Reshape SPI-SPI correlations from one block per dataset to one column per dataset.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The correlations with a ``(Dataset, SPI-1)`` row index and ``SPI-2``
+        columns, as ``CalculatorFrame.get_correlation_df`` returns them.
+        Dataset names must be unique.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per ``(SPI-1, SPI-2)`` pair and one column per dataset.
+    """
+    # pivot_table would average two datasets that share a name.
     dup = df.index[df.index.duplicated()]
     if len(dup):
         names = sorted({str(k[0]) for k in dup})
@@ -109,19 +179,30 @@ def convert_mdf_to_ddf(df):
 
 def filter_spis(keywords, output_name = None, configfile= None):
     """
-    Filter a YAML using a list of keywords, and save the reduced set as a new
-    YAML with a user-specified name (or a random one if not provided) in the
-    current directory.
+    Write a config of the SPIs that carry every one of the given labels.
 
-    Args:
-        keywords (list): A list of keywords (as strings) to filter the YAML.
-        output_name (str, optional): The desired name for the output file. Defaults to a random name.
-        configfile (str, optional): The path to the input YAML file. Defaults to the `config.yaml' in the pyspi dir.
+    Each SPI of the source config is instantiated and kept if its labels
+    (after the config's own labels are merged in) include all ``keywords``.
+    The reduced config is written as ``<output_name>.yaml`` in the current
+    directory, and a summary is printed.
 
-    Raises:
-        ValueError: If `keywords` is not a list or if no SPIs match the keywords.
-        FileNotFoundError: If the specified `configfile` or the default `config.yaml` is not found.
-        IOError: If there's an error reading the YAML file.
+    Parameters
+    ----------
+    keywords : list of str
+        Labels an SPI must all carry, such as ``['linear', 'undirected']``.
+    output_name : str or None, optional
+        Name of the output file, without ``.yaml``. Default: None, a random
+        name ``config_<hex>``.
+    configfile : str or None, optional
+        The source config: a bundled config name or a path to a YAML file.
+        Default: None, the bundled ``full`` config.
+
+    Returns
+    -------
+    None
+        A ``ValueError`` is raised if ``keywords`` is not a non-empty list of
+        strings or no SPI matches, and a ``FileNotFoundError`` if the config
+        is not found.
     """
     # handle invalid keyword input
     if not keywords:
@@ -149,12 +230,9 @@ def filter_spis(keywords, output_name = None, configfile= None):
         # handle all other exceptions
         raise IOError(f"An error occurred while trying to read '{configfile}': {e}")
 
-    # Filter on the labels each SPI *actually* carries once instantiated, not on
-    # the family labels written in the YAML. Several traits are set per variant
-    # in __init__ -- 'antisymmetric' for phase measures whose band statistic is
-    # the mean, 'directed' for cointegration's aeg method -- and are invisible
-    # in the raw file. Matching on families would select
-    # every config in a family rather than the variants that qualify.
+    # Filter on the labels of each instantiated SPI, not those in the YAML:
+    # some traits are set per variant in __init__ (such as 'directed' for
+    # cointegration's aeg method).
     import importlib
     from pyspi.calculator import (
         _merge_spi_labels,
@@ -228,12 +306,7 @@ def filter_spis(keywords, output_name = None, configfile= None):
 """)
 
 def _print_timing_summary(calc, n_slowest=5):
-    """Print total compute time and the slowest SPIs.
-
-    Per-SPI timings are always available as ``calc.timings``; this surfaces the
-    part that actually informs a decision -- which SPIs dominate the run, and
-    are therefore what a cheaper ``config=`` drops.
-    """
+    """Print the total compute time and the slowest SPIs of ``calc``."""
     timings = {k: v for k, v in calc.timings.items() if v}
     if not timings:
         # Every SPI was restored from a checkpoint, so nothing was timed.
@@ -250,13 +323,21 @@ def _print_timing_summary(calc, n_slowest=5):
 
 def inspect_calc_results(calc):
     """
-    Display a summary of the computed SPI results, including counts of successful computations,
-    outputs with NaNs, and partially computed results.
+    Print a summary of a computed Calculator's results.
 
-    The categories are read from ``calc.quality``, off the diagonal (self-pairs
-    are NaN by construction): "NaNs" is an SPI with no good value, "Partial
-    NaNs" one with some. Each listed SPI shows what its other cells are --
-    error, NaN, Inf, -Inf, complex -- with counts.
+    SPIs are counted as successful, "NaNs" (no good off-diagonal value) or
+    "Partial NaNs" (some), from ``calc.quality``. Each SPI listed under the
+    last two shows what its other cells are (error, NaN, Inf, -Inf, complex),
+    with counts. The total time and the slowest SPIs are printed too.
+
+    Parameters
+    ----------
+    calc : Calculator
+        A Calculator after :meth:`~pyspi.calculator.Calculator.compute`.
+
+    Returns
+    -------
+    None
     """
     from pyspi.quality import Quality, quality_from_values, quality_summary
 
@@ -322,14 +403,22 @@ def inspect_calc_results(calc):
 
 
 def fmt_param(x):
-    """Format a parameter value for use inside an SPI identifier, losslessly.
+    """
+    Format a parameter value for an SPI identifier, losslessly.
 
-    Identifiers are the package's primary key: they name table columns, name
-    checkpoint files, and are compared when resuming, so the formatting must be
-    lossless -- ``.3g``/``.4g`` would let two different parameterisations
-    render to the same identifier and overwrite one another.
-    ``repr`` of a Python float is the shortest string that round-trips, so it is
-    both lossless and stable across platforms.
+    Identifiers name table columns and checkpoint files, so two different
+    values must never format alike. A float is formatted with ``repr``, the
+    shortest string that round-trips; anything else with ``str``.
+
+    Parameters
+    ----------
+    x : object
+        The parameter value.
+
+    Returns
+    -------
+    str
+        The formatted value.
     """
     if isinstance(x, float):
         if x != x or x in (float("inf"), float("-inf")):

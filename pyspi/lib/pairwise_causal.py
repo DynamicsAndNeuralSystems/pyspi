@@ -1,38 +1,43 @@
 """Pairwise causal-direction scores, in NumPy/SciPy/scikit-learn.
 
-These are the four functions of the Causal Discovery Toolbox
-(`cdt.causality.pairwise`) that pyspi uses: the ANM independence score, the
-conditional distribution similarity statistic, the RECI regression-error
-score, and IGCI. They are reimplemented here because cdt imports its
-Torch-backed models at package load.
+These are the four functions of the Causal Discovery Toolbox (cdt) [1]_,
+``cdt.causality.pairwise``, that pyspi uses: the additive-noise-model (ANM)
+independence score [2]_ with HSIC [3]_, the conditional distribution
+similarity statistic (CDS) [4]_, the regression-error score (RECI) [5]_ and
+information-geometric causal inference (IGCI) [6]_. They are reimplemented
+here because cdt imports its Torch-backed models at package load.
 
-Each function below is a transcription of the corresponding cdt 0.6
-implementation, kept close enough that the numbers are bit-identical on
-continuous data (see `tests/test_pairwise_causal.py`, which checks against
-values frozen from cdt 0.6 before the dependency was dropped). Where cdt's code
-was itself a transcription of the original author's, the original attribution is
-kept below.
+Each function is a transcription of the cdt 0.6 implementation, close enough
+that the values are bit-identical on continuous data. Where cdt's code was
+itself a transcription of the original author's (CDS is Fonollosa's), the
+original attribution is kept. The differences from cdt are NaN results where
+cdt returns 0, noted at each function.
 
-Provenance and licence
-----------------------
 Derived from the Causal Discovery Toolbox, Copyright (c) 2018 Diviyan
-Kalainathan, MIT licence (a copy of which is retained at
-`pyspi/lib/LICENSE-cdt.txt`).
+Kalainathan, MIT licence (a copy is in ``pyspi/lib/LICENSE-cdt.txt``).
 
-Algorithms:
-
-* HSIC with a Gamma approximation -- Gretton, A., Fukumizu, K., Teo, C.,
-  Song, L., Schölkopf, B. & Smola, A. (2007). A kernel statistical test of
-  independence. *NIPS*.
-* ANM -- Hoyer, P., Janzing, D., Mooij, J., Peters, J. & Schölkopf, B. (2009).
-  Nonlinear causal discovery with additive noise models. *NIPS*.
-* CDS -- Fonollosa, J. A. R. (2016). Conditional distribution variability
-  measures for causality detection. (cdt's implementation is Fonollosa's.)
-* RECI -- Blöbaum, P., Janzing, D., Washio, T., Shimizu, S. & Schölkopf, B.
-  (2018). Cause-effect inference by comparing regression errors. *AISTATS*.
-* IGCI -- Daniušis, P., Janzing, D., Mooij, J., Zscheischler, J., Steudel, B.,
-  Zhang, K. & Schölkopf, B. (2010). Inferring deterministic causal relations.
-  *UAI*.
+References
+----------
+.. [1] D. Kalainathan, O. Goudet, R. Dutta, "Causal Discovery Toolbox:
+       uncovering causal relationships in Python", Journal of Machine
+       Learning Research 21(37), 1-5 (2020).
+.. [2] P. O. Hoyer, D. Janzing, J. M. Mooij, J. Peters, B. Schölkopf,
+       "Nonlinear causal discovery with additive noise models", Advances in
+       Neural Information Processing Systems 21, 689-696 (2008).
+.. [3] A. Gretton, K. Fukumizu, C. H. Teo, L. Song, B. Schölkopf,
+       A. J. Smola, "A kernel statistical test of independence", Advances in
+       Neural Information Processing Systems 20, 585-592 (2007).
+.. [4] J. A. R. Fonollosa, "Conditional distribution variability measures
+       for causality detection", in Cause Effect Pairs in Machine Learning,
+       Springer Series on Challenges in Machine Learning, 339-347 (2019).
+.. [5] P. Blöbaum, D. Janzing, T. Washio, S. Shimizu, B. Schölkopf,
+       "Cause-effect inference by comparing regression errors", Proceedings
+       of the 21st International Conference on Artificial Intelligence and
+       Statistics, PMLR 84, 900-909 (2018).
+.. [6] P. Daniušis, D. Janzing, J. M. Mooij, J. Zscheischler, B. Steudel,
+       K. Zhang, B. Schölkopf, "Inferring deterministic causal relations",
+       Proceedings of the 26th Conference on Uncertainty in Artificial
+       Intelligence, 143-150 (2010).
 """
 
 from collections import Counter
@@ -90,9 +95,22 @@ def _fast_hsic_test_gamma(X, Y, sig=(-1, -1), maxpnt=200):
 
 
 def normalized_hsic(x, y):
-    """HSIC between standardised `x` and `y`. Lower means more independent.
+    """
+    HSIC between standardised `x` and `y`; lower means more independent.
 
-    NaN when either input is constant, as it cannot be standardised.
+    cdt's biased statistic ``tr(K H L H) / m``, with Gaussian kernels of
+    median-heuristic width, on at most 200 evenly spaced samples.
+
+    Parameters
+    ----------
+    x, y : array-like
+        Samples of the two variables, of equal length.
+
+    Returns
+    -------
+    float
+        The HSIC statistic. NaN when either input is constant (it cannot be
+        standardised) or the statistic is not finite.
     """
     if np.ptp(x) == 0 or np.ptp(y) == 0:
         return np.nan
@@ -106,16 +124,25 @@ def normalized_hsic(x, y):
 # ---------------------------------------------------------------------------
 
 def _count_unique(x):
+    """Number of distinct values."""
     return len(np.unique(x)) if isinstance(x, np.ndarray) else len(set(x))
 
 
 def _discretized_values(x, ffactor, maxdev):
+    """The levels ``-ffactor*maxdev..ffactor*maxdev``, or x's values if fewer."""
     if _count_unique(x) > (2 * ffactor * maxdev + 1):
         return range(-ffactor * maxdev, ffactor * maxdev + 1)
     return sorted(set(x))
 
 
 def _discretized_sequence(x, ffactor, maxdev, norm=True):
+    """
+    x binned at ``1/ffactor`` standard deviations and clipped at ``maxdev``.
+
+    With ``norm``, a discrete x (no more distinct values than levels) is
+    returned unchanged; otherwise x is standardised, then restandardised on
+    the values within ``maxdev``, before binning.
+    """
     if not norm or _count_unique(x) > len(_discretized_values(x, ffactor, maxdev)):
         if norm:
             x = (x - np.mean(x)) / np.std(x)
@@ -129,12 +156,32 @@ def _discretized_sequence(x, ffactor, maxdev, norm=True):
 
 
 def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12, min_conditionals=0):
-    """Std. of the rescaled y values after binning in x; lower favours x -> y.
+    """
+    Spread of P(y | x) across x-bins (CDS); lower favours x -> y.
 
-    The statistic is the spread of P(y | x = a) across the x-bins ``a`` holding
-    more than ``minc`` points. Returns NaN when either input is constant, when
-    no such bin exists, or when fewer than ``min_conditionals`` exist (cdt
-    returns 0 in the first two cases).
+    The statistic is the spread of P(y | x = a) across the x-bins ``a``
+    holding more than ``minc`` points.
+
+    Parameters
+    ----------
+    x_te, y_te : array-like
+        Samples of the putative cause and effect, of equal length.
+    ffactor : int, optional
+        Bins per standard deviation. Default: 2.
+    maxdev : int, optional
+        Standard deviations at which values are clipped. Default: 3.
+    minc : int, optional
+        An x-bin is used only if it holds more than ``minc`` points.
+        Default: 12.
+    min_conditionals : int, optional
+        Minimum number of usable x-bins. Default: 0.
+
+    Returns
+    -------
+    float
+        The CDS score. NaN when either input is constant, when no x-bin is
+        usable, or when fewer than ``min_conditionals`` are (cdt returns 0
+        in the first two cases).
     """
     if (np.ptp(np.asarray(x_te, dtype=float)) == 0
             or np.ptp(np.asarray(y_te, dtype=float)) == 0):
@@ -187,11 +234,24 @@ def cds_score(x_te, y_te, ffactor=2, maxdev=3, minc=12, min_conditionals=0):
 # ---------------------------------------------------------------------------
 
 def reci_score(x, y, degree=3):
-    """Mean squared error of a monomial fit of y on x, both min-max scaled.
+    """
+    Mean squared error of a monomial fit of y on x, both min-max scaled.
 
     The polynomial columns for x and x**2 are zeroed (the intercept is fitted
     by `LinearRegression`), so at the default degree=3 the fit is the paper's
-    monomial a*x**3 + b (as in cdt).
+    monomial a*x**3 + b (as in cdt). Lower favours x -> y.
+
+    Parameters
+    ----------
+    x, y : array-like
+        Samples of the putative cause and effect, of equal length.
+    degree : int, optional
+        Degree of the polynomial features. Default: 3.
+
+    Returns
+    -------
+    float
+        The mean squared error of the fit.
     """
     x = np.reshape(minmax_scale(np.asarray(x, dtype=float).reshape(-1, 1)), (-1, 1))
     y = np.reshape(minmax_scale(np.asarray(y, dtype=float).reshape(-1, 1)), (-1, 1))
@@ -218,7 +278,8 @@ def _eval_entropy(x):
 
 
 def _integral_approx_estimator(x, y):
-    """Slope-based IGCI (Daniusis et al. 2010); > 0 favours x -> y.
+    """
+    Slope-based IGCI (Daniusis et al. 2010); > 0 favours x -> y.
 
     ``a`` and ``b`` are about (m-1) * C_{X->Y} and (m-1) * C_{Y->X}, and the
     paper infers X -> Y when C_{X->Y} < C_{Y->X}, so the score is ``b - a``.
@@ -237,7 +298,26 @@ def _integral_approx_estimator(x, y):
 
 
 def igci_score(x, y, ref_measure="gaussian", estimator="entropy"):
-    """Entropy (or integral-approximation) asymmetry; > 0 favours x -> y."""
+    """
+    Entropy (or integral-approximation) asymmetry; > 0 favours x -> y.
+
+    Parameters
+    ----------
+    x, y : array-like
+        Samples of the two variables, of equal length.
+    ref_measure : str, optional
+        Reference measure, which sets how each variable is rescaled:
+        ``'gaussian'`` (standardised), ``'uniform'`` (min-max scaled to
+        ``[0, 1]``) or ``'None'`` (unchanged). Default: ``'gaussian'``.
+    estimator : str, optional
+        ``'entropy'``, ``H(x) - H(y)`` with `_eval_entropy`, or
+        ``'integral'``, the slope-based estimator. Default: ``'entropy'``.
+
+    Returns
+    -------
+    float
+        The IGCI score.
+    """
     x = np.asarray(x, dtype=float).reshape(-1)
     y = np.asarray(y, dtype=float).reshape(-1)
 

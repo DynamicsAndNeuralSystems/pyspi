@@ -46,7 +46,8 @@ logger = get_logger("pyspi.parallel")
 
 
 def default_mp_context() -> str:
-    """Best start method for the current platform.
+    """
+    Best start method for the current platform.
 
     fork on Linux: workers inherit the parent's already-imported modules and
     instantiated SPIs via copy-on-write, so worker startup is near-instant.
@@ -62,7 +63,8 @@ _WORKER_STATE: dict = {}
 
 
 def _attach_data(shm_name, shape, dtype_str, procnames, name):
-    """Build a Data object that views an existing shared-memory block.
+    """
+    Build a Data object that views an existing shared-memory block.
 
     The shared array is the parent's already-normalised/detrended ``_dataset._data``,
     so we bypass Data.__init__ to avoid re-applying those transforms.
@@ -82,7 +84,8 @@ _BLAS_ENV_VARS = (
 
 
 def _pin_blas_env() -> None:
-    """Force BLAS/threading env vars to 1 in the parent, before workers spawn.
+    """
+    Force BLAS/threading env vars to 1 in the parent, before workers spawn.
 
     threadpool_limits (see _pin_worker_thread_pools) pins OpenBLAS/MKL/OpenMP
     at runtime; these env vars additionally cover numba and — for spawn
@@ -97,7 +100,8 @@ def _pin_blas_env() -> None:
 
 
 def available_cores() -> int:
-    """Cores this process may actually use.
+    """
+    Cores this process may actually use.
 
     ``sched_getaffinity`` honours cgroup/cpuset pinning, so under PBS or Slurm
     this returns the cores the scheduler actually granted -- not the machine's
@@ -114,7 +118,8 @@ def available_cores() -> int:
 
 
 def resolve_n_jobs(n_jobs) -> int:
-    """Turn a user ``n_jobs`` into a worker count >= 1, joblib-style.
+    """
+    Turn a user ``n_jobs`` into a worker count >= 1, joblib-style.
 
     Positive values pass through; ``-1`` means every core this process may use
     (see :func:`available_cores`), ``-2`` all but one, and so on, floored at 1.
@@ -151,7 +156,8 @@ def _requested_threads() -> int:
 
 
 def guard_oversubscription(n_jobs: int) -> None:
-    """Warn -- or intervene -- when threads x processes exceeds the cores we hold.
+    """
+    Warn -- or intervene -- when threads x processes exceeds the cores we hold.
 
     The dangerous case is dataset-level parallelism on a cluster: many
     single-core pyspi processes, each inheriting a site-wide
@@ -167,9 +173,8 @@ def guard_oversubscription(n_jobs: int) -> None:
     cores = available_cores()
     requested = n_jobs * threads
 
-    # pyEDM (ConvergentCrossMapping) self-parallelises over *processes*, which
-    # no BLAS thread count covers. Its pools are switched off at the call site
-    # (see statistics/causal.py), so it needs no handling here.
+    # pyEDM (ConvergentCrossMapping) uses processes, not threads; its pools
+    # are switched off in statistics/causal.py.
 
     if requested <= cores:
         return
@@ -204,7 +209,8 @@ _THREADPOOL_LIMITER = None  # module-global so the limiter is never GC'd
 
 
 def _pin_worker_thread_pools():
-    """Pin every nested thread/process pool to 1 so process workers don't oversubscribe.
+    """
+    Pin every nested thread/process pool to 1 so process workers don't oversubscribe.
 
     n_jobs workers each running a library that itself spawns cpu_count() threads
     = quadratic blow-up. The pools pinned: BLAS + OpenMP (numpy/scipy/sklearn),
@@ -224,7 +230,8 @@ def _pin_worker_thread_pools():
 
 def _worker_init(shm_name, shape, dtype_str, procnames, ds_name, configfile, progress_q,
                  config_bytes=None):
-    """ProcessPoolExecutor initializer. Runs once per worker.
+    """
+    ProcessPoolExecutor initializer. Runs once per worker.
 
     Re-instantiates SPIs from the configfile (some SPI classes use closures in
     ``__init__`` that aren't picklable, so we can't ship instances across the
@@ -232,8 +239,6 @@ def _worker_init(shm_name, shape, dtype_str, procnames, ds_name, configfile, pro
     """
     data, shared = _attach_data(shm_name, shape, dtype_str, procnames, ds_name)
 
-    # Direct call to the shared loader — no throwaway Calculator instantiation,
-    # no stdout suppression needed.
     from pyspi.calculator import load_spis_from_yaml
     # Load from the parent's snapshot, not the path: the file on disk may have
     # changed since the parent instantiated its SPIs, which would bind results
@@ -261,7 +266,8 @@ def _worker_init(shm_name, shape, dtype_str, procnames, ds_name, configfile, pro
 
 
 def _run_task(spi_keys, checkpoint_dir):
-    """Compute a bucket of SPIs sequentially in this worker.
+    """
+    Compute a bucket of SPIs sequentially in this worker.
 
     Posts ``(key, failed)`` to the progress queue after each SPI, and returns
     the list of ``(key, SPIResult)`` pairs.
@@ -284,7 +290,8 @@ def _run_task(spi_keys, checkpoint_dir):
 
 
 class SPIResult(NamedTuple):
-    """One SPI's result, as both execution paths and resume produce it.
+    """
+    One SPI's result, as both execution paths and resume produce it.
 
     ``values`` is the ``(M, M)`` float64 matrix with NaN in every cell whose
     ``quality`` code is not ``Quality.GOOD``. ``err`` is the SPI-level error
@@ -318,15 +325,16 @@ def failed_quality(M: int) -> np.ndarray:
 
 
 def derive_quality(values, err) -> np.ndarray:
-    """Quality codes for a stored result that has none (an older file or checkpoint).
+    """
+    Quality codes for a stored result saved without them (a file or checkpoint).
 
     Codes follow the stored values (NaN, +/-Inf, finite), and the diagonal is
     NaN. If the SPI carries an error that is not one of the value-describing
     ones in ``_VALUE_ERRORS``, its computation failed, and every off-diagonal
-    cell that is not a finite value is ERROR. Before quality codes existed an
-    Inf anywhere failed the whole SPI, so for those results this is exact. What
-    cannot be recovered is which NaN cells were failed pairs inside
-    ``fill_pairwise``: those read as NaN.
+    cell that is not a finite value is ERROR. Results without codes recorded
+    an Inf anywhere as a failure of the whole SPI, so for them this is exact.
+    Which NaN cells were failed pairs inside ``fill_pairwise`` cannot be
+    recovered: those read as NaN.
     """
     values = np.asarray(values)
     _, q = quality_from_values(values)
@@ -339,7 +347,8 @@ def derive_quality(values, err) -> np.ndarray:
 
 
 def execute_spi(spi, data, key, M) -> SPIResult:
-    """Compute one SPI, label every cell with a quality code, and capture failures.
+    """
+    Compute one SPI, label every cell with a quality code, and capture failures.
 
     The single execution primitive shared by the serial and parallel paths, so
     both agree on what counts as a failure and on which warnings are captured.
@@ -415,7 +424,8 @@ def execute_spi(spi, data, key, M) -> SPIResult:
 
 
 def write_checkpoint(checkpoint_dir, key, S, err, quality=None, pair_errors=None):
-    """Persist one SPI result plus its sidecars.
+    """
+    Persist one SPI result plus its sidecars.
 
     ``<key>.npy`` is the commit point: a key counts as done only once it
     exists. So any previous ``<key>.npy`` is removed first, the sidecars (error,
@@ -449,7 +459,8 @@ def write_checkpoint(checkpoint_dir, key, S, err, quality=None, pair_errors=None
 
 
 def _atomic_npy_write(path: Path, arr: np.ndarray) -> None:
-    """Atomic write: numpy.save then os.replace. POSIX rename is atomic.
+    """
+    Atomic write: numpy.save then os.replace. POSIX rename is atomic.
 
     Note: ``np.save(path, arr)`` auto-appends ``.npy`` if absent — that
     rewrites our ``.npy.tmp`` to ``.npy.tmp.npy`` and breaks the rename.
@@ -462,19 +473,17 @@ def _atomic_npy_write(path: Path, arr: np.ndarray) -> None:
 
 
 def cache_bucket(spi):
-    """``(namespace, *_cache_subkey)`` -- the key that actually shares a cache.
+    """
+    ``(namespace, *_cache_subkey)`` -- the key that actually shares a cache.
 
-    The one definition of "these SPIs share work", used by the scheduler here,
-    by ``calculator.warn_partial_cache_buckets`` and by ``bench/cut_config.py``.
-    ``None`` for an SPI that caches nothing.
+    The one definition of "these SPIs share work", used by the scheduler here
+    and by ``calculator.warn_partial_cache_buckets``. ``None`` for an SPI that
+    caches nothing.
 
-    Namespace alone is too coarse. ``_cache_subkey`` splits a namespace into
-    independent caches -- ``Barycenter`` caches per mode, so ``bary_dtw`` and
+    The namespace alone is too coarse: ``_cache_subkey`` splits it into
+    independent caches. ``Barycenter`` caches per mode, so ``bary_dtw`` and
     ``bary_softdtw`` share nothing, and the multitaper spectral SPIs cache per
-    class and sampling frequency. On the ``full`` config the namespaces divide
-    as: spectral_mv 84 SPIs across 16 independent caches, covariance 26 across
-    7, spectral_bv 30 in one, barycenter 16 across 4, coint 11 across 7,
-    ccm 9 across 3.
+    class and sampling frequency.
     """
     ns = getattr(type(spi), "_cache_namespace", None)
     if ns is None:
@@ -482,34 +491,29 @@ def cache_bucket(spi):
     return (ns, *tuple(getattr(spi, "_cache_subkey", ())))
 
 
-# Amortized cost per SPI at the M=16, T=800 anchor cell
-# (bench/results/analysis/report.md). Used only to decide which task a worker
-# picks up first, so a stale or missing entry costs some makespan and nothing
-# else -- it cannot change a computed value. Anything unlisted is treated as
-# cheap.
-# spectral_bv's SPIs share one factorisation per pair, so its entry is the
-# anchor-cell figure (1.6) divided by the 7.6x speed-up that sharing gives.
+# Relative cost per SPI of each cache namespace, with the cache shared, for a
+# moderate dataset. Used only to decide which task starts first, so a stale
+# entry costs some run time and cannot change a value. Unlisted is cheap.
 _NAMESPACE_COST = {"ccm": 292.7, "barycenter": 11.1, "spectral_bv": 0.2,
                    "spectral_mv": 0.3, "coint": 0.3, "covariance": 0.3}
 
 
 def build_tasks(spi_keys, spis) -> list[list[str]]:
-    """Bucket SPI keys by the cache they actually share.
+    """
+    Bucket SPI keys by the cache they actually share.
 
     SPIs in one bucket form a multi-SPI task, so the cached intermediate is
     built once on the worker's Data and reused; SPIs that cache nothing become
     single-SPI tasks.
 
     Bucketing on ``cache_bucket`` rather than ``_cache_namespace`` matters
-    because the longest task bounds the makespan: the namespace alone would
-    put all 84 ``spectral_mv`` SPIs of ``full`` (16 independent caches) in one
-    task. ``cache_bucket`` gives 43 shareable groups whose largest has 24
-    members.
+    because the longest task bounds the run time: the namespace alone would
+    put every ``spectral_mv`` SPI, across many independent caches, in one task.
 
-    Ordering is by estimated cost (members times the namespace's measured
-    amortized cost) rather than member count, so a 3-member ``ccm`` bucket
-    starts before a 24-member ``covariance`` one. This affects scheduling only;
-    every task is computed identically whichever order it runs in.
+    Tasks are ordered by estimated cost (members times the namespace's cost
+    per SPI) rather than member count, so a small ``ccm`` bucket starts before
+    a large ``covariance`` one. The order affects scheduling only, never a
+    value.
     """
     cacheless: list[list[str]] = []
     grouped: dict[tuple, list[str]] = defaultdict(list)
@@ -531,54 +535,41 @@ def build_tasks(spi_keys, spis) -> list[list[str]]:
 
 MANIFEST_NAME = "run.json"
 SCHEMA_VERSION = 1
-# Bumped when a change alters computed values, so checkpoints cannot outlive the
-# algorithm that produced them, and so `Calculator.run_digest` separates results
-# that differ only by implementation. `<release>.r<revision>`: the revision is a
-# counter within a release, not a version of anything -- only equality is ever
-# tested.
-#   r2 -- the KSG per-occurrence dither, full MAX_CORR_AIS, the group-delay
-#         sample scaling and |r|, and the cross-correlation threshold returning
-#         zero when nothing clears it.
-#   r3 -- the KSG dither key is taken from the normalised column rounded to 12
-#         decimals rather than its exact bytes. On tie-free data that changes
-#         nothing (only the integer neighbour counts enter the estimate), but on
-#         tied or quantised data a different dither separates the ties
-#         differently, so values there can move.
-#   r4 -- KSG uses the rounded coordinate in its geometry, canonicalises
-#         reflections, and assigns numerical key collisions by content rather
-#         than coordinate order. Tied/quantised and tolerance-boundary values
-#         can move.
-#   r5 -- KSG refuses tied coordinates and no longer rounds or dithers valid
-#         continuous inputs. This removes arbitrary order-dependent tie
-#         breaking and the artificial 12-decimal conditioning boundary.
-#   r6 -- KSG strict marginal counts use the immediately preceding
-#         representable radius instead of shrinking epsilon by 1e-10.
-#   r7 -- coherence phase uses a circular mean and refuses zero-resultant and
-#         antipodal locations that have no unique signed float orientation.
-#   r8 -- no SPI reads the global NumPy stream: the sgddtw barycenter and the
-#         MinCovDet / EllipticEnvelope fits each use a fixed-seed generator, so
-#         their SPIs change value and no longer depend on evaluation order or
-#         the caller's seed. Multitaper phase slope index applies its band;
-#         its variants were one identical full-band matrix.
-#   r9 -- multitaper phase slope index is Nolte's sum over neighbouring
-#         frequencies one multitaper bandwidth apart, computed in pyspi; it
-#         was the backend's sum over all pairs of thinned frequencies. Also
-#         covers GraphicalLasso(CV) converging at tol=1e-8 (values moved by
-#         up to 1.5e-4) and the scikit-learn >= 1.8 floor, under which the
-#         MinCovDet / EllipticEnvelope estimates carry its consistency
-#         correction; both landed without a revision of their own.
+# Changed whenever a change alters computed values, so a checkpoint cannot
+# outlive the algorithm that produced it and `Calculator.run_digest` separates
+# results that differ only by implementation. `<release>.r<revision>`; only
+# equality is ever tested. What each revision changed:
+#   r2  -- KSG per-occurrence dither; full MAX_CORR_AIS; group-delay sample
+#          scaling and |r|; cross-correlation threshold gives 0 when no lag
+#          clears it.
+#   r3  -- KSG dither key from the normalised column rounded to 12 decimals
+#          (values move on tied or quantised data only).
+#   r4  -- KSG uses the rounded coordinate in its geometry, canonicalises
+#          reflections, and assigns key collisions by content.
+#   r5  -- KSG refuses tied coordinates and stops rounding or dithering
+#          continuous input.
+#   r6  -- KSG strict marginal counts use the next representable radius below
+#          epsilon.
+#   r7  -- coherence phase uses a circular mean and refuses zero-resultant and
+#          antipodal locations.
+#   r8  -- fixed-seed generators for the sgddtw barycenter and the MinCovDet /
+#          EllipticEnvelope fits; multitaper phase slope index applies its
+#          band.
+#   r9  -- multitaper phase slope index is Nolte's sum over neighbouring
+#          frequencies one bandwidth apart, computed in pyspi; GraphicalLasso
+#          (CV) converges at tol=1e-8; scikit-learn >= 1.8, whose MinCovDet /
+#          EllipticEnvelope carry a consistency correction.
 #   r10 -- constrained LCSS applies its Sakoe-Chiba / Itakura band, computed
-#         in pyspi (both variants had equalled plain `lcss`). tslearn >= 0.10,
-#         whose subgradient DBA behind the four `bary*_sgddtw_*` SPIs changed
-#         its update and stopping rule.
+#          in pyspi; tslearn >= 0.10, whose subgradient DBA (the
+#          `bary*_sgddtw_*` SPIs) has a new update and stopping rule.
 #   r11 -- ccm, softdtw constraints, dcorrx/mgcx, hsic, KSG MI with a Theiler
-#         window, phi_Geo, dspli, the bivariate directed spectral measures and
-#         parametric spectral GC.
+#          window, phi_Geo, dspli, the bivariate directed spectral measures and
+#          parametric spectral GC.
 #   r12 -- coint_aeg, gd, the phase measures' band, psi_multitaper, gwtau and
-#         gpfit.
+#          gpfit.
 #   r13 -- the AUTO Theiler window is capped at N // 10.
 #   r14 -- kernel MI, TLMI and TE exclude the point itself from its counts.
-#   r15 -- KSG breaks every exact tie, not only in series under 90% unique.
+#   r15 -- KSG breaks every exact tie.
 COMPUTATION_VERSION = "3.0.0.r15"
 
 
@@ -604,11 +595,11 @@ def write_manifest(checkpoint_dir: Path, digest: str, spec: dict) -> None:
 
 
 def checkpoint_owner_matches(checkpoint_dir: Path, digest: str):
-    """Return (matches, reason). A directory with no manifest is unowned.
+    """
+    Return (matches, reason). A directory with no manifest is unowned.
 
-    An unowned directory is treated as a mismatch rather than a match: it was
-    written by a version that did not record provenance, and there is no way to
-    tell whether it belongs to this run.
+    A directory that holds results but no manifest is a mismatch: nothing
+    records which run wrote them.
     """
     manifest = read_manifest(checkpoint_dir)
     if manifest is None:
@@ -631,11 +622,12 @@ def checkpoint_owner_matches(checkpoint_dir: Path, digest: str):
 
 
 def _read_checkpoint_quality(checkpoint_dir: Path, key, arr, err, M):
-    """The stored quality codes for ``key``, or codes derived from its values.
+    """
+    The stored quality codes for ``key``, or codes derived from its values.
 
     A quality sidecar is used only if it has the right shape and agrees with
-    the values (GOOD exactly where the value is finite); a checkpoint written
-    before quality codes existed has none, and one that disagrees is stale.
+    the values (GOOD exactly where the value is finite); one that disagrees is
+    stale.
     """
     path = checkpoint_dir / f"{key}.quality"
     if path.exists():
@@ -664,13 +656,14 @@ def _read_checkpoint_pairs(checkpoint_dir: Path, key, quality):
 
 
 def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool = True):
-    """Return (done_results, remaining_keys).
+    """
+    Return (done_results, remaining_keys).
 
     done_results: dict[key] -> SPIResult (no warnings, zero elapsed time).
     A key is considered done if ``<key>.npy`` exists and has shape (M, M).
-    Its quality codes come from ``<key>.quality`` (``.npy`` format); a checkpoint written
-    before those existed has its codes derived from the values and the error
-    sidecar (see :func:`derive_quality`).
+    Its quality codes come from ``<key>.quality`` (``.npy`` format), or, for a
+    checkpoint without one, from the values and the error sidecar (see
+    :func:`derive_quality`).
 
     A checkpoint carrying an ``.error`` sidecar records a *failed* SPI. By
     default those are retried rather than resumed: a failure is usually caused
@@ -707,8 +700,8 @@ def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool 
             continue
         q = _read_checkpoint_quality(checkpoint_dir, key, arr, err, M)
         pairs = _read_checkpoint_pairs(checkpoint_dir, key, q)
-        # Values are stored NaN wherever the code is not GOOD; an older
-        # checkpoint could hold an Inf the codes now label instead.
+        # Values are NaN wherever the code is not GOOD; a checkpoint without
+        # codes can hold an Inf, which the codes now label instead.
         arr = np.where(q == Quality.GOOD, arr, np.nan)
         done[key] = SPIResult(arr, q, err, pairs, [], 0.0)
     return done, remaining

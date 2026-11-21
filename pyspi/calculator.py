@@ -1,28 +1,34 @@
-# Science/maths/computing tools
+"""The Calculator, which computes every SPI of a config on a dataset, and its results."""
+import copy
+import functools
+import hashlib
+import importlib
+import importlib.metadata
+import json
+import os
+from pathlib import Path
+import re
+import time
+from typing import NamedTuple, Optional
+import warnings
+
 import numpy as np
 import pandas as pd
-import copy, yaml, importlib, importlib.metadata, re, time, warnings, os
-import functools
-import hashlib, json
-from pathlib import Path
-from typing import NamedTuple, Optional
 from tqdm import tqdm
+import yaml
 
-# From this package
-from .data import Data
-from .base import DIRECTEDNESS_TRAITS, ONE_VALUE_PER_PAIR
-from .utils import convert_mdf_to_ddf, inspect_calc_results, require_int
 from . import _parallel
+from ._compat import resolve_config_arg, resolve_zscore, translate_calculator_kwargs
+from ._logging import configure as _configure_logging, get_logger
+from .base import DIRECTEDNESS_TRAITS, ONE_VALUE_PER_PAIR
+from .data import Data
 from .quality import Quality
-from ._logging import get_logger, configure as _configure_logging
-from ._compat import resolve_zscore, resolve_config_arg, translate_calculator_kwargs
+from .utils import convert_mdf_to_ddf, inspect_calc_results, require_int
 
 logger = get_logger("pyspi.calculator")
 
 
-# ---------------------------------------------------------------------------
-# LaggedCorrelation config expansion: max_tau -> tau=1..max_tau
-# ---------------------------------------------------------------------------
+# Labels of the SPIs in a config.
 
 def _as_label_list(labels):
     if labels is None:
@@ -49,6 +55,7 @@ _CONTRADICTORY_LABELS = (
 
 
 def _merge_spi_labels(spi, family_labels=None, config_labels=None):
+    """Set ``spi.labels`` to its own labels plus the config's, without contradictions."""
     labels = list(getattr(spi, "labels", []))
     family_labels = _as_label_list(family_labels)
     config_labels = _as_label_list(config_labels)
@@ -64,23 +71,10 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
         if label not in merged:
             merged.append(label)
 
-    # The SPI's own `issigned()` is authoritative over any declared
-    # signed/unsigned label. It is not metadata: `Calculator._rmmin` subtracts
-    # the minimum from every SPI reporting unsigned, and `set_group` correlates
-    # unsigned SPIs through `abs()`. A config that declares `unsigned` over an
-    # antisymmetric measure (which the shipped configs do for `phase`, `pli`,
-    # `wpli`, `psi`, `gd` and `ccm_*_diff`) does not merely mislabel it -- it
-    # asks for a transform that destroys the lead/lag its sign carries. The
-    # label follows the implementation, not the other way round.
-    # The SPI's *own* structural trait is authoritative over any structural
-    # trait the config declares. `labels` here is the instance's list, before the
-    # family and per-config labels are folded in, so it is what the class and
-    # `__init__` decided from the shape of the matrix they produce.
-    #
-    # Exactly one of the four traits survives, so `filter_spis` cannot answer
-    # both ways for one SPI: `gd_*` would otherwise carry the class's
-    # `antisymmetric` and the config's `directed` together, and
-    # `gd_*_rvalue` (symmetric, since it stores |r|) both labels.
+    # The SPI's own structural trait (set by its class and __init__, before
+    # the config's labels are merged) overrides any the config declares, so
+    # exactly one of DIRECTEDNESS_TRAITS survives and `filter_spis` gives one
+    # answer.
     own = [label for label in DIRECTEDNESS_TRAITS if label in labels]
     if own:
         trait = own[0]
@@ -98,6 +92,9 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
             if label not in ("linear", "nonlinear") or label == own_lin[0]
         ]
 
+    # Likewise the SPI's own issigned() decides signed/unsigned. It is not just
+    # a label: `Calculator._rmmin` shifts unsigned SPIs and the SPI-SPI
+    # correlations take their abs(), which would destroy a lead/lag sign.
     issigned = getattr(spi, "issigned", None)
     if issigned is not None:
         actual = "signed" if issigned() else "unsigned"
@@ -115,6 +112,7 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
 
 
 def _split_config_params(params):
+    """``(constructor parameters, labels)`` of one entry of a config's ``configs`` list."""
     params = dict(params or {})
     config_labels = params.pop("labels", None)
     return params, config_labels
@@ -123,17 +121,34 @@ CONFIG_DIR = Path(__file__).parent / "configs"
 
 
 def bundled_configs():
-    """Names of the bundled configs, i.e. the valid non-path values of ``config``."""
+    """
+    Names of the bundled configs.
+
+    Returns
+    -------
+    list of str
+        The values of ``config`` that name a bundled config, sorted.
+    """
     return sorted(p.stem for p in CONFIG_DIR.glob("*.yaml"))
 
 
 def resolve_config(config):
-    """Resolve ``config`` to a config yaml path.
+    """
+    Resolve a config name or path to the path of its YAML file.
 
-    Accepts either the name of a bundled config (``"full"``, ``"fast"``,
-    ``"benchmarked_p90"``, ...) or a path to a user-written yaml. A value is
-    treated as a path if it carries a directory component or a ``.yaml``/
-    ``.yml`` suffix; otherwise it is looked up in :data:`CONFIG_DIR`.
+    Parameters
+    ----------
+    config : str or path-like
+        The name of a bundled config (``"full"``, ``"fast"``,
+        ``"benchmarked_p90"``, ...) or the path of a YAML file. A value with a
+        directory component or a ``.yaml`` or ``.yml`` suffix is a path;
+        anything else is looked up in :data:`CONFIG_DIR`.
+
+    Returns
+    -------
+    str
+        Path of the config file. A missing file raises ``FileNotFoundError``
+        and an unknown name ``ValueError``.
     """
     text = str(config)
     looks_like_path = (
@@ -159,12 +174,7 @@ def resolve_config(config):
 
 @functools.lru_cache(maxsize=1)
 def _full_config_cache_buckets():
-    """``{cache_bucket: {identifiers}}`` for the `full` config, built once.
-
-    Cached because the caller is an advisory check that runs on every
-    `Calculator` construction, and the answer is a property of the shipped
-    config rather than of the run.
-    """
+    """``{cache_bucket: {identifiers}}`` for the ``full`` config, built once per session."""
     from collections import defaultdict
 
     available = defaultdict(set)
@@ -176,37 +186,36 @@ def _full_config_cache_buckets():
 
 
 def warn_partial_cache_buckets(spis):
-    """Warn when a config keeps only part of a shared-cache group.
-
-    Several SPI families build one expensive cached intermediate on the Data
-    object and then derive cheap variants from it (``ccm``, ``spectral_mv``,
-    ``barycenter``, ...). The cache is built as soon as *any* member runs, so
-    keeping a strict subset pays the full cache cost for fewer SPIs -- the
-    remaining members are close to free. ``bench/cut_config.py`` already snaps
-    generated configs up to whole buckets; this gives a hand-written config
-    the same nudge.
     """
-    # Only caches expensive enough for the advice to matter. Warning on the
-    # cheap ones is noise: fabfour deliberately keeps 1 of 26 covariance SPIs.
+    Warn when a config keeps only part of an expensive shared-cache group.
+
+    Some SPI families build one expensive cached intermediate on the Data
+    object and derive cheap variants from it (``ccm``, ``barycenter``). The
+    cache is built as soon as any member runs, so the other members are close
+    to free, and keeping only some of them pays the full cost for fewer SPIs.
+
+    Parameters
+    ----------
+    spis : dict
+        ``{identifier: SPI instance}``, as :func:`load_spis_from_yaml`
+        returns.
+    """
+    # Only caches expensive enough for the advice to matter.
     EXPENSIVE = {"ccm", "barycenter"}
 
     from collections import defaultdict
 
-    # The same definition the scheduler buckets on; see _parallel.cache_bucket.
+    # The definition the scheduler buckets on.
     bucket = _parallel.cache_bucket
 
-    # Keyed by identifier, not class: a bucket is a set of *variants* (ccm is
-    # one class with nine configs), and it is the variants that share the cache.
+    # Keyed by identifier, not class: variants of one class share the cache.
     kept = defaultdict(set)
     for key, spi in spis.items():
         b = bucket(spi)
         if b is not None:
             kept[b].add(key)
     if not any(bkey[0] in EXPENSIVE for bkey in kept):
-        # Nothing this advisory could say anything about. Checked before the
-        # `full` config is touched: building it instantiates every SPI and pulls
-        # a heavy dependency tree, which is real import time for a check that
-        # only ever comments on `ccm` and `barycenter`.
+        # Return before building the `full` config, which imports every SPI.
         return
     try:
         available = _full_config_cache_buckets()
@@ -228,11 +237,9 @@ def warn_partial_cache_buckets(spis):
         )
 
 
-# Fields of `run_spec` that say *where* the run came from rather than *what* it
-# computes. They are recorded for provenance and deliberately kept out of
-# `run_digest`, which is a content hash: the same config contents and the same
-# data must digest the same from a checkout, a wheel or a temporary directory.
-# The version fields are excluded too: `COMPUTATION_VERSION` is hashed
+# Fields of `run_spec` that say where the run came from rather than what it
+# computes, kept out of the content hash `run_digest`: the same config and
+# data digest the same from any location. `COMPUTATION_VERSION` is hashed
 # separately, so an upgrade that changes no computed value still resumes.
 _DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({
     "config", "configfile", "dataset_name",
@@ -242,11 +249,11 @@ _DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({
 
 @functools.cache
 def _installed_versions():
-    """pyspi's version and the installed version of each runtime dependency.
+    """
+    pyspi's version and the installed version of each runtime dependency.
 
-    The dependency list is pyspi's own declared requirements (extras
-    excluded), so it does not drift from `pyproject.toml`. ``None`` marks a
-    package that is not installed or carries no metadata.
+    The dependencies are pyspi's declared requirements, extras excluded.
+    ``None`` marks a package that is not installed or carries no metadata.
     """
     def version(name):
         try:
@@ -265,23 +272,32 @@ def _installed_versions():
     return version("pyspi"), {name: version(name) for name in deps}
 
 
-# Bumped whenever the .npz layout changes. Schema 0 means "written before the
-# field existed", i.e. a pre-3.0.0 pickled file. Schema 2 adds `quality`, the
-# per-cell codes, and `pair_errors`; a schema-1 file still loads, with its
-# codes derived from its values and `errors`.
+# Version of the .npz layout; 0 is a file without the field. Schema 2 adds
+# `quality`, the per-cell codes, and `pair_errors`; a schema-1 file still
+# loads, with its codes derived from its values and `errors`.
 _NPZ_SCHEMA = 2
 
 
 class Results(NamedTuple):
-    """Everything :meth:`Calculator.save` writes to ``.npz``, as :func:`load_results` returns it.
+    """
+    The contents of a results ``.npz``, as :func:`load_results` returns them.
 
-    ``table`` is what :func:`load_table` returns. ``quality`` is a ``uint8``
-    DataFrame with the same index and columns, holding one
-    :class:`pyspi.quality.Quality` code per cell (``Calculator.quality``).
-    ``errors`` is the SPI-level ``{identifier: message}`` mapping
-    (``Calculator.errors``), ``run_spec`` the resolved run specification, and
-    ``pair_errors`` the per-pair messages (``Calculator.pair_errors``). A field
-    the file does not record is ``None``.
+    A field the file does not record is ``None``.
+
+    Attributes
+    ----------
+    table : pandas.DataFrame
+        The values, as :func:`load_table` returns them.
+    quality : pandas.DataFrame
+        A ``uint8`` DataFrame with the index and columns of ``table``, one
+        :class:`pyspi.quality.Quality` code per cell (``Calculator.quality``).
+    errors : dict or None
+        ``{identifier: message}`` for the SPIs that failed
+        (``Calculator.errors``).
+    run_spec : dict or None
+        The resolved specification of the run (``Calculator.run_spec``).
+    pair_errors : dict or None
+        The messages of failed pairs (``Calculator.pair_errors``).
     """
     table: pd.DataFrame
     quality: pd.DataFrame
@@ -291,7 +307,8 @@ class Results(NamedTuple):
 
 
 def _frame_from_matrices(matrices, spis, procs):
-    """``(n_spis, M, M)`` -> the wide ``M x (n_spis * M)`` frame :attr:`Calculator.table` uses.
+    """
+    ``(n_spis, M, M)`` -> the wide ``M x (n_spis * M)`` frame :attr:`Calculator.table` uses.
 
     The one builder for :attr:`Calculator.table`, :attr:`Calculator.quality`
     and what :func:`load_table` / :func:`load_results` return, so their index
@@ -321,9 +338,8 @@ def _read_npz(path):
             f"Can only load '.npz' (got '{path.suffix}'). CSV export is one-way; "
             f"re-run the calculation or save as .npz."
         )
-    # allow_pickle=False: loading a results table must never be able to execute
-    # code. Files written by pyspi < 3.0.0 stored names as object arrays and
-    # will fail here; re-save them from a Calculator.
+    # allow_pickle=False: loading a results table must never execute code. A
+    # file that stores names as object arrays fails here.
     with np.load(path, allow_pickle=False) as f:
         missing = {"values", "spis", "processes"} - set(f.files)
         if missing:
@@ -340,15 +356,12 @@ def _read_npz(path):
         quality = f["quality"] if "quality" in f.files else None
         spis = [str(s) for s in f["spis"]]
         procs = [str(p) for p in f["processes"]]
-        # Provenance. `save()` writes these, so a loaded table can report which
-        # SPIs (and pairs) failed, what produced it, and whether it matches a rerun.
+        # Provenance: which SPIs and pairs failed, and what produced the file.
         meta = {name: str(f[name])
                 for name in ("run_spec", "run_digest", "errors", "pair_errors")
                 if name in f.files}
 
-    # The whole shape, not just `ndim` and axis 0, so a file of the wrong width
-    # fails here with a statement about the file rather than later in
-    # `MultiIndex.from_product` with a reshape error.
+    # Check the whole shape, so a malformed file fails here and says so.
     if values.shape != (len(spis), len(procs), len(procs)):
         raise ValueError(
             f"{path} is malformed: values has shape {values.shape}, expected "
@@ -371,27 +384,32 @@ def _read_npz(path):
 
 
 def load_table(path):
-    """Load a results table written by :meth:`Calculator.save`.
+    """
+    Load the results table that :meth:`Calculator.save` wrote to ``.npz``.
 
-    Returns the same DataFrame ``Calculator.table`` returns: rows are
-    processes, columns are a ``(spi, process)`` MultiIndex. Only ``.npz``
-    round-trips exactly -- ``.csv`` is a one-way human-readable export.
+    Only ``.npz`` round-trips; ``.csv`` is a one-way export. For the per-cell
+    quality codes, use :func:`load_results`.
 
-    ``table.attrs`` carries the file's small metadata: ``schema``,
-    ``run_spec``, ``run_digest`` and ``errors``. The per-cell quality codes are
-    not among them; use :func:`load_results` for those.
+    Parameters
+    ----------
+    path : str or path-like
+        Path of the ``.npz`` file.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The table as ``Calculator.table`` holds it: rows are processes,
+        columns a ``(spi, process)`` MultiIndex. ``table.attrs`` holds the
+        file's ``schema``, ``run_spec``, ``run_digest`` and ``errors``.
     """
     return _table_from_parts(_read_npz(path))
 
 
 def _table_from_parts(parts):
+    """The results table of a read ``.npz``, with its small metadata in ``attrs``."""
     table = _frame_from_matrices(parts["values"], parts["spis"], parts["procs"])
-    # `DataFrame.attrs` rather than a wrapper type: it is pandas' documented
-    # place for exactly this, and it keeps `load_table` returning the same
-    # object `Calculator.table` does. Only small values go here: pandas
-    # deep-copies `attrs` on every derived frame and compares them with `==`
-    # in `concat`, so a DataFrame in `attrs` (the quality codes) made slicing
-    # slower and made `pd.concat` of two tables raise.
+    # Only small values go in `attrs`: pandas deep-copies them on every derived
+    # frame and compares them in `concat`, so the quality codes stay out.
     table.attrs["schema"] = parts["schema"]
     for name in ("run_spec", "errors"):
         if name in parts:
@@ -402,18 +420,27 @@ def _table_from_parts(parts):
 
 
 def load_results(path):
-    """Load everything :meth:`Calculator.save` wrote to ``.npz`` as a :class:`Results`.
+    """
+    Load everything :meth:`Calculator.save` wrote to ``.npz``.
 
-    ``Results(table, quality, errors, run_spec, pair_errors)``: ``table`` is
-    what :func:`load_table` returns, ``quality`` the matching ``uint8``
-    DataFrame of :class:`pyspi.quality.Quality` codes, and the rest as in
-    :class:`Results`.
+    A file without quality codes (schema < 2) has them derived from its values
+    and ``errors``: a cell is GOOD, NaN or +/-Inf by its value, the diagonal
+    is NaN, and every non-finite off-diagonal cell of an SPI recorded as
+    failed is ERROR. Such a file holds no pair failures, so those cells read
+    as NaN and ``pair_errors`` is ``None``.
 
-    A file written before quality codes existed (schema < 2) has its codes
-    derived from its values and ``errors``: a cell is GOOD, NaN or +/-Inf by its
-    value, the diagonal is NaN, and every non-finite off-diagonal cell of an
-    SPI recorded as failed is ERROR. Pair-level failures were not recorded in
-    those files, so those cells read as NaN and ``pair_errors`` is ``None``.
+    Parameters
+    ----------
+    path : str or path-like
+        Path of the ``.npz`` file.
+
+    Returns
+    -------
+    Results
+        ``Results(table, quality, errors, run_spec, pair_errors)``: ``table``
+        as :func:`load_table` returns it, ``quality`` the matching ``uint8``
+        DataFrame of :class:`pyspi.quality.Quality` codes, and the rest as
+        described in :class:`Results`.
     """
     parts = _read_npz(path)
     table = _table_from_parts(parts)
@@ -434,7 +461,8 @@ def load_results(path):
 
 
 def feature_vector(table, directedness=None, include_self=False):
-    """Flatten a results table to one value per independent pairwise feature.
+    """
+    Flatten a results table to one value per independent pairwise feature.
 
     :attr:`Calculator.table` stores every SPI as a full ``M x M`` matrix. For
     an ``undirected`` SPI the lower triangle is a copy of the upper one and
@@ -517,7 +545,8 @@ def feature_vector(table, directedness=None, include_self=False):
 
 
 def _directedness_from_table(table):
-    """Recover ``{identifier: trait}`` for a table loaded from disk.
+    """
+    Recover ``{identifier: trait}`` for a table loaded from disk.
 
     ``table.attrs["run_spec"]["config"]`` names the bundled config or YAML
     path the SPIs were built from; they are instantiated again to read their
@@ -545,7 +574,8 @@ def _directedness_from_table(table):
 
 
 class _ConfigLoader(yaml.FullLoader):
-    """FullLoader that refuses a key repeated within one mapping.
+    """
+    FullLoader that refuses a key repeated within one mapping.
 
     PyYAML keeps the last of two equal keys, so a module named twice in a
     config would silently lose its first block of SPIs.
@@ -567,12 +597,23 @@ _CONFIG_ENTRY_KEYS = ("labels", "configs", "dependencies")
 
 
 def load_config_yaml(configfile):
-    """Read an SPI config as ``{module: {class: entry}}``, refusing malformed ones.
+    """
+    Read an SPI config, refusing malformed ones.
 
     A key other than ``labels``, ``configs`` or ``dependencies`` in a class
-    entry is refused rather than ignored: a misspelt ``config:`` would
-    otherwise build the class with its default parameters. A bare ``Class:``
-    line is an entry with no keys.
+    entry is refused rather than ignored, since a misspelt ``config:`` would
+    build the class with its default parameters. A key repeated within one
+    mapping is refused too. A bare ``Class:`` line is an entry with no keys.
+
+    Parameters
+    ----------
+    configfile : str or path-like
+        Path of the YAML file.
+
+    Returns
+    -------
+    dict
+        ``{module: {class name: entry}}``, each entry a dict.
     """
     with open(configfile) as f:
         yf = yaml.load(f, Loader=_ConfigLoader)
@@ -598,14 +639,24 @@ def load_config_yaml(configfile):
 
 
 def load_spis_from_yaml(configfile, quiet=False):
-    """Instantiate all SPIs from a configfile.
+    """
+    Instantiate every SPI of a config.
 
-    Returns a dict mapping identifier to SPI instance.
+    Used by :class:`Calculator` and by the parallel workers. Progress is
+    logged by the ``pyspi.calculator`` logger at INFO level. Two SPIs with the
+    same identifier raise ``ValueError``.
 
-    Shared between :class:`Calculator` and the parallel worker initializer
-    (see :func:`pyspi._parallel._worker_init`) so workers don't need to
-    instantiate a throwaway Calculator just to rebuild ``_spis``. Progress is
-    emitted via the ``pyspi.calculator`` logger at INFO level.
+    Parameters
+    ----------
+    configfile : str or path-like
+        Path of the YAML file.
+    quiet : bool, optional
+        Log nothing. Default: False.
+
+    Returns
+    -------
+    dict
+        ``{identifier: SPI instance}``, in config order.
     """
     spis = {}
     log = (lambda *a, **k: None) if quiet else logger.info
@@ -635,11 +686,10 @@ def load_spis_from_yaml(configfile, quiet=False):
 
 
 def _insert_spi(spis, spi, module_name, fcn, params):
-    """Insert an SPI, rejecting identifier collisions.
+    """
+    Insert an SPI, rejecting an identifier already in ``spis``.
 
-    The identifier is the primary key: it names the table column and the
-    checkpoint file. Duplicates are caught on insertion, because once in the
-    dict the loser has already been discarded.
+    The identifier names the table column and the checkpoint file.
     """
     existing = spis.get(spi.identifier)
     if existing is not None:
@@ -654,6 +704,7 @@ def _insert_spi(spis, spi, module_name, fcn, params):
 
 
 def _expand_lagged_correlation_configs(configs):
+    """Expand each ``max_tau: K`` entry of LaggedCorrelation into ``tau = 1, ..., K``."""
     expanded = []
     for params in configs or []:
         if "max_tau" in params:
@@ -671,57 +722,70 @@ def _expand_lagged_correlation_configs(configs):
 
 
 class Calculator:
-    """Compute all pairwise interactions.
+    """
+    Compute every SPI of a config on a multivariate time series.
 
-    The calculator takes in a multivariate time-series dataset (MTS), computes and stores all pairwise interactions for the dataset.
-    It uses a YAML configuration file that can be modified in order to compute a reduced set of pairwise methods.
+    The SPIs are instantiated from the config when the Calculator is built;
+    :meth:`compute` fills :attr:`table`, one ``M x M`` matrix per SPI with
+    row = source and column = target, and :attr:`quality`, which says why any
+    value is NaN. :meth:`save` writes both to a file.
 
-    Example:
-        >>> import numpy as np
-        >>> dataset = np.random.randn(5,500)    # create a random multivariate time series (MTS)
-        >>> calc = Calculator(dataset=dataset)  # Instantiate the calculator
-        >>> calc.compute()                      # Compute all pairwise interactions
+    Parameters
+    ----------
+    dataset : Data, array-like or None, optional
+        The ``M`` processes of ``T`` observations, as a :class:`~pyspi.data.Data`
+        (used as it is preprocessed) or anything ``Data`` reads (an
+        ``(M, T)`` array, a DataFrame or a file path), which is detrended and
+        z-scored as set here. Default: None; load one later with
+        :meth:`load_dataset`.
+    name : str or None, optional
+        Name of the calculator, shown in progress output and used to tell
+        datasets apart in a :class:`CalculatorFrame`. Default: None.
+    labels : list or None, optional
+        Labels of the dataset, for grouping it with :meth:`set_group`.
+        Default: None.
+    config : str or path-like or None, optional
+        Which SPIs to compute: the name of a bundled config or the path of a
+        YAML file. Default: None, which means ``"full"``. The bundled configs
+        are:
 
-    Args:
-        dataset (:class:`~pyspi.data.Data`, array_like, optional):
-            The multivariate time series of M processes and T observations, default=None.
-        name (str, optional):
-            The name of the calculator. Mainly used for printing the results but can be useful if you have multiple instances, default=None.
-        labels (array_like, optional):
-            Any set of strings by which you want to label the calculator. This can be useful later for classification purposes, default=None.
-        config (str, optional):
-            Which SPIs to compute. Either the name of a bundled config or a path
-            to your own YAML file, default="full". Bundled configs are:
+        - ``"full"``: every SPI.
+        - ``"fast"``: all but the slowest SPIs.
+        - ``"sonnet"``: 14 representative SPIs, one per module (M01-M14).
+        - ``"fabfour"``: 4 SPIs: covariance, Spearman's correlation, directed
+          information and power-envelope correlation.
+        - ``"benchmarked_p80"``, ``"_p90"``, ``"_p95"``, ``"_p99"``: the
+          fastest 80, 90, 95 or 99% of SPIs by measured compute cost.
+    detrend : bool, optional
+        Remove the least-squares line from each process. Default: False.
+    zscore : bool or None, optional
+        z-score each process along time. This is per process, not over the
+        whole dataset, so it removes each process's units without letting
+        the other processes influence any pairwise statistic.
+        Default: None, which means True.
+    verbose : bool, optional
+        Log progress at INFO level and print a summary after :meth:`compute`.
+        Default: True.
+    subset, configfile, normalise : optional
+        Deprecated spellings of ``config`` (``subset="all"`` is
+        ``config="full"``), ``config`` (a path) and ``zscore``, removed in
+        pyspi 4.0. Each emits a ``DeprecationWarning`` and cannot be combined
+        with the argument that replaces it. Default: None.
 
-            - ``"full"`` -- every SPI.
-            - ``"fast"`` -- drops the slowest SPIs.
-            - ``"sonnet"`` -- 14 representative SPIs, one per module (M01-M14).
-            - ``"fabfour"`` -- 4 SPIs: covariance, Spearman, directed information,
-              power-envelope correlation.
-            - ``"benchmarked_p80"`` / ``"_p90"`` / ``"_p95"`` / ``"_p99"`` -- keep
-              the fastest N% of SPIs by measured amortized compute cost, so
-              ``benchmarked_p80`` is the cheapest and ``benchmarked_p99`` the most
-              complete. See ``bench/README.md`` for how these were derived.
-        detrend (bool, optional):
-            If True, detrend each time series in the MTS dataset individually along the time axis, default=False.
-        zscore (bool, optional):
-            If True, z-score each time series in the MTS dataset individually along
-            the time axis, default=True. Per-process (rather than whole-dataset)
-            standardisation is deliberate: it removes each process's arbitrary
-            gain/units without letting the choice of the other processes in the
-            dataset influence any pairwise statistic.
-        subset, configfile, normalise:
-            Deprecated 2.x spellings of ``config`` (``subset="all"`` is
-            ``config="full"``), ``config`` (a path) and ``zscore``. They emit a
-            ``DeprecationWarning``, are removed in 4.0, and cannot be combined
-            with the new argument they replace.
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pyspi import Calculator
+    >>> calc = Calculator(dataset=np.random.randn(5, 500), config="fast")
+    >>> calc.compute()
+    >>> calc.table  # one 5 x 5 block of columns per SPI
     """
     def __init__(
         self, dataset=None, name=None, labels=None, config=None,
         detrend=False, zscore=None, verbose=True,
         subset=None, configfile=None, normalise=None,
     ):
-        # 2.x spellings (subset/configfile/normalise): deprecated, removed in 4.0.
+        # Deprecated spellings (subset, configfile, normalise).
         config = resolve_config_arg(config, subset, configfile)
         zscore = resolve_zscore(zscore, normalise)
         self._spis = {}
@@ -737,25 +801,21 @@ class Calculator:
 
         configfile = resolve_config(config)
 
-        self._configfile = configfile  # stored so parallel workers can re-instantiate SPIs
-        # Snapshot at construction: the SPIs were built from *these* bytes, so
-        # the digest must reflect them even if the file changes afterwards.
+        self._configfile = configfile
+        # The bytes the SPIs are built from, in case the file changes later.
         try:
             self._config_bytes = Path(configfile).read_bytes()
         except OSError:
             self._config_bytes = b"<configfile unreadable>"
         self._config = config
-        # Duplicates are rejected at insertion inside load_spis_from_yaml; a
-        # post-hoc Counter over dict keys can never see a count above 1.
         self._spis = load_spis_from_yaml(configfile)
 
         self._name = name
         self._labels = labels
 
         logger.info("%d SPI(s) were successfully initialised.", len(self.spis))
-        # Bundled configs are curated deliberately -- sonnet, for instance, is
-        # one representative SPI per module, not a cost-optimised set -- so the
-        # advice only applies to configs the user wrote.
+        # Bundled configs are chosen deliberately, so only user configs are
+        # checked.
         if Path(configfile).parent != CONFIG_DIR:
             warn_partial_cache_buckets(self._spis)
 
@@ -764,10 +824,7 @@ class Calculator:
 
     @property
     def spis(self):
-        """Dict of SPIs.
-
-        Keys are the SPI identifier and values are their objects.
-        """
+        """``{identifier: SPI instance}`` for every SPI of the config."""
         return self._spis
 
     @spis.setter
@@ -776,7 +833,8 @@ class Calculator:
 
     @property
     def errors(self):
-        """``{identifier: "ExcType: message"}`` for every SPI that failed.
+        """
+        ``{identifier: "ExcType: message"}`` for every SPI that failed.
 
         A failed SPI still occupies its column in :attr:`table`, filled with
         NaN. Consult this before interpreting a table: a NaN column is
@@ -792,7 +850,8 @@ class Calculator:
 
     @property
     def pair_errors(self):
-        """``{identifier: [(source, target, "ExcType: message"), ...]}`` for failed pairs.
+        """
+        ``{identifier: [(source, target, "ExcType: message"), ...]}`` for failed pairs.
 
         A pair whose computation raised inside an SPI that otherwise succeeded
         (see :func:`pyspi.base.fill_pairwise`) is NaN in :attr:`table` and
@@ -804,7 +863,8 @@ class Calculator:
 
     @property
     def run_digest(self):
-        """Content hash of the resolved run: spec plus the input data itself.
+        """
+        Content hash of the resolved run: spec plus the input data itself.
 
         This is what a checkpoint is bound to: a checkpoint resumes only into a
         run with the same dataset, preprocessing, config, process order and
@@ -814,22 +874,15 @@ class Calculator:
         of the same width with the same name are exactly the case that needs
         separating.
         """
-        # Location-only fields are excluded: `configfile` is an absolute path,
-        # which differs between a source checkout, an installed wheel and a
-        # temporary directory for the same config. The path stays in `run_spec`
-        # as provenance; the *contents* are hashed below.
+        # Location-only fields are excluded; the config's contents are hashed.
         spec = {k: v for k, v in self.run_spec.items()
                 if k not in _DIGEST_EXCLUDED_SPEC_FIELDS}
         h = hashlib.sha256()
         h.update(json.dumps(spec, sort_keys=True, default=str).encode())
-        # The algorithm, not only its inputs. Identical data and an identical
-        # config computed by two different estimator implementations are two
-        # different results, and a digest that cannot tell them apart lets a
-        # checkpoint from one be resumed by the other. `COMPUTATION_VERSION` is
-        # bumped whenever a change alters computed values.
+        # The algorithm, not only its inputs: COMPUTATION_VERSION changes
+        # whenever a change alters computed values.
         h.update(_parallel.COMPUTATION_VERSION.encode())
-        # Hash the config *contents*, not just its path and the identifiers it
-        # produces, so a config edited in place gives a different digest.
+        # The config's contents, so an edited config gives a different digest.
         h.update(self._config_bytes)
         dataset = getattr(self, "_dataset", None)
         if dataset is not None:
@@ -842,21 +895,19 @@ class Calculator:
 
     @property
     def run_spec(self):
-        """The resolved specification of what this Calculator computes.
+        """
+        The resolved specification of what this Calculator computes.
 
-        One canonical description of the run — the config actually resolved to,
-        the preprocessing actually applied, the dataset shape and process names
-        actually loaded, and the SPI set actually instantiated. Recorded so a
-        result can be tied back to the run that produced it rather than being
-        identified by SPI name and matrix width alone.
+        The config it resolved to, the preprocessing applied, the dataset's
+        shape and process names, the SPIs instantiated, and the versions of
+        pyspi, its computations and its dependencies. Saved with the results,
+        to tie them to the run that produced them.
         """
         dataset = getattr(self, "_dataset", None)
         return {
             "config": str(self._config),
             "configfile": str(self._configfile),
-            # The dataset's own flags: a prepared Data supplied by the caller
-            # carries its own preprocessing, and the Calculator's flags were
-            # never applied to it.
+            # The dataset's own flags: a Data passed in keeps its preprocessing.
             "zscore": bool(dataset.zscore) if dataset is not None else bool(self._zscore),
             "detrend": bool(dataset.detrend) if dataset is not None else bool(self._detrend),
             "n_processes": int(dataset.n_processes) if dataset is not None else None,
@@ -878,7 +929,7 @@ class Calculator:
 
     @property
     def dataset(self):
-        """Dataset as a data object."""
+        """The loaded dataset, a :class:`~pyspi.data.Data`."""
         return self._dataset
 
     @dataset.setter
@@ -898,7 +949,7 @@ class Calculator:
 
     @property
     def labels(self):
-        """List of calculator labels."""
+        """Labels of the dataset, as used by :meth:`set_group`."""
         return self._labels
 
     @labels.setter
@@ -912,10 +963,12 @@ class Calculator:
 
     @property
     def table(self):
-        """Results table for all pairwise interactions.
+        """
+        The results table.
 
-        Rows are processes and columns a ``(spi, process)`` MultiIndex, so
-        ``table[spi]`` is that SPI's full ``M x M`` matrix, row = source.
+        A DataFrame with processes as rows and a ``(spi, process)`` column
+        MultiIndex, so ``table[identifier]`` is that SPI's ``M x M`` matrix,
+        row = source and column = target. NaN until :meth:`compute` has run.
         :meth:`feature_vector` flattens it to one value per independent pair.
         """
         return self._table
@@ -928,7 +981,8 @@ class Calculator:
 
     @property
     def quality(self):
-        """Per-cell quality codes: a ``uint8`` DataFrame shaped like :attr:`table`.
+        """
+        Per-cell quality codes: a ``uint8`` DataFrame shaped like :attr:`table`.
 
         Each cell holds a :class:`pyspi.quality.Quality` code. ``GOOD`` (0)
         means the value in :attr:`table` is a real, finite number; every other
@@ -955,11 +1009,7 @@ class Calculator:
         return f"<Calculator config={self._config!r} {shape} {state}{failed}>"
 
     def _repr_html_(self):
-        """Rendered by Jupyter in place of the default object repr.
-
-        Shows whether the run has happened and how it went, which the bare
-        ``<Calculator at 0x...>`` does not.
-        """
+        """A table of :meth:`summary`, shown by Jupyter."""
         s = self.summary()
         rows = [
             ("config", s["config"]),
@@ -977,17 +1027,25 @@ class Calculator:
         return f'<table><tbody>{body}</tbody></table>'
 
     def to_frame(self, dropna=True):
-        """Results in long form: one row per ``(spi, source, target)``.
+        """
+        The results in long form, one row per ``(spi, source, target)``.
 
-        :attr:`table` is wide -- an ``M x (n_spis * M)`` frame with a
-        ``(spi, process)`` column MultiIndex -- which is the right shape for
-        storage but awkward for plotting, ``groupby``, or joining against SPI
-        labels. This is the same data with one value per row.
+        The same values as :attr:`table`, in the shape suited to plotting,
+        ``groupby`` and joins. Self-pairs are dropped.
 
-        Self-pairs are dropped (their diagonal is NaN by construction); with
-        ``dropna=False`` failed SPIs keep their NaN rows. Both orientations of
-        every pair are listed, so an undirected SPI appears twice per pair;
-        use :meth:`feature_vector` for one value per independent feature.
+        Both orientations of every pair are listed, so an undirected SPI
+        appears twice per pair; :meth:`feature_vector` gives one value per
+        independent pair.
+
+        Parameters
+        ----------
+        dropna : bool, optional
+            Drop the rows whose value is NaN. Default: True.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns ``spi``, ``source``, ``target`` and ``value``.
         """
         long = (
             self.table.rename_axis(index="source")
@@ -1002,7 +1060,8 @@ class Calculator:
         return long[["spi", "source", "target", "value"]].reset_index(drop=True)
 
     def feature_vector(self, include_self=False):
-        """One value per independent pairwise feature, as a ``pandas.Series``.
+        """
+        One value per independent pairwise feature, as a ``pandas.Series``.
 
         Turns :attr:`table` into features for classification or regression
         across datasets. For ``undirected`` and ``antisymmetric`` SPIs only the
@@ -1031,11 +1090,15 @@ class Calculator:
         return feature_vector(self.table, directedness, include_self=include_self)
 
     def summary(self):
-        """One-line-per-fact overview of the last :meth:`compute` call.
+        """
+        An overview of the last :meth:`compute` call, for printing.
 
-        Human-facing convenience over :attr:`timings`, :attr:`errors` and
-        :attr:`n_spis`, which stay as they are: those are the programmatic
-        handles you filter and assert on, this is the thing you print.
+        Returns
+        -------
+        dict
+            The dataset's name and shape, the config, the numbers of SPIs,
+            computed SPIs and failed SPIs, the failed identifiers, the total
+            time in seconds and the five slowest SPIs with their times.
         """
         timings = self._timings
         total = sum(timings.values())
@@ -1055,7 +1118,7 @@ class Calculator:
 
     @property
     def group(self):
-        """The numerical group assigned during :meth:`~pyspi.Calculator.calculator.set_group`."""
+        """The index of the group assigned by :meth:`set_group`."""
         try:
             return self._group
         except AttributeError as err:
@@ -1070,7 +1133,7 @@ class Calculator:
 
     @property
     def group_name(self):
-        """The group name assigned during :meth:`~pyspi.Calculator.calculator.set_group`."""
+        """The name of the group assigned by :meth:`set_group`."""
         try:
             return self._group_name
         except AttributeError as err:
@@ -1082,11 +1145,15 @@ class Calculator:
         raise Exception("Do not set this property externally. Use the group() method.")
 
     def load_dataset(self, dataset):
-        """Load new dataset into existing instance.
+        """
+        Load a dataset, replacing any earlier one and its results.
 
-        Args:
-            dataset (:class:`~pyspi.data.Data`, array_list):
-                New dataset to attach to calculator.
+        Parameters
+        ----------
+        dataset : Data or array-like
+            A :class:`~pyspi.data.Data`, copied and used as it is
+            preprocessed, or anything ``Data`` reads, which is detrended and
+            z-scored as set for this Calculator.
         """
         if not isinstance(dataset, Data):
             self._dataset = Data(
@@ -1095,10 +1162,8 @@ class Calculator:
                 detrend=self._detrend,
             )
         else:
-            # Snapshot rather than alias, so mutating the caller's Data after
-            # construction cannot change this run. The snapshot also records
-            # the preprocessing the data *actually* carries, not the Calculator
-            # flags that were bypassed when a prepared Data was supplied.
+            # A copy, so changing the caller's Data cannot change this run,
+            # with the preprocessing that Data carries.
             self._dataset = Data._from_prepared_array(
                 np.array(dataset.to_numpy(), copy=True),
                 procnames=dataset.procnames,
@@ -1119,15 +1184,25 @@ class Calculator:
             np.full(shape, Quality.NOT_COMPUTED, dtype=np.uint8), self.spis, procs)
 
     def save(self, path):
-        """Write the results table to ``path``; the format follows the suffix.
+        """
+        Write the results to a file, in the format its suffix names.
 
-        ``.npz`` (recommended) stores the results in their natural shape -- an
-        ``(n_spis, M, M)`` float array plus the SPI and process names -- and
-        round-trips exactly through :func:`pyspi.load_table`. It also stores
-        :attr:`quality` as an ``(n_spis, M, M)`` ``uint8`` array, with
-        :attr:`errors`, :attr:`pair_errors` and the run's provenance; all of it
-        comes back from :func:`pyspi.load_results`. ``.csv`` is for eyeballing
-        small results (values only); it is impractical for the full SPI set.
+        ``.npz`` (recommended) stores the values as an ``(n_spis, M, M)`` array
+        with the SPI and process names, and round-trips exactly through
+        :func:`pyspi.load_table`. It also stores :attr:`quality`,
+        :attr:`errors`, :attr:`pair_errors` and the run's provenance, which
+        :func:`pyspi.load_results` reads back. ``.csv`` holds the values only,
+        for looking at small results.
+
+        Parameters
+        ----------
+        path : str or path-like
+            Path of the file, ending in ``.npz`` or ``.csv``.
+
+        Returns
+        -------
+        pathlib.Path
+            The path written.
         """
         path = Path(path)
         M = self.dataset.n_processes
@@ -1139,8 +1214,7 @@ class Calculator:
             quality = np.stack([self.quality[k].to_numpy(dtype=np.uint8) for k in keys])
             np.savez_compressed(
                 path, values=values, quality=quality,
-                # dtype='U', not object: object arrays are only loadable with
-                # allow_pickle=True, which allows arbitrary code execution on load.
+                # dtype='U', not object, which would need allow_pickle to load.
                 spis=np.array(keys, dtype="U"),
                 processes=np.array(self.dataset.procnames, dtype="U"),
                 schema=np.array(_NPZ_SCHEMA),
@@ -1172,34 +1246,44 @@ class Calculator:
         mp_context=None,
         progress=True,
     ):
-        """Compute every SPI on the loaded dataset.
+        """
+        Compute every SPI on the loaded dataset.
 
-        Args:
-            n_jobs (int, optional): Number of worker processes. ``-1`` uses every
-                core available to this process, ``-2`` all but one (joblib
-                convention); ``0`` raises ``ValueError``. ``None`` (default)
-                falls back to the ``PYSPI_N_JOBS`` environment variable, or 1 if
-                unset. ``1`` runs serially in this process.
-            checkpoint_dir (str | Path, optional): If set, each finished SPI is
-                written to ``<dir>/<identifier>.npy`` atomically. Enables resume.
-            resume (bool): If True (default) and ``checkpoint_dir`` contains
-                results from a prior run, those SPIs are loaded and skipped.
-            retry_failed (bool): If True (default), checkpoints carrying an
-                ``.error`` sidecar are recomputed rather than resumed. Set
-                False to inherit a prior run's failures as-is.
-            mp_context (str, optional): Multiprocessing start method when
-                ``n_jobs>1``. Default (``None``): ``"fork"`` on Linux (workers
-                inherit imported state via copy-on-write — ~2x faster startup),
-                ``"spawn"`` on macOS/Windows (fork is unsafe/absent there).
-            progress (bool): Show a tqdm progress bar (default True).
+        Fills :attr:`table` and :attr:`quality`, and records failures in
+        :attr:`errors` and :attr:`pair_errors` and times in :attr:`timings`.
+        A failed SPI does not stop the run.
 
-        Backend threading: when ``n_jobs>1`` each worker pins its nested pools
-        (OpenMP/OpenBLAS/MKL, pyEDM) to one thread/process so the
-        workers don't oversubscribe the cores. macOS is an exception — its
-        Accelerate BLAS cannot be thread-pinned by threadpoolctl, so on macOS
-        ``n_jobs>1`` can oversubscribe BLAS-heavy SPIs; prefer ``n_jobs=1``
-        there for a single dataset. ``n_jobs=1`` always leaves the backends
-        free to self-parallelise.
+        With ``n_jobs > 1`` each worker pins its BLAS and OpenMP pools to one
+        thread so the workers do not oversubscribe the cores. macOS's
+        Accelerate BLAS cannot be pinned this way, so there ``n_jobs > 1`` can
+        oversubscribe BLAS-heavy SPIs; prefer ``n_jobs=1`` for a single
+        dataset. ``n_jobs=1`` leaves the libraries free to use several threads.
+
+        Parameters
+        ----------
+        n_jobs : int or None, optional
+            Number of worker processes: ``1`` runs serially in this process,
+            ``-1`` uses every core available to it and ``-2`` all but one;
+            ``0`` raises ``ValueError``. Default: None, the ``PYSPI_N_JOBS``
+            environment variable, or 1 if it is unset.
+        checkpoint_dir : str or path-like or None, optional
+            Directory to which each finished SPI is written as
+            ``<identifier>.npy``, so an interrupted run can resume. A
+            directory that belongs to a different run raises ``ValueError``.
+            Default: None.
+        resume : bool, optional
+            Load and skip the SPIs already in ``checkpoint_dir``.
+            Default: True.
+        retry_failed : bool, optional
+            Recompute, rather than resume, checkpoints of SPIs that failed.
+            Default: True.
+        mp_context : str or None, optional
+            Multiprocessing start method when ``n_jobs > 1``: ``'fork'``,
+            ``'spawn'`` or ``'forkserver'``. Default: None, ``'fork'`` on
+            Linux (workers inherit the imported modules) and ``'spawn'``
+            elsewhere (fork is unsafe on macOS and absent on Windows).
+        progress : bool, optional
+            Show a progress bar. Default: True.
         """
         if not hasattr(self, "_dataset"):
             raise AttributeError(
@@ -1218,12 +1302,8 @@ class Calculator:
             digest = self.run_digest
             owned, reason = _parallel.checkpoint_owner_matches(cp_dir, digest)
             if not owned:
-                # Refuse to inherit another run's results, e.g. those of a
-                # different dataset of the same width.
+                # Refuse another run's results, and do not delete them.
                 self._resume_rejected = True
-                # Refuse rather than delete. Deleting another run's results to
-                # make room is destructive and, if interrupted midway, relabels
-                # whatever survives as this run.
                 raise ValueError(
                     f"Checkpoint directory {cp_dir} belongs to a different run "
                     f"({reason}). Use a separate directory per run, or remove "
@@ -1276,16 +1356,14 @@ class Calculator:
         for key in iterable:
             if progress:
                 iterable.set_description(f"Processing [{self._name}: {key}]")
-            # Same primitive the workers use, so both paths agree on what
-            # counts as a failure and on what the caller is shown.
+            # The primitive the workers use, so both paths agree on failures.
             res = _parallel.execute_spi(self._spis[key], self.dataset, key, M)
             self._record(key, res)
             _parallel.write_checkpoint(cp_dir, key, res.values, res.err,
                                        res.quality, res.pair_errors)
 
     def _record(self, key, res):
-        """Commit one SPI result (a ``_parallel.SPIResult``): values, quality
-        codes, errors and warnings."""
+        """Record one ``_parallel.SPIResult``: values, quality codes, errors and warnings."""
         S, err, warns = res.values, res.err, res.warns
         self._table[key] = S
         self._quality[key] = np.asarray(res.quality, dtype=np.uint8)
@@ -1302,12 +1380,11 @@ class Calculator:
             self._errors[key] = err
             warnings.warn(f'Caught error for SPI "{key}": {err}')
         else:
-            # A recomputation that succeeds clears the previous failure, so
-            # `retry_failed=True` leaves no stale entry in `calc.errors`.
+            # A successful recomputation clears an earlier failure.
             self._errors.pop(key, None)
 
     def _rmmin(self):
-        """Iterate through all spis and remove the minimum (fixes absolute value errors when correlating)"""
+        """Shift each unsigned SPI in :attr:`table` to a minimum of 0."""
         self._table = self._min_shifted_table()
 
     def _min_shifted_table(self):
@@ -1320,17 +1397,23 @@ class Calculator:
         return table
 
     def set_group(self, classes):
-        """Assigns a numeric value to this instance based on list of classes.
+        """
+        Assign this dataset to the class whose labels it carries.
 
-        Args:
-            classes (list):
-                If any of the labels in this instance matches one in the class list, then we assign the index
-                value to this class.
+        Sets :attr:`group` to the index of the one class in ``classes`` all of
+        whose labels are among :attr:`labels`, and :attr:`group_name` to its
+        labels joined by commas. With no match, or more than one (which
+        warns), the group is None.
+
+        Parameters
+        ----------
+        classes : list
+            One entry per class: a label or a list of labels. No class may be
+            a subset of another.
         """
         self._group = None
         self._group_name = None
 
-        # Ensure this is a list of lists
         for i, c in enumerate(classes):
             if not isinstance(c, list):
                 classes[i] = [c]
@@ -1357,7 +1440,7 @@ class Calculator:
                 pass
 
     def _merge(self, other):
-        """TODO: Merge two calculators (to include additional SPIs)"""
+        """Merge two calculators (not implemented)."""
         raise NotImplementedError()
         if self.identifier is not other.name:
             raise TypeError(f"Calculator name does do not match. Aborting merge.")
@@ -1371,20 +1454,29 @@ class Calculator:
                 )
 
     def get_stat_labels(self):
-        """Get the labels for each statistic.
+        """
+        The labels of each SPI.
 
-        Returns:
-            stat_labels (dict): dictionary of
+        Returns
+        -------
+        dict
+            ``{identifier: list of labels}``.
         """
         return {k: v.labels for k, v in zip(self._spis.keys(), self._spis.values())}
 
     def _get_correlation_df(self, with_labels=False, rmmin=False):
-        # Shift unsigned SPIs to a minimum of 0 on a copy, so the stored table
-        # (and `save()`) keeps the raw values.
+        """
+        Spearman correlation between every pair of SPIs, over the pairs of processes.
+
+        A pair of SPIs is correlated on absolute values unless both are
+        signed. With ``rmmin`` the unsigned SPIs are first shifted to a
+        minimum of 0, on a copy of the table.
+        Returns the SPI-by-SPI DataFrame, and the SPI labels if
+        ``with_labels``.
+        """
         table = self._min_shifted_table() if rmmin else self.table
 
-        # Flatten (get Edge-by-SPI matrix). future_stack=True keeps all-NaN
-        # rows, so dropna removes the self-pairs (the SPI diagonals are NaN).
+        # Edge-by-SPI matrix; dropna removes the self-pairs, which are NaN.
         edges = table.stack(future_stack=True).dropna(how="all")
 
         # Spearman correlation of every SPI pair, on pairwise complete values:
@@ -1405,6 +1497,7 @@ class Calculator:
 
 
 def forall(func):
+    """Make a CalculatorFrame method that calls ``func(calc, ...)`` on each calculator."""
     def do(self, *args, **kwargs):
         try:
             for i in self._calculators.index:
@@ -1420,8 +1513,25 @@ def forall(func):
 
 
 class CalculatorFrame:
-    """ CalculatorFrame
-        Container for batch level commands, like computing/pruning/initialising multiple datasets at once
+    """
+    A set of Calculators, one per dataset, run and compared together.
+
+    Parameters
+    ----------
+    calculators : Calculator, CalculatorFrame, list or None, optional
+        Calculators to start with. Default: None.
+    name : str or None, optional
+        Name of the frame. Default: None.
+    datasets : list or None, optional
+        Datasets to build one Calculator each for, all with the same
+        ``**kwargs``. Default: None.
+    names : list or None, optional
+        One name per dataset. Default: None (unnamed).
+    labels : list or None, optional
+        One list of labels per dataset. Default: None.
+    **kwargs
+        Arguments of :class:`Calculator`, such as ``config``, ``detrend`` and
+        ``zscore``, for the Calculators built from ``datasets``.
     """
     def __init__(
         self,
@@ -1458,11 +1568,31 @@ class CalculatorFrame:
 
     @staticmethod
     def from_calculator(calculator):
+        """
+        A CalculatorFrame holding ``calculator``.
+
+        Parameters
+        ----------
+        calculator : Calculator
+            The calculator.
+
+        Returns
+        -------
+        CalculatorFrame
+        """
         cf = CalculatorFrame()
         cf.add_calculator(calculator)
         return cf
 
     def set_calculator(self, calculators):
+        """
+        Replace the calculators of the frame (with a warning if it had any).
+
+        Parameters
+        ----------
+        calculators : Calculator, CalculatorFrame or iterable of Calculator
+            The new calculators.
+        """
         if hasattr(self, "_calculators"):
             warnings.warn("Overwriting existing calculators without explicitly deleting.")
             del self._calculators
@@ -1477,7 +1607,15 @@ class CalculatorFrame:
                 self.add_calculator(calc)
 
     def add_calculator(self, calc):
+        """
+        Add calculators to the frame.
 
+        Parameters
+        ----------
+        calc : Calculator, CalculatorFrame or pandas.DataFrame
+            A calculator, the calculators of another frame, or a DataFrame of
+            calculators, which replaces those of the frame.
+        """
         if not hasattr(self, "_calculators"):
             self._calculators = pd.DataFrame()
 
@@ -1486,10 +1624,7 @@ class CalculatorFrame:
                 [self._calculators, calc._calculators], ignore_index=True
             )
         elif isinstance(calc, Calculator):
-            # Keep one Calculator per row in a stable, explicitly named column.
-            # Concatenating a named Series into an empty DataFrame gives column 0
-            # in pandas 2 but uses the Series name in pandas 3, where successive
-            # calculators would form a sparse frame.
+            # One Calculator per row, in column 0 under every pandas version.
             self._calculators = pd.concat(
                 [self._calculators, pd.DataFrame({0: [calc]})],
                 ignore_index=True,
@@ -1505,6 +1640,20 @@ class CalculatorFrame:
         self.n_calculators = len(self.calculators.index)
 
     def init_from_list(self, datasets, names, labels, **kwargs):
+        """
+        Add one Calculator per dataset, all built with the same arguments.
+
+        Parameters
+        ----------
+        datasets : list
+            The datasets, each a :class:`~pyspi.data.Data` or array-like.
+        names : list
+            One name per dataset.
+        labels : list
+            One list of labels per dataset.
+        **kwargs
+            Arguments of :class:`Calculator`.
+        """
         kwargs = translate_calculator_kwargs(kwargs)
         base_calc = Calculator(**kwargs)
         for i, dataset in enumerate(datasets):
@@ -1518,6 +1667,33 @@ class CalculatorFrame:
         self, document, detrend=False, zscore=None, n_processes=None, n_observations=None,
         normalise=None, **kwargs
     ):
+        """
+        Add one Calculator per dataset listed in a YAML file.
+
+        A dataset that fails to load is skipped with a warning.
+
+        Parameters
+        ----------
+        document : str or path-like
+            A YAML list with one entry per dataset, each with the keys
+            ``file`` (a path ``Data`` reads), ``dim_order``, ``name`` and
+            ``labels``.
+        detrend : bool, optional
+            Remove the least-squares line from each process. Default: False.
+        zscore : bool or None, optional
+            z-score each process along time. Default: None, which means True.
+        n_processes : int or None, optional
+            Keep only the first ``n_processes`` processes of each dataset.
+            Default: None (all).
+        n_observations : int or None, optional
+            Keep only the first ``n_observations`` observations of each
+            dataset. Default: None (all).
+        normalise : bool or None, optional
+            Deprecated spelling of ``zscore``, removed in pyspi 4.0.
+            Default: None.
+        **kwargs
+            Arguments of :class:`Calculator`.
+        """
         zscore = resolve_zscore(zscore, normalise)
         kwargs = translate_calculator_kwargs(kwargs)
         datasets = []
@@ -1541,8 +1717,7 @@ class CalculatorFrame:
                 except Exception as err:
                     warnings.warn(f"Loading dataset: {config} failed ({err}).")
                     continue
-                # Appended only once the dataset loads, so a failed entry cannot
-                # shift later names and labels onto the wrong datasets.
+                # Only once the dataset loads, so names and labels stay aligned.
                 datasets.append(dataset)
                 names.append(config["name"])
                 labels.append(labels_i)
@@ -1551,7 +1726,7 @@ class CalculatorFrame:
 
     @property
     def calculators(self):
-        """Return data array."""
+        """The calculators, a DataFrame with one per row, or None."""
         try:
             return self._calculators
         except AttributeError:
@@ -1573,6 +1748,14 @@ class CalculatorFrame:
         del self._calculators
 
     def merge(self, other):
+        """
+        Add the calculators of another CalculatorFrame.
+
+        Parameters
+        ----------
+        other : CalculatorFrame
+            The frame whose calculators are added.
+        """
         try:
             self._calculators = pd.concat(
                 [self._calculators, other._calculators], ignore_index=True
@@ -1581,16 +1764,19 @@ class CalculatorFrame:
             self._calculators = other._calculators
 
     def compute(self, **kwargs):
-        """Compute every calculator in the frame, one dataset after another.
+        """
+        Compute every calculator in the frame, one dataset after another.
 
-        Keyword arguments are forwarded to :meth:`Calculator.compute`, so
-        ``frame.compute(n_jobs=4)`` parallelises *within* each dataset.
+        For many datasets on many cores, one dataset per process (such as a
+        scheduler array job) is faster than ``n_jobs > 1`` here, because SPIs
+        that share a cache run in one worker. See "Running at scale" in the
+        README.
 
-        Note that for many datasets on many cores, running one dataset per
-        process (e.g. a scheduler array job) beats ``n_jobs>1`` here: SPIs
-        sharing a cache run serially inside a single worker, which floors the
-        achievable speedup at roughly 2-4x irrespective of ``n_jobs``. See
-        "Running at scale" in the README.
+        Parameters
+        ----------
+        **kwargs
+            Arguments of :meth:`Calculator.compute`, so ``n_jobs=4``
+            parallelises within each dataset.
         """
         if not hasattr(self, "_calculators"):
             raise AttributeError("No calculators in frame yet. Initialise before computing.")
@@ -1600,6 +1786,7 @@ class CalculatorFrame:
 
     @property
     def groups(self):
+        """The group index of each calculator, as set by :meth:`set_group`."""
         groups = []
         for i in self._calculators.index:
             calc_ser = self._calculators.loc[i]
@@ -1616,6 +1803,32 @@ class CalculatorFrame:
         calc._rmmin()
 
     def get_correlation_df(self, with_labels=False, **kwargs):
+        """
+        Spearman correlations between SPIs, over pairs of processes, per dataset.
+
+        For each dataset, every pair of SPIs is correlated across the pairs of
+        processes (on absolute values unless both SPIs are signed). An unnamed
+        dataset is named ``dataset_<i>`` by its position.
+
+        Parameters
+        ----------
+        with_labels : bool, optional
+            Also return the SPI and dataset labels. Default: False.
+        **kwargs
+            ``rmmin=True`` shifts each unsigned SPI to a minimum of 0 first.
+
+        Returns
+        -------
+        mdf : pandas.DataFrame
+            The correlations, with a ``(Dataset, SPI-1)`` row index and
+            ``SPI-2`` columns.
+        shapes : pandas.DataFrame
+            ``n_processes`` and ``n_observations`` of each dataset.
+        mlabels : dict
+            ``{identifier: labels}``, only with ``with_labels``.
+        dlabels : dict
+            ``{dataset name: labels}``, only with ``with_labels``.
+        """
         if with_labels:
             mlabels = {}
             dlabels = {}
@@ -1624,8 +1837,7 @@ class CalculatorFrame:
         mdf = pd.DataFrame()
         for i, calc in enumerate(c[0] for c in self.calculators.values):
             out = calc._get_correlation_df(with_labels=with_labels, **kwargs)
-            # An unnamed dataset is labelled by its position in the frame, so
-            # several unnamed datasets stay apart instead of sharing one key.
+            # By position, so unnamed datasets stay apart.
             name = calc.name if calc.name not in (None, "") else f"dataset_{i}"
 
             s = pd.Series(
@@ -1646,7 +1858,6 @@ class CalculatorFrame:
             else:
                 df = pd.concat({name: out}, names=["Dataset"])
 
-            # Adds another hierarchical level giving the dataset name
             mdf = pd.concat([mdf, df])
         shapes.index.name = "Dataset"
 
@@ -1657,6 +1868,23 @@ class CalculatorFrame:
 
 
 class CorrelationFrame:
+    """
+    Correlations between SPIs, over pairs of processes, across datasets.
+
+    Holds the SPI-by-SPI Spearman correlations of each dataset
+    (:meth:`CalculatorFrame.get_correlation_df`), for comparing how SPIs
+    relate across datasets.
+
+    Parameters
+    ----------
+    cf : Calculator, CalculatorFrame, CorrelationFrame or None, optional
+        The computed calculators, or a CorrelationFrame to copy in.
+        Default: None.
+    **kwargs
+        Arguments of :meth:`CalculatorFrame.get_correlation_df`, such as
+        ``rmmin``.
+    """
+
     def __init__(self, cf=None, **kwargs):
         self._slabels = {}
         self._dlabels = {}
@@ -1668,7 +1896,6 @@ class CorrelationFrame:
                 cf = CalculatorFrame(cf)
 
             if isinstance(cf, CalculatorFrame):
-                # Store the statistic-focused dataframe, statistic labels, and dataset labels
                 (
                     self._mdf,
                     self._shapes,
@@ -1692,32 +1919,39 @@ class CorrelationFrame:
 
     @property
     def shapes(self):
+        """``n_processes`` and ``n_observations`` of each dataset."""
         return self._shapes
 
     @property
     def mdf(self):
+        """The correlations, with a ``(Dataset, SPI-1)`` row index and ``SPI-2`` columns."""
         return self._mdf
 
     @property
     def ddf(self):
+        """The correlations with one row per ``(SPI-1, SPI-2)`` and one column per dataset."""
         if not hasattr(self, "_ddf") or self._ddf.size != self._mdf.size:
             self._ddf = convert_mdf_to_ddf(self.mdf)
         return self._ddf
 
     @property
     def n_datasets(self):
+        """Number of datasets."""
         return self.ddf.shape[1]
 
     @property
     def n_spis(self):
+        """Number of SPIs."""
         return self.mdf.shape[1]
 
     @property
     def mlabels(self):
+        """``{identifier: labels}`` of the SPIs."""
         return self._slabels
 
     @property
     def dlabels(self):
+        """``{dataset name: labels}`` of the datasets."""
         return self._dlabels
 
     @mdf.setter
@@ -1733,6 +1967,14 @@ class CorrelationFrame:
         raise AttributeError("Do not directly set the dlabels attribute.")
 
     def merge(self, other):
+        """
+        Add the datasets of another CorrelationFrame; datasets must be named.
+
+        Parameters
+        ----------
+        other : CorrelationFrame
+            The frame whose correlations and labels are added.
+        """
         if not all(isinstance(i[0], str) for i in self._mdf.index):
             raise TypeError(
                 f"This operation only works with named calculators (set each calc.name property)."
@@ -1757,6 +1999,7 @@ class CorrelationFrame:
             self._dlabels.update(other.dlabels)
 
     def get_pvalues(self):
+        """Not available: the pairs of processes are not independent samples."""
         raise NotImplementedError(
             "CorrelationFrame.get_pvalues() is disabled: its observations "
             "are process edges, not independent time samples. The previous "
@@ -1767,6 +2010,7 @@ class CorrelationFrame:
         )
 
     def compute_significant_values(self):
+        """Not available: the pairs of processes are not independent samples."""
         raise NotImplementedError(
             "CorrelationFrame.compute_significant_values() is disabled "
             "because it depends on invalid edge-correlation p-values. Edges "
@@ -1778,6 +2022,28 @@ class CorrelationFrame:
     def get_average_correlation(
         self, thresh=0.2, absolute=True, summary="mean", remove_insig=False
     ):
+        """
+        The SPI-by-SPI correlation matrix summarised over datasets.
+
+        Parameters
+        ----------
+        thresh : float, optional
+            Drop the SPIs (rows, then columns) with fewer than this fraction
+            of non-NaN entries. Default: 0.2.
+        absolute : bool, optional
+            Summarise the absolute correlations. Default: True.
+        summary : str, optional
+            The pandas groupby reduction, such as ``'mean'`` or ``'median'``.
+            Default: ``'mean'``.
+        remove_insig : bool, optional
+            Not available; True raises ``NotImplementedError``.
+            Default: False.
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``SPI-1`` by ``SPI-2``, columns sorted.
+        """
         if remove_insig:
             raise NotImplementedError(
                 "CorrelationFrame.get_average_correlation(remove_insig=True) "
@@ -1801,7 +2067,25 @@ class CorrelationFrame:
         return ss_adj
 
     def get_feature_matrix(self, sthresh=0.8, dthresh=0.2, dropduplicates=True):
+        """
+        The SPI-pair-by-dataset correlations, with sparse rows and columns dropped.
 
+        Parameters
+        ----------
+        sthresh : float, optional
+            Drop the SPI pairs (rows) with fewer than this fraction of
+            non-NaN entries. Default: 0.8.
+        dthresh : float, optional
+            Drop the datasets (columns) with fewer than this fraction of
+            non-NaN entries; applied first. Default: 0.2.
+        dropduplicates : bool, optional
+            Drop duplicated rows first. Default: True.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per ``(SPI-1, SPI-2)`` and one column per dataset.
+        """
         fm = self.ddf
         if dropduplicates:
             fm = fm.drop_duplicates()
@@ -1817,7 +2101,7 @@ class CorrelationFrame:
 
     @staticmethod
     def _verify_classes(classes):
-        # Ensure this is a list of lists
+        """Make each class a list of labels, and refuse a class that is a subset of another."""
         for i, cls in enumerate(classes):
             if not isinstance(cls, list):
                 classes[i] = [cls]
@@ -1832,10 +2116,10 @@ class CorrelationFrame:
 
     @staticmethod
     def _get_group(labels, classes, instance, verbose=False):
+        """Index of the first class whose labels are all in ``labels``, or -1."""
         labset = set(labels)
         matches = [set(cls).issubset(labset) for cls in classes]
 
-        # Iterate through all
         if np.count_nonzero(matches) > 1:
             if verbose:
                 logger.warning(
@@ -1854,12 +2138,21 @@ class CorrelationFrame:
 
     @staticmethod
     def _set_groups(classes, labels, group_names, group):
+        """Fill ``group`` with the class index of each key of ``labels``."""
         CorrelationFrame._verify_classes(classes)
         for m in labels:
             group[m] = CorrelationFrame._get_group(labels[m], classes, m)
 
     def set_sgroups(self, classes):
-        # Initialise the classes
+        """
+        Assign each SPI to the first class whose labels it carries.
+
+        Parameters
+        ----------
+        classes : list of list
+            One list of labels per class. No class may be a subset of another.
+            An SPI that matches no class gets group -1, named ``"N/A"``.
+        """
         self._sgroup_names = {i: ", ".join(c) for i, c in enumerate(classes)}
         self._sgroup_names[-1] = "N/A"
 
@@ -1869,6 +2162,14 @@ class CorrelationFrame:
         )
 
     def set_dgroups(self, classes):
+        """
+        Assign each dataset to the first class whose labels it carries.
+
+        Parameters
+        ----------
+        classes : list
+            As for :meth:`set_sgroups`.
+        """
         self._dgroup_names = {i: ", ".join(c) for i, c in enumerate(classes)}
         self._dgroup_names[-1] = "N/A"
 
@@ -1878,30 +2179,88 @@ class CorrelationFrame:
         )
 
     def get_dgroup_ids(self, names=None):
+        """
+        Group indices of datasets, from :meth:`set_dgroups`.
+
+        Parameters
+        ----------
+        names : list or None, optional
+            Dataset names. Default: None, every dataset.
+
+        Returns
+        -------
+        list of int
+        """
         if names is None:
             names = self._ddf.columns
 
         return [self._dgroup_ids[n] for n in names]
 
     def get_dgroup_names(self, names=None):
+        """
+        Group names of datasets, from :meth:`set_dgroups`.
+
+        Parameters
+        ----------
+        names : list or None, optional
+            Dataset names. Default: None, every dataset.
+
+        Returns
+        -------
+        list of str
+        """
         if names is None:
             names = self._ddf.columns
 
         return [self._dgroup_names[i] for i in self.get_dgroup_ids(names)]
 
     def get_sgroup_ids(self, names=None):
+        """
+        Group indices of SPIs, from :meth:`set_sgroups`.
+
+        Parameters
+        ----------
+        names : list or None, optional
+            SPI identifiers. Default: None, every SPI.
+
+        Returns
+        -------
+        list of int
+        """
         if names is None:
             names = self._mdf.columns
 
         return [self._sgroup_ids[n] for n in names]
 
     def get_sgroup_names(self, names=None):
+        """
+        Group names of SPIs, from :meth:`set_sgroups`.
+
+        Parameters
+        ----------
+        names : list or None, optional
+            SPI identifiers. Default: None, every SPI.
+
+        Returns
+        -------
+        list of str
+        """
         if names is None:
             names = self._mdf.columns
 
         return [self._sgroup_names[i] for i in self.get_sgroup_ids(names)]
 
     def relabel_spis(self, names, labels):
+        """
+        Replace the labels of SPIs.
+
+        Parameters
+        ----------
+        names : list
+            SPI identifiers.
+        labels : list
+            One list of labels per SPI.
+        """
         assert len(names) == len(labels), "Length of spis must equal length of labels."
 
         for n, l in zip(names, labels):
@@ -1911,6 +2270,16 @@ class CorrelationFrame:
                 self._slabels = {n: l}
 
     def relabel_data(self, names, labels):
+        """
+        Replace the labels of datasets.
+
+        Parameters
+        ----------
+        names : list
+            Dataset names.
+        labels : list
+            One list of labels per dataset.
+        """
         assert len(names) == len(
             labels
         ), "Length of datasets must equal length of labels."

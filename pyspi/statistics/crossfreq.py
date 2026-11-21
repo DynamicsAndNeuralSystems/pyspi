@@ -45,9 +45,11 @@ _SURROGATE_SEED = 0
 
 @functools.lru_cache(maxsize=None)
 def _shift_index(n, n_surr):
-    """``(n_surr, n)`` gather index: row ``k`` circularly delays a length-``n``
+    """
+    ``(n_surr, n)`` gather index: row ``k`` circularly delays a length-``n``
     series by ``s_k`` samples, ``s_k`` uniform on the integers in
-    ``[n // 10, n - n // 10]``. Read-only and cached per ``(n, n_surr)``."""
+    ``[n // 10, n - n // 10]``. Read-only and cached per ``(n, n_surr)``.
+    """
     rng = np.random.default_rng(_SURROGATE_SEED)
     shifts = rng.integers(n // 10, n - n // 10, size=n_surr, endpoint=True)
     index = (np.arange(n)[None, :] - shifts[:, None]) % n
@@ -86,7 +88,8 @@ def _bandpass(band):
 
 @functools.lru_cache(maxsize=None)
 def _filter_length(band):
-    """Samples holding 99% of the energy of the one-pass impulse response.
+    """
+    Samples holding 99% of the energy of the one-pass impulse response.
 
     The response rings for a time set by the lower band edge and the
     bandwidth, so it is evaluated over ``100 / min(low, high - low)`` samples,
@@ -102,7 +105,8 @@ def _filter_length(band):
 
 
 def _band_series(data, band, kind):
-    """Phase or amplitude of every process in ``band``, full length, cached.
+    """
+    Phase or amplitude of every process in ``band``, full length, cached.
 
     ``data.crossfreq[(band, "phase")]`` is the angle and
     ``data.crossfreq[(band, "amp")]`` the modulus of the analytic signal
@@ -127,116 +131,108 @@ def _band_series(data, band, kind):
 
 
 class PhaseAmplitudeCoupling(Directed, Unsigned):
-    """Phase-amplitude coupling (PAC), source phase to target amplitude.
+    """
+    Phase-amplitude coupling, source phase to target amplitude [1]_ [2]_.
 
     ``A[i, j]`` measures how strongly the amplitude envelope of process ``j``
     (column, target) in a high band ``amp_band = (f3, f4)`` is modulated by the
     phase of process ``i`` (row, source) in a low band ``phase_band = (f1,
-    f2)``. Bands are in cycles per sample. The two orientations are different
-    quantities (``A[j, i]`` takes the *phase* of ``j``), so the SPI is
-    directed. The two raw statistics are in [0, 1] and unsigned; their
-    surrogate-normalised versions (``_excess``, ``_z``) are signed.
+    f2)``, both in cycles per sample. The two orientations are different
+    quantities (``A[j, i]`` takes the phase of ``j``), so the SPI is directed;
+    the direction is a role, not temporal precedence, so ``A[i, j] > A[j, i]``
+    does not by itself mean that ``i`` drives ``j``. The raw statistics are in
+    [0, 1] and unsigned; their surrogate-normalised versions are signed.
 
-    **Signals.** Each process is band-passed with a zero-phase
-    (forward-backward, ``scipy.signal.sosfiltfilt``) order-4 Butterworth
-    filter, and the analytic signal is taken with ``scipy.signal.hilbert``:
-
+    Each process is band-passed with a zero-phase (forward-backward,
+    ``scipy.signal.sosfiltfilt``) order-4 Butterworth filter, and the
+    analytic signal is taken with ``scipy.signal.hilbert``:
     ``phi_t = angle(H[bp_{f1,f2}(x_i)]_t)``, ``A_t = |H[bp_{f3,f4}(x_j)]_t|``.
+    Filter transients and the Hilbert transform's wrap-around are confined to
+    the ends of the record, so ``2 L`` samples are discarded at each end, where
+    ``L`` is the larger of the two filters' lengths (the number of samples
+    holding 99% of the impulse response's energy): 200 samples for the default
+    bands. On a record shorter than ``8 L`` the edge is capped at ``T // 4``
+    samples, with a warning. ``edge_samples(T)`` returns the number discarded
+    at each end.
 
-    Order 4 per pass (about 48 dB per octave after the two passes) separates
-    the bands while keeping the ringing short. Filter transients and the
-    Hilbert transform's wrap-around are confined to the ends of the record, so
-    ``2 L`` samples are discarded at each end, where ``L`` is the larger of the
-    two filters' lengths, a filter's length being the number of samples that
-    hold 99% of its impulse response's energy. For the bundled pairs that is
-    200 samples at each end for ``p = (0.01, 0.05), a = (0.15, 0.4)`` and 100
-    for ``p = (0.05, 0.1), a = (0.2, 0.45)``. On a record shorter than ``8 L``
-    the edge is capped at ``T // 4`` samples, with a warning.
-    ``edge_samples(T)`` returns the number of samples discarded at each end.
+    With ``n`` retained samples, the raw statistics are:
 
-    **Statistics.** With ``n`` retained samples:
+    - ``'mi'``, the modulation index [1]_: the source phase is divided into
+      ``n_bins`` equal bins on [-pi, pi), ``m_k`` is the mean target amplitude
+      in bin ``k``, ``P_k = m_k / sum_l m_l``, and
+      ``MI = (log N - H(P)) / log N`` with ``H(P) = -sum_k P_k log P_k`` and
+      ``N = n_bins``: the Kullback-Leibler divergence of ``P`` from uniform,
+      normalised by its maximum. NaN when the source phase leaves a bin
+      empty (a record too short for the phase band).
+    - ``'mvl'``, the normalised mean vector length (direct PAC estimate) [2]_:
+      ``|sum_t A_t exp(i phi_t)| / (sqrt(n) sqrt(sum_t A_t^2))``, at most 1.
+      Unlike the raw mean vector length [3]_, it does not scale with the
+      target's amplitude.
 
-    - ``"mi"``: the modulation index of Tort et al. (2010). The source phase is
-      divided into ``n_bins`` equal bins on [-pi, pi), ``m_k`` is the mean
-      target amplitude over the samples whose phase falls in bin ``k``, ``P_k
-      = m_k / sum_l m_l``, and ``MI = (log N - H(P)) / log N`` with ``H(P) =
-      -sum_k P_k log P_k`` and ``N = n_bins``: the Kullback-Leibler divergence
-      of ``P`` from the uniform distribution, normalised by its maximum. 0 when
-      the mean amplitude is the same in every phase bin, 1 when all amplitude
-      is in one bin. Every bin must be occupied; a pair whose source phase
-      leaves a bin empty (a record too short for the phase band) is undefined
-      and NaN.
-    - ``"mvl"``: the normalised mean vector length (direct PAC estimate) of
-      Özkurt & Schnitzler (2011),
-      ``|sum_t A_t exp(i phi_t)| / (sqrt(n) sqrt(sum_t A_t^2))``,
-      i.e. ``|mean(A exp(i phi))| / sqrt(mean(A^2))``, which is at most 1.
-      Unlike the raw mean vector length of Canolty et al. (2006), it does not
-      scale with the target's amplitude. For ``A_t = 1 + m cos(phi_t)`` with
-      the phase uniformly distributed it is ``(m / 2) / sqrt(1 + m^2 / 2)``.
+    Both are invariant to rescaling either process. Neither is zero for
+    independent processes, and their chance level grows with the target's own
+    amplitude modulation, so each has two normalised versions, compared with
+    ``n_surr`` surrogates [1]_ [3]_ that circularly shift the target's envelope
+    within the retained window by ``s`` samples, ``s`` uniform on the integers
+    in ``[n // 10, n - n // 10]`` from a fixed seed (so values are
+    deterministic and a pair's value does not depend on the other processes):
 
-    Both are invariant to rescaling either process (the source enters only
-    through its phase, and ``P`` and the MVL are ratios in ``A``), so they do
-    not depend on z-scoring.
+    - ``'<stat>_excess'``: the index minus the surrogates' mean, in the
+      index's units; about 0 for independent processes.
+    - ``'<stat>_z'``: ``(index - mean) / sd`` over the surrogates (``ddof =
+      0``), a significance score rather than an effect size: it saturates as
+      the coupling grows, grows with the record length, and under
+      independence is centred near 0 but not standard normal. NaN if every
+      surrogate gives the same value.
 
-    **Surrogate normalisation.** Neither raw statistic is zero for independent
-    processes, and their chance level grows with the target's own amplitude
-    modulation, which a slow rhythm of the source can align with by chance over
-    a finite record. The normalised statistics compare the index with its
-    values on ``n_surr`` surrogates, each a circular shift of the target's
-    envelope within the ``n`` retained samples by ``s`` samples, ``s`` uniform
-    on the integers in ``[n // 10, n - n // 10]`` (Canolty et al. 2006; Tort et
-    al. 2010). A shift keeps the envelope and its spectrum and destroys its
-    timing relative to the source's phase:
+    Time-shift surrogates fail for a strictly periodic source, whose shift only
+    rotates the preferred phase. No normalisation removes spurious coupling
+    from sharp, non-sinusoidal waveforms, whose harmonics are locked to their
+    own fundamental [4]_.
 
-    - ``"<stat>_excess"``: the index minus the mean of its surrogates, in the
-      index's units. About 0 for independent processes whatever their own
-      modulation, and it grows with the coupling as the raw index does.
-    - ``"<stat>_z"``: ``(index - mean) / sd`` over the surrogates (``sd`` with
-      ``ddof = 0``), a significance score for comparing pairs whose targets
-      differ in their own modulation. It is not an effect size: the
-      surrogates' spread grows with the target's modulation about as fast as
-      the index, so it saturates as the coupling grows, and it grows with the
-      record length. Under independence it is centred near 0 but is not
-      standard normal. Undefined (NaN) if every surrogate gives the same value.
-
-    The shifts come from a fixed seed and depend only on ``n`` and
-    ``n_surr``, so the values are deterministic and a pair's value does not
-    depend on the other processes. Time-shift surrogates fail for a strictly
-    periodic source: a shift only rotates the preferred phase, so the
-    surrogates keep the coupling and both normalised values are near 0.
-
-    Neither normalisation removes spurious PAC from sharp, non-sinusoidal
-    waveforms, whose harmonics in the amplitude band are locked to their own
-    fundamental in the phase band (Kramer, Tort & Kopell 2008); read PAC on
-    such data together with the waveform shape.
-
-    **Validity of the bands.** The envelope of the target can follow a
-    modulation at frequency ``f`` only if the amplitude band passes the
-    sidebands at ``carrier +/- f``, so its bandwidth ``f4 - f3`` must be at
-    least twice the highest phase frequency ``f2`` (Aru et al. 2015). A
-    narrower amplitude band filters the modulation out and biases the coupling
-    towards zero, so construction raises ``ValueError`` for such a band pair.
-    It also raises if the amplitude band starts below the top of the phase band
-    (``f3 < f2``).
-
-    ``phase_band = (f1, f2)`` and ``amp_band = (f3, f4)`` are in cycles per
-    sample, with ``f3 >= f2`` and ``f4 - f3 >= 2 f2``. ``statistic`` is
-    ``"mi"`` or ``"mvl"``, raw or with the suffix ``_excess`` or ``_z``.
-    ``n_bins`` (default 18, Tort et al.'s 20-degree bins) is the number of
-    phase bins of the modulation index; a value other than 18 is appended to
-    the identifier as ``_nbins-<n>``. ``n_surr`` (default 100, at least 2) is
-    the number of time-shift surrogates of the normalised statistics; a value
-    other than 100 is appended to the identifier as ``_nsurr-<n>``.
-
+    The amplitude envelope can follow a modulation at ``f`` only if the
+    amplitude band passes the sidebands at ``carrier +/- f``, so construction
+    raises ``ValueError`` unless ``f4 - f3 >= 2 f2`` [5]_ and ``f3 >= f2``.
     The identifier is ``pac_<statistic>_p-<f1>-<f2>_a-<f3>-<f4>`` with decimal
-    points written as dashes, as in ``spectral.py``: ``pac_mi_p-0-01-0-05_a-
-    0-15-0-4`` is the modulation index with phase band (0.01, 0.05) and
-    amplitude band (0.15, 0.4), and ``pac_mi_excess_p-0-01-0-05_a-0-15-0-4``
-    its excess over the surrogates.
+    points written as dashes, e.g. ``pac_mi_p-0-01-0-05_a-0-15-0-4``.
 
-    Its direction is a role, which process supplies the phase and which the
-    amplitude, not temporal precedence as in the Granger-type SPIs: ``A[i, j]
-    > A[j, i]`` does not by itself mean that ``i`` drives ``j``.
+    References
+    ----------
+    .. [1] A.B.L. Tort, R. Komorowski, H. Eichenbaum, N. Kopell, "Measuring
+           phase-amplitude coupling between neuronal oscillations of different
+           frequencies", J. Neurophysiol. 104(2), 1195-1210 (2010).
+    .. [2] T.E. Özkurt, A. Schnitzler, "A critical note on the definition of
+           phase-amplitude cross-frequency coupling", J. Neurosci. Methods
+           201(2), 438-443 (2011).
+    .. [3] R.T. Canolty et al., "High gamma power is phase-locked to theta
+           oscillations in human neocortex", Science 313(5793), 1626-1628
+           (2006).
+    .. [4] M.A. Kramer, A.B.L. Tort, N.J. Kopell, "Sharp edge artifacts and
+           spurious coupling in EEG frequency comodulation measures",
+           J. Neurosci. Methods 170(2), 352-357 (2008).
+    .. [5] J. Aru et al., "Untangling cross-frequency coupling in
+           neuroscience", Curr. Opin. Neurobiol. 31, 51-61 (2015).
+
+    Parameters
+    ----------
+    phase_band : tuple of float, optional
+        ``(f1, f2)``, the source's phase band in cycles per sample, with
+        ``0 < f1 < f2 < 0.5``. Default: ``(0.01, 0.05)``.
+    amp_band : tuple of float, optional
+        ``(f3, f4)``, the target's amplitude band in cycles per sample, with
+        ``f3 >= f2``, ``f4 - f3 >= 2 f2`` and ``f4 < 0.5``.
+        Default: ``(0.15, 0.4)``.
+    statistic : str, optional
+        ``'mi'`` or ``'mvl'``, raw or with the suffix ``'_excess'`` or
+        ``'_z'``. Default: ``'mi'``.
+    n_bins : int, optional
+        Number of phase bins of the modulation index, at least 2; 18 gives
+        20-degree bins. A value other than 18 is appended to the identifier
+        of an ``mi`` statistic as ``_nbins-<n>``. Default: 18.
+    n_surr : int, optional
+        Number of time-shift surrogates of the normalised statistics, at least
+        2. A value other than 100 is appended to the identifier of a
+        normalised statistic as ``_nsurr-<n>``. Default: 100.
     """
 
     name = "Phase-amplitude coupling"
@@ -376,7 +372,8 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
         return float(excess / sd)
 
     def _pair_function(self, phase, amp):
-        """``compute(i, j)``: the statistic of source ``i`` and target ``j``.
+        """
+        ``compute(i, j)``: the statistic of source ``i`` and target ``j``.
 
         Each source's bins (or phasors) are formed once, then the raw index is
         O(n) per pair. For the surrogate statistics, each target's ``n_surr``

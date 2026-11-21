@@ -7,18 +7,17 @@ from scipy.linalg import cho_solve, cholesky
 from scipy.spatial import KDTree
 from sklearn.gaussian_process.kernels import ConstantKernel, RBF
 
+from pyspi.base import (
+    Directed, Unsigned, Signed, fill_pairwise, parse_bivariate, parse_multivariate,
+)
 from pyspi.lib.pairwise_causal import (
     cds_score, igci_score, normalized_hsic, reci_score,
 )
 from pyspi.utils import require_int
 
-from pyspi.base import (
-    Directed, Unsigned, Signed, fill_pairwise, parse_bivariate, parse_multivariate,
-)
 
-
-# A fixed (untuned) ConstantKernel * RBF, as in cdt's ANM; set explicitly
-# because sklearn 1.9 changed the default kernel. 1e-10 is
+# cdt's ANM kernel, a fixed (untuned) ConstantKernel * RBF, set explicitly
+# because scikit-learn's default kernel differs between versions. 1e-10 is
 # GaussianProcessRegressor's default `alpha`.
 _ANM_KERNEL = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(
     1.0, length_scale_bounds="fixed")
@@ -26,7 +25,8 @@ _ANM_ALPHA = 1e-10
 
 
 def _anm_scores(x, ys):
-    """``normalized_hsic(residual, x)`` for the GP regression of each y on x.
+    """
+    ``normalized_hsic(residual, x)`` for the GP regression of each y on x.
 
     The regression is ``GaussianProcessRegressor(kernel=_ANM_KERNEL,
     optimizer=None).fit(x, y).predict(x)``, the posterior mean at the training
@@ -52,28 +52,50 @@ def _anm_scores(x, ys):
 
 
 class AdditiveNoiseModel(Directed, Unsigned):
-    """Additive-noise-model score for row (cause) -> column (effect).
+    """
+    Additive-noise-model (ANM) score, row (cause) -> column (effect) [1]_.
 
-    Lower is stronger evidence for the row causing the column (a small HSIC
-    means the residual of the column regressed on the row is independent of
-    the row). ``cds`` and ``reci`` share this polarity; for ``ccm`` and
-    ``igci`` higher means more. NaN for a pair involving a constant series.
+    ``A[i, j]`` is the HSIC [2]_ between ``x_i`` and the residual of a
+    Gaussian-process regression of ``x_j`` on ``x_i``. If
+    ``x_j = f(x_i) + noise`` with the noise independent of ``x_i``, the
+    residual is independent of the cause, so a lower value is stronger
+    evidence for ``i -> j``.
+
+    This is the ``anm_score`` of the Causal Discovery Toolbox (cdt) [3]_,
+    reimplemented in `pyspi.lib.pairwise_causal`. The regression is the
+    posterior mean of a Gaussian process with a fixed (untuned)
+    ``ConstantKernel(1) * RBF(1)`` kernel and ``alpha = 1e-10``. HSIC is
+    cdt's biased statistic ``tr(K H L H) / m`` with Gaussian kernels of
+    median-heuristic width on the standardised variables, on at most 200
+    evenly spaced samples. cdt's ``predict_proba`` reports the difference
+    between the two directions' scores; here each direction is its own
+    entry.
+
+    Directed and unsigned. Lower is stronger evidence, as for ``cds`` and
+    ``reci``; for ``ccm`` and ``igci`` higher means more. NaN for a pair
+    involving a constant series.
+
+    References
+    ----------
+    .. [1] P. O. Hoyer, D. Janzing, J. M. Mooij, J. Peters, B. Schölkopf,
+           "Nonlinear causal discovery with additive noise models", Advances
+           in Neural Information Processing Systems 21, 689-696 (2008).
+    .. [2] A. Gretton, K. Fukumizu, C. H. Teo, L. Song, B. Schölkopf,
+           A. J. Smola, "A kernel statistical test of independence", Advances
+           in Neural Information Processing Systems 20, 585-592 (2007).
+    .. [3] D. Kalainathan, O. Goudet, R. Dutta, "Causal Discovery Toolbox:
+           uncovering causal relationships in Python", Journal of Machine
+           Learning Research 21(37), 1-5 (2020).
     """
 
     name = "Additive noise model"
     identifier = "anm"
-    # Not `linear`: the fit is a Gaussian-process regression and the
-    # independence test an RBF-kernel HSIC. Nothing about it is linear.
+    # Not `linear`: a Gaussian-process fit and an RBF-kernel HSIC.
     labels = ["unsigned", "causal", "unordered", "nonlinear", "directed"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        """HSIC between x and the residual of a GP fit of y on x.
-
-        This is cdt's ``ANM.anm_score(x, y)``; cdt's ``predict_proba``
-        instead reports the difference between the two directions' scores
-        on standardised data. The HSIC is in `pyspi.lib.pairwise_causal`.
-        """
+        """HSIC between ``x_i`` and the residual of a GP fit of ``x_j`` on ``x_i``."""
         z = data.to_numpy()
         return _anm_scores(z[i], [z[j]])[0]
 
@@ -90,11 +112,35 @@ class AdditiveNoiseModel(Directed, Unsigned):
 
 
 class ConditionalDistributionSimilarity(Directed, Unsigned):
-    """CDS score for row (cause) -> column (effect); lower is stronger evidence.
+    """
+    Conditional distribution similarity (CDS) score, row -> column [1]_.
 
-    See ``AdditiveNoiseModel`` for the polarity convention across the causal
-    module. NaN for a pair involving a constant series, and when fewer than
-    two x-bins can be compared.
+    Row = cause, column = effect. Both series are standardised and binned at
+    half a standard deviation, clipped at three (13 levels). For every bin of
+    ``x_i`` holding more than 12 samples, the values of ``x_j`` in that bin
+    are centred, scaled by the standard deviation of ``x_j`` and binned the
+    same way; ``A[i, j]`` is the standard deviation of these conditional
+    histograms (as probabilities) about their mean across bins. Conditionals
+    of similar shape (a low score) are evidence for ``i -> j``. A discrete
+    series (13 or fewer distinct values) is used as it is, and each
+    conditional histogram of a discrete ``x_j`` is aligned to the marginal by
+    the shift that maximises their cross-correlation.
+
+    This is cdt's ``CDS`` [2]_, which is Fonollosa's implementation,
+    reimplemented in `pyspi.lib.pairwise_causal`. Directed and unsigned;
+    lower is stronger evidence, as for ``anm``. NaN for a pair involving a
+    constant series and when fewer than two bins of ``x_i`` hold more than
+    12 samples, where cdt returns 0.
+
+    References
+    ----------
+    .. [1] J. A. R. Fonollosa, "Conditional distribution variability measures
+           for causality detection", in Cause Effect Pairs in Machine
+           Learning, Springer Series on Challenges in Machine Learning,
+           339-347 (2019).
+    .. [2] D. Kalainathan, O. Goudet, R. Dutta, "Causal Discovery Toolbox:
+           uncovering causal relationships in Python", Journal of Machine
+           Learning Research 21(37), 1-5 (2020).
     """
 
     name = "Conditional distribution similarity statistic"
@@ -104,15 +150,30 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         z = data.to_numpy()
-        # NaN when fewer than two x-bins can be compared.
         return cds_score(z[i], z[j], min_conditionals=2)
 
 
 class RegressionErrorCausalInference(Directed, Unsigned):
-    """RECI score for row (cause) -> column (effect); lower is stronger evidence.
+    """
+    Regression-error-based causal inference (RECI), row -> column [1]_.
 
-    See ``AdditiveNoiseModel`` for the polarity convention across the causal
-    module.
+    Row = cause, column = effect. ``A[i, j]`` is the mean squared error of
+    the least-squares fit ``x_j ~ a x_i^3 + b``, with both series first
+    min-max scaled to ``[0, 1]``. [1]_ infers ``i -> j`` when this error is
+    smaller than that of the reverse fit, so a lower value is stronger
+    evidence for ``i -> j``, read against ``A[j, i]``. The cubic monomial fit
+    is cdt's [2]_, reimplemented in `pyspi.lib.pairwise_causal`. Directed and
+    unsigned; lower is stronger evidence, as for ``anm``.
+
+    References
+    ----------
+    .. [1] P. Blöbaum, D. Janzing, T. Washio, S. Shimizu, B. Schölkopf,
+           "Cause-effect inference by comparing regression errors",
+           Proceedings of the 21st International Conference on Artificial
+           Intelligence and Statistics, PMLR 84, 900-909 (2018).
+    .. [2] D. Kalainathan, O. Goudet, R. Dutta, "Causal Discovery Toolbox:
+           uncovering causal relationships in Python", Journal of Machine
+           Learning Research 21(37), 1-5 (2020).
     """
 
     name = "Regression error-based causal inference"
@@ -126,20 +187,36 @@ class RegressionErrorCausalInference(Directed, Unsigned):
 
 
 class InformationGeometricCausalInference(Directed, Signed):
-    """IGCI: Information-Geometric Causal Inference (Daniusis et al. 2010).
+    """
+    Information-geometric causal inference (IGCI) [1]_ [2]_.
 
-    Not "conditional independence" -- IGCI tests neither. It compares the two
-    directions' entropies under a reference measure and leverages the asymmetry
-    of a deterministic invertible map.
+    ``A[i, j] = H(x_i) - H(x_j)``, the difference between the entropies of
+    the two standardised series (IGCI with a Gaussian reference measure),
+    each estimated from the gaps between consecutive order statistics (the
+    1-D Kozachenko-Leonenko estimator; zero gaps from tied values are
+    skipped). If ``x_j = f(x_i)`` for an invertible ``f`` chosen
+    independently of the distribution of ``x_i``, the effect tends to have
+    the lower entropy, so a positive value favours ``i -> j``. The method
+    assumes a deterministic relationship and tests no conditional
+    independence. It is cdt's ``IGCI`` [3]_ with the Gaussian reference
+    measure and the entropy estimator, reimplemented in
+    `pyspi.lib.pairwise_causal`.
 
-    The score is a *difference* of two entropies, hence exactly antisymmetric:
-    `A[i, j] == -A[j, i]`. It is therefore signed: `Calculator._rmmin` shifts
-    every unsigned column by its minimum and `set_group` correlates unsigned
-    SPIs through `abs()`, both of which would destroy the lead/lag the sign
-    carries.
+    Signed and antisymmetric: ``A[i, j] = -A[j, i]``; positive means i
+    causes j. It is in none of the bundled configs; the heuristic is not
+    claimed to be reliable.
 
-    It is in none of the bundled configs; the heuristic is not claimed to be
-    reliable.
+    References
+    ----------
+    .. [1] P. Daniušis, D. Janzing, J. M. Mooij, J. Zscheischler, B. Steudel,
+           K. Zhang, B. Schölkopf, "Inferring deterministic causal
+           relations", Proceedings of the 26th Conference on Uncertainty in
+           Artificial Intelligence, 143-150 (2010).
+    .. [2] D. Janzing et al., "Information-geometric approach to inferring
+           causal directions", Artificial Intelligence 182-183, 1-31 (2012).
+    .. [3] D. Kalainathan, O. Goudet, R. Dutta, "Causal Discovery Toolbox:
+           uncovering causal relationships in Python", Journal of Machine
+           Learning Research 21(37), 1-5 (2020).
     """
 
     name = "Information-geometric causal inference"
@@ -153,10 +230,12 @@ class InformationGeometricCausalInference(Directed, Signed):
 
 
 class InformationGeometricConditionalIndependence(InformationGeometricCausalInference):
-    """Deprecated alias for :class:`InformationGeometricCausalInference`.
+    """
+    Deprecated alias of `InformationGeometricCausalInference`.
 
-    The old name misdescribed the method. Kept so existing configs and scripts
-    keep working; the identifier (`igci`) and the computation are unchanged.
+    The name misdescribes IGCI, which tests no conditional independence. The
+    identifier (``igci``) and the values are the same; it warns on use and
+    will be removed in a future release.
     """
 
     def __init__(self, *args, **kwargs):
@@ -172,14 +251,14 @@ class InformationGeometricConditionalIndependence(InformationGeometricCausalInfe
 
 
 def _optimal_embedding_dimension(df, column, lib_pred, max_e=10):
-    """E in [1, max_e] maximising simplex-projection skill, computed serially.
+    """
+    E in [1, max_e] maximising simplex-projection skill, computed serially.
 
     The serial equivalent of ``pyEDM.EmbedDimension``: it runs
     ``pyEDM.Simplex`` for each E (as ``PoolFunc.EmbedDimSimplexFunc`` does in
     each child) and selects ``rho.idxmax()``. ``EmbedDimension`` always builds a
     ``multiprocessing.Pool`` (even with ``numProcess=1``), which pyEDM starts
-    with forkserver/spawn, so each child re-imports the caller's ``__main__``
-    (see the note in ``ConvergentCrossMapping._from_cache``).
+    with forkserver/spawn, so each child re-imports the caller's ``__main__``.
 
     Ties go to the smallest E: a lower-dimensional embedding that predicts as
     well is the better model, and ``argmax`` returns the first maximum. Ties are
@@ -198,7 +277,8 @@ def _optimal_embedding_dimension(df, column, lib_pred, max_e=10):
 
 
 def _ccm_library_sizes(N, E, nlibs=21):
-    """``nlibs + 1`` library sizes from ``ceil(2E/10)*10`` to ``floor((N-E-1)/10)*10``.
+    """
+    ``nlibs + 1`` library sizes from ``ceil(2E/10)*10`` to ``floor((N-E-1)/10)*10``.
 
     Inclusive at both ends; fewer (the caller NaN-pads) when the span is under
     ``nlibs``.
@@ -226,7 +306,8 @@ def _pearson(predictions, actuals):
 
 
 def _cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=42, tp=0):
-    """Cross-map skill of one variable's shadow manifold against several targets.
+    """
+    Cross-map skill of one variable's shadow manifold against several targets.
 
     Returns ``(len(targets), len(lib_sizes))``: entry ``[t, l]`` is the mean,
     over ``sample`` random libraries of ``lib_sizes[l]`` points drawn without
@@ -279,7 +360,8 @@ def _cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=42, tp=0):
 
 
 def _shadow_manifold(library, targets, E, tp):
-    """Delay embedding of ``library`` and the targets ``tp`` steps ahead of it.
+    """
+    Delay embedding of ``library`` and the targets ``tp`` steps ahead of it.
 
     Row r of ``embed`` is ``(x(t), x(t-1), ..., x(t-E+1))`` for ``t =
     rows[r]``, and row r of each ``actuals`` entry is ``y(t + tp)``; ``rows``
@@ -298,7 +380,8 @@ def _shadow_manifold(library, targets, E, tp):
 
 
 def _simplex_rhos(dist, neighbours, k, actuals, candidates=None):
-    """Simplex cross-map skill of every target for one random library.
+    """
+    Simplex cross-map skill of every target for one random library.
 
     ``dist`` and ``neighbours`` are ``(n_points, q)``, each row sorted by
     distance, ``neighbours`` holding embedding-row indices. The first ``k``
@@ -351,7 +434,8 @@ def _simplex_rhos(dist, neighbours, k, actuals, candidates=None):
 
 
 def _cross_map_skill_dense(library, targets, E, L, sample=100, seed=42, tp=0):
-    """``_cross_map_skill`` at the single library size ``L``, one KD-tree query in all.
+    """
+    ``_cross_map_skill`` at the single library size ``L``, one KD-tree query in all.
 
     Returns ``(len(targets),)``, equal to
     ``_cross_map_skill(library, targets, E, [L], sample, seed, tp)[:, 0]``
@@ -411,7 +495,8 @@ def _ccm_store(data, key, value):
 
 
 def _ccm_embedding(data, E, procs=None):
-    """Embedding dimension of each process in ``procs`` (default: all), as ints.
+    """
+    Embedding dimension of each process in ``procs`` (default: all), as ints.
 
     A fixed ``E`` is returned for every process. ``E=None`` gives each process
     its simplex-optimal dimension (``_optimal_embedding_dimension`` over E =
@@ -448,7 +533,8 @@ def _ccm_embedding(data, E, procs=None):
 
 
 def _ccm_curves(z, embedding, nlibs=_CCM_NLIBS):
-    """CCM skill curves ``(P, P, nlibs + 1)`` of the processes ``z`` (P, N).
+    """
+    CCM skill curves ``(P, P, nlibs + 1)`` of the processes ``z`` (P, N).
 
     ``[s, t, l]`` is "t xmap s" (the shadow manifold of t recovering s) at the
     l-th library size of ``_ccm_library_sizes(N, E_st)``, NaN-padded past the
@@ -490,7 +576,8 @@ def _ccm_log_library_sizes(embedding, N, nlibs=_CCM_NLIBS):
 
 
 def _ccm_convergence(curves):
-    """Last finite skill minus first finite skill along the library axis.
+    """
+    Last finite skill minus first finite skill along the library axis.
 
     NaN where fewer than two library sizes have a finite skill.
     """
@@ -505,7 +592,8 @@ def _ccm_convergence(curves):
 
 
 def _ccm_slope(curves, log_L):
-    """OLS slope of skill on ``ln L`` over the library sizes where both are finite.
+    """
+    OLS slope of skill on ``ln L`` over the library sizes where both are finite.
 
     NaN where fewer than two such sizes.
     """
@@ -522,58 +610,69 @@ def _ccm_slope(curves, log_L):
 
 
 class ConvergentCrossMapping(Directed, Signed):
-    """Convergent cross-mapping skill, row (source) -> column (target).
+    """
+    Convergent cross-mapping skill, row (source) -> column (target) [1]_.
 
-    ``table[i, j]`` is read off the skill with which the shadow manifold of
-    *j* recovers *i*, which Sugihara et al. (2012) read as *i* driving *j*;
-    higher means more (the opposite polarity to ``anm``/``cds``/``reci``).
-    That skill is computed once per Data and embedding dimension as a curve
-    ``rho_ij(L)`` over 22 library sizes L from ``ceil(2E/10)*10`` to
-    ``floor((N-E-1)/10)*10`` (``_ccm_library_sizes``), each the mean Pearson
-    correlation over 100 random libraries (``_cross_map_skill``), and cached
-    on ``data.ccm[E]``. The statistics are all read off that curve:
+    ``A[i, j]`` is read off the skill with which the shadow manifold (delay
+    embedding) of ``x_j`` recovers ``x_i``, which [1]_ reads as ``i`` driving
+    ``j``; higher means more (the opposite polarity to ``anm``, ``cds`` and
+    ``reci``). That skill is computed once per Data and embedding dimension
+    ``E`` as a curve ``rho_ij(L)`` over up to 22 library sizes ``L`` from
+    ``ceil(2E/10)*10`` to ``floor((N-E-1)/10)*10``, each the mean Pearson
+    correlation over 100 random libraries (seed 42) of simplex cross-map
+    estimates (``E + 1`` neighbours, embedding delay of one sample), and
+    cached on ``data.ccm[E]``. Each skill equals pyEDM 2.5's ``CCM`` at the
+    same ``E``; pyEDM's process pools are not used. Every ``statistic`` is
+    read off that curve.
 
-    * ``mean`` and ``max``: over library sizes.
-    * ``diff``: ``ccm(i->j) - ccm(j->i)`` averaged over library sizes, and
-      antisymmetric.
-    * ``convergence``: ``rho_ij(L_max) - rho_ij(L_min)``, the last finite
-      entry of the curve minus the first. Skill that grows with the library
-      is Sugihara et al.'s (2012) criterion for causation. Signed and
-      directed: negative when skill falls with L.
-    * ``slope``: the least-squares slope of ``rho_ij`` against ``ln L`` over
-      the finite library sizes, in skill per e-fold of library size.
+    With ``embedding_dimension=None`` each process gets its own
+    simplex-optimal dimension (``E = 1..10``), and each pair uses the larger
+    of its two in both directions ([1]_ uses the library variable's own), so
+    the two directions are computed on manifolds of the same dimension.
 
     ``convergence`` and ``slope`` are NaN with fewer than two finite library
     sizes. A link strong enough to synchronise the pair saturates the skill
     from the smallest library on and so barely converges, and when both
-    directions are causal the stronger one can converge less.
-
-    With ``embedding_dimension=None`` each process gets its own
-    simplex-optimal dimension, and each pair uses the larger of its two in
-    both directions (Sugihara et al. use the library variable's own), so the
-    two directions are computed on manifolds of the same dimension.
-    Embeddings use a delay of one sample, so a weakly autocorrelated source
-    acting at a longer lag can leave the skill near zero.
+    directions are causal the stronger one can converge less. With a delay
+    of one sample, a weakly autocorrelated source acting at a longer lag can
+    leave the skill near zero.
 
     The "i drives j" reading holds for deterministic dynamics. Under
-    stochastic lagged coupling it can reverse: if x drives y with a delay,
-    x's delay vector predicts y, so the skill appears in the y -> x cell. On
-    such data compare ``LaggedConvergentCrossMapping``'s ``tp`` in the two
+    stochastic lagged coupling it can reverse: if ``x_i`` drives ``x_j``
+    with a delay, ``x_i``'s delay vector predicts ``x_j``, so the skill
+    appears in the ``j -> i`` cell. On such data compare the ``tp`` of
+    `LaggedConvergentCrossMapping`, the time-delayed variant, in the two
     cells instead.
 
     ``bivariate`` reads the cached table when the Data has one and otherwise
-    computes the pair alone. See ``LaggedConvergentCrossMapping`` for the
-    time-delayed variant of Ye et al. (2015).
+    computes the pair alone.
 
-    Reference: G. Sugihara et al., "Detecting causality in complex
-    ecosystems", Science 338, 496-500 (2012).
+    References
+    ----------
+    .. [1] G. Sugihara et al., "Detecting causality in complex ecosystems",
+           Science 338(6106), 496-500 (2012).
+
+    Parameters
+    ----------
+    statistic : str, optional
+        What is read off the skill curve ``rho_ij(L)``: ``'mean'`` or
+        ``'max'`` over library sizes; ``'diff'``, ``ccm(i->j) - ccm(j->i)``
+        averaged over library sizes, so ``A[i, j] = -A[j, i]`` and positive
+        means i drives j; ``'convergence'``, ``rho_ij(L_max) - rho_ij(L_min)``
+        (the last finite entry minus the first; skill that grows with ``L``
+        is the criterion for causation in [1]_, and a negative value means
+        skill falls with ``L``); or ``'slope'``, the least-squares slope of
+        ``rho_ij`` against ``ln L``, in skill per e-fold of library size.
+        Default: ``'mean'``.
+    embedding_dimension : int or None, optional
+        Embedding dimension ``E`` (at least 1). None gives each process its
+        own simplex-optimal dimension, as above. Default: None.
     """
 
     name = "Convergent cross-mapping"
     identifier = "ccm"
     labels = ["causal", "directed", "nonlinear", "temporal", "signed"]
-    # Variants (statistic x embedding dimension) share data.ccm[self.key],
-    # keyed by embedding dimension — bucket them onto one parallel worker.
+    # Variants share data.ccm[E], so they run on one parallel worker.
     _cache_namespace = "ccm"
 
     @property
@@ -588,10 +687,7 @@ class ConvergentCrossMapping(Directed, Signed):
             else require_int("embedding_dimension", embedding_dimension, minimum=1)
         )
 
-        # The "diff" statistic is ccm(i->j) - ccm(j->i), so A[i,j] == -A[j,i]
-        # by construction. That is antisymmetric, not merely directed: the two
-        # orientations are one quantity and its negation, not independent
-        # values. "mean"/"max"/"convergence"/"slope" remain plainly directed.
+        # diff is ccm(i->j) - ccm(j->i): antisymmetric rather than directed.
         if statistic == "diff":
             self.labels = [l for l in self.labels if l != "directed"] + ["antisymmetric"]
 
@@ -605,8 +701,7 @@ class ConvergentCrossMapping(Directed, Signed):
         try:
             ccmf = data.ccm[self.key]
         except (AttributeError, KeyError):
-            # Compute CCM from the fixed or optimal embedding. Each pair uses
-            # the larger of its two dimensions in both directions.
+            # Each pair uses the larger of its two dimensions in both directions.
             ccmf = _ccm_curves(data.to_numpy(squeeze=True),
                                _ccm_embedding(data, self._E))
             _ccm_store(data, self.key, ccmf)
@@ -650,7 +745,8 @@ class ConvergentCrossMapping(Directed, Signed):
 
 def _lagged_ccm_skill(z, embedding, max_lag, nlibs=_CCM_NLIBS, sample=100,
                       seed=42):
-    """Cross-map skill by prediction horizon, ``(P, P, 2 * max_lag + 1)``.
+    """
+    Cross-map skill by prediction horizon, ``(P, P, 2 * max_lag + 1)``.
 
     ``[s, t, max_lag + tp]`` is "t xmap s" at horizon ``tp``: the shadow
     manifold of t at time u estimating ``s[u + tp]``, at the largest library
@@ -680,48 +776,58 @@ def _lagged_ccm_skill(z, embedding, max_lag, nlibs=_CCM_NLIBS, sample=100,
 
 
 class LaggedConvergentCrossMapping(Directed, Signed):
-    """Lagged convergent cross-mapping (Ye et al. 2015, Sci Rep 5, 14750).
+    """
+    Lagged convergent cross-mapping, row (source) -> column (target) [1]_.
 
-    Ye et al. extend CCM with a cross-map lag: the shadow manifold of the
-    library variable at time t estimates the other variable at time ``t + Tp``.
-    For each ordered pair and each ``Tp in -k..k`` this computes
-    ``rho_ij(Tp) = corr(i(t + Tp), estimate of i(t + Tp) from M_j(t))``, "j
-    xmap i" at horizon Tp, at the largest library size only
-    (``L = floor((N-E-1)/10)*10``, 100 random libraries, seed 42, exactly as
-    ``ConvergentCrossMapping``; the ``Tp = 0`` value equals the last point of
+    [1]_ extends CCM with a cross-map lag: the shadow manifold of the library
+    variable at time t estimates the other variable at time ``t + Tp``. For
+    each ordered pair and each ``Tp`` in ``-k..k`` this computes
+    ``rho_ij(Tp)``, the skill with which the shadow manifold of ``x_j`` at
+    time t recovers ``x_i(t + Tp)``, at the largest library size only
+    (``L = floor((N-E-1)/10)*10``, 100 random libraries, seed 42, as in
+    `ConvergentCrossMapping`; the ``Tp = 0`` value equals the last point of
     the ``ccm`` curve). The ``(M, M, 2k + 1)`` array is cached on
-    ``data.ccm[("lagged", E, k)]``.
+    ``data.ccm[("lagged", E, k)]``. Rows whose shifted target falls outside
+    the series are dropped, as with pyEDM's ``Tp``, so a horizon ``Tp``
+    costs at most ``|Tp|`` points.
 
-    Orientation: row = source, so ``A[i, j]`` (``i -> j``) uses ``M_j``
-    cross-mapping i, as in ``ccm``. If i reaches j after a delay ``d >= 1``,
-    ``M_j(t)`` best recovers ``i(t - d)`` and ``rho_ij(Tp)`` peaks at
-    ``Tp = -d < 0``; skill in the non-causal direction comes from generalized
-    synchrony under strong forcing, where the peak sits at ``Tp >= 0``.
+    Orientation is as in ``ccm``: ``A[i, j]`` (``i -> j``) uses the manifold
+    of ``x_j`` cross-mapping ``x_i``. If i reaches j after a delay
+    ``d >= 1``, the manifold at time t best recovers ``x_i(t - d)`` and
+    ``rho_ij(Tp)`` peaks at ``Tp = -d < 0``; skill in the non-causal
+    direction comes from generalised synchrony under strong forcing, where
+    the peak sits at ``Tp >= 0``. Unlike ``ccm``, which evaluates every
+    library size at ``Tp = 0``, ``lccm`` reads direction from when skill
+    peaks, so it can separate a delayed causal link from synchrony; it does
+    not test convergence.
 
-    Statistics:
+    References
+    ----------
+    .. [1] H. Ye, E. R. Deyle, L. J. Gilarranz, G. Sugihara, "Distinguishing
+           time-delayed causal interactions using convergent cross mapping",
+           Scientific Reports 5, 14750 (2015).
 
-    * ``tp``: the Tp of maximal skill, an integer in ``[-k, k]``. Negative
-      ``A[i, j]`` is the signature of a causal i -> j. Its magnitude
-      estimates ``d`` only roughly (the peak flattens for larger E). For an
-      unlinked pair the argmax is noise, so read ``tp`` together with
-      ``skill`` or ``ccm_*_convergence``. Ties go to the most negative Tp.
-      Under noisy lagged coupling the reverse cell's ``tp`` is unreliable,
-      and a hidden common driver makes both cells negative, so compare
-      ``A[i, j]`` with ``A[j, i]`` (the more negative marks the driving
-      direction) rather than reading the sign of one cell.
-    * ``skill``: ``max over Tp of rho_ij(Tp)``, signed like ``ccm``.
-
-    Unlike ``ccm``, which evaluates every library size at ``Tp = 0``, ``lccm``
-    reads direction from when skill peaks, so it can separate a delayed
-    causal link from synchrony; it does not test convergence.
-
-    ``statistic`` is ``"tp"`` or ``"skill"``. ``embedding_dimension`` is as in
-    ``ConvergentCrossMapping``: ``None`` selects each process's simplex-optimal
-    E and a pair uses the larger of its two, in both directions. ``max_lag``
-    is k, the largest horizon examined, in samples (default 5).
-
-    Rows whose shifted target falls outside the series are dropped (as
-    pyEDM's ``Tp``), so a horizon of ``Tp`` costs ``|Tp|`` points at most.
+    Parameters
+    ----------
+    statistic : str, optional
+        ``'tp'``: the ``Tp`` of maximal skill, an integer in ``[-k, k]``
+        (ties go to the most negative). A negative ``A[i, j]`` is the
+        signature of ``i -> j``; its magnitude estimates ``d`` only roughly
+        (the peak flattens for larger E). For an unlinked pair the argmax is
+        noise, so read ``tp`` together with ``skill`` or
+        ``ccm_*_convergence``. Under noisy lagged coupling the reverse cell's
+        ``tp`` is unreliable, and a hidden common driver makes both cells
+        negative, so compare ``A[i, j]`` with ``A[j, i]`` (the more negative
+        marks the driving direction) rather than reading one cell's sign.
+        ``'skill'``: ``max over Tp of rho_ij(Tp)``, signed like ``ccm``.
+        Default: ``'tp'``.
+    embedding_dimension : int or None, optional
+        As in `ConvergentCrossMapping`: None selects each process's
+        simplex-optimal ``E``, and a pair uses the larger of its two in both
+        directions. Default: None.
+    max_lag : int, optional
+        ``k``, the largest horizon examined, in samples (at least 1).
+        Default: 5.
     """
 
     name = "Lagged convergent cross-mapping"
@@ -789,7 +895,8 @@ class LaggedConvergentCrossMapping(Directed, Signed):
 
 
 def _nli_embed(x, m, tau):
-    """Delay vectors ``(x_n, x_{n-tau}, ..., x_{n-(m-1)tau})``, one per row.
+    """
+    Delay vectors ``(x_n, x_{n-tau}, ..., x_{n-(m-1)tau})``, one per row.
 
     Rows run over ``n = (m-1)tau, ..., T-1``, so every process of a dataset
     gives the same ``N = T - (m-1)tau`` time indices and row ``n`` of two
@@ -802,7 +909,8 @@ def _nli_embed(x, m, tau):
 
 
 def _nli_neighbours(emb, k, theiler):
-    """Time indices of the ``k`` nearest neighbours of every delay vector.
+    """
+    Time indices of the ``k`` nearest neighbours of every delay vector.
 
     Neighbours with ``|n - r| <= theiler`` (the point itself included) are
     excluded. At most ``2 * theiler + 1`` points are excluded per row, so the
@@ -825,7 +933,8 @@ def _nli_mean_sq_dist(emb, idx):
 
 
 def _nli_mean_sq_dist_all(emb, theiler):
-    """Mean squared distance from each ``x_n`` to every admissible ``x_j``.
+    """
+    Mean squared distance from each ``x_n`` to every admissible ``x_j``.
 
     Admissible means ``|n - j| > theiler``. Returns ``(R, n_admissible)``.
     The sum over all ``j`` uses ``sum_j |c_n - c_j|^2 = N|c_n|^2 + sum_j
@@ -850,7 +959,8 @@ def _nli_mean_sq_dist_all(emb, theiler):
 
 
 def _nli_ranks(emb, theiler, queries, block=128):
-    """Rank of ``|x_n - x_{queries[n, l]}|`` among ``x_n``'s admissible distances.
+    """
+    Rank of ``|x_n - x_{queries[n, l]}|`` among ``x_n``'s admissible distances.
 
     For each row ``n`` the distances to every ``x_j`` with ``|n - j| >
     theiler`` are ranked in ascending order (1 = nearest); entry ``[n, l]`` is
@@ -880,16 +990,16 @@ def _nli_ranks(emb, theiler, queries, block=128):
 
 
 class NonlinearInterdependence(Directed, Unsigned):
-    """Nonlinear interdependence S, H, N or L from delay-embedded neighbourhoods.
+    """
+    Nonlinear interdependence S, H, N or L [1]_ [2]_ [3]_ [4]_.
 
     State-space measures of whether close states of one process occur at the
-    same times as close states of another (Arnhold et al. 1999; Quian Quiroga
-    et al. 2002; Chicharro & Andrzejak 2009). Each process is delay-embedded,
+    same times as close states of another. Each process is delay-embedded,
     ``x_n = (x_n, x_{n-tau}, ..., x_{n-(m-1)tau})`` for ``n = 1..N`` with
-    ``N = T - (m-1)tau``. Let
-    ``r_{n,l}`` and ``s_{n,l}`` (``l = 1..k``) be the time indices of the ``k``
-    nearest neighbours of ``x_n`` and of ``y_n`` (Euclidean distance), with
-    temporal neighbours ``|n - r| <= theiler`` excluded. Then
+    ``N = T - (m-1)tau``. Let ``r_{n,l}`` and ``s_{n,l}`` (``l = 1..k``) be
+    the time indices of the ``k`` nearest neighbours of ``x_n`` and of
+    ``y_n`` (Euclidean distance), with temporal neighbours
+    ``|n - r| <= theiler`` excluded. Then
 
     * ``R_n^k(X)   = (1/k) sum_l |x_n - x_{r_{n,l}}|^2``  (own neighbours),
     * ``R_n^k(X|Y) = (1/k) sum_l |x_n - x_{s_{n,l}}|^2``  (Y's neighbours'
@@ -898,13 +1008,13 @@ class NonlinearInterdependence(Directed, Unsigned):
 
     and, averaging over ``n``,
 
-    * ``S(X|Y) = <R_n^k(X) / R_n^k(X|Y)>`` (Arnhold et al. 1999), in [0, 1];
-    * ``H(X|Y) = <log(R_n(X) / R_n^k(X|Y))>`` (Arnhold et al. 1999), in nats,
-      about 0 for independent processes;
-    * ``N(X|Y) = <(R_n(X) - R_n^k(X|Y)) / R_n(X)>`` (Quian Quiroga et al.
-      2002), at most 1, about 0 for independent processes;
-    * ``L(X|Y) = <(G_n(X) - G_n^k(X|Y)) / (G_n(X) - G_n^k(X))>`` (Chicharro &
-      Andrzejak 2009, eq. 4), at most 1, about 0 for independent processes.
+    * ``S(X|Y) = <R_n^k(X) / R_n^k(X|Y)>`` [1]_, in ``[0, 1]``;
+    * ``H(X|Y) = <log(R_n(X) / R_n^k(X|Y))>`` [1]_, in nats, about 0 for
+      independent processes;
+    * ``N(X|Y) = <(R_n(X) - R_n^k(X|Y)) / R_n(X)>`` [3]_, at most 1, about 0
+      for independent processes;
+    * ``L(X|Y) = <(G_n(X) - G_n^k(X|Y)) / (G_n(X) - G_n^k(X))>`` ([4]_,
+      eq. 4), at most 1, about 0 for independent processes.
       ``G_n^k(X|Y)`` is the mean rank of the ``k`` distances
       ``|x_n - x_{s_{n,l}}|`` among all of ``x_n``'s admissible distances
       (1 = nearest; ties take their average rank), ``G_n^k(X) = (k+1)/2`` is
@@ -914,46 +1024,59 @@ class NonlinearInterdependence(Directed, Unsigned):
     With ``theiler = W`` every average over ``j`` (the neighbour searches,
     ``R_n(X)`` and the ranks) runs over ``|n - j| > W`` only, so ``N_n =
     N - 1 - #{j != n: |n - j| <= W}`` (``N - 2W - 1`` away from the ends), as
-    in Chicharro & Andrzejak (2009), note 24.
+    in [4]_, note 24.
 
-    **Direction.** ``A[i, j] = A(x_i | x_j)`` (``A`` one of S, H, N, L): the
-    row is the conditioned process X, whose distances are measured, and the
-    column is the conditioning process Y, whose neighbourhoods are mapped onto
-    X. The entry is large when close states of ``x_j`` are mapped to close
-    states of ``x_i``, which Chicharro & Andrzejak (2009) read as a coupling
-    ``x_i -> x_j`` (as in convergent cross-mapping). So with pyspi's
-    row = source convention, ``A[i, j] > A[j, i]`` points to ``i -> j``.
+    Direction: ``A[i, j] = A(x_i | x_j)`` (``A`` one of S, H, N, L). The row
+    is the conditioned process X, whose distances are measured, and the
+    column is the conditioning process Y, whose neighbourhoods are mapped
+    onto X. The entry is large when close states of ``x_j`` are mapped to
+    close states of ``x_i``, which [4]_ reads as a coupling ``x_i -> x_j``
+    (as in convergent cross-mapping). So with row = source,
+    ``A[i, j] > A[j, i]`` points to ``i -> j``. Unsigned.
 
-    **Caveats.** Both entries of a coupled pair rise, so only the asymmetry
-    indicates direction, and it is unreliable near generalised
-    synchronisation. S and H depend on the effective dimension of each
-    process, so their asymmetry can point the wrong way (Quian Quiroga et al.
-    2000); L, which uses only ranks, is the most reliable for direction
-    (Chicharro & Andrzejak 2009).
+    Both entries of a coupled pair rise, so only the asymmetry indicates
+    direction, and it is unreliable near generalised synchronisation. S and H
+    depend on the effective dimension of each process, so their asymmetry
+    can point the wrong way [2]_; L, which uses only ranks, is the most
+    reliable for direction [4]_.
 
-    **Undefined pairs.** S and H divide by ``R_n^k(X|Y)``, which is zero when
-    every conditioned neighbour of some ``x_n`` coincides with it (repeated
-    delay vectors, e.g. quantised data). That pair raises, and is NaN in the
-    multivariate table.
+    S and H divide by ``R_n^k(X|Y)``, which is zero when every conditioned
+    neighbour of some ``x_n`` coincides with it (repeated delay vectors, as
+    in quantised data). That pair raises, and is NaN in the multivariate
+    table.
 
-    Args:
-        statistic (str): ``"S"``, ``"H"``, ``"N"`` or ``"L"``.
-        m (int): embedding dimension, default 5.
-        tau (int): embedding delay in samples, default 1.
-        k (int): number of nearest neighbours, default 5.
-        theiler (int or None): Theiler window ``W`` in samples; neighbours
-            with ``|n - j| <= W`` are excluded. ``None`` (default) uses
-            ``m * tau``, which excludes every pair of delay vectors sharing a
-            sample. Needs ``N = T - (m-1)tau > k + 2W + 1``.
+    References
+    ----------
+    .. [1] J. Arnhold, P. Grassberger, K. Lehnertz, C. E. Elger, "A robust
+           method for detecting interdependences: application to
+           intracranially recorded EEG", Physica D 134(4), 419-430 (1999).
+    .. [2] R. Quian Quiroga, J. Arnhold, P. Grassberger, "Learning
+           driver-response relationships from synchronization patterns",
+           Physical Review E 61(5), 5142-5148 (2000).
+    .. [3] R. Quian Quiroga, A. Kraskov, T. Kreuz, P. Grassberger,
+           "Performance of different synchronization measures in real data:
+           a case study on electroencephalographic signals", Physical Review
+           E 65(4), 041903 (2002).
+    .. [4] D. Chicharro, R. G. Andrzejak, "Reliable detection of directional
+           couplings using rank statistics", Physical Review E 80(2), 026217
+           (2009).
 
-    References:
-        J. Arnhold, P. Grassberger, K. Lehnertz, C. E. Elger, Physica D 134,
-        419 (1999).
-        R. Quian Quiroga, J. Arnhold, P. Grassberger, Phys. Rev. E 61, 5142
-        (2000).
-        R. Quian Quiroga, A. Kraskov, T. Kreuz, P. Grassberger, Phys. Rev. E
-        65, 041903 (2002).
-        D. Chicharro, R. G. Andrzejak, Phys. Rev. E 80, 026217 (2009).
+    Parameters
+    ----------
+    statistic : str, optional
+        ``'S'``, ``'H'``, ``'N'`` or ``'L'``. Default: ``'L'``.
+    m : int, optional
+        Embedding dimension (at least 1). Default: 5.
+    tau : int, optional
+        Embedding delay, in samples (at least 1). Default: 1.
+    k : int, optional
+        Number of nearest neighbours (at least 1). Default: 5.
+    theiler : int or None, optional
+        Theiler window ``W``, in samples: neighbours with ``|n - j| <= W``
+        are excluded. None uses ``m * tau``, which excludes every pair of
+        delay vectors sharing a sample; a value given explicitly is appended
+        to the identifier. Needs ``N = T - (m-1)tau > k + 2W + 1``.
+        Default: None.
     """
 
     name = "Nonlinear interdependence"
@@ -1016,7 +1139,8 @@ class NonlinearInterdependence(Directed, Unsigned):
         return cache["process"][p]
 
     def _conditioned_ranks(self, data, cache, i, conditioners):
-        """Fill ``cache["ranks"][(i, j)] = G_n^k(x_i | x_j)`` for each j given.
+        """
+        Fill ``cache["ranks"][(i, j)] = G_n^k(x_i | x_j)`` for each j given.
 
         All of process i's conditioning partners are ranked in one pass over
         its distance rows.
@@ -1061,7 +1185,8 @@ class NonlinearInterdependence(Directed, Unsigned):
 
     @parse_multivariate
     def multivariate(self, data):
-        """Every ordered pair, from per-process embeddings and neighbours.
+        """
+        Every ordered pair, from per-process embeddings and neighbours.
 
         Each process is embedded and searched once (O(N log N) with a
         KD-tree); a pair then costs O(N k m). L additionally ranks each
@@ -1083,7 +1208,8 @@ class NonlinearInterdependence(Directed, Unsigned):
 
 
 def _liang_moments(z, k):
-    """The sample covariances every Liang-Kleeman estimator is built from.
+    """
+    The sample covariances every Liang-Kleeman estimator is built from.
 
     With the Euler forward difference at a step of one sample,
     ``dx_b[n] = (x_b[n + k] - x_b[n]) / k`` (Liang 2014; Liang 2021 eq. 7),
@@ -1116,33 +1242,33 @@ def _liang_moments(z, k):
 
 
 class LiangInformationFlow(Directed, Signed):
-    r"""Liang-Kleeman rate of information flow (Liang 2014, Phys Rev E 90).
+    r"""
+    Liang-Kleeman information flow, row (source) -> column (target) [1]_.
 
     ``A[j, i]`` is ``T_{j->i}``, the rate at which the source ``x_j`` transfers
     information (entropy) to the target ``x_i``, in nats per sample, estimated
     under a linear stochastic model ``dx = (f + A x) dt + B dW`` with diagonal
-    ``B`` (Liang 2014, 2021). Positive means ``x_j`` makes ``x_i`` *more*
-    uncertain, negative means it *reduces* ``x_i``'s uncertainty (stabilises
-    it), and zero means no causal influence (Liang's principle of nil
-    causality, a theorem of the formalism: ``T_{j->i} = 0`` whenever ``x_i``'s
-    dynamics do not depend on ``x_j``). Equation numbers below refer to Liang
-    2015 (Phys Rev E 92, 022126; arXiv:1501.03548) and Liang 2021 (Entropy 23,
-    679; arXiv:2104.11360).
+    ``B`` [1]_ [3]_. Positive means ``x_j`` makes ``x_i`` more uncertain,
+    negative means it reduces ``x_i``'s uncertainty (stabilises it), and zero
+    means no causal influence (Liang's principle of nil causality, a theorem
+    of the formalism: ``T_{j->i} = 0`` whenever ``x_i``'s dynamics do not
+    depend on ``x_j``). Equation numbers below refer to [2]_ (2015) and
+    [3]_ (2021).
 
-    **Estimators.** With the Euler forward difference
+    Estimators. With the Euler forward difference
     ``dx_i[n] = (x_i[n + k] - x_i[n]) / k`` (one sample is the time unit),
     ``C_ab = cov(x_a, x_b)``, ``C_{a,di} = cov(x_a, dx_i)`` and
     ``C_{di,di} = var(dx_i)``, all over the ``T - k`` samples that have a
     difference (``_liang_moments``):
 
-    * ``conditional=False``: Liang's (2014) bivariate maximum-likelihood
-      estimator for each pair on its own (Liang 2015 eq. 3; Liang 2021 eq. 5),
-      with 1 the target and 2 the source,
+    * ``conditional=False``: the bivariate maximum-likelihood estimator of
+      [1]_ for each pair on its own (2015 eq. 3; 2021 eq. 5), with 1 the
+      target and 2 the source,
       ``T_{2->1} = (C11 C12 C_{2,d1} - C12^2 C_{1,d1}) / D`` with
       ``D = C11^2 C22 - C11 C12^2``.
 
     * ``conditional=True``: the multivariate estimator with all ``M`` series
-      as the system (Liang 2021 eq. 14),
+      as the system (2021 eq. 14),
       ``T_{j->i} = (1 / det C) sum_k Delta_jk C_{k,di} C_ij / C_ii``, which is
       ``a_ij C_ij / C_ii``, where ``Delta_jk`` are the cofactors of ``C`` and
       ``a_ij = sum_k (C^-1)_jk C_{k,di}`` (eq. 9;
@@ -1153,39 +1279,55 @@ class LiangInformationFlow(Directed, Signed):
       chain ``x0 -> x1 -> x2`` the conditional ``T_{0->2}`` vanishes, the
       bivariate one does not.
 
-    ``statistic="normalised"`` reports Liang's (2015) relative flow
+    ``statistic='normalised'`` reports the relative flow of [2]_,
     ``tau_{j->i} = T_{j->i} / Z_i`` in ``[-1, 1]``, with the target's entropy
-    balance as the normaliser (Liang 2015 eqs. 10-11 and 29-32; Liang 2021 eqs.
-    17-20), ``Z_i = |dH_i*/dt| + sum_{j != i} |T_{j->i}| + |dH_i^noise/dt|``.
+    balance as the normaliser (2015 eqs. 10-11 and 29-32; 2021 eqs. 17-20),
+    ``Z_i = |dH_i*/dt| + sum_{j != i} |T_{j->i}| + |dH_i^noise/dt|``.
     Here ``dH_i*/dt = a_ii`` (2015 eq. 22/29; 2021 eq. 15),
     ``dH_i^noise/dt = g_ii / (2 C_ii)`` with ``g_ii = k Q_i / N`` (2015 eqs.
     24, 30), and ``Q_i / N = C_{di,di} - sum_j a_ij C_{j,di}`` (2015 eq. 28) is
     the residual variance of the regression of ``dx_i`` on the series in the
     fit (the pair, or all ``M``). The sum over sources runs over the pair's one
-    source in the bivariate version (Liang 2015) and over all ``M - 1`` others
-    in the conditional one (Liang 2021). ``|tau_{j->i}|`` is the share of the
-    target's entropy budget due to ``x_j``, so ``tau`` is normalised within
-    each target and ``|tau_{j->i}|`` and ``|tau_{i->j}|`` are not on one scale
-    (Liang 2015, sec. VI). Liang's reference code mixes ``1/N`` (noise) and
-    ``1/(N - 1)`` (covariance) normalisations, so the normalised ``tau``
-    differs from it by a relative O(1/N).
+    source in the bivariate version [2]_ and over all ``M - 1`` others in the
+    conditional one [3]_. ``|tau_{j->i}|`` is the share of the target's
+    entropy budget due to ``x_j``, so ``tau`` is normalised within each target
+    and ``|tau_{j->i}|`` and ``|tau_{i->j}|`` are not on one scale ([2]_,
+    sec. VI). Liang's reference code mixes ``1/N`` (noise) and ``1/(N - 1)``
+    (covariance) normalisations, so the normalised ``tau`` differs from it by
+    a relative O(1/N).
 
-    **Units and sampling.** The rate is per sample: for a continuous-time
-    process sampled every ``h`` time units it is about ``h`` times the
-    per-unit-time flow. ``k`` sets the difference's stride; ``k = 1`` is the
-    usual choice and Liang recommends ``k = 2`` for densely sampled chaotic
-    series. ``g_ii`` uses ``k Delta t`` (the interval the difference spans) so
-    that it estimates the diffusion coefficient whatever ``k``. The statistic
-    is invariant under rescaling and shifting of each series.
+    Units and sampling. The rate is per sample: for a continuous-time process
+    sampled every ``h`` time units it is about ``h`` times the per-unit-time
+    flow. ``k = 1`` is the usual choice, and Liang recommends ``k = 2`` for
+    densely sampled chaotic series. ``g_ii`` uses ``k Delta t`` (the interval
+    the difference spans) so that it estimates the diffusion coefficient
+    whatever ``k``. The statistic is invariant under rescaling and shifting of
+    each series. No significance test is applied (the confidence intervals of
+    [1]_ are not implemented).
 
-    No significance test is applied (the confidence intervals of Liang 2014
-    are not implemented).
+    References
+    ----------
+    .. [1] X. S. Liang, "Unraveling the cause-effect relation between time
+           series", Physical Review E 90(5), 052150 (2014).
+    .. [2] X. S. Liang, "Normalizing the causality between time series",
+           Physical Review E 92(2), 022126 (2015).
+    .. [3] X. S. Liang, "Normalized multivariate time series causality
+           analysis and causal graph reconstruction", Entropy 23(6), 679
+           (2021).
 
-    ``k`` (default 1) is the stride of the forward difference, in samples.
-    ``conditional=True`` requires a nonsingular ``M x M`` covariance
-    (``M < T - k``, no series an exact linear combination of the others).
-    ``statistic`` is ``"rate"`` (default, nats per sample) or
-    ``"normalised"``.
+    Parameters
+    ----------
+    k : int, optional
+        Stride of the forward difference, in samples (at least 1).
+        Default: 1.
+    conditional : bool, optional
+        Use the multivariate estimator, conditioning on all other series
+        (identifier stem ``liang-cond``). It needs a nonsingular ``M x M``
+        covariance (``M < T - k``, no series an exact linear combination of
+        the others). Default: False.
+    statistic : str, optional
+        ``'rate'`` (nats per sample) or ``'normalised'`` (``tau``, in
+        ``[-1, 1]``). Default: ``'rate'``.
     """
 
     name = "Liang-Kleeman information flow"
@@ -1227,7 +1369,8 @@ class LiangInformationFlow(Directed, Signed):
         return moments
 
     def _bivariate_flows(self, C, Cd, Vd):
-        """Liang (2014, 2015) for every ordered pair at once; ``[j, i]`` is j -> i.
+        """
+        Liang (2014, 2015) for every ordered pair at once; ``[j, i]`` is j -> i.
 
         For the pair (target i = "1", source j = "2"): ``a_self`` is
         ``a_11`` (2015 eq. 22), ``a_src`` is ``a_12`` (eq. 23), and
@@ -1308,7 +1451,8 @@ class LiangInformationFlow(Directed, Signed):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        """``T_{i->j}`` (or ``tau_{i->j}``): i is the source, j the target.
+        """
+        ``T_{i->j}`` (or ``tau_{i->j}``): i is the source, j the target.
 
         Read from the full table, which costs ``O(M^2)`` (``O(M^3)`` when
         conditional) once the cached covariances exist. Raises, rather than

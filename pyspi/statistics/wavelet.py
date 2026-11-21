@@ -1,10 +1,18 @@
-from mne_connectivity import phase_slope_index
-from pyspi.base import Undirected, Unsigned, parse_multivariate
 import numpy as np
+from mne_connectivity import phase_slope_index
+
+from pyspi.base import Undirected, Unsigned, parse_multivariate
 from pyspi.utils import fmt_param, require_positive_float
 
 
 class mne(Unsigned):
+    """
+    Base class of the Morlet-wavelet SPIs computed with mne-connectivity.
+
+    Holds the sampling frequency, the band ``[fmin, fmax]`` and the statistic
+    that reduces the result, and appends them to the identifier.
+    """
+
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean"):
         if fmax is None:
             fmax = fs / 2
@@ -32,11 +40,12 @@ class mne(Unsigned):
 
 
 class PhaseSlopeIndex(mne, Undirected):
-    """Time-averaged instantaneous phase slope from Morlet wavelets.
+    """
+    Time-averaged instantaneous phase slope from Morlet wavelets.
 
-    Not Nolte et al.'s (2008) phase slope index, which weights each phase
+    Not Nolte et al.'s phase slope index [1]_, which weights each phase
     difference by the coherence; that index is ``statistics.spectral``'s
-    ``PhaseSlopeIndex``. What this class computes, through mne-connectivity's
+    ``PhaseSlopeIndex``. This class computes, through mne-connectivity's
     ``phase_slope_index(mode="cwt_morlet")`` on the record as one epoch:
 
     - Morlet coefficients ``W_i(f, t)`` at 10 frequencies spaced linearly from
@@ -50,15 +59,38 @@ class PhaseSlopeIndex(mne, Undirected):
       interior frequencies (the backend's band is open, so both ends drop out),
       bounded by 7 in magnitude.
 
-    ``mean`` is the time average of ``psi(t)``: positive when ``i`` leads
-    ``j`` and zero in expectation for independent series, with a standard
-    deviation that falls as ``1 / sqrt(T)``. Neighbouring
-    frequencies are ``df = (fmax - fmin) / 9`` apart, so for a delay longer
-    than about ``1 / (2 df)`` samples the sign reverses (about 9 samples at
-    fs=1 on [0, 0.5]). The value is not proportional to the delay.
+    ``mean`` is the time average of ``psi(t)``, zero in expectation for
+    independent series, with a standard deviation that falls as
+    ``1 / sqrt(T)``. It is antisymmetric and signed: ``A[i, j] = -A[j, i]``;
+    positive means process ``i`` leads. Neighbouring frequencies are
+    ``df = (fmax - fmin) / 9`` apart, so for a delay longer than about
+    ``1 / (2 df)`` samples the sign reverses (about 9 samples at ``fs = 1``
+    on [0, 0.5]). The value is not proportional to the delay.
 
     ``max`` is the maximum of ``psi(t)`` over time. It tends to the bound
-    whatever the data, so it carries no lead/lag information.
+    whatever the data, so it carries no lead/lag information; it is signed
+    but not antisymmetric.
+
+    References
+    ----------
+    .. [1] G. Nolte et al., "Robustly estimating the flow direction of
+           information in complex physical systems", Phys. Rev. Lett.
+           100(23), 234101 (2008).
+
+    Parameters
+    ----------
+    fs : float, optional
+        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Default: 1.
+    fmin : float, optional
+        Lower edge of the band, raised to ``5 fs / T`` (five cycles over the
+        record) when below it. Default: 0.
+    fmax : float or None, optional
+        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
+        Default: None.
+    statistic : str, optional
+        ``'mean'`` (antisymmetric) or ``'max'`` of ``psi(t)`` over time.
+        Default: ``'mean'``.
     """
 
     name = "Phase slope index (wavelet)"
@@ -67,32 +99,22 @@ class PhaseSlopeIndex(mne, Undirected):
     def __init__(self, **kwargs):
         self.identifier = "psi"
         super().__init__(**kwargs)
-        # The per-frequency tensor is antisymmetric, but only a statistic that
-        # commutes with negation keeps the matrix antisymmetric. mean does;
-        # max does not (max of the negated band is -min, not -max), so the max
-        # variants are genuinely asymmetric.
+        # Only a statistic that commutes with negation keeps the matrix
+        # antisymmetric: mean does, max does not.
         trait = "antisymmetric" if self._statistic == "mean" else "asymmetric"
         self.labels = [l for l in self.labels
                        if l not in ("undirected", "directed", "unsigned")
                        ] + [trait, "signed"]
-        # Signed in behaviour, not only in label: see the same note on
-        # statistics/spectral.py's NonparametricSpectral -- `_rmmin` shifts
-        # every "unsigned" SPI by its minimum, which destroys antisymmetry.
+        # Signed in behaviour too, as in spectral.NonparametricSpectral:
+        # `_rmmin` would shift an unsigned SPI and destroy the antisymmetry.
         self.issigned = lambda: True
         self.identifier += f"_{self._statistic}"
 
     def _get_psi(self, data):
-        """Compute PSI over this class's [fmin, fmax] band.
-
-        mne_connectivity's phase_slope_index integrates cwt_freqs that fall
-        inside [fmin, fmax], so each band needs its own call. Cached per band
-        on the dataset to share across PSI variants with the same band.
-        """
-        # Floor fmin at five cycles over the record (5 * fs / T Hz), as in
-        # mne._get_cache: lower frequencies are not resolved by the data.
+        """PSI over this class's ``[fmin, fmax]`` band, cached per band."""
+        # Frequencies below five cycles over the record are not resolved.
         fmin = max(self._fmin, 5.0 * self._fs / data.n_observations)
-        # Key on the resolved fmin, not the requested one, so two bands that
-        # collapse onto the same floor share correctly.
+        # Keyed on the resolved fmin, so bands floored alike share an entry.
         key = (self._fs, fmin, self._fmax)
         try:
             return data.mne_psi[key]
@@ -101,13 +123,9 @@ class PhaseSlopeIndex(mne, Undirected):
 
         z = np.moveaxis(data.to_numpy(), 2, 0)
         cwt_freqs = np.linspace(max(fmin, 1e-6), self._fmax, 10)
-        # A Morlet wavelet spans n_cycles/f seconds. At MNE's default of 7
-        # cycles the low-frequency wavelets are longer than the data (223
-        # samples for T=100), which MNE warns about and which makes those bands
-        # meaningless. Shorten the wavelet at low frequencies so it always fits:
-        # the usual time-frequency trade, resolution given up to stay estimable.
-        # MNE's Morlet length is ~1.59 * n_cycles / f samples. Cap n_cycles so
-        # the wavelet never exceeds the signal, with a small margin.
+        # MNE's Morlet wavelet spans about 1.59 n_cycles / f samples, so at its
+        # default 7 cycles the low-frequency wavelets can outlast the record.
+        # Cap n_cycles (at least 1) so every wavelet fits, with a 5% margin.
         n_obs = data.n_observations
         max_cycles = 0.95 * n_obs * cwt_freqs / (1.59 * self._fs)
         cwt_n_cycles = np.clip(max_cycles, 1.0, 7.0)
@@ -134,20 +152,10 @@ class PhaseSlopeIndex(mne, Undirected):
     def multivariate(self, data):
         psi = np.real(self._get_psi(data))
 
-        # mne_connectivity returns a *lower-triangular* dense tensor: the upper
-        # triangle is zero and must be filled in. PSI is antisymmetric per
-        # frequency -- psi[i,j,f] = -psi[j,i,f], the sign being the entire
-        # lead/lag content -- so the fill must negate, and it must happen
-        # BEFORE the band statistic is applied.
-        #
-        # Negating after reduction is only valid for a statistic that commutes
-        # with negation. mean does; max does not:
-        #     max_f psi[i,j,f] = max_f(-psi[j,i,f]) = -min_f psi[j,i,f]
-        # which is not -max_f psi[j,i,f].
-        #
-        # Subtracting the transpose fills both triangles in one step, since the
-        # upper triangle is zero: lower keeps psi[i,j,f], upper becomes
-        # -psi[j,i,f], diagonal cancels to zero.
+        # mne_connectivity fills only the lower triangle. PSI is antisymmetric
+        # at every frequency and time, so the upper triangle is its negative,
+        # filled before the statistic (max does not commute with negation).
+        # The upper triangle is zero, so subtracting the transpose does both.
         psi = psi - np.swapaxes(psi, 0, 1)
 
         adj = self._statfn(psi, axis=(2, 3))
@@ -160,21 +168,26 @@ _N_WAVELET_FREQS = 64
 
 
 def _efolding_time(freqs, fs, n_cycles):
-    """Morlet e-folding time in samples, ``sqrt(2) sigma_t`` with
-    ``sigma_t = n_cycles / (2 pi f)`` seconds."""
+    """
+    Morlet e-folding time in samples, ``sqrt(2) sigma_t`` with
+    ``sigma_t = n_cycles / (2 pi f)`` seconds.
+    """
     return np.sqrt(2) * n_cycles / (2 * np.pi * freqs) * fs
 
 
 def _morlet_frequencies(n_observations, fs, n_cycles):
-    """Bin centres ``(k + 1/2) fs / (2 * 64)`` on ``(0, fs/2)`` whose cone of
-    influence leaves at least half the record (``T - 2 tau >= T / 2``)."""
+    """
+    Bin centres ``(k + 1/2) fs / (2 * 64)`` on ``(0, fs/2)`` whose cone of
+    influence leaves at least half the record (``T - 2 tau >= T / 2``).
+    """
     freqs = (np.arange(_N_WAVELET_FREQS) + 0.5) * (fs / 2) / _N_WAVELET_FREQS
     tau = _efolding_time(freqs, fs, n_cycles)
     return freqs[n_observations - 2 * tau >= n_observations / 2]
 
 
 def _morlet_coefficients(z, freqs, fs, n_cycles):
-    """Analytic Morlet coefficients ``W[i, f, t]`` of the rows of ``z``.
+    """
+    Analytic Morlet coefficients ``W[i, f, t]`` of the rows of ``z``.
 
     Each wavelet is a Gaussian in frequency centred on ``f`` with standard
     deviation ``f / n_cycles`` and unit peak gain, applied by FFT with zero
@@ -192,7 +205,8 @@ def _morlet_coefficients(z, freqs, fs, n_cycles):
 
 
 class WaveletCoherence(Unsigned, Undirected):
-    """Smoothed wavelet coherence of each pair, averaged over a frequency band [1]_.
+    """
+    Smoothed wavelet coherence of each pair, averaged over a frequency band [1]_.
 
     ``R^2_ij(f, t) = |S(W_i W_j*)|^2 / (S(|W_i|^2) S(|W_j|^2))`` is the local
     squared coherence of the analytic Morlet coefficients ``W(f, t)``, where
@@ -242,8 +256,8 @@ class WaveletCoherence(Unsigned, Undirected):
         Default: 1.
     fmin : float, optional
         Lower edge of the band, inclusive. Default: 0.
-    fmax : float, optional
-        Upper edge of the band, inclusive. Default: ``fs / 2``.
+    fmax : float or None, optional
+        Upper edge of the band, inclusive; None is ``fs / 2``. Default: None.
     statistic : str, optional
         Band statistic; only ``'mean'`` is accepted. Default: ``'mean'``.
     n_cycles : float, optional
@@ -317,7 +331,8 @@ class WaveletCoherence(Unsigned, Undirected):
         return scale_kernel @ a
 
     def _scale_kernel(self, freqs):
-        """Boxcar of ``scale_smoothing`` octaves, uniform in log frequency.
+        """
+        Boxcar of ``scale_smoothing`` octaves, uniform in log frequency.
 
         The grid is linear, so each frequency is weighted by ``1 / f``, the
         width of its bin in log frequency.
@@ -386,6 +401,8 @@ class WaveletCoherence(Unsigned, Undirected):
 
 
 def _integral(x):
-    """``x`` as an ``int`` when it is integral, so ``6`` and ``6.0`` name the
-    same identifier."""
+    """
+    ``x`` as an ``int`` when it is integral, so ``6`` and ``6.0`` name the
+    same identifier.
+    """
     return int(x) if float(x).is_integer() else float(x)

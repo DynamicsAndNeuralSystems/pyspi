@@ -1,82 +1,71 @@
-"""Information-theoretic statistics, implemented in pure NumPy.
+"""Information-theoretic statistics, implemented in NumPy.
 
 Attribution. The Kraskov-Stoegbauer-Grassberger (KSG), box-kernel, Gaussian
 and symbolic estimators of mutual information and transfer entropy in this
-module, and the Kozachenko-Leonenko entropy estimator, follow -- and were
-validated against -- the Java Information Dynamics Toolkit (JIDT):
+module, and the Kozachenko-Leonenko entropy estimator, follow, and were
+validated against, the Java Information Dynamics Toolkit (JIDT):
 
     Lizier, J. T. (2014). JIDT: An information-theoretic toolkit for studying
     the dynamics of complex systems. Frontiers in Robotics and AI 1:11.
     https://github.com/jlizier/jidt  (GPL-3.0-or-later; (C) 2012- J. T. Lizier
     and contributors)
 
-pyspi 3 reimplements JIDT's algorithms in NumPy and needs no Java runtime
-(pyspi 2.x called JIDT through JPype). The code here is an independent NumPy
-implementation, but the estimator definitions, parameter names and default
-behaviours (k_HISTORY, DYN_CORR_EXCL, KERNEL_WIDTH, AUTO_EMBED_METHOD, ...)
-derive from JIDT. JIDT's copyright notice is retained in
-``pyspi/lib/LICENSE-jidt.txt``. The version used for validation was JIDT 1.6.1;
-``tests/test_jidt_reference.py`` pins JIDT's outputs on a fixed dataset (no Java
-required), and ``tests/tools/jidt_reference/`` regenerates them. Known
-deviations: kernel MI, TLMI and TE exclude the point itself and a Theiler
-window w, i.e. JIDT's DYN_CORR_EXCL = w + 1 (|j - i| <= w, as for KSG),
-where JIDT's default counts the point itself; Gaussian estimators carry a
-deterministic 1e-8 relative ridge; KSG breaks every exact tie with a small
-seeded jitter where JIDT adds random noise by default; with a Theiler
-window, KSG MI takes its psi(N) term over the reduced neighbour pool (see
-_ksg_pool_digamma).
+The code is an independent NumPy implementation and needs no Java runtime,
+but the estimator definitions, parameter names and default behaviours
+(k_HISTORY, DYN_CORR_EXCL, KERNEL_WIDTH, AUTO_EMBED_METHOD, ...) derive from
+JIDT, whose copyright notice is retained in ``pyspi/lib/LICENSE-jidt.txt``.
+It was validated against JIDT 1.6.1. Known deviations from JIDT: kernel MI,
+TLMI and TE exclude the point itself and a Theiler window w, that is JIDT's
+DYN_CORR_EXCL = w + 1 (|j - i| <= w, as for KSG), where JIDT's default counts
+the point itself; Gaussian estimators carry a deterministic 1e-8 relative
+ridge; KSG breaks every exact tie with a small seeded jitter where JIDT adds
+random noise by default; with a Theiler window, KSG MI takes its psi(N) term
+over the reduced neighbour pool (see _ksg_pool_digamma).
 """
 
-import math
-import numpy as np
-from pyspi import utils
 import copy
 import logging
+import math
 import warnings
 
+import numpy as np
 from scipy.spatial import cKDTree
 from scipy.special import digamma, gammaln
 
+from pyspi import utils
 from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_bivariate, parse_multivariate, fill_pairwise
 
 # ---------------------------------------------------------------------------
-# Pure-numpy entropy calculators (drop-in replacements for JIDT)
+# Entropy calculators (with the interface of JIDT's calculators)
 # ---------------------------------------------------------------------------
 
-# One singularity policy for every Gaussian quantity in this module: each
-# variable is treated as observed with independent additive noise of variance
-# GAUSSIAN_RIDGE times its own variance, so
+# Every Gaussian quantity in this module treats each variable as observed with
+# independent noise of variance GAUSSIAN_RIDGE times its own variance:
 #
 #     Sigma  ->  Sigma + GAUSSIAN_RIDGE * diag(diag(Sigma)).
 #
-# Two properties make this preferable to an isotropic
-# eps = ridge * mean(diag(Sigma)):
-#
-#   * It commutes with the compositions. log|.| of a 1-D block is
-#     log(V(1+ridge)), of a 2-D block log(V_i V_j((1+ridge)^2 - r^2)), so
-#     H(X) + H(Y) - H(X,Y) is exactly -0.5*log(1 - r^2/(1+ridge)^2) -- the
-#     direct MI formula below, with no residual. An isotropic ridge does not
-#     have this property, because eps then depends on which block it is in.
-#   * It is equivariant to per-variable rescaling, so the regularisation does
-#     not quietly depend on the units of the loudest process.
+# Unlike an isotropic ridge, this commutes with the entropy compositions
+# (H(X) + H(Y) - H(X,Y) equals the direct MI formula below exactly) and is
+# unaffected by rescaling any one variable.
 GAUSSIAN_RIDGE = 1e-8
 
 
 def _gaussian_mi_from_r(r, ridge_rel=GAUSSIAN_RIDGE):
-    """I(X;Y) = -0.5*log(1 - r^2) for jointly Gaussian X, Y, ridged.
+    """
+    I(X;Y) = -0.5*log(1 - r^2) for jointly Gaussian X, Y, ridged.
 
-    The ridge is what the entropy path applies, expressed on the correlation
-    scale: adding independent noise of variance ridge*V to each variable
-    attenuates the correlation by exactly (1 + ridge). The bound is therefore
-    -0.5*log(1 - 1/(1+ridge)^2) ~ 8.86 nats rather than an unreachable
-    infinity, and it is the *same* bound the entropy composition reaches.
+    The ridge is that of the entropy path on the correlation scale: noise of
+    variance ridge*V on each variable attenuates the correlation by exactly
+    (1 + ridge). The bound is therefore -0.5*log(1 - 1/(1+ridge)^2), about
+    8.86 nats, the same bound the entropy composition reaches.
     """
     r2 = np.clip(np.asarray(r, dtype=np.float64) ** 2, 0.0, 1.0)
     return -0.5 * np.log(1.0 - r2 / (1.0 + ridge_rel) ** 2)
 
 
 def _gaussian_pairwise_joint_entropy(Z, ridge_rel=GAUSSIAN_RIDGE):
-    """Vectorised pairwise Gaussian joint entropy, matching the scalar path.
+    """
+    Vectorised pairwise Gaussian joint entropy, matching the scalar path.
 
     Same ridge as _gaussian_log_det, so bivariate() and multivariate() cannot
     disagree.
@@ -93,21 +82,18 @@ def _gaussian_pairwise_joint_entropy(Z, ridge_rel=GAUSSIAN_RIDGE):
 
 
 def _gaussian_log_det(cov, ridge_rel=GAUSSIAN_RIDGE):
-    """log|Σ + ridge*diag(diag(Σ))| -- the shared Gaussian log-determinant.
+    """
+    log|Σ + ridge*diag(diag(Σ))|, the shared Gaussian log-determinant.
 
     Every Gaussian entropy, joint entropy, conditional entropy, MI, TLMI, TE
     and AIS in this module goes through this or through `_gaussian_mi_from_r`,
-    which is its closed form on a 2x2 block. Returns NaN, never -inf, on input
-    that is still degenerate after the ridge -- a variable with zero variance
-    has no scale for a *proportional* ridge to act on, and its differential
-    entropy really is -inf, so NaN reports "undefined" rather than propagating
-    an infinity into a difference of entropies.
+    its closed form on a 2x2 block. Returns NaN, never -inf, on input that is
+    still degenerate after the ridge (a variable with zero variance), so an
+    undefined entropy does not propagate an infinity into a difference.
 
-    Rationale for regularising at all: for rank-deficient Σ the unregularised
-    log|Σ| is -inf (the data lives on a lower-dimensional subspace). JIDT adds
-    NOISE_LEVEL_TO_ADD=1e-8 Gaussian noise to the observations for the same
-    reason; ridging Σ is that operation in expectation (cov(x + η) =
-    Σ + cov(η)) and is deterministic.
+    For rank-deficient Σ the unregularised log|Σ| is -inf. JIDT adds 1e-8
+    Gaussian noise to the observations (NOISE_LEVEL_TO_ADD) for the same
+    reason; the ridge is that operation in expectation, made deterministic.
     """
     if np.ndim(cov) == 0:
         var = float(cov)
@@ -129,9 +115,11 @@ def _gaussian_log_det(cov, ridge_rel=GAUSSIAN_RIDGE):
 
 
 class GaussianEntropyCalculator:
-    """Drop-in for JIDT's EntropyCalculatorMultiVariateGaussian.
+    """
+    Multivariate Gaussian entropy calculator.
 
-    H = 0.5 * d * log(2*pi*e) + 0.5 * log|Sigma|
+    H = 0.5 * d * log(2*pi*e) + 0.5 * log|Sigma|, in nats. Same interface as
+    JIDT's EntropyCalculatorMultiVariateGaussian.
     """
     def __init__(self):
         self._d = None
@@ -160,10 +148,12 @@ class GaussianEntropyCalculator:
 
 
 class KLEntropyCalculator:
-    """Drop-in for JIDT's EntropyCalculatorMultiVariateKozachenko.
+    """
+    Kozachenko-Leonenko nearest-neighbour entropy calculator.
 
-    Uses L2 norm with k=1, matching JIDT.
-    H = psi(N) - psi(1) + log(c_d) + (d/N) * sum(log(eps_i))
+    H = psi(N) - psi(1) + log(c_d) + (d/N) * sum(log(eps_i)), in nats, with
+    the L2 norm and k = 1 as in JIDT. Same interface as JIDT's
+    EntropyCalculatorMultiVariateKozachenko.
     """
     def __init__(self):
         self._d = None
@@ -187,10 +177,8 @@ class KLEntropyCalculator:
         tree = cKDTree(X)
         dists, _ = tree.query(X, k=2, p=2)  # k=1 NN (index 0 = self)
         eps = dists[:, 1]
-        # Duplicated observations put a neighbour at distance 0, and log(0)
-        # sends the entropy to -inf. Quantised data does this readily: the
-        # bundled `forex` series has one process with 24 distinct values in 250
-        # samples. Fail with the cause named rather than emitting an infinity.
+        # A duplicated observation puts a neighbour at distance 0 and sends the
+        # entropy to -inf (common in quantised data), so fail with the cause.
         if not np.all(eps > 0):
             n_tied = int(np.sum(eps == 0))
             raise ValueError(
@@ -206,11 +194,11 @@ class KLEntropyCalculator:
 
 
 def _gaussian_entropy_from_data(data_2d):
-    """Compute Gaussian entropy from (N, d) array.
+    """
+    Gaussian entropy of an (N, d) array, in nats.
 
-    Returns NaN (not -inf) on singular covariance after ridge regularisation,
-    so that downstream differences (e.g. H(X,Y)-H(Y)) never cascade to
-    +/-inf and get clipped to float-max by np.nan_to_num.
+    NaN (not -inf) when the covariance is singular after the ridge, so a
+    difference such as H(X,Y) - H(Y) is NaN rather than infinite.
     """
     N, d = data_2d.shape
     cov = np.cov(data_2d, rowvar=False, ddof=1)
@@ -221,18 +209,20 @@ def _gaussian_entropy_from_data(data_2d):
 
 
 # ---------------------------------------------------------------------------
-# Box-kernel KDE entropy/MI/TE calculators (replace JIDT kernel estimators)
+# Box-kernel entropy, MI and TE calculators (after JIDT's kernel estimators)
 # ---------------------------------------------------------------------------
 
 class KernelEntropyCalculator:
-    """Drop-in for JIDT's EntropyCalculatorMultiVariateKernel.
+    """
+    Box-kernel entropy calculator.
 
-    Box kernel (Heaviside) with L-infinity norm, matching JIDT exactly:
-    H = mean(log(N) - log(count_i))  [nats]
-    where count_i = #{j : |x_j - x_i|_inf <= kernel_width} (includes self).
-
-    When NORMALISE=true (JIDT default), data is normalised by std before
-    counting; kernel_width is then in units of std dev.
+    Box (Heaviside) kernel with the L-infinity norm, as in JIDT's
+    EntropyCalculatorMultiVariateKernel, whose interface it shares:
+    ``H = mean(log(N) - log(count_i)) + d * log(2 * kernel_width)`` in nats,
+    where ``count_i = #{j : |x_j - x_i|_inf <= kernel_width}`` includes the
+    point itself. With NORMALISE (the default, as in JIDT) each coordinate is
+    divided by its standard deviation before counting, so ``kernel_width`` is
+    in standard deviations, and the log standard deviations are added back.
     """
 
     def __init__(self):
@@ -260,11 +250,8 @@ class KernelEntropyCalculator:
         X = self._obs
         N, d = X.shape
         w = self._kernel_width
-        # NORMALISE: JIDT scales the bandwidth by std (kernelWidthsInUse = w*std)
-        # rather than standardising data. Equivalent operation here is to
-        # standardise X *and* add log(prod(std)) to the entropy — otherwise
-        # we'd be reporting H(X/std) = H(X) - log(std), missing the scale
-        # term and giving a constant downward bias of d*log(std) nats.
+        # JIDT scales the bandwidth by the std; the equivalent here is to
+        # standardise X and add log(prod(std)), since H(X/std) = H(X) - log(std).
         log_std_total = 0.0
         if self._normalise:
             stds = np.std(X, axis=0, ddof=1)
@@ -283,15 +270,18 @@ class KernelEntropyCalculator:
 
 
 def _unit_std(data, ref=None):
-    """Columns divided by the sample std of ``ref`` (default: themselves), as
-    JIDT's NORMALISE does; constant columns are kept."""
+    """
+    Columns divided by the sample std of ``ref`` (default: themselves), as
+    JIDT's NORMALISE does; constant columns are kept.
+    """
     stds = np.std(data if ref is None else ref, axis=0, ddof=1)
     stds = np.where(stds > 0, stds, 1.0)
     return data / stds[None, :]
 
 
 def _kernel_counts(tree, pts, width, dce):
-    """Box-kernel neighbour counts of each point of ``pts`` in ``tree``.
+    """
+    Box-kernel neighbour counts of each point of ``pts`` in ``tree``.
 
     ``dce`` is JIDT's kernel ``DYN_CORR_EXCL``: when positive, neighbours
     ``|j - i| < dce`` (the point itself included) do not count. That is the
@@ -310,17 +300,19 @@ def _kernel_counts(tree, pts, width, dce):
 
 
 class KernelMICalculator:
-    """Drop-in for JIDT's MutualInfoCalculatorMultiVariateKernel.
+    """
+    Box-kernel mutual information calculator.
 
-    MI = mean(log(n_xy * N / (n_x * n_y)))  [nats]
-    where n_x, n_y, n_xy are counts within L∞ ball of radius kernel_width.
-    Matches JIDT except as noted below.
+    ``MI = mean(log(n_xy * N / (n_x * n_y)))`` in nats, where ``n_x``, ``n_y``
+    and ``n_xy`` are counts within an L-infinity ball of radius
+    ``kernel_width``, as in JIDT's MutualInfoCalculatorMultiVariateKernel,
+    whose interface it shares.
 
-    With JIDT's ``DYN_CORR_EXCL = dce > 0`` the counts exclude
-    ``|j - i| < dce`` (see `_kernel_counts`), ``N`` becomes the number of
-    samples each point was compared with, and, as in JIDT, a sample with an
-    empty joint box contributes 0 to the mean over all ``N`` samples. When
-    every joint box is empty the result is NaN (JIDT gives 0).
+    With ``DYN_CORR_EXCL = dce > 0`` the counts exclude ``|j - i| < dce``
+    (see `_kernel_counts`), ``N`` becomes the number of samples each point was
+    compared with, and, as in JIDT, a sample with an empty joint box adds 0
+    to the mean over all ``N`` samples. When every joint box is empty the
+    result is NaN (JIDT gives 0).
     """
 
     def __init__(self):
@@ -393,12 +385,15 @@ class KernelMICalculator:
 
 
 class KernelTECalculator:
-    """Drop-in for JIDT's TransferEntropyCalculatorKernel.
+    """
+    Box-kernel transfer entropy calculator.
 
-    TE(X→Y) = mean(log(n_yn_yp_x * n_yp / (n_yp_x * n_yn_yp)))  [nats]
-    Uses box kernel with L∞ norm, half-width = kernel_width.
-    ``DYN_CORR_EXCL`` excludes neighbours as in `KernelMICalculator`, and the
-    result is NaN when every joint box is empty.
+    ``TE(X -> Y) = mean(log(n_yn_yp_x * n_yp / (n_yp_x * n_yn_yp)))`` in nats,
+    with a box kernel of half-width ``kernel_width`` in the L-infinity norm,
+    as in JIDT's TransferEntropyCalculatorKernel, whose interface it shares.
+    The target past has ``k_HISTORY`` samples and the source one sample, at
+    lag 1. ``DYN_CORR_EXCL`` excludes neighbours as in `KernelMICalculator`,
+    and the result is NaN when every joint box is empty.
     """
 
     def __init__(self):
@@ -484,11 +479,12 @@ class KernelTECalculator:
 
 
 # ---------------------------------------------------------------------------
-# Symbolic Transfer Entropy (ordinal patterns)
+# Symbolic transfer entropy (ordinal patterns)
 # ---------------------------------------------------------------------------
 
 def _ordinal_pattern_id(vec):
-    """Convert a vector to its ordinal pattern ID.
+    """
+    Convert a vector to its ordinal pattern ID.
 
     The ordinal pattern is the rank ordering. Maps to an integer in [0, d!).
     Uses the factorial number system (Lehmer code).
@@ -512,7 +508,8 @@ def _ordinal_pattern_id(vec):
 
 
 def _series_to_ordinal_symbols(x, k):
-    """Convert a 1D time series to a sequence of ordinal pattern symbols.
+    """
+    Convert a 1D time series to a sequence of ordinal pattern symbols.
 
     For each t, the embedding vector is [x[t], x[t-1], ..., x[t-k+1]].
     Returns integer array of symbol IDs, length T-k+1.
@@ -535,21 +532,20 @@ def _series_to_ordinal_symbols(x, k):
 
 
 class SymbolicTECalculator:
-    """Drop-in for JIDT's TransferEntropyCalculatorSymbolic.
+    """
+    Symbolic (ordinal-pattern) transfer entropy calculator.
 
-    Converts source and target to ordinal patterns of length k,
-    then computes TE from joint symbol histograms.
-
-    One pattern length, applied to source and destination alike, at unit
-    delay -- Staniek & Lehnertz (2008) define it this way and JIDT's
-    TransferEntropyCalculatorSymbolic does the same. There is no separate
-    source history or embedding delay here, so `TransferEntropy` refuses
-    `k_tau`, `l_history` and `l_tau` under this estimator rather than
-    accepting them, writing them into the identifier and ignoring them.
+    Converts source and target to ordinal patterns of length k and computes
+    TE from joint symbol histograms, as in JIDT's
+    TransferEntropyCalculatorSymbolic, whose interface it shares:
 
     TE = H(Y_next | Y_past) - H(Y_next | Y_past, X)
        = H(Y_next, Y_past) - H(Y_past) - H(Y_next, Y_past, X) + H(Y_past, X)
-    where all entropies are discrete (histogram-based).
+
+    with discrete entropies in nats. One pattern length applies to source and
+    destination alike, at unit delay, as Staniek & Lehnertz (2008) define it,
+    so `TransferEntropy` refuses `k_tau`, `l_history` and `l_tau` under this
+    estimator.
     """
 
     def __init__(self):
@@ -581,9 +577,8 @@ class SymbolicTECalculator:
         src_symbols = _series_to_ordinal_symbols(src, k)
         targ_symbols = _series_to_ordinal_symbols(targ, k)
 
-        # Align: targ_next starts at index 1 of the symbol sequence
-        # targ_past = targ_symbols[:-1], targ_next = targ_symbols[1:]
-        # src_current = src_symbols[:-1] (concurrent with targ_past)
+        # targ_next is the target's next symbol; the source symbol is
+        # concurrent with targ_past.
         n = min(len(src_symbols), len(targ_symbols)) - 1
         if n <= 0:
             return np.nan
@@ -593,11 +588,11 @@ class SymbolicTECalculator:
         src_curr = src_symbols[:n]
 
         def _discrete_entropy(*arrs):
-            """Joint entropy of integer-valued arrays using histograms.
+            """
+            Joint entropy of integer-valued arrays from their histogram.
 
-            Counts distinct rows directly rather than packing the symbols into
-            a single integer, which can overflow int64 for large alphabets
-            (e.g. ordinal patterns at k >= 10).
+            Counts distinct rows directly: packing the symbols into one
+            integer can overflow int64 for large alphabets (k >= 10).
             """
             if len(arrs) == 1:
                 _, counts = np.unique(arrs[0], return_counts=True)
@@ -618,7 +613,7 @@ class SymbolicTECalculator:
 
 
 def _numpy_delay_embedding(x, dim):
-    """Numpy equivalent of JIDT's MatrixUtils.makeDelayEmbeddingVector."""
+    """Delay embedding, as JIDT's MatrixUtils.makeDelayEmbeddingVector."""
     x = np.asarray(x).ravel()
     T = len(x)
     if dim == 0:
@@ -631,24 +626,22 @@ def _numpy_delay_embedding(x, dim):
 # ---------------------------------------------------------------------------
 
 # JIDT adds random noise (1e-8) to every KSG input and normalises it. pyspi
-# standardises each coordinate (below) but replaces JIDT's noise with
-# deterministic tie-breaking jitter, as pyhctsa's KSG does: KSG assumes no
-# ties, so the repeated values of a variable are first given tiny Gaussian
-# jitter from a fixed-seed generator. Unlike hctsa's BF_TieBreakNoise, which
-# jitters every value of a series with fewer than 90% unique values, every
-# exact tie is broken and values that occur once are left alone. Tie-free data
-# are returned bit-identically.
+# standardises each coordinate (below) but, as pyhctsa's KSG does, replaces
+# the noise with deterministic jitter on repeated values only, since KSG
+# assumes no ties. Unlike hctsa's BF_TieBreakNoise, which jitters every value
+# of a series with fewer than 90% unique values, values that occur once are
+# left alone, so tie-free data are returned bit-identically.
 
-# Seeds of the per-variable jitter streams. Variables that are compared with one
-# another must not share a stream (identical noise would manufacture
-# dependence), so source, target and the embedding-selection pass differ.
+# Seeds of the per-variable jitter streams. Variables compared with one another
+# must not share a stream (identical noise would create dependence).
 _TIE_SEED_SOURCE = 0
 _TIE_SEED_TARGET = 1
 _TIE_SEED_SELECTION = 2
 
 
 def _tie_break(y, seed=0):
-    """Make every value of a raw series distinct with tiny fixed-seed jitter.
+    """
+    Make every value of a raw series distinct with tiny fixed-seed jitter.
 
     Each entry whose value occurs more than once gets Gaussian jitter of
     standard deviation ``1e-10 * std(y, ddof=1)``: entry ``i`` gets the ``i``-th
@@ -682,14 +675,12 @@ def _tie_break(y, seed=0):
 
 
 def _knn_condition(X):
-    """Validate KSG input and standardise each coordinate.
+    """
+    Validate KSG input and standardise each coordinate.
 
     Non-finite values and constant coordinates raise. Ties do not: callers
-    apply ``_tie_break`` to raw series first (KSG itself assumes no ties).
-
-    Standardisation uses an observed origin before mean/std calculation to
-    reduce cancellation under affine offsets. No rounding, dither, seed, or
-    global RNG state participates here.
+    apply ``_tie_break`` to raw series first. Deterministic: no rounding,
+    dither or random state.
     """
     X = np.asarray(X, dtype=np.float64)
     reshaped = X.ndim == 1
@@ -701,9 +692,8 @@ def _knn_condition(X):
     out = np.empty_like(X)
     for c in range(X.shape[1]):
         col = X[:, c]
-        # Subtract an observed origin before taking the mean/std. This is
-        # algebraically identical, but avoids needless cancellation when an
-        # affine transform adds an offset large relative to the variation.
+        # Subtracting an observed origin first is algebraically identical and
+        # avoids cancellation under a large affine offset.
         shifted = col - col[0]
         sd = shifted.std(ddof=1)      # JIDT MatrixUtils.stdDevs: sample std
         if not sd > 0:
@@ -719,11 +709,12 @@ def _knn_condition(X):
 # ---------------------------------------------------------------------------
 
 def _validate_ksg_sample(N, k, w, context=""):
-    """Reject KSG settings that cannot produce a meaningful estimate.
+    """
+    Reject KSG settings that cannot produce a meaningful estimate.
 
-    The estimator needs k neighbours drawn from the points that survive the
-    Theiler exclusion. Without it, k >= N would return a finite number that
-    grows with k and estimates nothing.
+    The estimator needs k neighbours among the points that survive the
+    Theiler exclusion; otherwise it returns a finite number that estimates
+    nothing.
     """
     effective = N - (2 * w + 1) if w else N - 1
     where = f" ({context})" if context else ""
@@ -742,7 +733,8 @@ def _validate_ksg_sample(N, k, w, context=""):
 
 
 def _strict_radius(epsilon):
-    """Largest representable radius strictly smaller than ``epsilon``.
+    """
+    Largest representable radius strictly smaller than ``epsilon``.
 
     ``cKDTree.query_ball_point`` includes the radius boundary. KSG estimator 1
     requires marginal distances strictly below the joint kth-neighbour radius,
@@ -757,7 +749,8 @@ _KSG_CHUNK = 1 << 21
 
 
 def _ksg_radius(tree, points, k, w):
-    """Strict radius of each point's kth nearest neighbour in the joint space.
+    """
+    Strict radius of each point's kth nearest neighbour in the joint space.
 
     With a Theiler window ``w`` the neighbours ``|j - i| <= w`` do not count.
     The nearest ``k + 2w + 2`` points always hold ``k`` that do (the point
@@ -787,7 +780,8 @@ def _ksg_radius(tree, points, k, w):
 
 
 def _ksg_counts(tree, points, radius, w):
-    """Neighbours of each point within its ``radius``, boundary included.
+    """
+    Neighbours of each point within its ``radius``, boundary included.
 
     The point itself is not a neighbour, nor is any ``|j - i| <= w``. The tree
     counts every point in the ball; the excluded ones that fell inside it are
@@ -808,7 +802,8 @@ def _ksg_counts(tree, points, radius, w):
 
 
 def _ksg_pool_digamma(N, w):
-    """KSG's ``psi(N)`` term for a neighbour pool reduced by a Theiler window.
+    """
+    KSG's ``psi(N)`` term for a neighbour pool reduced by a Theiler window.
 
     ``psi(N)`` is ``psi(m + 1)`` for a pool of ``m = N - 1`` candidate
     neighbours. The window removes ``|j - i| <= w`` from point i's pool,
@@ -828,9 +823,8 @@ def _ksg_mi_pair(x, y, k, w):
     """KSG Estimator 1 MI for a single pair of scalar series."""
     N = len(x)
     _validate_ksg_sample(N, k, w, context="mutual information")
-    # A constant marginal carries no information, but it is almost always a
-    # broken input rather than a result the caller wants. Checked before
-    # conditioning so the error can name the marginal directly.
+    # A constant marginal is almost always a broken input; checked here so the
+    # error can name it.
     for name, v in (("x", x), ("y", y)):
         if np.ptp(v) == 0:
             raise ValueError(
@@ -845,10 +839,8 @@ def _ksg_mi_pair(x, y, k, w):
     tree_x = cKDTree(x)
     tree_y = cKDTree(y)
     xy = np.column_stack([x, y])
-    # Marginal neighbours are counted STRICTLY within eps (< eps), as KSG1
-    # requires. Inclusive (<= eps) counting wrongly admits the k-th neighbour
-    # at the boundary, inflating n_x/n_y and flipping the sign of the
-    # Theiler-window effect on MI.
+    # Marginal neighbours are counted strictly within eps (< eps), as KSG
+    # estimator 1 requires; counting the boundary would admit the kth neighbour.
     eps = _ksg_radius(cKDTree(xy), xy, k, w)
     n_x = _ksg_counts(tree_x, x, eps, w)
     n_y = _ksg_counts(tree_y, y, eps, w)
@@ -860,12 +852,13 @@ def _ksg_mi_pair(x, y, k, w):
 
 
 def _ksg_mi_general(A, B, k_nn, w=0, condition=True):
-    """KSG Estimator 1 MI(A; B) for multivariate A (N,dA), B (N,dB), L-inf norm.
+    """
+    KSG estimator 1 MI(A; B) for A (N, dA) and B (N, dB), L-infinity norm.
 
-    Generalisation of _ksg_mi_pair to arbitrary marginal dimensions.
-    Marginal neighbours are counted strictly (< eps). An optional Theiler
-    window w excludes |j-i| <= w from the neighbour set, and psi(N) becomes
-    the mean psi of the reduced pool (_ksg_pool_digamma).
+    _ksg_mi_pair for any marginal dimensions. Marginal neighbours are counted
+    strictly (< eps). A Theiler window w excludes |j - i| <= w from the
+    neighbour set, and psi(N) becomes the mean psi of the reduced pool
+    (_ksg_pool_digamma).
     """
     A = np.asarray(A, dtype=np.float64)
     B = np.asarray(B, dtype=np.float64)
@@ -876,10 +869,8 @@ def _ksg_mi_general(A, B, k_nn, w=0, condition=True):
     if condition:
         A, B = np.split(_knn_condition(np.column_stack([A, B])), [A.shape[1]], axis=1)
     N = A.shape[0]
-    # Validated here, on the aligned arrays, not only by whatever built them.
-    # This is the estimator's own precondition: with fewer usable neighbours
-    # than k, `tree.query(..., k=k_nn+1)` pads with infinities and the digamma
-    # assembly returns a finite number that is not an estimate of anything.
+    # The estimator's own precondition, checked on the aligned arrays: with
+    # fewer usable neighbours than k the result would be finite but meaningless.
     _validate_ksg_sample(N, k_nn, w, context="mutual information")
     AB = np.column_stack([A, B])
     tree_ab = cKDTree(AB)
@@ -894,11 +885,11 @@ def _ksg_mi_general(A, B, k_nn, w=0, condition=True):
 
 
 # ---------------------------------------------------------------------------
-# Transfer Entropy helpers
+# Transfer entropy helpers
 # ---------------------------------------------------------------------------
 
 class _DummyTECalculator:
-    """Dummy TE calculator for gaussian/kraskov fixed-embedding."""
+    """Placeholder calculator: gaussian and kraskov TE are computed directly."""
     def __init__(self):
         self._props = {}
     def setProperty(self, key, value):
@@ -939,20 +930,20 @@ def _te_build_embeddings(src, targ, k_history, k_tau, l_history, l_tau):
 
 
 def _gaussian_ais(targ, k, tau):
-    """Bias-corrected Gaussian AIS criterion: MI(Y_future; Y_past_embedding(k, tau)).
+    """
+    Bias-corrected Gaussian AIS, MI(Y_future; Y_past_embedding(k, tau)).
 
-    Used for AIS-criterion auto-embedding: select (k, tau) = argmax AIS.
+    The criterion for auto-embedding: (k, tau) = argmax AIS. The in-sample
+    log-det estimate is biased upward by the mean of its chi-squared null,
+    df / (2N) with df = k (the future is 1-D), so uncorrected it grows with k
+    up to k_max. Subtracting k/(2N), as JIDT's
+    ActiveInfoStorageCalculatorGaussian.computeAdditionalBiasToRemove does,
+    gives an interior maximum.
 
-    The raw in-sample log-det multiinformation is biased upward by the mean of
-    its chi-squared null, E[MI_null] = df / (2N) with df = dim(Y_f)*k = k (the
-    future is 1-D). Without this correction the criterion increases monotonically
-    in k and saturates at k_max. Subtracting k/(2N) gives an interior maximum and
-    matches JIDT's ActiveInfoStorageCalculatorGaussian.computeAdditionalBiasToRemove.
-
-    This is the *maximum corrected AIS* criterion (Wibral et al. 2014; JIDT's
-    AUTO_EMBED_METHOD_MAX_CORR_AIS). It is not the Ragwitz criterion, which
-    selects by local-prediction error (Ragwitz & Kantz 2002) and is not
-    implemented here.
+    This is JIDT's maximum corrected AIS criterion
+    (AUTO_EMBED_METHOD_MAX_CORR_AIS, after Garland et al. 2016), not the
+    Ragwitz local-prediction criterion (Ragwitz & Kantz 2002), which is not
+    implemented.
     """
     T = len(targ)
     start = (k - 1) * tau
@@ -972,15 +963,13 @@ def _gaussian_ais(targ, k, tau):
 
 
 def _ksg_ais(targ, k, tau, k_nn, w=0):
-    """KSG (Kraskov) AIS = MI(Y_future; Y_past_embedding(k, tau)), for embedding
-    selection of the *kraskov* TE estimator.
+    """
+    KSG AIS, MI(Y_future; Y_past_embedding(k, tau)), for the kraskov TE.
 
-    Estimator-consistent counterpart of _gaussian_ais: the KSG estimator is
-    approximately bias-free, so max-KSG-AIS over k has a genuine interior peak
-    without an explicit bias term (cf. JIDT MAX_CORR_AIS, which returns 0 extra
-    bias for KSG; Wibral et al. 2014). Selecting the embedding with the same
-    estimator used for the final TE avoids the linear/nonlinear mismatch of
-    using Gaussian AIS to embed a nonlinear estimator.
+    The counterpart of _gaussian_ais. KSG is approximately bias-free, so the
+    maximum over k is interior without a bias term (JIDT's MAX_CORR_AIS also
+    removes no extra bias for KSG), and the embedding is chosen by the
+    estimator that computes the TE.
     """
     T = len(targ)
     start = (k - 1) * tau
@@ -993,31 +982,25 @@ def _ksg_ais(targ, k, tau, k_nn, w=0):
 
 
 def _ais_scorer(estimator, k_nn=None, w=0):
-    """``f(series, dim, delay) -> score`` for the estimator that will run the TE.
+    """
+    ``f(series, dim, delay) -> score`` for the estimator that will run the TE.
 
-    Factored out so the source and the destination embeddings are chosen by the
-    same code, with the same estimator, and so a test can substitute a scorer
-    that deliberately picks different values for the two and check that all four
-    reach the final estimate.
-
-    Selecting with the estimator that will do the work is the point: scoring a
-    KSG transfer entropy's embedding by a Gaussian AIS picks the embedding with
-    the best *linear* predictability, which is not what the final estimator
-    measures.
+    The source and destination embeddings are chosen by the same scorer, with
+    the estimator that computes the TE: a Gaussian AIS would pick the
+    embedding with the best linear predictability, which is not what a KSG
+    transfer entropy measures.
     """
     if estimator == "gaussian":
         return lambda series, dim, delay: _gaussian_ais(series, dim, delay)
     if estimator == "kraskov":
         def score(series, dim, delay):
-            # `T - 1 - (dim-1)*delay`, not `T - (dim-1)*delay`: `_ksg_ais`
-            # aligns a one-step-ahead future against the embedding, so it
-            # spends a sample on the shift as well as on the lookback.
+            # `_ksg_ais` spends one sample on the one-step-ahead future as
+            # well as (dim - 1) * delay on the lookback.
             n_eff = len(series) - 1 - (dim - 1) * delay
             try:
                 _validate_ksg_sample(n_eff, k_nn, w)
             except ValueError:
-                # Skip candidates the estimator cannot support rather than
-                # ranking them and failing on the winner, so a valid smaller
+                # Unsupported candidates are skipped, so a valid smaller
                 # embedding is chosen when one exists.
                 return -np.inf
             return _ksg_ais(series, dim, delay, k_nn, w)
@@ -1028,20 +1011,15 @@ def _ais_scorer(estimator, k_nn=None, w=0):
 
 
 def _select_embedding(series, scorer, dim_max, tau_max):
-    """``(dimension, delay, score)`` maximising the scorer.
+    """
+    ``(dimension, delay, score)`` maximising the scorer.
 
     Ties go to the smaller dimension and then the smaller delay: a
-    lower-dimensional embedding that stores as much information is the better
-    model, and the finite-sample AIS objective plateaus often enough that ties
-    are not rare.
+    lower-dimensional embedding that stores as much information is the
+    better model, and the AIS objective often plateaus.
 
-    Raises when *no* candidate is scorable. Returning ``(1, 1)`` there would
-    hand the estimator an embedding that had itself been rejected, and the
-    caller would get a number rather than the reason there isn't one -- which
-    on a short series is the difference between "transfer entropy at the
-    selected embedding" and "there is not enough data to select an embedding".
-    A non-finite score counts as unscorable, so a candidate whose covariance is
-    degenerate cannot win by default either.
+    Raises when no candidate is scorable (a non-finite score counts as
+    unscorable), rather than returning an embedding that was itself rejected.
     """
     best = (None, None, -np.inf)
     for dim in range(1, dim_max + 1):
@@ -1077,17 +1055,15 @@ def _gaussian_te_bivariate(src, targ, k_history, k_tau, l_history, l_tau):
 
 
 def _ksg_cmi(A, B, C, k_nn, w=0, condition=True):
-    """KSG conditional mutual information I(A; B | C), Frenzel-Pompe estimator.
+    """
+    KSG conditional mutual information I(A; B | C), Frenzel-Pompe estimator.
 
-    Estimates the CMI *directly* rather than as a sum of four separately
-    estimated entropies. That distinction is the whole point: the neighbour
-    radius is fixed once in the joint space [A,B,C] and reused in every
-    marginal count, so the dimension-dependent biases cancel by construction.
-    Composing the same quantity from marginal entropies leaves each one with
-    its own bias in its own dimensionality, and those do not cancel.
+    Estimates the CMI directly: the neighbour radius is fixed once in the
+    joint space [A, B, C] and reused in every marginal count, so the
+    dimension-dependent biases cancel, which they do not when the CMI is
+    composed from separately estimated entropies.
 
-    ``C`` may have zero columns, in which case this delegates to the MI
-    estimator -- conditioning on nothing is mutual information.
+    ``C`` may have zero columns, in which case this is the MI estimator.
     """
     A = np.atleast_2d(A)
     B = np.atleast_2d(B)
@@ -1109,9 +1085,8 @@ def _ksg_cmi(A, B, C, k_nn, w=0, condition=True):
             A, B = np.split(
                 _knn_condition(np.column_stack([A, B])), [A.shape[1]], axis=1)
     if not has_C:
-        # With nothing to condition on this *is* mutual information, so use the
-        # MI estimator rather than emulating it: a constant conditioning count of
-        # N-(2w+1) matches _ksg_mi_general only at w=0.
+        # With nothing to condition on this is mutual information: a constant
+        # conditioning count of N - (2w + 1) would match it only at w = 0.
         return _ksg_mi_general(A, B, k_nn, w, condition=False)
 
     joint = np.concatenate([A, B, C], axis=1)
@@ -1141,58 +1116,41 @@ def _kraskov_te_bivariate(src, targ, k_history, k_tau, l_history, l_tau, k_nn, w
     Y_f, Y_p, X_p = _te_build_embeddings(src, targ, k_history, k_tau, l_history, l_tau)
     if Y_f is None:
         return np.nan
-    # Same precondition as the MI path, applied to the *embedded* sample count
-    # rather than the raw series length: embedding consumes the lookback, so
-    # the usable N here is smaller than len(targ).
+    # Checked on the embedded sample count, which the lookback makes smaller
+    # than len(targ).
     _validate_ksg_sample(Y_f.shape[0], k_nn, w, context="transfer entropy")
     return _ksg_cmi(Y_f, X_p, Y_p, k_nn, w)
 
 
 # ---------------------------------------------------------------------------
-# Information-theory base class — with estimator dispatch
+# Information-theory base class, with estimator dispatch
 # ---------------------------------------------------------------------------
 
 _ESTIMATORS = frozenset({"gaussian", "kraskov", "kernel", "kozachenko", "symbolic"})
 
 
 def _require_positive_int(name, value):
-    """Thin alias for `utils.require_int(..., minimum=1)`; see it for the rules."""
+    """`utils.require_int(..., minimum=1)`."""
     return utils.require_int(name, value, minimum=1)
 
-# Auto-embedding selection criteria that are actually implemented, and what
-# each one selects. Both maximise the bias-corrected active information storage
-# of a series over (dimension, delay); they differ only in which series.
-#   MAX_CORR_AIS            -- destination *and* source, chosen independently.
-#   MAX_CORR_AIS_DEST_ONLY  -- destination only; the source embedding is the
-#                              caller's fixed l_history/l_tau.
-# Ragwitz local-prediction selection is a different criterion and is not
-# implemented.
+# Implemented auto-embedding criteria. Both maximise the bias-corrected active
+# information storage of a series over (dimension, delay):
+#   MAX_CORR_AIS            selects destination and source, independently;
+#   MAX_CORR_AIS_DEST_ONLY  selects the destination only; the source embedding
+#                           is the fixed l_history, l_tau.
 _AUTO_EMBED_METHODS = frozenset({"MAX_CORR_AIS", "MAX_CORR_AIS_DEST_ONLY"})
 _AUTO_EMBED_DEST_ONLY = "MAX_CORR_AIS_DEST_ONLY"
 
 
 class InfoTheoryBase(Unsigned):
-    """Base for the information-theoretic SPIs.
+    """
+    Base class for the information-theoretic SPIs, with estimator dispatch.
 
-    **Every measure in this module is reported in nats**, so magnitudes are
-    comparable across estimators. JIDT reports bits for its kernel and
-    symbolic (discrete) estimators; divide by ln 2 to compare with those.
-
-    ``dyn_corr_excl`` sets a Theiler window (dynamic correlation exclusion)
-    and applies only to the ``kraskov`` and ``kernel`` estimators of mutual
-    information, time-lagged mutual information and transfer entropy (and
-    ``kraskov`` directed information), so the measures composed from marginal
-    entropies (joint, conditional, causal and cross-map entropy, stochastic
-    interaction) have none. A window ``w`` excludes neighbours ``|j - i| <= w``
-    for both estimators; with no window (``None`` or 0) both still exclude
-    the point itself. An ``AUTO`` window is at least 1 for
-    series of 10 or more samples.
-
-    The ``kernel`` estimator counts points in a box of fixed width, which holds
-    few points in short series: there its transfer entropy is biased upward
-    (independent series give clearly positive values below about a thousand
-    samples), a window can take its MI slightly below zero, and an estimate in
-    which every joint box is empty is NaN (JIDT returns 0).
+    Every measure is in nats, whatever the estimator (JIDT reports bits for
+    its kernel and symbolic estimators; divide by ln 2 to compare). The
+    ``estimator``, ``kernel_width``, ``prop_k`` and ``dyn_corr_excl``
+    arguments are documented on each SPI. An argument the chosen estimator
+    does not use, or an estimator the SPI does not implement, raises.
     """
 
     _AUTO_EMBED_METHOD_PROP_NAME = "AUTO_EMBED_METHOD"
@@ -1203,9 +1161,8 @@ class InfoTheoryBase(Unsigned):
     _K_SEARCH_MAX_PROP_NAME = "AUTO_EMBED_K_SEARCH_MAX"
     _TAU_SEARCH_MAX_PROP_NAME = "AUTO_EMBED_TAU_SEARCH_MAX"
 
-    # Which estimator each optional parameter belongs to. A parameter supplied
-    # to an estimator that ignores it is rejected rather than silently dropped,
-    # so e.g. kernel_width under estimator="gaussian" is an error.
+    # The estimators each optional parameter applies to; supplying it to any
+    # other estimator raises (kernel_width with estimator="gaussian", say).
     _PARAM_OWNER = {
         "kernel_width": ("kernel",),
         "prop_k": ("kraskov",),
@@ -1236,13 +1193,9 @@ class InfoTheoryBase(Unsigned):
                 )
 
         self._estimator = estimator
-        # Defaults applied after validation so "not supplied" stays
-        # distinguishable from "supplied with the default value".
-        # Validated, not coerced. `float(True)` is 1.0 and `int(2.7)` is 2, so
-        # a permissive cast turns a plainly wrong argument into a plausible one:
-        # a non-positive box-kernel half-width counts only the point itself, so
-        # every log ratio is log(N) and the "estimate" is a constant, and k < 1
-        # has no kth neighbour at all.
+        # Defaults are applied after the check above, so "not supplied" stays
+        # distinct from "supplied with the default". Values are validated, not
+        # coerced: a cast would turn True or 2.7 into a plausible 1 or 2.
         self._kernel_width = (0.5 if kernel_width is None
                               else utils.require_positive_float("kernel_width",
                                                                 kernel_width))
@@ -1250,8 +1203,7 @@ class InfoTheoryBase(Unsigned):
                         else utils.require_int("prop_k", prop_k, minimum=1))
         if dyn_corr_excl is not None and not (
                 isinstance(dyn_corr_excl, str) and dyn_corr_excl == "AUTO"):
-            # `None` and the exact string "AUTO" are the only non-integer
-            # values; everything else is a Theiler window in samples.
+            # None and "AUTO" aside, the window is an integer in samples.
             if isinstance(dyn_corr_excl, str):
                 raise ValueError(
                     f"dyn_corr_excl must be an integer >= 0, None, or the "
@@ -1263,12 +1215,8 @@ class InfoTheoryBase(Unsigned):
 
         self.identifier = self.identifier + "_" + estimator
         if estimator == "kraskov":
-            # Only the measures with a genuine KSG implementation may accept
-            # it. The composed measures (joint/conditional/crossmap/causal
-            # entropy, directed info, stochastic interaction) are built from
-            # marginal entropies, for which "kraskov" has no estimator, so
-            # accepting it would advertise kraskov_NN-<k> over a Gaussian
-            # result.
+            # Only the measures with a KSG implementation accept it; the others
+            # are composed from marginal entropies, which KSG does not estimate.
             if not isinstance(self, (MutualInfo, TimeLaggedMutualInfo,
                                      TransferEntropy, DirectedInfo)):
                 raise NotImplementedError(
@@ -1298,20 +1246,16 @@ class InfoTheoryBase(Unsigned):
             self._dyn_corr_excl = None
             return
         elif estimator == "kozachenko":
-            # Kozachenko-Leonenko estimates *entropy* from k-NN distances. The
-            # measures below are computed directly rather than as a sum of
-            # marginal entropies, and there is no KL path for them: composing
-            # them from separate KL entropies is biased, since the per-space
-            # biases do not cancel (avoiding exactly that is why KSG couples
-            # its radii across spaces -- use estimator="kraskov" instead).
-            # Fail here rather than returning NaN at compute time.
+            # Composing MI, TLMI or TE from separate Kozachenko-Leonenko
+            # entropies is biased, since the per-space biases do not cancel;
+            # KSG ("kraskov") couples its radii across spaces to avoid this.
             if isinstance(self, (MutualInfo, TimeLaggedMutualInfo, TransferEntropy)):
                 raise NotImplementedError(
                     f"The kozachenko estimator is not available for "
                     f"{type(self).__name__}; use estimator='kraskov' for a "
                     f"k-nearest-neighbour estimate of this measure."
                 )
-            # k-NN based, so nonlinear -- not "linear" as gaussian is.
+            # Nearest-neighbour based, so nonlinear.
             self.labels = self.labels + ["nonlinear"]
             self._dyn_corr_excl = None
         else:
@@ -1319,8 +1263,7 @@ class InfoTheoryBase(Unsigned):
             self._dyn_corr_excl = None
 
         if self._dyn_corr_excl:
-            # The *value*, not just the flag: dyn_corr_excl=5, =10 and "AUTO"
-            # are three Theiler windows and need three identifiers.
+            # The window's value, since each window is a different SPI.
             self.identifier = self.identifier + f"_DCE-{self._dyn_corr_excl}"
 
     def __getstate__(self):
@@ -1346,19 +1289,14 @@ class InfoTheoryBase(Unsigned):
         if self._estimator == "kernel":
             return (self._estimator, self._kernel_width, self._dyn_corr_excl)
         elif self._estimator == "kraskov":
-            # dyn_corr_excl is in the key even though the entropy caches this
-            # keys are not consumed by the KSG paths today: the rule is that
-            # everything reaching the identifier reaches the cache key, and an
-            # exception maintained by argument is an exception that stops being
-            # true.
+            # Everything in the identifier is in the cache key, including
+            # dyn_corr_excl, which the KSG paths do not cache on.
             return (self._estimator, self._prop_k, self._dyn_corr_excl)
         else:
             return (self._estimator,)
 
     def _getcalc(self, measure):
         est = self._estimator
-
-        # --- Pure-numpy calculators (no JIDT/JVM needed) ---
 
         if measure == "entropy":
             if est == 'kozachenko':
@@ -1408,7 +1346,7 @@ class InfoTheoryBase(Unsigned):
             if est in ('gaussian', 'kraskov'):
                 data.entropy[key][i] = _gaussian_entropy_from_data(x.reshape(-1, 1))
             else:
-                # kozachenko, kernel — all have numpy calculators
+                # kozachenko or kernel
                 self._entropy_calc.initialise(1)
                 self._entropy_calc.setObservations(x)
                 data.entropy[key][i] = self._entropy_calc.computeAverageLocalOfObservations()
@@ -1425,12 +1363,9 @@ class InfoTheoryBase(Unsigned):
             data.joint_entropy[key] = np.full((data.n_processes, data.n_processes), -np.inf)
 
         if data.joint_entropy[key][i, j] == -np.inf:
-            # The pair in one orientation, (larger, smaller), whichever is
-            # asked for first: the value is cached for both, and the
-            # Kozachenko-Leonenko estimate of [x, y] and of [y, x] can differ
-            # in the last bit, so the order the pairs are visited in would
-            # otherwise decide it. (larger, smaller) is the orientation the
-            # stored baselines use.
+            # Always computed as (larger, smaller), since the value is cached
+            # for both orders and the Kozachenko-Leonenko estimates of [x, y]
+            # and [y, x] can differ in the last bit.
             x, y = data.to_numpy()[[max(i, j), min(i, j)]]
             joint = np.concatenate([x, y], axis=1)
             est = self._estimator
@@ -1438,7 +1373,7 @@ class InfoTheoryBase(Unsigned):
             if est in ('gaussian', 'kraskov'):
                 val = _gaussian_entropy_from_data(joint)
             else:
-                # kozachenko, kernel — all have numpy calculators
+                # kozachenko or kernel
                 self._entropy_calc.initialise(2)
                 self._entropy_calc.setObservations(joint)
                 val = self._entropy_calc.computeAverageLocalOfObservations()
@@ -1454,7 +1389,7 @@ class InfoTheoryBase(Unsigned):
             XY = np.concatenate([X, Y], axis=1)
             return _gaussian_entropy_from_data(XY) - _gaussian_entropy_from_data(Y)
         else:
-            # kozachenko, kernel — all have numpy calculators
+            # kozachenko or kernel
             XY = np.concatenate([X, Y], axis=1)
             self._entropy_calc.initialise(XY.shape[1])
             self._entropy_calc.setObservations(XY)
@@ -1465,7 +1400,8 @@ class InfoTheoryBase(Unsigned):
             return H_XY - H_Y
 
     def _per_process(self, data, tag, i, compute):
-        """``compute()`` for process ``i``, cached on ``data.entropy``.
+        """
+        ``compute()`` for process ``i``, cached on ``data.entropy``.
 
         For a quantity of one series that a pairwise statistic would otherwise
         recompute for every partner. ``tag`` names it and carries every
@@ -1482,17 +1418,14 @@ class InfoTheoryBase(Unsigned):
         return data.entropy[key][i]
 
     def _resolve_theiler(self, data, i, j):
-        """Theiler/dynamic-correlation-exclusion window for pair (i, j).
+        """
+        Theiler (dynamic correlation exclusion) window for pair (i, j).
 
-        None -> 0 (no window); an integer -> that window; "AUTO" -> the
-        autocorrelation time 2*<acf(x_i), acf(x_j)>, capped at N // 10 and
-        cached per dataset. Shared by the kraskov and kernel MI/TLMI/TE
-        paths; for TLMI and TE it applies to the lagged or embedded sample
-        index.
-
-        The cap is hctsa's rule for autocorrelation-derived parameters. For
-        two slowly decaying autocorrelation functions the uncapped window can
-        approach or exceed the series length, leaving too few neighbours.
+        None gives 0 (no window), an integer that window, and "AUTO" the
+        autocorrelation time ``2 * <acf(x_i), acf(x_j)>``, capped at N // 10
+        (hctsa's rule for autocorrelation-derived parameters, so the window
+        cannot approach the series length) and cached per dataset. For TLMI
+        and TE it applies to the lagged or embedded sample index.
         """
         raw_w = getattr(self, '_dyn_corr_excl', None)
         if raw_w is None:
@@ -1513,12 +1446,12 @@ class InfoTheoryBase(Unsigned):
         return int(raw_w)
 
     def _kernel_window(self, data, i, j):
-        """JIDT's kernel ``DYN_CORR_EXCL`` for pair (i, j).
+        """
+        JIDT's kernel ``DYN_CORR_EXCL`` for pair (i, j).
 
         JIDT's kernel estimators exclude ``|j - i| < DYN_CORR_EXCL``, so
-        ``w + 1`` excludes ``|j - i| <= w``, the kraskov window. Without a
-        window (w = 0) that is the point itself, which kraskov also excludes;
-        counting it inflates every estimate (leave-one-out density).
+        ``w + 1`` excludes ``|j - i| <= w``, the kraskov window. With w = 0
+        that is the point itself (a leave-one-out density), as for kraskov.
         """
         w = self._resolve_theiler(data, i, j)
         if w < 0:
@@ -1527,6 +1460,36 @@ class InfoTheoryBase(Unsigned):
 
 
 class JointEntropy(InfoTheoryBase, Undirected):
+    """
+    Joint entropy ``H(x_i, x_j)`` of two processes, in nats.
+
+    The differential entropy of the pair's joint distribution at lag 0,
+    treating the samples as independent draws. Undirected; like any
+    differential entropy it can be negative.
+
+    The ``gaussian`` estimate is the entropy of a Gaussian with the sample
+    covariance (with a relative ridge of 1e-8 on its diagonal). The
+    ``kozachenko`` estimate is the Kozachenko-Leonenko nearest-neighbour
+    estimator [1]_ (k = 1, Euclidean norm), which is undefined for repeated
+    values. The ``kernel`` estimate counts neighbours in a box kernel, as in
+    JIDT [2]_.
+
+    References
+    ----------
+    .. [1] L.F. Kozachenko, N.N. Leonenko, "Sample estimate of the entropy of a
+           random vector", Problems Inf. Transmission 23(2), 95 (1987).
+    .. [2] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
+           dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
+
+    Parameters
+    ----------
+    estimator : str, optional
+        ``'gaussian'``, ``'kozachenko'`` (raises for repeated values, and the
+        pair is then NaN) or ``'kernel'``. Default: ``'gaussian'``.
+    kernel_width : float, optional
+        Half-width of the box kernel, in standard deviations of each variable
+        (``'kernel'`` only). Default: 0.5.
+    """
 
     name = "Joint entropy"
     identifier = "je"
@@ -1549,14 +1512,43 @@ class JointEntropy(InfoTheoryBase, Undirected):
 
 
 class ConditionalEntropy(InfoTheoryBase, Directed):
+    """
+    Conditional entropy ``H(x_j | x_i)`` of the column given the row, in nats.
+
+    ``H(x_i, x_j) - H(x_i)`` at lag 0, treating the samples as independent
+    draws: ``A[i, j]`` is the uncertainty left in the column process once the
+    row process is known. Directed, since ``H(x_j | x_i)`` and
+    ``H(x_i | x_j)`` differ unless the marginal entropies are equal (the
+    ``gaussian`` estimate is symmetric for z-scored data).
+
+    The ``gaussian`` estimate is the entropy of a Gaussian with the sample
+    covariance (with a relative ridge of 1e-8 on its diagonal). The
+    ``kozachenko`` estimate is the Kozachenko-Leonenko nearest-neighbour
+    estimator [1]_ (k = 1, Euclidean norm), which is undefined for repeated
+    values. The ``kernel`` estimate counts neighbours in a box kernel, as in
+    JIDT [2]_.
+
+    References
+    ----------
+    .. [1] L.F. Kozachenko, N.N. Leonenko, "Sample estimate of the entropy of a
+           random vector", Problems Inf. Transmission 23(2), 95 (1987).
+    .. [2] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
+           dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
+
+    Parameters
+    ----------
+    estimator : str, optional
+        ``'gaussian'``, ``'kozachenko'`` (raises for repeated values, and the
+        pair is then NaN) or ``'kernel'``. Default: ``'gaussian'``.
+    kernel_width : float, optional
+        Half-width of the box kernel, in standard deviations of each variable
+        (``'kernel'`` only). Default: 0.5.
+    """
 
     name = "Conditional entropy"
     identifier = "ce"
-    # Directed: H(X|Y) != H(Y|X) in general. The kozachenko and kernel
-    # estimators are asymmetric even after z-scoring; the Gaussian form is
-    # symmetric only when the marginal variances are equal, as z-scoring makes
-    # them. A structural label describes the measure, not one estimator under
-    # one preprocessing default.
+    # Directed because H(X|Y) != H(Y|X) in general, even though the Gaussian
+    # form is symmetric for z-scored data.
     labels = ["unsigned", "infotheory", "unordered", "directed"]
 
     def __init__(self, **kwargs):
@@ -1583,6 +1575,46 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
 
 
 class MutualInfo(InfoTheoryBase, Undirected):
+    """
+    Mutual information ``I(x_i; x_j)`` between two processes, in nats.
+
+    The mutual information of the pair at lag 0, treating the samples as
+    independent draws from their joint distribution. Undirected.
+
+    The ``gaussian`` estimate is ``-0.5 ln(1 - r^2)`` of the Pearson
+    correlation ``r`` (with a relative ridge of 1e-8, which bounds it at about
+    8.86 nats). The ``kraskov`` estimate is the KSG nearest-neighbour
+    estimator 1 [1]_ on standardised series, with repeated values first broken
+    by tiny fixed-seed jitter, so it is deterministic. The ``kernel`` estimate
+    counts neighbours in a box kernel, as in JIDT [2]_, excluding the point
+    itself. The ``kraskov`` estimate, and the ``kernel`` estimate with a
+    Theiler window, can fall slightly below zero for independent processes;
+    a kernel estimate in which every joint box is empty is NaN.
+
+    References
+    ----------
+    .. [1] A. Kraskov, H. Stögbauer, P. Grassberger, "Estimating mutual
+           information", Phys. Rev. E 69(6), 066138 (2004).
+    .. [2] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
+           dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
+
+    Parameters
+    ----------
+    estimator : str, optional
+        ``'gaussian'``, ``'kraskov'`` or ``'kernel'``. Default: ``'gaussian'``.
+    kernel_width : float, optional
+        Half-width of the box kernel, in standard deviations of each variable
+        (``'kernel'`` only). Default: 0.5.
+    prop_k : int, optional
+        Number of nearest neighbours ``k`` (``'kraskov'`` only). Default: 4.
+    dyn_corr_excl : int, 'AUTO' or None, optional
+        Theiler window ``w`` in samples (``'kraskov'`` and ``'kernel'`` only):
+        neighbours ``|t - s| <= w`` are not counted. ``'AUTO'`` sets ``w`` for
+        each pair to ``2 * sum_k acf_i(k) acf_j(k)`` over non-negative lags,
+        capped at ``N // 10`` (at least 1 for 10 or more samples). With None
+        or 0 only the point itself is excluded. Default: None.
+    """
+
     name = "Mutual information"
     identifier = "mi"
     labels = ["unsigned", "infotheory", "unordered", "undirected"]
@@ -1599,7 +1631,6 @@ class MutualInfo(InfoTheoryBase, Undirected):
     def bivariate(self, data, i=None, j=None, verbose=False):
         """Compute mutual information between Y and X"""
         if self._estimator in ('gaussian', 'kraskov'):
-            # Handled by multivariate; bivariate fallback
             z = data.to_numpy(squeeze=True)
             if self._estimator == 'gaussian':
                 return float(_gaussian_mi_from_r(np.corrcoef(z[i], z[j])[0, 1]))
@@ -1609,7 +1640,7 @@ class MutualInfo(InfoTheoryBase, Undirected):
                 w = self._resolve_theiler(data, i, j)
                 return _ksg_mi_pair(z[i], z[j], k, w)
 
-        # kernel estimator: use numpy KernelMICalculator
+        # kernel estimator
         if self._estimator == 'kernel':
             src, targ = data.to_numpy(squeeze=True)[[i, j]]
             self._calc.initialise(1, 1)
@@ -1617,7 +1648,7 @@ class MutualInfo(InfoTheoryBase, Undirected):
             self._calc.setObservations(src, targ)
             return self._calc.computeAverageLocalOfObservations()
 
-        # Fallback should not be reached (all estimators handled above)
+        # Not reached: every accepted estimator is handled above.
         logging.warning(f"MI bivariate: unhandled estimator '{self._estimator}'")
         return np.nan
 
@@ -1642,11 +1673,46 @@ class MutualInfo(InfoTheoryBase, Undirected):
 
 
 class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
-    """Time-lagged mutual information from the row (source) to the column (target).
+    """
+    Time-lagged mutual information from the row (source) to the column (target).
 
     ``I(x_i(t); x_j(t + 1))`` in nats: the source one sample ahead of the
-    target. The lag is fixed at one sample, so coupling that acts only at a
-    longer lag is seen only through the source's own autocorrelation.
+    target, with any Theiler window applied to the lagged sample index. The
+    lag is fixed at one sample, so coupling that acts only at a longer lag is
+    seen only through the source's own autocorrelation.
+
+    The ``gaussian`` estimate is ``-0.5 ln(1 - r^2)`` of the Pearson
+    correlation ``r`` (with a relative ridge of 1e-8, which bounds it at about
+    8.86 nats). The ``kraskov`` estimate is the KSG nearest-neighbour
+    estimator 1 [1]_ on standardised series, with repeated values first broken
+    by tiny fixed-seed jitter, so it is deterministic. The ``kernel`` estimate
+    counts neighbours in a box kernel, as in JIDT [2]_, excluding the point
+    itself. The ``kraskov`` estimate, and the ``kernel`` estimate with a
+    Theiler window, can fall slightly below zero for independent processes;
+    a kernel estimate in which every joint box is empty is NaN.
+
+    References
+    ----------
+    .. [1] A. Kraskov, H. Stögbauer, P. Grassberger, "Estimating mutual
+           information", Phys. Rev. E 69(6), 066138 (2004).
+    .. [2] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
+           dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
+
+    Parameters
+    ----------
+    estimator : str, optional
+        ``'gaussian'``, ``'kraskov'`` or ``'kernel'``. Default: ``'gaussian'``.
+    kernel_width : float, optional
+        Half-width of the box kernel, in standard deviations of each variable
+        (``'kernel'`` only). Default: 0.5.
+    prop_k : int, optional
+        Number of nearest neighbours ``k`` (``'kraskov'`` only). Default: 4.
+    dyn_corr_excl : int, 'AUTO' or None, optional
+        Theiler window ``w`` in samples (``'kraskov'`` and ``'kernel'`` only):
+        neighbours ``|t - s| <= w`` are not counted. ``'AUTO'`` sets ``w`` for
+        each pair to ``2 * sum_k acf_i(k) acf_j(k)`` over non-negative lags,
+        capped at ``N // 10`` (at least 1 for 10 or more samples). With None
+        or 0 only the point itself is excluded. Default: None.
     """
 
     name = "Time-lagged mutual information"
@@ -1674,7 +1740,7 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
                 w = self._resolve_theiler(data, i, j)
                 return _ksg_mi_pair(src, tgt, k, w)
 
-        # kernel estimator: use numpy KernelMICalculator
+        # kernel estimator
         if self._estimator == 'kernel':
             src, targ = data.to_numpy(squeeze=True)[[i, j]]
             src = src[:-1]
@@ -1714,18 +1780,116 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
 
 
 class TransferEntropy(InfoTheoryBase, Directed):
-    """Transfer entropy from the row (source) to the column (target).
+    """
+    Transfer entropy from the row (source) to the column (target) [1]_.
 
-    With the Gaussian estimator (identifier ``gc``) this is
-    ``0.5 * ln(var_restricted / var_full)`` in nats (Barnett, Barrett & Seth
-    2009): half of Geweke's (1982) Granger causality as reported by
-    ``statsmodels``.
+    ``TE(x_i -> x_j) = I(y_{t+1}; x_t^(l) | y_t^(k))`` in nats: the
+    information that the source's past adds about the target's next sample,
+    beyond what the target's own past holds. ``y_t^(k)`` is ``k_history``
+    target samples spaced ``k_tau`` apart and ``x_t^(l)`` is ``l_history``
+    source samples spaced ``l_tau`` apart, both ending at ``t``, so the
+    source-target delay is one sample. ``A[i, j]`` is the transfer from
+    ``x_i`` to ``x_j``.
 
-    With a source history of one sample at a source-target delay of one, the
-    source enters only at lag 1, so coupling at a longer lag from a weakly
-    autocorrelated source is missed. The auto-embedded variants choose the
-    source embedding from the source's own active information storage, which
-    stays short for such a source, so they share this limit.
+    With the ``gaussian`` estimator (identifier prefix ``gc`` instead of
+    ``te``) this is ``0.5 * ln(var_restricted / var_full)``, from the
+    target's residual variances when it is predicted from its own past alone
+    and together with the source's past: half of Geweke's linear feedback
+    measure [2]_, since Granger causality and transfer entropy are equivalent
+    for Gaussian variables [3]_. The ``kraskov`` estimator computes the
+    conditional mutual information directly with the Frenzel-Pompe
+    nearest-neighbour estimator [4]_ [5]_, after repeated values are broken
+    by tiny fixed-seed jitter. The ``kernel`` estimator counts neighbours in
+    a box kernel, as in JIDT [6]_, with a target past of ``k_history``
+    samples at unit delay and the source at lag one; in short series it is
+    biased upward, and it is NaN when every joint box is empty (JIDT returns
+    0). The ``symbolic`` estimator [7]_ replaces source and target by ordinal
+    patterns of length ``k_history`` at unit delay and computes the transfer
+    entropy between the symbol sequences from their histograms.
+
+    With ``auto_embed_method``, the target embedding (and with
+    ``'MAX_CORR_AIS'`` also the source embedding, chosen independently) is
+    the one that maximises the series' own bias-corrected active information
+    storage [8]_ over dimensions ``1, ..., k_search_max`` and delays
+    ``1, ..., tau_search_max``: JIDT's ``MAX_CORR_AIS`` criterion [6]_, which
+    follows [9]_. Ties go to the smaller dimension, then the smaller delay.
+    The ``gaussian`` criterion subtracts the AIS bias ``k / (2N)``, and the
+    ``kraskov`` criterion uses the KSG estimator with the same ``prop_k`` and
+    Theiler window. A pair is NaN when no candidate embedding leaves enough
+    samples.
+
+    With a source history of one sample the source enters only at lag one,
+    so coupling at a longer lag from a weakly autocorrelated source is
+    missed. The auto-embedded variants choose the source embedding from the
+    source's own active information storage, which stays short for such a
+    source, so they share this limit.
+
+    References
+    ----------
+    .. [1] T. Schreiber, "Measuring information transfer", Phys. Rev. Lett.
+           85(2), 461-464 (2000).
+    .. [2] J. Geweke, "Measurement of linear dependence and feedback between
+           multiple time series", J. Am. Stat. Assoc. 77(378), 304-313 (1982).
+    .. [3] L. Barnett, A.B. Barrett, A.K. Seth, "Granger causality and
+           transfer entropy are equivalent for Gaussian variables", Phys. Rev.
+           Lett. 103(23), 238701 (2009).
+    .. [4] A. Kraskov, H. Stögbauer, P. Grassberger, "Estimating mutual
+           information", Phys. Rev. E 69(6), 066138 (2004).
+    .. [5] S. Frenzel, B. Pompe, "Partial mutual information for coupling
+           analysis of multivariate time series", Phys. Rev. Lett. 99(20),
+           204101 (2007).
+    .. [6] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
+           dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
+    .. [7] M. Staniek, K. Lehnertz, "Symbolic transfer entropy", Phys. Rev.
+           Lett. 100(15), 158101 (2008).
+    .. [8] J.T. Lizier, M. Prokopenko, A.Y. Zomaya, "Local measures of
+           information storage in complex distributed computation", Inf. Sci.
+           208, 39-54 (2012).
+    .. [9] J. Garland, R.G. James, E. Bradley, "Leveraging information storage
+           to select forecast-optimal parameters for delay-coordinate
+           reconstructions", Phys. Rev. E 93(2), 022221 (2016).
+
+    Parameters
+    ----------
+    estimator : str, optional
+        ``'gaussian'``, ``'kraskov'``, ``'kernel'`` or ``'symbolic'``.
+        Default: ``'gaussian'``.
+    k_history : int, optional
+        Target history length (for ``'symbolic'``, the ordinal pattern length,
+        which must be at least 2). Not with ``auto_embed_method``. Default: 1.
+    k_tau : int, optional
+        Delay between target history samples (``'gaussian'`` and
+        ``'kraskov'`` only; not with ``auto_embed_method``). Default: 1.
+    l_history : int, optional
+        Source history length (``'gaussian'`` and ``'kraskov'`` only; with
+        ``auto_embed_method``, only ``'MAX_CORR_AIS_DEST_ONLY'``). Default: 1.
+    l_tau : int, optional
+        Delay between source history samples (as for ``l_history``).
+        Default: 1.
+    auto_embed_method : str or None, optional
+        ``'MAX_CORR_AIS'`` selects the target and source embeddings and
+        ``'MAX_CORR_AIS_DEST_ONLY'`` the target embedding only, with the
+        source embedding fixed by ``l_history`` and ``l_tau`` (``'gaussian'``
+        and ``'kraskov'`` only). None uses the fixed embedding.
+        Default: None.
+    k_search_max : int, optional
+        Largest embedding dimension searched (requires
+        ``auto_embed_method``). Default: 10.
+    tau_search_max : int, optional
+        Largest embedding delay searched (requires ``auto_embed_method``).
+        Default: 4.
+    kernel_width : float, optional
+        Half-width of the box kernel, in standard deviations of each variable
+        (``'kernel'`` only). Default: 0.5.
+    prop_k : int, optional
+        Number of nearest neighbours ``k`` (``'kraskov'`` only). Default: 4.
+    dyn_corr_excl : int, 'AUTO' or None, optional
+        Theiler window ``w`` in samples (``'kraskov'`` and ``'kernel'`` only),
+        on the embedded sample index: neighbours ``|t - s| <= w`` are not
+        counted. ``'AUTO'`` sets ``w`` for each pair to
+        ``2 * sum_k acf_i(k) acf_j(k)`` over non-negative lags, capped at
+        ``N // 10``. With None or 0 only the point itself is excluded.
+        Default: None.
     """
 
     name = "Transfer entropy"
@@ -1753,15 +1917,14 @@ class TransferEntropy(InfoTheoryBase, Directed):
         super().__init__(**kwargs)
 
         if auto_embed_method is not None and auto_embed_method not in _AUTO_EMBED_METHODS:
-            # Validated, so a typo cannot silently fall through to MAX_CORR_AIS.
+            # Validated, so a typo cannot fall through to MAX_CORR_AIS.
             raise ValueError(
                 f"Unknown auto_embed_method {auto_embed_method!r}; implemented: "
                 f"{sorted(_AUTO_EMBED_METHODS)}. Ragwitz local-prediction "
                 f"selection is a different criterion and is not implemented."
             )
 
-        # Every embedding and search argument the estimator does not implement
-        # is refused rather than accepted and dropped.
+        # An embedding or search argument the estimator does not use raises.
         supplied = {"k_tau": k_tau, "l_history": l_history, "l_tau": l_tau}
         if self._estimator not in self._EMBEDDING_ONLY:
             for name, value in supplied.items():
@@ -1787,8 +1950,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
                     )
 
         if auto_embed_method is None:
-            # Search bounds with nothing to search are rejected rather than
-            # accepted and ignored.
+            # Search bounds with nothing to search raise.
             for name, value in (("k_search_max", k_search_max),
                                 ("tau_search_max", tau_search_max)):
                 if value is not None:
@@ -1797,8 +1959,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
                         f"with a fixed embedding there is nothing to search."
                     )
         else:
-            # A selected embedding and a supplied one cannot both be honoured,
-            # so the supplied one is refused rather than silently ignored.
+            # A selected embedding and a supplied one cannot both be honoured.
             fixed = {"k_history": k_history, "k_tau": k_tau}
             if auto_embed_method != _AUTO_EMBED_DEST_ONLY:
                 fixed.update({"l_history": l_history, "l_tau": l_tau})
@@ -1829,16 +1990,14 @@ class TransferEntropy(InfoTheoryBase, Directed):
             _require_positive_int(name, value)
 
         if self._estimator == "symbolic" and k_history < 2:
-            # An ordinal pattern of length 1 has exactly one possible symbol, so
-            # every entropy term is zero and TE is identically zero. It is not a
-            # degenerate edge case, it is a guaranteed-null statistic.
+            # A length-1 ordinal pattern has one symbol, so TE is identically 0.
             raise ValueError(
                 "estimator='symbolic' requires k_history >= 2: a length-1 "
                 "ordinal pattern has a single symbol, so the transfer entropy "
                 "is identically zero."
             )
 
-        # Store embedding params for numpy path
+        # Embedding parameters
         self._auto_embed_method = auto_embed_method
         self._k_search_max = k_search_max
         self._tau_search_max = tau_search_max
@@ -1850,9 +2009,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
         self._calc = self._new_te_calc()
 
         if auto_embed_method is not None:
-            # The method is in the identifier because it changes what is
-            # computed: MAX_CORR_AIS selects the source embedding too, and
-            # MAX_CORR_AIS_DEST_ONLY only the destination's.
+            # The method changes what is computed, so it is in the identifier.
             self.identifier += "_{}_k-max-{}_tau-max-{}".format(
                 auto_embed_method.replace("_", "-"), k_search_max, tau_search_max)
             if auto_embed_method == _AUTO_EMBED_DEST_ONLY:
@@ -1863,8 +2020,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
                     k_history, k_tau, l_history, l_tau
                 )
             else:
-                # One history length, unit delay: the identifier says only what
-                # is computed.
+                # One history length at unit delay.
                 self.identifier = self.identifier + "_k-{}".format(k_history)
 
     def __setstate__(self, state):
@@ -1872,12 +2028,11 @@ class TransferEntropy(InfoTheoryBase, Directed):
         self._calc = self._new_te_calc()
 
     def _new_te_calc(self):
-        """A TE calculator configured with this instance's embedding.
+        """
+        A TE calculator configured with this instance's embedding.
 
-        Used by ``__init__`` and ``__setstate__``: pickling drops the
-        calculator, and a fresh one has its default history length of 1, so
-        an unpickled or ``copy.copy``-ed kernel or symbolic TE would otherwise
-        compute k_history=1 under a k_history=k identifier.
+        Used by ``__init__`` and by ``__setstate__``, since pickling drops the
+        calculator and a fresh one has the default history length of 1.
         """
         calc = self._getcalc("TransferEntropy")
         if self._auto_embed_method is not None:
@@ -1892,21 +2047,17 @@ class TransferEntropy(InfoTheoryBase, Directed):
                 calc.setProperty(self._L_TAU_PROP_NAME, str(self._l_tau))
         return calc
 
-    # Overridable so a test can inject a scorer that deliberately picks
-    # different source and destination embeddings and check that all four
-    # selected values reach the final estimator.
+    # A class attribute, so the embedding criterion can be substituted.
     _embedding_scorer = staticmethod(_ais_scorer)
 
     def _selected_embedding(self, data, process, series, scorer, w):
-        """``(dimension, delay)`` for one series, cached on the Data object.
+        """
+        ``(dimension, delay)`` for one series, cached on the Data object.
 
-        Selection depends on the series, the estimator, the search bounds and
-        the Theiler window -- not on which pair the series appears in, nor on
-        whether it is the source or the destination there: the criterion is the
-        series' own active information storage either way. With
-        ``dyn_corr_excl="AUTO"`` the window *is* pair-dependent, so it is part
-        of the key; otherwise one search per process serves every pair in both
-        roles, instead of 2*(M-1) identical searches.
+        The criterion is the series' own active information storage, so the
+        choice depends on the series, estimator, search bounds and Theiler
+        window, not on the pair or the role. The window is in the key because
+        ``dyn_corr_excl="AUTO"`` makes it pair-dependent.
         """
         key = (process, self._estimator, self._prop_k, w,
                self._k_search_max, self._tau_search_max)
@@ -1915,8 +2066,8 @@ class TransferEntropy(InfoTheoryBase, Directed):
             cache = data.ais_embedding = {}
         if key not in cache:
             if self._estimator == "kraskov":
-                # Role-independent seed: the cached choice must not depend on
-                # whether the series was first seen as source or target.
+                # A role-independent seed, so the cached choice does not depend
+                # on whether the series was first seen as source or target.
                 series = _tie_break(series, _TIE_SEED_SELECTION)
             dim, delay, _ = _select_embedding(
                 series, scorer, self._k_search_max, self._tau_search_max)
@@ -1930,7 +2081,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
 
         src, targ = data.to_numpy(squeeze=True)[[i, j]]
 
-        # Pure-numpy path for gaussian/kraskov with fixed embedding
+        # gaussian or kraskov, fixed embedding
         if est in ('gaussian', 'kraskov') and auto is None:
             if est == 'gaussian':
                 return _gaussian_te_bivariate(
@@ -1955,8 +2106,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
             if auto == _AUTO_EMBED_DEST_ONLY:
                 l_history, l_tau = self._l_history, self._l_tau
             else:
-                # Selected from the *source*, independently and by the same
-                # criterion.
+                # Selected from the source, independently, by the same criterion.
                 l_history, l_tau = self._selected_embedding(data, i, src, scorer, w)
 
             if est == 'gaussian':
@@ -1965,7 +2115,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
             return _kraskov_te_bivariate(src, targ, k_history, k_tau,
                                          l_history, l_tau, k_nn, w)
 
-        # kernel/symbolic path: numpy calculators
+        # kernel or symbolic
         if est in ('kernel', 'symbolic'):
             self._calc.initialise()
             if est == 'kernel':
@@ -1978,23 +2128,41 @@ class TransferEntropy(InfoTheoryBase, Directed):
 
 
 class CrossmapEntropy(InfoTheoryBase, Directed):
-    """H(Y_t | X_{t-1}, ..., X_{t-k+1}) -- a *k*-dimensional joint embedding.
+    """
+    Cross-map entropy of the column given the row's past.
 
-    ``history_length=k`` gives ``k - 1`` source lags, not ``k``: the loop runs
-    ``range(2, k)``, so the joint space [source past, target future] has
-    exactly ``k`` columns. Both readings of the parameter are internally
-    consistent -- "k source lags" would need ``range(2, k + 1)`` -- and the
-    implementation uses the second.
+    ``H(y_t | x_{t-1}, ..., x_{t-k+1})`` in nats for ``k = history_length``,
+    computed as ``H(x_past, y_t) - H(x_past)``: the entropy of the target's
+    current sample given ``k - 1`` lagged source samples, so the joint space
+    has ``k`` columns. ``history_length=1`` still conditions on the source at
+    lag 1, so it gives the same quantity as ``history_length=2``. Cross-map
+    entropy has no canonical published definition; this is the convention
+    pyspi uses. ``A[i, j]`` conditions the column process on the row's past.
 
-    The exception is ``history_length=1``: the first source column is always
-    present, so ``xme_*_k1`` is ``H(Y_t | X_{t-1})``, the same quantity as k=2.
+    The ``gaussian`` estimate uses the entropy of a Gaussian with the sample
+    covariance (with a relative ridge of 1e-8 on its diagonal), the
+    ``kozachenko`` estimate the Kozachenko-Leonenko nearest-neighbour
+    estimator [1]_ (k = 1, Euclidean norm), and the ``kernel`` estimate a box
+    kernel, as in JIDT [2]_.
 
-    It is documented here rather than changed. Cross-map entropy has no
-    canonical published definition to arbitrate between the two conventions,
-    and silently re-picking one would change every ``xme_*`` value on a guess
-    about intent. The parameter name is the misleading part; the arithmetic is
-    self-consistent, and `test_crossmap_entropy_embedding_dimension` pins it so
-    a future change has to be deliberate.
+    References
+    ----------
+    .. [1] L.F. Kozachenko, N.N. Leonenko, "Sample estimate of the entropy of a
+           random vector", Problems Inf. Transmission 23(2), 95 (1987).
+    .. [2] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
+           dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
+
+    Parameters
+    ----------
+    history_length : int, optional
+        Size ``k`` of the joint embedding (``k - 1`` source lags, at least
+        one). Default: 10.
+    estimator : str, optional
+        ``'gaussian'``, ``'kozachenko'`` (raises for repeated values, and the
+        pair is then NaN) or ``'kernel'``. Default: ``'gaussian'``.
+    kernel_width : float, optional
+        Half-width of the box kernel, in standard deviations of each variable
+        (``'kernel'`` only). Default: 0.5.
     """
 
     name = "Cross-map entropy"
@@ -2021,7 +2189,6 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
 
         joint = np.concatenate([src_past, np.expand_dims(targ_future, axis=1)], axis=1)
 
-        # All estimators have numpy entropy calculators
         self._entropy_calc.initialise(joint.shape[1])
         self._entropy_calc.setObservations(joint)
         H_xy = self._entropy_calc.computeAverageLocalOfObservations()
@@ -2039,6 +2206,44 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
 
 
 class CausalEntropy(InfoTheoryBase, Directed):
+    """
+    Causally conditioned entropy of the column given the row [1]_.
+
+    Kramer's ``H(Y^n || X^n) = sum_{m=1}^{n} H(y_t | y_{t-1}, ..., y_{t-m+1},
+    x_t, ..., x_{t-m+1})`` in nats over a horizon of ``n`` samples, each
+    term estimated over every time ``t`` at which its embedding exists, as a
+    difference of joint entropies. ``A[i, j]`` conditions the column process
+    on the row process up to and including the current sample. An entropy,
+    not a dependence: it is also low for a column that is predictable from
+    its own past (`DirectedInfo` measures the dependence).
+
+    The ``gaussian`` estimate uses the entropy of a Gaussian with the sample
+    covariance (with a relative ridge of 1e-8 on its diagonal), the
+    ``kozachenko`` estimate the Kozachenko-Leonenko nearest-neighbour
+    estimator [2]_ (k = 1, Euclidean norm), and the ``kernel`` estimate a box
+    kernel, as in JIDT [3]_.
+
+    References
+    ----------
+    .. [1] G. Kramer, "Causal conditioning, directed information and the
+           multiple-access channel with feedback", Proc. 1998 IEEE Int. Symp.
+           Information Theory, 189 (1998).
+    .. [2] L.F. Kozachenko, N.N. Leonenko, "Sample estimate of the entropy of a
+           random vector", Problems Inf. Transmission 23(2), 95 (1987).
+    .. [3] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
+           dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
+
+    Parameters
+    ----------
+    n : int, optional
+        Horizon in samples. Default: 5.
+    estimator : str, optional
+        ``'gaussian'``, ``'kozachenko'`` (raises for repeated values, and the
+        pair is then NaN) or ``'kernel'``. Default: ``'gaussian'``.
+    kernel_width : float, optional
+        Half-width of the box kernel, in standard deviations of each variable
+        (``'kernel'`` only). Default: 0.5.
+    """
 
     name = "Causally conditioned entropy"
     identifier = "cce"
@@ -2085,6 +2290,53 @@ class CausalEntropy(InfoTheoryBase, Directed):
 
 
 class DirectedInfo(CausalEntropy, Directed):
+    """
+    Directed information from the row (source) to the column (target) [1]_.
+
+    Massey's ``I(X^n -> Y^n) = sum_{m=1}^{n} I(x_t, ..., x_{t-m+1}; y_t |
+    y_{t-1}, ..., y_{t-m+1})`` in nats over a horizon of ``n`` samples.
+    Every term is estimated over one common window of times
+    ``t = n, ..., T - 1``, and the source terms include the current sample
+    ``x_t``. NaN when the series has ``n + 1`` samples or fewer.
+
+    The ``kraskov`` estimator computes each conditional mutual information
+    directly with the Frenzel-Pompe nearest-neighbour estimator [2]_ [3]_,
+    after repeated values are broken by tiny fixed-seed jitter. The other
+    estimators compose each term from four joint entropies, estimated as for
+    `CausalEntropy`; for ``kozachenko`` and ``kernel`` the estimation biases
+    of those entropies, each in its own dimension, do not cancel.
+
+    References
+    ----------
+    .. [1] J.L. Massey, "Causality, feedback and directed information", Proc.
+           Int. Symp. Information Theory and its Applications (ISITA-90),
+           Waikiki, Hawaii (1990).
+    .. [2] A. Kraskov, H. Stögbauer, P. Grassberger, "Estimating mutual
+           information", Phys. Rev. E 69(6), 066138 (2004).
+    .. [3] S. Frenzel, B. Pompe, "Partial mutual information for coupling
+           analysis of multivariate time series", Phys. Rev. Lett. 99(20),
+           204101 (2007).
+
+    Parameters
+    ----------
+    n : int, optional
+        Horizon in samples. Default: 5.
+    estimator : str, optional
+        ``'gaussian'``, ``'kraskov'``, ``'kozachenko'`` (raises for repeated
+        values, and the pair is then NaN) or ``'kernel'``.
+        Default: ``'gaussian'``.
+    kernel_width : float, optional
+        Half-width of the box kernel, in standard deviations of each variable
+        (``'kernel'`` only). Default: 0.5.
+    prop_k : int, optional
+        Number of nearest neighbours ``k`` (``'kraskov'`` only). Default: 4.
+    dyn_corr_excl : int, 'AUTO' or None, optional
+        Theiler window ``w`` in samples (``'kraskov'`` only): neighbours
+        ``|t - s| <= w`` are not counted. ``'AUTO'`` sets ``w`` for each pair
+        to ``2 * sum_k acf_i(k) acf_j(k)`` over non-negative lags, capped at
+        ``N // 10``. With None or 0 only the point itself is excluded.
+        Default: None.
+    """
 
     name = "Directed information"
     identifier = "di"
@@ -2106,18 +2358,11 @@ class DirectedInfo(CausalEntropy, Directed):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        r"""Directed information from process ``i`` to process ``j``.
+        """
+        Directed information from process ``i`` to process ``j``.
 
-        Massey's finite-horizon definition:
-
-        .. math::
-            I(X^n \to Y^n) = \sum_{i=1}^{n} I(X^i; Y_i \mid Y^{i-1})
-                           = \sum_{i=1}^{n} \left[ H(Y_i \mid Y^{i-1})
-                             - H(Y_i \mid Y^{i-1}, X^i) \right]
-
-        Each conditional entropy is expanded as a difference of joint entropies
-        over one common row window, so the terms telescope correctly and every
-        entropy is estimated on identically aligned samples.
+        Each term ``H(Y_i | Y^{i-1}) - H(Y_i | Y^{i-1}, X^i)`` is estimated on
+        one common window of aligned samples.
         """
         z = data.to_numpy(squeeze=True)
         src, targ = np.asarray(z[i], float), np.asarray(z[j], float)
@@ -2141,13 +2386,8 @@ class DirectedInfo(CausalEntropy, Directed):
             Xpast = np.hstack(x_lags[:order])
 
             if self._estimator == "kraskov":
-                # Estimate I(X^i; Y_i | Y^{i-1}) directly. The KSG/Frenzel-Pompe
-                # estimator fixes one neighbour radius in the joint space and
-                # reuses it in every marginal count, so the dimension-dependent
-                # biases cancel. Composing the same term from four separate
-                # entropies does not: each is biased in its own dimensionality,
-                # which is why the kernel and kozachenko compositions are unusable
-                # here.
+                # I(X^i; Y_i | Y^{i-1}) directly, so the dimension-dependent
+                # biases cancel (see _ksg_cmi).
                 w = self._resolve_theiler(data, i, j) if self._dyn_corr_excl else 0
                 _validate_ksg_sample(y_now.shape[0], int(self._prop_k), w,
                                      context="directed information")
@@ -2168,12 +2408,42 @@ class DirectedInfo(CausalEntropy, Directed):
 
 
 class StochasticInteraction(InfoTheoryBase, Undirected):
-    """Stochastic interaction ``H(X_t|X_{t-d}) + H(Y_t|Y_{t-d}) - H(X_t,Y_t|X_{t-d},Y_{t-d})``.
+    """
+    Stochastic interaction of two processes [1]_.
 
-    With the kernel estimator (``si_kernel_W-0.5_k-1``) the estimate is
-    consistent but positively biased at short lengths (the bias falls roughly
-    as ``T**-0.65``, about +1 nat at T=100), so compare pairs within a dataset
-    rather than reading the absolute level.
+    ``SI = H(x_t | x_{t-d}) + H(y_t | y_{t-d}) - H(x_t, y_t | x_{t-d}, y_{t-d})``
+    in nats with ``d = delay``: the processes' conditional entropies given
+    their own pasts, less the pair's conditional entropy given the pair's
+    past. Undirected. Each conditional entropy is a difference of joint
+    entropies.
+
+    The ``gaussian`` estimate uses the entropy of a Gaussian with the sample
+    covariance (with a relative ridge of 1e-8 on its diagonal), the
+    ``kozachenko`` estimate the Kozachenko-Leonenko nearest-neighbour
+    estimator [2]_ (k = 1, Euclidean norm), and the ``kernel`` estimate a box
+    kernel, as in JIDT [3]_. The ``kernel`` estimate is positively biased in
+    short series, so compare pairs within a dataset rather than reading the
+    absolute level.
+
+    References
+    ----------
+    .. [1] N. Ay, "Information geometry on complexity and stochastic
+           interaction", Entropy 17(4), 2432-2458 (2015).
+    .. [2] L.F. Kozachenko, N.N. Leonenko, "Sample estimate of the entropy of a
+           random vector", Problems Inf. Transmission 23(2), 95 (1987).
+    .. [3] J.T. Lizier, "JIDT: An information-theoretic toolkit for studying the
+           dynamics of complex systems", Front. Robot. AI 1, 11 (2014).
+
+    Parameters
+    ----------
+    delay : int, optional
+        Delay ``d`` between past and present, in samples. Default: 1.
+    estimator : str, optional
+        ``'gaussian'``, ``'kozachenko'`` (raises for repeated values, and the
+        pair is then NaN) or ``'kernel'``. Default: ``'gaussian'``.
+    kernel_width : float, optional
+        Half-width of the box kernel, in standard deviations of each variable
+        (``'kernel'`` only). Default: 0.5.
     """
 
     name = "Stochastic interaction"
@@ -2204,6 +2474,43 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
 
 
 class IntegratedInformation(Undirected, Unsigned):
+    """
+    Integrated information of the pair as a two-element system [1]_ [2]_.
+
+    The pair is split into its two processes, and the measure is computed
+    from the system's covariances at lag ``delay``, so it is a Gaussian
+    (linear) estimate. ``phitype='star'`` gives phi* [1]_, ``I - I*``: the
+    mutual information between the system's past and present, less the
+    mismatched-decoding information ``I*`` of the disconnected model,
+    maximised over its inverse temperature ``beta``. ``phitype='Geo'`` gives
+    geometric integrated information [2]_,
+    ``0.5 * ln(|Sigma_E'| / |Sigma_E|)``: the smallest Kullback-Leibler
+    divergence between the fitted first-order autoregressive model and one
+    with no coupling between the processes, found by an augmented Lagrangian
+    method.
+    Undirected. The computation follows the PhiToolbox implementation
+    (``pyspi.lib.phi_native``). NaN when the estimate fails, for example for
+    a singular covariance.
+
+    References
+    ----------
+    .. [1] M. Oizumi, S. Amari, T. Yanagawa, N. Fujii, N. Tsuchiya, "Measuring
+           integrated information from the decoding perspective", PLoS Comput.
+           Biol. 12(1), e1004654 (2016).
+    .. [2] M. Oizumi, N. Tsuchiya, S. Amari, "Unified framework for information
+           integration based on information geometry", Proc. Natl. Acad. Sci.
+           USA 113(51), 14817-14822 (2016).
+
+    Parameters
+    ----------
+    phitype : str, optional
+        ``'star'`` (phi*) or ``'Geo'`` (geometric). Default: ``'star'``.
+    delay : int, optional
+        Lag between past and present states, in samples. Default: 1.
+    normalization : int, optional
+        0 for none, or 1 to divide by the smaller of the two processes'
+        Gaussian entropies (of the past state). Default: 0.
+    """
 
     name = "Integrated information"
     identifier = "phi"
