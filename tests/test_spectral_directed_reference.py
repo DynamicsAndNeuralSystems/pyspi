@@ -11,6 +11,8 @@ import spectral_connectivity as sc
 
 from pyspi.data import Data
 
+from unchecked_data import unchecked_data
+
 SEED = 0
 
 
@@ -124,8 +126,7 @@ def exact_pair_spectrum(monkeypatch):
 
     monkeypatch.setattr(spectral._FactoredConnectivity, "from_multitaper",
                         staticmethod(from_multitaper))
-    data = Data(data=np.vstack([np.zeros(64), np.ones(64)]), dim_order="ps",
-                zscore=False)
+    data = unchecked_data(np.vstack([np.zeros(64), np.ones(64)]))
     return data, f, H, S, Sigma
 
 

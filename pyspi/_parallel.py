@@ -57,6 +57,31 @@ def default_mp_context() -> str:
     """
     return "fork" if sys.platform.startswith("linux") else "spawn"
 
+
+def _worker_start_error(mp_context) -> RuntimeError:
+    """The error for worker processes that could not start under ``mp_context``."""
+    return RuntimeError(
+        f"pyspi could not start the worker processes of "
+        f"Calculator.compute(n_jobs > 1) with the {mp_context!r} start method. "
+        f"Each worker re-imports the program's main module, so a script must "
+        f"call compute inside an `if __name__ == \"__main__\":` block, and a "
+        f"program read from standard input (`python -`) cannot be re-imported "
+        f"at all. Add the guard and run the script from a file, or use n_jobs=1."
+    )
+
+
+def refuse_start_while_bootstrapping(mp_context) -> None:
+    """
+    Raise if this process is still importing its parent's main module.
+
+    A script without the ``__main__`` guard, re-imported by a spawned worker,
+    reaches ``compute`` again here; raising pyspi's message is clearer than
+    multiprocessing's own bootstrapping error.
+    """
+    if getattr(mp.current_process(), "_inheriting", False):
+        raise _worker_start_error(mp_context)
+
+
 # Worker-local state populated by _worker_init. Module globals are safe here
 # because each worker process has its own independent copy.
 _WORKER_STATE: dict = {}
@@ -735,14 +760,21 @@ def run_parallel(
     # (e.g. mp.Manager() raising) still runs the cleanup in finally.
     shared = None
     manager = None
+    ctx = mp.get_context(mp_context)
     try:
         shared = shm.SharedMemory(create=True, size=arr.nbytes)
-        manager = mp.Manager()
+        # The manager is the first process started with this start method, so a main
+        # module the workers cannot re-import fails here, before any worker starts.
+        try:
+            manager = ctx.Manager()
+        except (EOFError, ConnectionError) as err:
+            if ctx.get_start_method() == "fork":
+                raise
+            raise _worker_start_error(ctx.get_start_method()) from err
         progress_q = manager.Queue()
         shared_view = np.ndarray(arr.shape, dtype=arr.dtype, buffer=shared.buf)
         shared_view[:] = arr
 
-        ctx = mp.get_context(mp_context)
         results: dict = {}
         pbar = tqdm(total=len(spi_keys), desc="SPIs", disable=not progress)
         with cf.ProcessPoolExecutor(

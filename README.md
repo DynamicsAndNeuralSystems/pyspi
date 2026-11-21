@@ -218,6 +218,16 @@ thread each to avoid oversubscription. macOS is
 an exception: its Accelerate BLAS cannot be pinned this way, so prefer `n_jobs=1`
 there for a single dataset.
 
+On macOS and Windows, workers start by re-importing your script, so a script that calls `compute(n_jobs=...)` with more than one worker must do so under an `if __name__ == "__main__":` guard.
+Without it, or for a script piped to `python -`, pyspi raises a `RuntimeError` saying so.
+
+```python
+if __name__ == "__main__":
+    calc = Calculator(dataset=X, config="fast")
+    calc.compute(n_jobs=4)
+    calc.save("results.npz")
+```
+
 ## SPI Descriptions 📋
 To access a table with a high-level overview of the _pyspi_ library of SPIs, including their associated identifiers, see the [table of SPIs](https://time-series-features.gitbook.io/pyspi/spis/table-of-spis) in the full documentation.
 For detailed descriptions of each SPI, as well as its associated estimators, we provide a full breakdown in the [SPI descriptions](https://time-series-features.gitbook.io/pyspi/spis/spi-descriptions) page of our documentation. 

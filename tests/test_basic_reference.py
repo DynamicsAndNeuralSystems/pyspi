@@ -13,6 +13,8 @@ from scipy import stats
 from pyspi.data import Data
 from pyspi.statistics import basic
 
+from unchecked_data import unchecked_data
+
 
 def _series(T=120, seed=3):
     rng = np.random.default_rng(seed)
@@ -95,7 +97,7 @@ def test_spearman_matrix_survives_a_constant_series_in_any_position(make, pos):
     X = rng.standard_normal((4, 80))
     X[pos] = 1.5
     spi = make()
-    got = spi.multivariate(_data(X, zscore=False))
+    got = spi.multivariate(unchecked_data(X))
     tau = getattr(spi, "_tau", 0)
     for i, j in _pairs(4):
         if pos in (i, j):

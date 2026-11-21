@@ -21,6 +21,8 @@ from pyspi.data import Data
 from pyspi.statistics import basic
 from pyspi.statistics.basic import CrossCorrelation, LagResolvedCorrelation
 
+from unchecked_data import unchecked_data
+
 
 def _data(X, zscore=True):
     return Data(data=np.array(X, dtype=float), dim_order="ps", zscore=zscore)
@@ -516,7 +518,7 @@ def test_a_constant_process_voids_only_its_own_pairs(constant):
         spi = LagResolvedCorrelation(**params)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            A = spi.multivariate(_data(X, zscore=False))
+            A = spi.multivariate(unchecked_data(X))
         assert np.isnan(A[2]).all() and np.isnan(A[:, 2]).all()
         good = ~np.eye(4, dtype=bool)
         good[2] = good[:, 2] = False
@@ -524,7 +526,7 @@ def test_a_constant_process_voids_only_its_own_pairs(constant):
         msgs = [str(w.message) for w in caught if "undefined and set to NaN" in str(w.message)]
         assert len(msgs) == 1 and spi.identifier in msgs[0]
         with pytest.raises(ValueError, match="not finite"):
-            spi.bivariate(_data(X, zscore=False), i=0, j=2)
+            spi.bivariate(unchecked_data(X), i=0, j=2)
 
 
 def test_a_failed_pair_is_reported_in_both_of_its_cells():
@@ -537,7 +539,7 @@ def test_a_failed_pair_is_reported_in_both_of_its_cells():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         with collect_pair_failures() as failures:
-            A = LagResolvedCorrelation("lag").multivariate(_data(X, zscore=False))
+            A = LagResolvedCorrelation("lag").multivariate(unchecked_data(X))
     off = ~np.eye(4, dtype=bool)
     assert sorted((i, j) for i, j, _ in failures) == sorted(zip(*np.where(np.isnan(A) & off)))
     assert len(failures) == 6

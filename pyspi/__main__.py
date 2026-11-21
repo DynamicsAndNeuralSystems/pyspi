@@ -101,13 +101,17 @@ def main(argv=None) -> int:
         raise SystemExit(f"Data must be 2D (processes x observations, or observations x "
                          f"processes with --dim-order sp); got shape {arr.shape}")
 
-    calc = Calculator(
-        dataset=arr,
-        config=args.config,
-        dim_order=args.dim_order,
-        zscore=not args.no_zscore,
-        verbose=not args.quiet,
-    )
+    try:
+        calc = Calculator(
+            dataset=arr,
+            config=args.config,
+            dim_order=args.dim_order,
+            zscore=not args.no_zscore,
+            verbose=not args.quiet,
+        )
+    except ValueError as err:
+        # Invalid data or config: print the reason and exit 1, without a traceback.
+        raise SystemExit(f"error: {err}") from err
     calc.compute(
         n_jobs=args.n_jobs,
         checkpoint_dir=args.checkpoint_dir,

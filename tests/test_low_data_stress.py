@@ -31,6 +31,8 @@ import pytest
 
 from pyspi.data import Data
 
+from unchecked_data import unchecked_data
+
 T_SHORT, T_LONG = 64, 256
 SEEDS = (0, 7)
 M = 3
@@ -519,7 +521,7 @@ def test_constant_process_is_refused_by_the_ksg_estimators():
 
     Z = np.random.default_rng(0).standard_normal((2, 128))
     Z[1] = 3.0
-    data = Data(data=Z, dim_order="ps", zscore=False)
+    data = unchecked_data(Z)
     with pytest.raises(ValueError, match="constant"):
         it.MutualInfo(estimator="kraskov").bivariate(data, i=0, j=1)
 
@@ -544,7 +546,7 @@ def test_constant_process_gives_nan_for_its_pairs_only(module, cls, kwargs, leve
     spi = getattr(importlib.import_module(f"pyspi.statistics.{module}"), cls)(**kwargs)
     Z = np.random.default_rng(0).standard_normal((3, 128))
     Z[1] = level
-    data = Data(data=Z, dim_order="ps", zscore=False)
+    data = unchecked_data(Z)
     for i in range(3):
         for j in range(3):
             if i == j:

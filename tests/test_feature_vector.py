@@ -19,6 +19,8 @@ from pyspi.statistics.basic import Covariance
 from pyspi.statistics.infotheory import ConditionalEntropy
 from pyspi.statistics.spectral import PhaseLagIndex
 
+from unchecked_data import unchecked_data
+
 
 # --------------------------------------------------------------------------
 # The function on a hand-built table
@@ -240,7 +242,8 @@ def test_a_feature_is_nan_exactly_where_its_cell_is_not_good(tmp_path):
     configfile.write_text(CONFIG, encoding="utf-8")
     X = np.random.default_rng(0).standard_normal((4, 300))
     X[2] = 1.0     # a constant process: its conditional entropies are undefined
-    calc = Calculator(dataset=X, config=str(configfile), zscore=False, verbose=False)
+    # Data refuses a constant process, so the series are handed over as they are.
+    calc = Calculator(dataset=unchecked_data(X), config=str(configfile), verbose=False)
     calc.compute()
     v = calc.feature_vector(include_self=True)
     assert v.isna().any() and v.notna().any()

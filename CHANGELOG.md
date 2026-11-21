@@ -93,6 +93,9 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Importing pyspi reseeded NumPy's global RNG** (`pyspi.lib.ids` called `np.random.seed(1717)` at import), overriding the caller's seed.
 - **Process names** are coerced to `str` and must be unique; `Data(procnames=...)` was validated and then discarded, so custom names never reached the results table.
   `Data.add_process()` no longer creates a duplicate name.
+- **A constant process** was refused with `zscore=True` under a misleading "non-finite values" error, and accepted with `zscore=False`, where many SPIs then gave it a number instead of NaN.
+  `Data` now raises `ValueError` naming each constant process, including one that is exactly linear when `detrend=True`, whatever `zscore` is.
+  `python -m pyspi compute` prints such input errors and exits 1, without a traceback.
 - **`CalculatorFrame.compute()` accepted no arguments**; it now forwards to `Calculator.compute`.
 - **`CorrelationFrame` reported invalid p-values.**
   It used each time series' length as the F-test sample size, but the observations are edges, and edges sharing a node are dependent.
@@ -383,6 +386,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`Directed.directedness()`** returns the one symmetry trait an SPI carries: `undirected`, `antisymmetric` (`A[i, j] == -A[j, i]`, a new label), `directed` or `asymmetric`.
 - **Parallel computation and checkpoints.**
   `Calculator.compute(n_jobs=...)` follows the joblib convention (see Breaking changes), and `compute(checkpoint_dir=...)` writes each SPI as it finishes and resumes from it.
+  Under the spawn start method (the default on macOS and Windows), a script without an `if __name__ == "__main__":` guard, or one read from standard input, raises a `RuntimeError` that says so.
   A checkpoint directory carries a `run.json` manifest bound to `Calculator.run_digest`, which hashes the config contents, the dataset bytes and the computation version, so a different dataset, config, preprocessing or process order is refused rather than reused; failed checkpoints are retried by default.
   Checkpoint files are named after SPI identifiers, so a config with two identifiers that are equal ignoring letter case is refused, as they would share one file on a case-insensitive file system (the macOS and Windows defaults).
 - **Run records.**

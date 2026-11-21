@@ -60,6 +60,51 @@ def _frame_procnames(data, dim_order):
     return list(labels)
 
 
+# A detrended series is constant when its largest residual is at most this many
+# epsilons of its largest absolute value (detrending a line leaves tens).
+_DETRENDED_CONSTANT_EPS = 1e4
+
+
+def _constant_processes(data, detrended):
+    """
+    Indices of the processes with no variation in some replication.
+
+    ``data`` is a ``(p, s, r)`` array before preprocessing. Without
+    detrending a process is constant when all its values are equal. With
+    detrending it is also constant when removing the least-squares line
+    leaves only rounding error (an exactly linear series), relative to the
+    magnitude of its values. Processes with a non-finite value, series of
+    fewer than two observations and non-real dtypes are never flagged.
+    """
+    if data.shape[0] == 0 or data.shape[1] < 2:
+        return []
+    if data.dtype.kind in "biu":
+        data = data.astype(float)
+    elif data.dtype.kind != "f":
+        return []
+    finite = np.flatnonzero(np.isfinite(data).all(axis=(1, 2)))
+    data = data[finite]
+    with np.errstate(over="ignore"):
+        flat = np.ptp(data, axis=1) == 0
+        if detrended and data.size:
+            scale = np.max(np.abs(data), axis=1)
+            residual = np.max(np.abs(detrend(data, axis=1)), axis=1)
+            eps = np.finfo(data.dtype).eps
+            flat |= residual <= _DETRENDED_CONSTANT_EPS * eps * scale
+    return [int(i) for i in finite[flat.any(axis=1)]]
+
+
+def _refuse_non_finite(data, name):
+    """Raise ``ValueError`` naming the processes of ``data`` with a NaN or inf."""
+    # Inf as well as NaN: with zscore=False an Inf would reach the SPIs.
+    bad = ~np.isfinite(data)
+    if bad.any():
+        raise ValueError(
+            f"Dataset {name} contains non-finite values (NaN/inf) in "
+            f"processes: {np.unique(np.where(bad)[0])}."
+        )
+
+
 def _outside_pyspi_stacklevel():
     """``stacklevel`` for a warning raised by the caller, pointing at the first frame outside pyspi."""
     package = os.path.dirname(os.path.abspath(__file__))
@@ -79,7 +124,9 @@ class Data:
     z-scored along time. Statistics cache intermediate results on the
     instance; changing the series with ``set_data``, ``add_process`` or
     ``remove_process`` drops every cache. A series with a non-finite value is
-    refused.
+    refused, and so is a constant process (one with no variation, or, with
+    ``detrend``, one that is exactly linear), named in the ``ValueError``:
+    no pairwise statistic is defined for it.
 
     Parameters
     ----------
@@ -185,6 +232,10 @@ class Data:
                 if procnames is not None and n_processes is not None:
                     procnames = procnames[:n_processes]
             dat = self.convert_to_numpy(data)
+            if procnames is not None:
+                # Provisional, so set_data names any constant process; they are
+                # validated below.
+                self._procnames = [str(p) for p in procnames]
             self.set_data(
                 dat,
                 dim_order=dim_order,
@@ -270,6 +321,29 @@ class Data:
             logger.info("[2/2] Skipping normalisation of time series in the dataset.")
 
         return data
+
+    def _refuse_constant(self, data, names, first_index=0):
+        """
+        Raise ``ValueError`` if any process of ``data`` has no variation.
+
+        Run before preprocessing, which would turn a constant process into NaN
+        (z-scoring) or rounding noise (detrending an exactly linear series).
+        ``names`` labels the processes of ``data``, in order, and the first
+        of them has index ``first_index`` in the dataset.
+        """
+        constant = _constant_processes(data, self.detrend)
+        if not constant:
+            return
+        listed = ", ".join(
+            f"'{names[i]}' (index {i + first_index})" for i in constant
+        )
+        how = " once its linear trend is removed" if self.detrend else ""
+        where = " in at least one replication" if data.shape[2] > 1 else ""
+        raise ValueError(
+            f"Constant process(es) {listed}: each has no variation{how}{where}, "
+            f"so no pairwise statistic is defined for it. Remove it from the "
+            f"dataset."
+        )
 
     def _invalidate_caches(self):
         """
@@ -385,8 +459,9 @@ class Data:
         Replace the series held by this instance.
 
         The array is reordered to processes x observations x replications,
-        truncated, preprocessed with this instance's ``detrend`` and ``zscore``
-        settings and checked for non-finite values. Every statistic cache is
+        truncated, checked for non-finite values and constant processes
+        (either raises ``ValueError``), and preprocessed with this instance's
+        ``detrend`` and ``zscore`` settings. Every statistic cache is
         dropped, and process names are kept only if the number of processes
         is unchanged.
 
@@ -455,15 +530,17 @@ class Data:
                 UserWarning, stacklevel=_outside_pyspi_stacklevel(),
             )
 
-        data = self._apply_preprocessing(data, log=True)
+        # Non-finite input first, then constant processes, both before the
+        # preprocessing that would turn a constant process into NaN.
+        if data.dtype.kind in "biuf":
+            _refuse_non_finite(data, name)
+        names = self.__dict__.get("_procnames")
+        if names is None or len(names) != data.shape[0]:
+            names = [f"proc-{i}" for i in range(data.shape[0])]
+        self._refuse_constant(data, names)
 
-        # Inf as well as NaN: with zscore=False an Inf would reach the SPIs.
-        bad = ~np.isfinite(data)
-        if bad.any():
-            raise ValueError(
-                f"Dataset {name} contains non-finite values (NaN/inf) in "
-                f"processes: {np.unique(np.where(bad)[0])}."
-            )
+        data = self._apply_preprocessing(data, log=True)
+        _refuse_non_finite(data, name)
 
         self._set_internal(data)
         self.data_type = self._data.dtype.type
@@ -511,22 +588,23 @@ class Data:
                 f"Process has {proc.size} observations but the dataset has "
                 f"{self.n_observations}."
             )
-        # Preprocessed as set_data would.
-        block = self._apply_preprocessing(
-            np.reshape(np.asarray(proc, dtype=float), (1, self.n_observations, 1))
-        )
+        # `proc-<index>` may already be taken (names ["a", "proc-2"], then
+        # two appends): skip to a free name, as names must be unique.
+        index = self.n_processes
+        taken = set(self.procnames)
+        name = f"proc-{index}"
+        while name in taken:
+            index += 1
+            name = f"proc-{index}"
+
+        # Checked and preprocessed as set_data would.
+        block = np.reshape(np.asarray(proc, dtype=float), (1, self.n_observations, 1))
+        self._refuse_constant(block, [name], first_index=self.n_processes)
+        block = self._apply_preprocessing(block)
         appended = np.append(self._data, block, axis=0)
         self._set_internal(appended)
         self._reset_data_size()
         if hasattr(self, "_procnames"):
-            # `proc-<index>` may already be taken (names ["a", "proc-2"], then
-            # two appends): skip to a free name, as names must be unique.
-            index = self.n_processes - 1
-            taken = set(self._procnames)
-            name = f"proc-{index}"
-            while name in taken:
-                index += 1
-                name = f"proc-{index}"
             self._procnames.append(name)
 
     def remove_process(self, procs):

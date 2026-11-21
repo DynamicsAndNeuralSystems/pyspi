@@ -11,6 +11,8 @@ import pytest
 from pyspi.data import Data
 from pyspi.statistics import infotheory as it
 
+from unchecked_data import unchecked_data
+
 # Classes whose kraskov variant must be genuine or rejected.
 FALSE_KRASKOV = [
     "JointEntropy",
@@ -159,7 +161,7 @@ def test_ksg_rejects_k_at_or_above_sample_size(k):
 def test_ksg_rejects_degenerate_samples():
     const = np.zeros((2, 200))
     const[1] = np.arange(200)
-    data = Data(data=const, dim_order="ps", zscore=False)
+    data = unchecked_data(const)
     with pytest.raises(ValueError):
         it.MutualInfo(estimator="kraskov").bivariate(data, i=0, j=1)
 
@@ -234,7 +236,7 @@ def test_ksg_transfer_entropy_rejects_a_constant_process():
     """A constant process has no spread to standardise, so it is rejected."""
     const = np.zeros((2, 200))
     const[1] = np.arange(200)
-    data = Data(data=const, dim_order="ps", zscore=False)
+    data = unchecked_data(const)
     with pytest.raises(ValueError):
         it.TransferEntropy(estimator="kraskov").bivariate(data, i=0, j=1)
 
@@ -1969,7 +1971,7 @@ def test_distance_correlation_equals_the_both_orders_pair_loop(case, biased):
     spi = DistanceCorrelation(biased=biased)
 
     def run(method):
-        data = Data(data=series.copy(), dim_order="ps", zscore=False)
+        data = unchecked_data(series)
         before = data.to_numpy().copy()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
