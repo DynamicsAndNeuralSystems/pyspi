@@ -211,7 +211,7 @@ class EventSynchronisation(Directed):
         )
         # Q is symmetric and unsigned, q antisymmetric and signed: each
         # statistic sets its own structural trait and sign.
-        traits = ["undirected", "unsigned"] if statistic == "Q" else ["antisymmetric", "signed"]
+        traits = ["undirected"] if statistic == "Q" else ["antisymmetric", "signed"]
         self.labels = EventSynchronisation.labels + traits
         self.identifier = (
             f"{EventSynchronisation.identifier}_{statistic}"
@@ -337,8 +337,8 @@ class TailDependenceAsymmetry(Undirected):
         self._statistic = statistic
         self._quantile = _require_level("quantile", quantile, 0.5, 1.0)
         # The asymmetry is signed; the upper and lower coefficients are not.
-        sign = "signed" if statistic == "asymmetry" else "unsigned"
-        self.labels = TailDependenceAsymmetry.labels + [sign]
+        sign = ["signed"] if statistic == "asymmetry" else []
+        self.labels = TailDependenceAsymmetry.labels + sign
         stat = "" if statistic == "asymmetry" else f"_{statistic}"
         self.identifier = (
             f"{TailDependenceAsymmetry.identifier}{stat}"

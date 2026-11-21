@@ -2,9 +2,11 @@
 
 The same SPI must carry the same labels whichever config it is loaded from,
 no SPI may carry a contradictory pair, every label must belong to the fixed
-vocabulary of CONTRIBUTING.md (which catches typos such as ``unisgned``, a
+vocabulary of CONTRIBUTING.md (which catches typos such as ``sigend``, a
 stray ``directed,`` or a compound such as ``linear/nonlinear``), and every
 SPI carries exactly one label from each axis of that vocabulary.
+``signed`` is a flag, carried exactly when ``issigned()`` is true; ``unsigned``
+is not a label, and one in a config is dropped.
 The labels a config writes for an SPI must also agree with the SPI itself:
 its sign with ``issigned()``, its directedness with the class trait, its
 linearity with the class where the class declares one, and each SPI carries
@@ -32,13 +34,11 @@ from pyspi.calculator import (
 CONTRADICTORY = (
     ("linear", "nonlinear"),
     ("directed", "undirected"),
-    ("signed", "unsigned"),
 )
 # The label vocabulary of CONTRIBUTING.md: each SPI carries exactly one
-# label from each axis.
+# label from each axis, and the flag ``signed`` where it applies.
 LABEL_AXES = {
     "directedness": {"directed", "undirected", "antisymmetric"},
-    "sign": {"signed", "unsigned"},
     "linearity": {"linear", "nonlinear"},
     "arity": {"bivariate", "multivariate"},
     "time": {"contemporaneous", "time-dependent", "frequency-dependent"},
@@ -50,7 +50,7 @@ DESCRIPTIVE_TAGS = {
     "normal", "rank", "spectral", "symbolic", "temporal", "unordered",
     "wavelet",
 }
-VOCABULARY = set().union(*LABEL_AXES.values()) | DESCRIPTIVE_TAGS
+VOCABULARY = set().union(*LABEL_AXES.values()) | DESCRIPTIVE_TAGS | {"signed"}
 
 
 @pytest.fixture(scope="module")
@@ -124,7 +124,7 @@ def test_the_vocabulary_matches_contributing():
     for axis, axis_labels in LABEL_AXES.items():
         if axis != "module":
             assert axis_labels <= named, (axis, sorted(axis_labels - named))
-    assert {"M01", "M14", "MXX"} <= named
+    assert {"M01", "M14", "MXX", "signed"} <= named
     assert DESCRIPTIVE_TAGS <= named, sorted(DESCRIPTIVE_TAGS - named)
 
 
@@ -220,12 +220,13 @@ def test_config_sign_label_agrees_with_issigned(entries_by_config):
     bad = []
     for config, entries in entries_by_config.items():
         for written, spi, merged in entries:
-            expected = "signed" if spi.issigned() else "unsigned"
+            expected = ["signed"] if spi.issigned() else []
             declared = [l for l in written if l in ("signed", "unsigned")]
             own = [l for l in spi.labels if l in ("signed", "unsigned")]
-            if declared != [expected] or own not in ([], [expected]):
+            if declared != expected or own != expected \
+                    or [l for l in merged.labels if l == "signed"] != expected:
                 bad.append(f"{config}/{merged.identifier}: config {declared}, "
-                           f"class labels {own}, issigned() -> {expected}")
+                           f"class labels {own}, issigned() -> {spi.issigned()}")
     assert not bad, "\n".join(bad)
 
 
@@ -264,3 +265,40 @@ def test_every_spi_has_one_module_label(entries_by_config):
         if sum(_is_module_label(l) for l in merged.labels) != 1
     ]
     assert not bad, "\n".join(bad)
+
+
+def test_unsigned_is_not_a_label(labels_by_config):
+    bad = [f"{config}/{ident}" for config, spis in labels_by_config.items()
+           for ident, labels in spis.items() if "unsigned" in labels]
+    assert not bad, "\n".join(bad)
+
+
+def test_an_unsigned_label_in_a_config_is_dropped(tmp_path):
+    """Configs written for pyspi 2.x label SPIs ``unsigned``; they still load."""
+    config = tmp_path / "old_labels.yaml"
+    config.write_text(
+        ".statistics.basic:\n"
+        "  SpearmanR:\n"
+        "    labels: [undirected, nonlinear, unsigned, bivariate, M01]\n"
+        "    configs:\n"
+        "      - squared: True\n"
+        "      - squared: False\n"
+        "        labels: [unsigned]\n"
+    )
+    spis = load_spis_from_yaml(str(config), quiet=True)
+    assert set(spis) == {"spearmanr-sq", "spearmanr"}
+    assert "unsigned" not in spis["spearmanr-sq"].labels
+    assert "signed" not in spis["spearmanr-sq"].labels
+    # issigned() decides: Spearman's rho is signed whatever the config says.
+    assert "unsigned" not in spis["spearmanr"].labels
+    assert "signed" in spis["spearmanr"].labels
+
+
+def test_filter_spis_explains_that_unsigned_is_not_a_label(tmp_path, monkeypatch):
+    from pyspi.utils import filter_spis
+
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="'unsigned' is not a label.*without 'signed'"):
+        filter_spis(["unsigned"])
+    with pytest.raises(ValueError, match="'unsigned' is not a label"):
+        filter_spis(["linear", "unsigned"])

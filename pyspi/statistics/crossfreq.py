@@ -239,7 +239,7 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
 
     name = "Phase-amplitude coupling"
     identifier = "pac"
-    labels = ["unsigned", "directed", "nonlinear", "spectral"]
+    labels = ["directed", "nonlinear", "spectral"]
 
     # All statistics of one band pair share data.crossfreq[(band, kind)].
     _cache_namespace = "crossfreq"

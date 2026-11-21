@@ -238,7 +238,8 @@ def test_identifier_labels_and_cache_bucket():
     assert [s.identifier for s in spis] == IDENTIFIERS
     assert PhaseAmplitudeCoupling(n_bins=12).identifier.endswith("_nbins-12")
     assert PhaseAmplitudeCoupling(statistic="mvl", n_bins=12).identifier == IDENTIFIERS[1]
-    assert {"directed", "nonlinear", "unsigned"} <= set(spis[0].labels)
+    assert {"directed", "nonlinear"} <= set(spis[0].labels)
+    assert "signed" not in spis[0].labels
     assert not spis[0].issigned()
     # Both statistics of one band pair share a parallel bucket; band pairs do not.
     assert cache_bucket(spis[0]) == cache_bucket(spis[1]) != cache_bucket(spis[2])
@@ -416,7 +417,7 @@ def test_surrogates_cannot_see_coupling_to_a_strictly_periodic_source():
 def test_surrogate_identifiers_labels_and_parameters():
     spi = PhaseAmplitudeCoupling(*BANDS[0], statistic="mi_excess")
     assert spi.identifier == "pac_mi_excess_p-0-01-0-05_a-0-15-0-4"
-    assert not spi.issigned() and "unsigned" in spi.labels and "signed" not in spi.labels
+    assert not spi.issigned() and "signed" not in spi.labels
     assert PhaseAmplitudeCoupling(*BANDS[1], statistic="mvl_z").identifier == \
         "pac_mvl_z_p-0-05-0-1_a-0-2-0-45"
     assert PhaseAmplitudeCoupling(statistic="mi_z", n_surr=50).identifier.endswith("_nsurr-50")
@@ -438,6 +439,6 @@ def test_full_config_bundles_the_excess_modulation_index():
     for p, a in BANDS:
         ident = PhaseAmplitudeCoupling(p, a, "mi_excess").identifier
         assert ident in spis
-        assert {"directed", "nonlinear", "unsigned", "bivariate",
+        assert {"directed", "nonlinear", "bivariate",
                 "frequency-dependent"} <= set(spis[ident].labels)
         assert "signed" not in spis[ident].labels

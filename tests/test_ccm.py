@@ -521,13 +521,11 @@ def test_ccm_sign_follows_the_statistic(statistic, signed):
     """Skill is a one-ended strength; only the antisymmetric diff is signed."""
     spi = ConvergentCrossMapping(statistic=statistic)
     assert spi.issigned() is signed
-    assert ("signed" if signed else "unsigned") in spi.labels
-    assert ("unsigned" if signed else "signed") not in spi.labels
+    assert ("signed" in spi.labels) is signed
 
 
 @pytest.mark.parametrize("statistic,signed", [("tp", True), ("skill", False)])
 def test_lccm_sign_follows_the_statistic(statistic, signed):
     spi = LaggedConvergentCrossMapping(statistic=statistic)
     assert spi.issigned() is signed
-    assert ("signed" if signed else "unsigned") in spi.labels
-    assert ("unsigned" if signed else "signed") not in spi.labels
+    assert ("signed" in spi.labels) is signed

@@ -201,7 +201,7 @@ def filter_spis(keywords, output_name = None, configfile= None):
     -------
     None
         A ``ValueError`` is raised if ``keywords`` is not a non-empty list of
-        strings or no SPI matches, and a ``FileNotFoundError`` if the config
+        strings, includes ``'unsigned'`` (not a label) or no SPI matches, and a ``FileNotFoundError`` if the config
         is not found.
     """
     # handle invalid keyword input
@@ -211,6 +211,12 @@ def filter_spis(keywords, output_name = None, configfile= None):
         raise ValueError("All keywords must be strings.")
     if not isinstance(keywords, list):
         raise ValueError("Keywords must be provided as a list of strings.")
+    if "unsigned" in keywords:
+        raise ValueError(
+            "'unsigned' is not a label. An SPI is labelled 'signed' when zero "
+            "means no relationship and the sign says which of two opposite "
+            "relationships holds; the SPIs without 'signed' are the one-ended "
+            "ones.")
 
     # Default to the full bundled config; otherwise accept a bundled name or path.
     from pyspi.calculator import resolve_config, load_config_yaml

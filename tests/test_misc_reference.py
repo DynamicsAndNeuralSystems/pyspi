@@ -240,7 +240,7 @@ def test_bundled_pec_signedness_follows_absolute():
     for ident, spi in pec.items():
         expect_signed = not ident.endswith("_abs")
         assert spi.issigned() is expect_signed, ident
-        assert ("signed" if expect_signed else "unsigned") in spi.labels, ident
+        assert ("signed" in spi.labels) is expect_signed, ident
 
 
 # --------------------------------------------------------------------------

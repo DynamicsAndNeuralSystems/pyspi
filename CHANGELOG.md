@@ -51,6 +51,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - `utils.is_jpype_jvm_available` is removed, along with the other `utils` helpers in the migration table.
 - `parse_bivariate` raises `ValueError` when `i` and `j` are ambiguous. In 2.x it constructed a `Warning` object and did nothing.
 - Results tables written by pyspi < 3.0.0 (pickle) do not load; see Fixed.
+- The label `unsigned` is gone: `signed` is a flag, carried by an SPI whose sign says which of two opposite relationships holds (zero meaning none), and an SPI without it is a one-ended spectrum of dependence.
+  An `unsigned` in a config is dropped, and `filter_spis(["unsigned"])` raises `ValueError`.
 
 **Behavior of the API itself.**
 
@@ -94,8 +96,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `get_correlation_df(rmmin=True)` shifted the calculator's table in place; it now shifts a copy.
   `CorrelationFrame.ddf` averaged datasets that share a name, including several unnamed ones; unnamed datasets are now named by position (`dataset_0`, `dataset_1`, ...), and a name given to two datasets raises `ValueError`.
   The SPI-by-SPI correlation is computed as whole-matrix Spearman correlations (about 60x faster).
-- **`get_correlation_df` took the absolute value of unsigned SPIs**, which reversed or folded the order of an unsigned SPI with negative values (`softdtw*`, the differential entropies).
-  Two signed or two unsigned SPIs are now correlated on their values, and a signed SPI against an unsigned one through its absolute value; unsigned values are never transformed.
+- **`get_correlation_df` took the absolute value of SPIs that are not signed**, which reversed or folded the order of a one-ended SPI with negative values (`softdtw*`, the differential entropies, `coint_aeg_tstat_*`).
+  Two signed SPIs, or two that are not, are now correlated on their values, and a signed SPI against one that is not through its absolute value; the values of SPIs that are not signed are never transformed.
 - **Loading and config errors that were silent or late.**
   A `.csv` dataset never loaded (`np.genfromtxt` was given `","` as its dtype); it now does.
   A config entry with an unknown key (for example `config:` for `configs:`) built the class with its default parameters, and a module or class named twice silently lost the first block; both now raise, and a bare `Class:` entry means the defaults.
@@ -117,8 +119,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   pyspi filled the upper triangle of the backend's lower-triangular result without negating it, so `psi[i, j] == psi[j, i]`.
   The fill now happens per frequency, before the band statistic, so `mean` is antisymmetric.
   `fmin=0` also asked for an unbounded period; `fmin` is now resolved against the data-supported floor, and the cycle count is capped so the wavelet fits the signal.
-- **Antisymmetric SPIs reported themselves as unsigned.**
-  `Calculator._rmmin` subtracts the minimum from every unsigned SPI, which on an antisymmetric matrix destroys the lead/lag its sign carries.
+- **Antisymmetric SPIs reported themselves as not signed.**
+  `Calculator._rmmin` subtracts the minimum from every SPI that is not signed, which on an antisymmetric matrix destroys the lead/lag its sign carries.
   `phase`, `pli`, `wpli`, `psi` (multitaper and wavelet), `gd` and `ccm_*_diff` are now signed, and an SPI's merged label follows its `issigned()`.
   `CrossPairwiseDistance` had no `issigned`, so `_rmmin()` raised on any config containing it.
 - **`IGCI` was misnamed and mislabelled.**
@@ -165,7 +167,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Wilson's algorithm logs non-convergence through `logging` and returns the unconverged factor, so every Wilson-derived measure (`dcoh`, `dtf`, `ddtf`, `pdcoh`, `gpdcoh`, nonparametric `sgc`) reached the table silently; the warning now lands in the SPI's record.
 - **Group delay (`GroupDelay`) returned no finite value on any input**: the backend's one-sample coherence test takes the square root of a negative number.
   pyspi computes the standard one-sample test `(arctanh|C| − b)/sqrt(b)`, `b = 1/(2n − 2)` (Enochson & Goodman 1965; Bokil et al. 2007), applies Benjamini-Hochberg over the band, thins the longest significant run to one point per multitaper bandwidth, and fits the unwrapped phase against frequency.
-  The delay is in samples (it was in seconds), and `rvalue` is `|r|`, undirected and unsigned.
+  The delay is in samples (it was in seconds), and `rvalue` is `|r|`, undirected and not signed.
   It is not bundled (see [SPI set changes](#spi-set-changes)).
 - **Coherence phase used linear statistics on wrapped angles.**
   `CoherencePhase` uses the circular mean `arg(mean(exp(i·phase)))` and builds the opposite orientation by negation; a resultant indistinguishable from zero, or an antipodal mean, gives NaN.
@@ -285,8 +287,8 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The labels a bundled config writes for an SPI agree with the SPI: its sign with `issigned()`, its directedness with the class trait, and its linearity with the class where the class sets one; where these vary by variant (`lagcorr_*`, `coint_*`, `es_*`, `pec_*`), the labels are set per config entry.
   When a config's labels are merged with a class's, the class's directedness trait, its `linear`/`nonlinear` and its `issigned()` win, and any remaining contradictory pair raises.
   2.0.2 applied only the class labels, not those in its config files.
-  An SPI is `signed` when zero means no relationship (or no lead) and the sign says which of two opposite relationships holds, so that its absolute value is a strength (a covariance, or a lead/lag); every other SPI is `unsigned`, a one-ended scale of dependence, whatever values it takes (`softdtw*`, the differential entropies and `coint_aeg_tstat_*` can be negative).
-  Labels that differ from 2.0.2's: the Kozachenko SPIs, `anm` and the rank correlations `SpearmanR` and `KendallTau` (which capture monotone, not only linear, dependence) are `nonlinear`; `gpfit_DotProduct` and `Cointegration` are `linear`; `coint_aeg_*` is `directed`; `ccm_*` other than `ccm_*_diff` is unsigned; `hhg` is `undirected`; `phase`, `pli`, `wpli` and `psi` are `antisymmetric` and signed; `pec`, `pec_orth`, `pec_log` and `pec_orth_log` are signed; and the spectral SPIs that had no linearity label are `linear`, as is `psi_multitaper_*` (2.0.2: `linear/nonlinear`).
+  An SPI is `signed` when zero means no relationship (or no lead) and the sign says which of two opposite relationships holds, so that its absolute value measures the size of the effect (a covariance, or a lead/lag); every other SPI is a one-ended spectrum of dependence and carries no sign label, whatever values it takes (`softdtw*`, the differential entropies and `coint_aeg_tstat_*` can be negative).
+  Labels that differ from 2.0.2's: the Kozachenko SPIs, `anm` and the rank correlations `SpearmanR` and `KendallTau` (which capture monotone, not only linear, dependence) are `nonlinear`; `gpfit_DotProduct` and `Cointegration` are `linear`; `coint_aeg_*` is `directed`; `ccm_*` other than `ccm_*_diff` is not signed; `hhg` is `undirected`; `phase`, `pli`, `wpli` and `psi` are `antisymmetric` and signed; `pec`, `pec_orth`, `pec_log` and `pec_orth_log` are signed; and the spectral SPIs that had no linearity label are `linear`, as is `psi_multitaper_*` (2.0.2: `linear/nonlinear`).
   Every SPI carries exactly one label from each group in `CONTRIBUTING.md`, spelled as there, including one module label (`M01`-`M14`, or `MXX` for one not assigned to a module): `psi_wavelet_*` and `wtc_*` are `frequency-dependent` (2.0.2's wavelet PSI was `time/frequency dependent`), and `pdist_*` and `ids` are `bivariate` and `contemporaneous`.
   `filter_spis` matches on the labels each SPI carries after merging, not on the raw YAML family labels, so per-variant traits are found and a matching family no longer selects all of its configs.
 - **Conventions stated in the class docstrings:** `gc_gaussian_*` is half of Geweke's Granger causality; `xcorr_*_max` is the largest signed value; lower is stronger evidence for `anm`, `cds` and `reci`, higher for `ccm` and `igci`; `ccm_E-None_*` uses the larger of the pair's two embedding dimensions; `softdtw*` is the raw soft-DTW cost (it can be negative), named "Soft dynamic time warping"; `cohmag` is the magnitude-squared coherence.

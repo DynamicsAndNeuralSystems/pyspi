@@ -383,7 +383,7 @@ def test_symmetry_and_antisymmetry(spi, heavy_data):
 def test_base_classes_agree_with_labels(spi):
     """The sign and symmetry mixins never contradict the statistic's own traits."""
     assert ("signed" in spi.labels) == spi.issigned()
-    assert ("unsigned" in spi.labels) == (not spi.issigned())
+    assert "unsigned" not in spi.labels
     if isinstance(spi, Signed):
         assert spi.issigned()
     if isinstance(spi, Unsigned):
@@ -418,7 +418,7 @@ def test_bundled_es_traits_hold_on_a_driven_pair(driven_pair):
             assert "signed" in spi.labels, ident
             assert A[0, 1] > 0 > A[1, 0], ident  # row 0 leads
         else:
-            assert "unsigned" in spi.labels, ident
+            assert "signed" not in spi.labels, ident
             assert 0 < A[0, 1] <= 1, ident
         assert not isinstance(spi, Signed) or spi.issigned(), ident
         assert not isinstance(spi, Unsigned) or not spi.issigned(), ident
@@ -538,8 +538,8 @@ def test_calculator_round_trip(tmp_path):
 def test_bundled_configs_construct_the_new_spis():
     full = load_spis_from_yaml(resolve_config("full"), quiet=True)
     assert BUNDLED <= set(full)
-    traits = {"directed", "undirected", "antisymmetric", "signed", "unsigned"}
-    assert set(full["es_Q_q-0-95"].labels) & traits == {"undirected", "unsigned"}
+    traits = {"directed", "undirected", "antisymmetric", "signed"}
+    assert set(full["es_Q_q-0-95"].labels) & traits == {"undirected"}
     assert set(full["es_q_q-0-95"].labels) & traits == {"antisymmetric", "signed"}
     assert set(full["tailasym_q-0-95"].labels) & traits == {"undirected", "signed"}
     assert "time-dependent" in full["es_q_q-0-9"].labels

@@ -114,7 +114,7 @@ A note on where pyspi differs from an upstream implementation is worth keeping.
 ## How an SPI behaves
 
 - **Orientation:** the output is an `M x M` matrix with row = source and column = target.
-  The class's base (`Directed` or `Undirected`, `Signed` or `Unsigned`) and its config labels must agree with what it returns.
+  The class's base (`Directed` or `Undirected`, `Signed` or `Unsigned`) and its config labels must agree with what it returns; `Signed` classes carry the `signed` label.
 - **Input it can't handle:** a constant series, too few samples or a fit that doesn't exist gives NaN, not an exception.
   Raise an exception only for invalid arguments.
 - **Randomness:** any random draw uses a fixed seed, so every value is reproducible.
@@ -125,13 +125,13 @@ A note on where pyspi differs from an upstream implementation is worth keeping.
 ## Configs
 
 The bundled configs live in `pyspi/configs/`.
-Each class entry carries its labels: directedness (`directed`, `undirected` or `antisymmetric`), `signed` or `unsigned`, `linear` or `nonlinear`, `bivariate` or `multivariate`, `contemporaneous`, `time-dependent` or `frequency-dependent`, and one module code (`M01` to `M14`).
+Each class entry carries its labels: directedness (`directed`, `undirected` or `antisymmetric`), `linear` or `nonlinear`, `bivariate` or `multivariate`, `contemporaneous`, `time-dependent` or `frequency-dependent`, and one module code (`M01` to `M14`).
 An SPI not assigned to a module carries the code `MXX` instead.
-An SPI is `signed` when zero has a special meaning (no relationship, or no lead) and the sign says which of two opposite relationships holds, so that its absolute value is a strength, as for a covariance or a lead/lag whose sign says which process leads.
-Every other SPI is `unsigned`, a one-ended scale of dependence, whatever values it takes.
-The label does not say whether values can be negative: soft-DTW and a differential entropy are unsigned, yet their values can be negative.
 Each config entry adds the labels that depend on its parameters.
 Merged with the class's own labels, every SPI ends up with exactly one label from each of these groups, spelled as here.
+An SPI also carries the flag `signed` where it applies: when zero has a special meaning (no relationship, or no lead) and the sign says which of two opposite relationships holds, so that its absolute value measures the size of the effect, as for a covariance or a lead/lag whose sign says which process leads.
+Every other SPI is a one-ended spectrum of dependence and carries no sign label, whatever values it takes: soft-DTW and a differential entropy can be negative, yet are not signed.
+`unsigned` is not a label.
 A class may also carry descriptive tags: `basic`, `causal`, `distance`, `embedding`, `infotheory`, `lagged`, `misc`, `normal`, `rank`, `spectral`, `symbolic`, `temporal`, `unordered` and `wavelet`.
 Comments in a config are one or two lines per class.
 

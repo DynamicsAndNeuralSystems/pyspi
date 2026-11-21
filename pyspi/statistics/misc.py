@@ -80,7 +80,7 @@ class Cointegration(Directed, Unsigned):
     name = "Cointegration"
     identifier = "coint"
     # Johansen fits a VECM and Engle-Granger an OLS regression.
-    labels = ["misc", "unsigned", "temporal", "undirected", "linear"]
+    labels = ["misc", "temporal", "undirected", "linear"]
     _cache_namespace = "coint"
 
     @property
@@ -195,7 +195,7 @@ class LinearModel(Directed, Unsigned):
 
     name = "Linear model regression"
     identifier = "lmfit"
-    labels = ["misc", "unsigned", "unordered", "normal", "linear", "directed"]
+    labels = ["misc", "unordered", "normal", "linear", "directed"]
 
     def __init__(self, model):
         self.identifier += f"_{model}"
@@ -245,7 +245,7 @@ class GPModel(Directed, Unsigned):
 
     name = "Gaussian process regression"
     identifier = "gpfit"
-    labels = ["misc", "unsigned", "unordered", "normal", "nonlinear", "directed"]
+    labels = ["misc", "unordered", "normal", "nonlinear", "directed"]
 
     def __init__(self, kernel="RBF"):
         self.identifier += f"_{kernel}"
@@ -304,7 +304,7 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
 
     name = "Power envelope correlation"
     identifier = "pec"
-    labels = ["unsigned", "misc", "undirected"]
+    labels = ["misc", "undirected"]
 
     def __init__(self, orth=False, log=False, absolute=False):
         self._orth = False
@@ -320,7 +320,7 @@ class PowerEnvelopeCorrelation(Undirected, Unsigned):
         # Only the orthogonalised variant with `absolute` is non-negative
         # (MNE ignores `absolute` otherwise).
         if not (self._orth and absolute):
-            self.labels = [l for l in self.labels if l != "unsigned"] + ["signed"]
+            self.labels = self.labels + ["signed"]
             self.issigned = lambda: True
 
     @parse_multivariate
@@ -360,7 +360,7 @@ class InterDependenceScore(Undirected, Unsigned):
 
     name = "Interdependence score"
     identifier = "ids"
-    labels = ["unsigned", "misc", "undirected", "nonlinear"]
+    labels = ["misc", "undirected", "nonlinear"]
 
     def __init__(
             self,

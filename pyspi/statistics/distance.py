@@ -77,7 +77,7 @@ class PairwiseDistance(Undirected, Unsigned):
 
     name = "Pairwise distance"
     identifier = "pdist"
-    labels = ["unsigned", "distance", "unordered", "nonlinear", "undirected"]
+    labels = ["distance", "unordered", "nonlinear", "undirected"]
 
     def __init__(self, metric="euclidean", normalise=False, **kwargs):
         self._metric = metric
@@ -308,7 +308,7 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
 
     name = "Hilbert-Schmidt Independence Criterion"
     identifier = "hsic"
-    labels = ["unsigned", "distance", "unordered", "nonlinear", "undirected"]
+    labels = ["distance", "unordered", "nonlinear", "undirected"]
 
     def __init__(self, biased=False):
         self._biased = biased
@@ -432,7 +432,7 @@ class HellerHellerGorfine(Undirected, Unsigned):
 
     name = "Heller-Heller-Gorfine Independence Criterion"
     identifier = "hhg"
-    labels = ["unsigned", "distance", "unordered", "nonlinear", "undirected"]
+    labels = ["distance", "unordered", "nonlinear", "undirected"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
@@ -475,7 +475,7 @@ class DistanceCorrelation(Undirected, Unsigned):
 
     name = "Distance correlation"
     identifier = "dcorr"
-    labels = ["unsigned", "distance", "unordered", "nonlinear", "undirected"]
+    labels = ["distance", "unordered", "nonlinear", "undirected"]
 
     def __init__(self, biased=False):
         self._biased = biased
@@ -515,7 +515,7 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
 
     name = "Multiscale graph correlation"
     identifier = "mgc"
-    labels = ["distance", "unsigned", "unordered", "nonlinear", "undirected"]
+    labels = ["distance", "unordered", "nonlinear", "undirected"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
@@ -575,7 +575,7 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
     name = "Cross-distance correlation"
     identifier = "dcorrx"
-    labels = ["distance", "unsigned", "temporal", "directed", "nonlinear"]
+    labels = ["distance", "temporal", "directed", "nonlinear"]
 
     def __init__(self, max_lag=1):
         self._max_lag = max_lag
@@ -649,7 +649,7 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
 
     name = "Cross-multiscale graph correlation"
     identifier = "mgcx"
-    labels = ["unsigned", "distance", "temporal", "directed", "nonlinear"]
+    labels = ["distance", "temporal", "directed", "nonlinear"]
 
     def __init__(self, max_lag=1):
         self._max_lag = max_lag
@@ -673,7 +673,7 @@ class TimeWarping(Undirected, Unsigned):
     ``_constraint-sakoe-chiba`` or ``_constraint-itakura``.
     """
 
-    labels =["unsigned", "distance", "temporal", "undirected", "nonlinear"]
+    labels =["distance", "temporal", "undirected", "nonlinear"]
 
     def __init__(self, global_constraint=None):
         gcstr = global_constraint
@@ -1131,7 +1131,7 @@ class Barycenter(Undirected, Signed):
 
         # A squared barycenter and an argmax index are non-negative.
         if squared or statistic == "max_time":
-            self.labels = [l for l in self.labels if l != "signed"] + ["unsigned"]
+            self.labels = [l for l in self.labels if l != "signed"]
             self.issigned = lambda: False
 
         self.identifier += f"_{mode}_{statistic}"
@@ -1192,7 +1192,7 @@ class GromovWassersteinTau(Undirected, Unsigned):
 
     name = "Gromov-Wasserstein distance (GW_tau)"
     identifier = "gwtau"
-    labels = ["unsigned", "distance", "unordered", "nonlinear", "undirected"]
+    labels = ["distance", "unordered", "nonlinear", "undirected"]
 
     @staticmethod
     def vec_geo_dist(x):

@@ -253,7 +253,7 @@ def test_spectral_coherence_phase_uses_a_circular_mean_and_is_permutation_covari
     base = calculate([0, 1, 2])
     spi = CoherencePhase(statistic="mean", fmin=0, fmax=0.5)
     assert "signed" in spi.labels and "antisymmetric" in spi.labels
-    assert "unsigned" not in spi.labels and "undirected" not in spi.labels
+    assert "undirected" not in spi.labels
     assert spi.issigned()
     expected = np.angle(np.mean(np.exp(1j * full[:, 1, 0])))
     assert base[1, 0] == pytest.approx(expected)
@@ -343,26 +343,26 @@ def test_wavelet_psi_is_permutation_invariant(statistic):
 def test_antisymmetric_spis_report_themselves_as_signed():
     """`issigned()` drives a transform, so it cannot disagree with the values.
 
-    `Calculator._rmmin` subtracts the minimum from every SPI that reports
-    unsigned. On an antisymmetric matrix that shifts A[i,j] and A[j,i] by the
+    `Calculator._rmmin` subtracts the minimum from every SPI that is not
+    signed. On an antisymmetric matrix that shifts A[i,j] and A[j,i] by the
     same amount, destroying the antisymmetry that carries the lead/lag. This
-    covers `phase`, `pli`, `wpli`, `psi` (both the
-    multitaper and wavelet families), `gd` and `ccm_*_diff`, which configs may
-    label `unsigned`.
+    covers `phase`, `pli`, `wpli`, `psi` (both the multitaper and wavelet
+    families), `gd` and `ccm_*_diff`.
     """
     spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
     bad = [
         ident for ident, spi in spis.items()
         if ({"antisymmetric", "asymmetric"} & set(spi.labels)) and not spi.issigned()
     ]
-    assert not bad, "antisymmetric SPIs reporting unsigned:\n  " + "\n  ".join(sorted(bad))
+    assert not bad, "antisymmetric SPIs not reporting signed:\n  " + "\n  ".join(sorted(bad))
 
 
-def test_no_spi_declares_both_signed_and_unsigned():
-    """One authority. `_merge_spi_labels` resolves the label from `issigned()`."""
+def test_signed_label_follows_issigned():
+    """One authority. `_merge_spi_labels` sets the flag from `issigned()`."""
     spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
-    bad = [i for i, s in spis.items() if {"signed", "unsigned"} <= set(s.labels)]
-    assert not bad, "contradictory signedness labels:\n  " + "\n  ".join(sorted(bad))
+    bad = [i for i, s in spis.items()
+           if ("signed" in s.labels) != s.issigned() or "unsigned" in s.labels]
+    assert not bad, "sign label disagrees with issigned():\n  " + "\n  ".join(sorted(bad))
 
 
 def test_every_bundled_spi_declares_a_signedness():
@@ -393,7 +393,7 @@ _GROUP_DELAY_YAML = """.statistics.spectral:
 _EXPECTED_GD_TRAITS = {
     "delay": ({"antisymmetric", "signed"}, True),
     "slope": ({"antisymmetric", "signed"}, True),
-    "rvalue": ({"undirected", "unsigned"}, False),
+    "rvalue": ({"undirected"}, False),
 }
 _TRAITS = {"directed", "undirected", "antisymmetric", "asymmetric",
            "signed", "unsigned"}
@@ -454,10 +454,9 @@ def test_yaml_cannot_add_a_competing_structural_trait(tmp_path):
     spis = load_spis_from_yaml(str(config), quiet=True)
     assert set(spis) == set(expected)
     for identifier, trait in expected.items():
-        assert set(spis[identifier].labels) & set(_TRAITS) == {
-            trait,
-            "signed" if trait in {"antisymmetric", "asymmetric"} else "unsigned",
-        }
+        assert set(spis[identifier].labels) & set(_TRAITS) == (
+            {trait, "signed"} if trait in {"antisymmetric", "asymmetric"}
+            else {trait})
 
 
 def test_no_spi_in_any_bundled_config_declares_two_directedness_traits():
@@ -530,7 +529,7 @@ def test_lagged_correlation_linearity_follows_the_estimator(estimator, linearity
 
     labels = LaggedCorrelation(estimator=estimator, tau=1, squared=squared).labels
     assert set(labels) & {"linear", "nonlinear"} == {linearity}
-    assert set(labels) & {"signed", "unsigned"} == {"unsigned" if squared else "signed"}
+    assert ("signed" in labels) is not squared and "unsigned" not in labels
 
 
 def test_igci_stays_out_of_the_bundled_configs():
@@ -577,7 +576,7 @@ def test_squared_barycenter_is_unsigned():
 
     for stat in ("mean", "max"):
         spi = Barycenter(mode="euclidean", squared=True, statistic=stat)
-        assert not spi.issigned() and "unsigned" in spi.labels
+        assert not spi.issigned()
         assert "signed" not in spi.labels
     assert Barycenter(mode="euclidean", statistic="max").issigned()
 

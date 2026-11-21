@@ -91,7 +91,7 @@ class AdditiveNoiseModel(Directed, Unsigned):
     name = "Additive noise model"
     identifier = "anm"
     # Not `linear`: a Gaussian-process fit and an RBF-kernel HSIC.
-    labels = ["unsigned", "causal", "unordered", "nonlinear", "directed"]
+    labels = ["causal", "unordered", "nonlinear", "directed"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
@@ -145,7 +145,7 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
 
     name = "Conditional distribution similarity statistic"
     identifier = "cds"
-    labels = ["unsigned", "causal", "unordered", "nonlinear", "directed"]
+    labels = ["causal", "unordered", "nonlinear", "directed"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
@@ -178,7 +178,7 @@ class RegressionErrorCausalInference(Directed, Unsigned):
 
     name = "Regression error-based causal inference"
     identifier = "reci"
-    labels = ["unsigned", "causal", "unordered", "nonlinear", "directed"]
+    labels = ["causal", "unordered", "nonlinear", "directed"]
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
@@ -676,7 +676,7 @@ class ConvergentCrossMapping(Directed, Unsigned):
 
     name = "Convergent cross-mapping"
     identifier = "ccm"
-    labels = ["causal", "directed", "nonlinear", "temporal", "unsigned"]
+    labels = ["causal", "directed", "nonlinear", "temporal"]
     # Variants share data.ccm[E], so they run on one parallel worker.
     _cache_namespace = "ccm"
 
@@ -696,7 +696,7 @@ class ConvergentCrossMapping(Directed, Unsigned):
         # and its sign says which direction has the higher skill.
         if statistic == "diff":
             self.labels = [l for l in self.labels
-                           if l not in ("directed", "unsigned")] + ["antisymmetric", "signed"]
+                           if l != "directed"] + ["antisymmetric", "signed"]
             self.issigned = lambda: True
 
         self.identifier += f"_E-{self._E}_{statistic}"
@@ -865,7 +865,7 @@ class LaggedConvergentCrossMapping(Directed, Signed):
         self.identifier += f"_E-{self._E}_k-{self._k}_{statistic}"
         # A skill is a one-ended strength; the lag of its peak is signed.
         if statistic == "skill":
-            self.labels = [l for l in self.labels if l != "signed"] + ["unsigned"]
+            self.labels = [l for l in self.labels if l != "signed"]
             self.issigned = lambda: False
 
     @property
@@ -1095,7 +1095,7 @@ class NonlinearInterdependence(Directed, Unsigned):
 
     name = "Nonlinear interdependence"
     identifier = "nli"
-    labels = ["causal", "directed", "nonlinear", "temporal", "unsigned"]
+    labels = ["causal", "directed", "nonlinear", "temporal"]
     _STATISTICS = ("S", "H", "N", "L")
     # All statistics share data.nli[(m, tau, k, theiler)]: embeddings,
     # neighbours, R_n and the conditioned ranks.

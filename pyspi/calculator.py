@@ -50,7 +50,6 @@ def _is_module_label(label):
 _CONTRADICTORY_LABELS = (
     ("linear", "nonlinear"),
     ("directed", "undirected"),
-    ("signed", "unsigned"),
 )
 
 
@@ -92,15 +91,18 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
             if label not in ("linear", "nonlinear") or label == own_lin[0]
         ]
 
-    # Likewise the SPI's own issigned() decides signed/unsigned. It is not just
-    # a label: `Calculator._rmmin` shifts unsigned SPIs, which would destroy a
-    # lead/lag sign, and the SPI-SPI correlations take the absolute value of a
-    # signed SPI compared with an unsigned one.
+    # `signed` is a flag, set from the SPI's own issigned(); an SPI without it
+    # is one-ended. `unsigned` is not a label (configs written for pyspi 2.x
+    # use it) and is dropped. issigned() is not just a label: `Calculator._rmmin`
+    # shifts SPIs that are not signed, which would destroy a lead/lag sign,
+    # and the SPI-SPI correlations take the absolute value of a signed SPI
+    # compared with one that is not.
+    merged = [label for label in merged if label != "unsigned"]
     issigned = getattr(spi, "issigned", None)
     if issigned is not None:
-        actual = "signed" if issigned() else "unsigned"
-        merged = [label for label in merged
-                  if label not in ("signed", "unsigned")] + [actual]
+        merged = [label for label in merged if label != "signed"]
+        if issigned():
+            merged.append("signed")
 
     # Whatever the class did not settle must not be left contradictory.
     for pair in _CONTRADICTORY_LABELS:
@@ -1386,16 +1388,16 @@ class Calculator:
 
     def _rmmin(self):
         """
-        Shift each unsigned SPI in :attr:`table` to a minimum of 0.
+        Shift each SPI that is not signed in :attr:`table` to a minimum of 0.
 
-        An unsigned SPI measures a strength of dependence on a one-ended
-        scale, so a constant shift keeps its order and meaning even when its
-        floor is not 0. Signed SPIs are left as they are.
+        Such an SPI is a one-ended scale of dependence, so a constant shift
+        keeps its order and meaning even when its floor is not 0. Signed SPIs
+        are left as they are.
         """
         self._table = self._min_shifted_table()
 
     def _min_shifted_table(self):
-        """A copy of the table with each unsigned SPI shifted to a minimum of 0."""
+        """A copy of the table with each SPI that is not signed shifted to a minimum of 0."""
         table = self.table.copy()
         for spi in self.spis:
             if not self.spis[spi].issigned():
@@ -1475,12 +1477,13 @@ class Calculator:
         """
         Spearman correlation between every pair of SPIs, over the pairs of processes.
 
-        Two signed SPIs, or two unsigned SPIs, are correlated on their values.
-        A signed SPI is correlated with an unsigned one through its absolute
-        value, its strength of dependence. Unsigned values are never
-        transformed, so an unsigned SPI that can be negative (``softdtw``, a
-        differential entropy) keeps its order. With ``rmmin`` the unsigned
-        SPIs are first shifted to a minimum of 0, on a copy of the table.
+        Two signed SPIs, or two one-ended SPIs (those without the ``signed``
+        label), are correlated on their values. A signed SPI is correlated
+        with a one-ended one through its absolute value, the size of the
+        effect. One-ended values are never transformed, so one that can be
+        negative (``softdtw``, a differential entropy) keeps its order. With
+        ``rmmin`` the one-ended SPIs are first shifted to a minimum of 0, on a
+        copy of the table.
         Returns the SPI-by-SPI DataFrame, and the SPI labels if
         ``with_labels``.
         """
@@ -1490,8 +1493,8 @@ class Calculator:
         edges = table.stack(future_stack=True).dropna(how="all")
 
         # Spearman correlation of every SPI pair, on pairwise complete values:
-        # signed with signed and unsigned with unsigned on the values, signed
-        # with unsigned on the signed SPI's absolute value.
+        # signed with signed and one-ended with one-ended on the values, signed
+        # with one-ended on the signed SPI's absolute value.
         signed = np.array([self.spis[s].issigned() for s in edges.columns])
         cf = edges.corr(method="spearman")
         if signed.any() and not signed.all():
@@ -1822,8 +1825,8 @@ class CalculatorFrame:
         Spearman correlations between SPIs, over pairs of processes, per dataset.
 
         For each dataset, every pair of SPIs is correlated across the pairs of
-        processes: on their values when both are signed or both unsigned, and
-        on the signed SPI's absolute value against the unsigned SPI's value
+        processes: on their values when both are signed or neither is, and on
+        the signed SPI's absolute value against the other SPI's value
         otherwise. An unnamed
         dataset is named ``dataset_<i>`` by its position.
 
@@ -1832,7 +1835,8 @@ class CalculatorFrame:
         with_labels : bool, optional
             Also return the SPI and dataset labels. Default: False.
         **kwargs
-            ``rmmin=True`` shifts each unsigned SPI to a minimum of 0 first.
+            ``rmmin=True`` shifts each SPI that is not signed to a minimum of
+            0 first.
 
         Returns
         -------

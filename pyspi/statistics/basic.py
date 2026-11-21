@@ -55,7 +55,7 @@ class Estimators(Undirected, Signed):
         paramstr = f"_{estimator}"
         if squared:
             paramstr = "-sq" + paramstr
-            self.labels = Estimators.labels + ["unsigned"]
+            self.labels = list(Estimators.labels)
             self.issigned = lambda: False
         else:
             self.labels = Estimators.labels + ["signed"]
@@ -352,7 +352,7 @@ class CrossCorrelation(Undirected, Signed):
         if self._squared:
             self.issigned = lambda: False
             self.identifier = self.identifier + "-sq"
-            self.labels = CrossCorrelation.labels + ["unsigned"]
+            self.labels = list(CrossCorrelation.labels)
         else:
             self.labels = CrossCorrelation.labels + ["signed"]
         self.identifier += f"_{statistic}_sig-{sigonly}"
@@ -546,11 +546,11 @@ class LagResolvedCorrelation(Directed, Signed):
 
         if statistic in self._UNSIGNED:
             self.issigned = lambda: False
-            sign = "unsigned"
+            sign = []
         else:
-            sign = "signed"
+            sign = ["signed"]
         self.labels = LagResolvedCorrelation.labels + [
-            self._TRAITS[statistic], sign]
+            self._TRAITS[statistic]] + sign
         self.identifier = f"lagcorr_{statistic}"
         if statistic == "onesided":
             self.identifier += f"_tau-{tau}"
@@ -698,7 +698,7 @@ class SpearmanR(Undirected, Signed):
         if squared:
             self.issigned = lambda: False
             self.identifier = self.identifier + "-sq"
-            self.labels = self.labels + ["unsigned"]
+            self.labels = list(self.labels)
         else:
             self.labels = self.labels + ["signed"]
 
@@ -753,7 +753,7 @@ class KendallTau(Undirected, Signed):
         if squared:
             self.issigned = lambda: False
             self.identifier = self.identifier + "-sq"
-            self.labels = self.labels + ["unsigned"]
+            self.labels = list(self.labels)
         else:
             self.labels = self.labels + ["signed"]
 
@@ -840,7 +840,7 @@ class ChatterjeeXi(Directed, Unsigned):
 
     name = "Chatterjee's xi correlation"
     identifier = "xi"
-    labels = ["basic", "rank", "nonlinear", "directed", "unsigned"]
+    labels = ["basic", "rank", "nonlinear", "directed"]
 
     def __init__(self, tau=0):
         self._tau = require_int("tau", tau, minimum=0)
@@ -945,7 +945,7 @@ class LaggedCorrelation(Undirected, Signed):
         linearity = "linear" if est == "pearson" else "nonlinear"
         if self._squared:
             self.issigned = lambda: False
-            self.labels = LaggedCorrelation.labels + [linearity, "unsigned"]
+            self.labels = LaggedCorrelation.labels + [linearity]
             suffix = "-sq"
         else:
             self.labels = LaggedCorrelation.labels + [linearity, "signed"]

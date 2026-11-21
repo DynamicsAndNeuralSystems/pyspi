@@ -269,7 +269,7 @@ class Undirected(Directed):
 
     name = 'Base class'
     identifier = 'base'
-    labels = ['unsigned']
+    labels = []
 
     def ispositive(self):
         return False
@@ -300,11 +300,11 @@ class Undirected(Directed):
 
 class Signed:
     """
-    Mixin for signed SPIs.
+    Mixin for signed SPIs, which carry the ``signed`` label.
 
     Zero has a special meaning (no relationship, or no lead) and the sign says
-    which of two opposite relationships holds, so the absolute value is a
-    strength of dependence. Covariance (positive or negative coupling) is the
+    which of two opposite relationships holds, so the absolute value measures
+    the size of the effect. Covariance (positive or negative coupling) is the
     model case; a lead/lag whose sign says which process leads is the same
     kind.
     """
@@ -313,14 +313,12 @@ class Signed:
 
 class Unsigned:
     """
-    Mixin for unsigned SPIs.
+    Mixin for every SPI that is not signed, which carries no sign label.
 
-    Every SPI that is not signed: a one-ended scale of dependence, whatever
-    values it takes. The label does not say whether values can be negative:
-    an unsigned SPI can return negative values through estimator bias, a
-    floor that is not 0 (soft-DTW, a differential entropy) or an inverted
-    scale (the Engle-Granger t-statistic, more negative for stronger
-    evidence).
+    A one-ended spectrum of dependence, whatever values it takes: such an SPI
+    can return negative values through estimator bias, a floor that is not 0
+    (soft-DTW, a differential entropy) or an inverted scale (the Engle-Granger
+    t-statistic, more negative for stronger evidence).
     """
     def issigned(self):
         return False

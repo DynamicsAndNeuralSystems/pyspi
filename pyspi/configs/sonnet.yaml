@@ -20,7 +20,6 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
       - M10
@@ -51,7 +50,6 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
       - M02
@@ -66,7 +64,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M03
@@ -78,7 +75,6 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
       - M04
@@ -96,7 +92,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M05
@@ -112,7 +107,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - M12
@@ -154,7 +148,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - M06
@@ -187,7 +180,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M13

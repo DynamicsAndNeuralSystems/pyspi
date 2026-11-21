@@ -1493,7 +1493,7 @@ class JointEntropy(InfoTheoryBase, Undirected):
 
     name = "Joint entropy"
     identifier = "je"
-    labels = ["unsigned", "infotheory", "unordered", "undirected"]
+    labels = ["infotheory", "unordered", "undirected"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1550,7 +1550,7 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
     identifier = "ce"
     # Directed because H(X|Y) != H(Y|X) in general, even though the Gaussian
     # form is symmetric for z-scored data.
-    labels = ["unsigned", "infotheory", "unordered", "directed"]
+    labels = ["infotheory", "unordered", "directed"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1618,7 +1618,7 @@ class MutualInfo(InfoTheoryBase, Undirected):
 
     name = "Mutual information"
     identifier = "mi"
-    labels = ["unsigned", "infotheory", "unordered", "undirected"]
+    labels = ["infotheory", "unordered", "undirected"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1718,7 +1718,7 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
 
     name = "Time-lagged mutual information"
     identifier = "tlmi"
-    labels = ["unsigned", "infotheory", "temporal", "directed"]
+    labels = ["infotheory", "temporal", "directed"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1895,7 +1895,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
 
     name = "Transfer entropy"
     identifier = "te"
-    labels = ["unsigned", "embedding", "infotheory", "temporal", "directed"]
+    labels = ["embedding", "infotheory", "temporal", "directed"]
 
     # Only the two estimators with a genuine embedding implement any of the
     # embedding and search arguments. The symbolic and kernel calculators read
@@ -2169,7 +2169,7 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
 
     name = "Cross-map entropy"
     identifier = "xme"
-    labels = ["unsigned", "infotheory", "temporal", "directed"]
+    labels = ["infotheory", "temporal", "directed"]
 
     def __init__(self, history_length=10, **kwargs):
         super().__init__(**kwargs)
@@ -2250,7 +2250,7 @@ class CausalEntropy(InfoTheoryBase, Directed):
 
     name = "Causally conditioned entropy"
     identifier = "cce"
-    labels = ["unsigned", "infotheory", "temporal", "directed"]
+    labels = ["infotheory", "temporal", "directed"]
 
     def __init__(self, n=5, **kwargs):
         super().__init__(**kwargs)
@@ -2343,7 +2343,7 @@ class DirectedInfo(CausalEntropy, Directed):
 
     name = "Directed information"
     identifier = "di"
-    labels = ["unsigned", "infotheory", "temporal", "directed"]
+    labels = ["infotheory", "temporal", "directed"]
 
     def __init__(self, n=5, **kwargs):
         # n is handled by CausalEntropy; re-appending here would double the suffix.
@@ -2451,7 +2451,7 @@ class StochasticInteraction(InfoTheoryBase, Undirected):
 
     name = "Stochastic interaction"
     identifier = "si"
-    labels = ["unsigned", "infotheory", "temporal", "undirected"]
+    labels = ["infotheory", "temporal", "undirected"]
 
     def __init__(self, delay=1, **kwargs):
         super().__init__(**kwargs)
@@ -2517,7 +2517,7 @@ class IntegratedInformation(Undirected, Unsigned):
 
     name = "Integrated information"
     identifier = "phi"
-    labels = ["linear", "unsigned", "infotheory", "temporal", "undirected"]
+    labels = ["linear", "infotheory", "temporal", "undirected"]
 
     def __init__(self, phitype="star", delay=1, normalization=0):
         if phitype not in ("star", "Geo"):

@@ -285,12 +285,12 @@ def test_labels_match_the_matrix_structure():
               "asym": "antisymmetric"}
     for stat, trait in traits.items():
         spi = LagResolvedCorrelation(stat)
-        sign = "unsigned" if stat == "onesidedpeak" else "signed"
-        assert trait in spi.labels and sign in spi.labels and "linear" in spi.labels
+        signed = stat != "onesidedpeak"
+        assert trait in spi.labels and "linear" in spi.labels
         assert len({"antisymmetric", "undirected", "directed"} & set(spi.labels)) == 1
-        assert len({"signed", "unsigned"} & set(spi.labels)) == 1
-        assert spi.issigned() == (sign == "signed")
-    # The class attribute is untouched by an unsigned instance.
+        assert ("signed" in spi.labels) is signed and "unsigned" not in spi.labels
+        assert spi.issigned() is signed
+    # The class attribute is untouched by an instance that is not signed.
     assert LagResolvedCorrelation("onesided").issigned()
 
 
@@ -696,7 +696,7 @@ def test_calculator_round_trip(tmp_path):
     assert "undirected" in calc.spis["lagcorr_peak_L-10"].labels
     assert "directed" in calc.spis["lagcorr_onesided_tau-1e_L-None"].labels
     peak1s = calc.spis["lagcorr_onesidedpeak_L-None"]
-    assert "unsigned" in peak1s.labels and "signed" not in peak1s.labels
+    assert "signed" not in peak1s.labels
     assert not peak1s.issigned()
 
 
