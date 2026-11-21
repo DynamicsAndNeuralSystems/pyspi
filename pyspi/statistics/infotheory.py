@@ -33,7 +33,7 @@ from scipy.spatial import cKDTree
 from scipy.special import digamma, gammaln
 
 from pyspi import utils
-from pyspi.base import Undirected, Directed, Signed, Unsigned, parse_univariate, parse_bivariate, parse_multivariate, fill_pairwise
+from pyspi.base import Undirected, Directed, Unsigned, parse_univariate, parse_bivariate, parse_multivariate, fill_pairwise
 
 # ---------------------------------------------------------------------------
 # Entropy calculators (with the interface of JIDT's calculators)
@@ -1142,13 +1142,9 @@ _AUTO_EMBED_METHODS = frozenset({"MAX_CORR_AIS", "MAX_CORR_AIS_DEST_ONLY"})
 _AUTO_EMBED_DEST_ONLY = "MAX_CORR_AIS_DEST_ONLY"
 
 
-class InfoTheoryBase:
+class InfoTheoryBase(Unsigned):
     """
     Base class for the information-theoretic SPIs, with estimator dispatch.
-
-    A subclass sets its sign: the entropies are differential entropies, which
-    can be negative, so they are ``Signed``; the mutual informations and
-    their relatives are ``Unsigned``.
 
     Every measure is in nats, whatever the estimator (JIDT reports bits for
     its kernel and symbolic estimators; divide by ln 2 to compare). The
@@ -1463,13 +1459,13 @@ class InfoTheoryBase:
         return w + 1
 
 
-class JointEntropy(InfoTheoryBase, Undirected, Signed):
+class JointEntropy(InfoTheoryBase, Undirected):
     """
     Joint entropy ``H(x_i, x_j)`` of two processes, in nats.
 
     The differential entropy of the pair's joint distribution at lag 0,
-    treating the samples as independent draws. Undirected and signed: like
-    any differential entropy it can be negative.
+    treating the samples as independent draws. Undirected and unsigned,
+    though like any differential entropy its value can be negative.
 
     The ``gaussian`` estimate is the entropy of a Gaussian with the sample
     covariance (with a relative ridge of 1e-8 on its diagonal). The
@@ -1497,7 +1493,7 @@ class JointEntropy(InfoTheoryBase, Undirected, Signed):
 
     name = "Joint entropy"
     identifier = "je"
-    labels = ["signed", "infotheory", "unordered", "undirected"]
+    labels = ["unsigned", "infotheory", "unordered", "undirected"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1515,7 +1511,7 @@ class JointEntropy(InfoTheoryBase, Undirected, Signed):
         return super().multivariate(data)
 
 
-class ConditionalEntropy(InfoTheoryBase, Directed, Signed):
+class ConditionalEntropy(InfoTheoryBase, Directed):
     """
     Conditional entropy ``H(x_j | x_i)`` of the column given the row, in nats.
 
@@ -1523,8 +1519,8 @@ class ConditionalEntropy(InfoTheoryBase, Directed, Signed):
     draws: ``A[i, j]`` is the uncertainty left in the column process once the
     row process is known. Directed, since ``H(x_j | x_i)`` and
     ``H(x_i | x_j)`` differ unless the marginal entropies are equal (the
-    ``gaussian`` estimate is symmetric for z-scored data). Signed: a
-    differential entropy, which can be negative.
+    ``gaussian`` estimate is symmetric for z-scored data). Unsigned, though
+    a differential entropy can be negative.
 
     The ``gaussian`` estimate is the entropy of a Gaussian with the sample
     covariance (with a relative ridge of 1e-8 on its diagonal). The
@@ -1554,7 +1550,7 @@ class ConditionalEntropy(InfoTheoryBase, Directed, Signed):
     identifier = "ce"
     # Directed because H(X|Y) != H(Y|X) in general, even though the Gaussian
     # form is symmetric for z-scored data.
-    labels = ["signed", "infotheory", "unordered", "directed"]
+    labels = ["unsigned", "infotheory", "unordered", "directed"]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1579,7 +1575,7 @@ class ConditionalEntropy(InfoTheoryBase, Directed, Signed):
         return super().multivariate(data)
 
 
-class MutualInfo(InfoTheoryBase, Undirected, Unsigned):
+class MutualInfo(InfoTheoryBase, Undirected):
     """
     Mutual information ``I(x_i; x_j)`` between two processes, in nats.
 
@@ -1677,7 +1673,7 @@ class MutualInfo(InfoTheoryBase, Undirected, Unsigned):
         return super().multivariate(data)
 
 
-class TimeLaggedMutualInfo(InfoTheoryBase, Directed, Unsigned):
+class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
     """
     Time-lagged mutual information from the row (source) to the column (target).
 
@@ -1784,7 +1780,7 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed, Unsigned):
         return super().multivariate(data)
 
 
-class TransferEntropy(InfoTheoryBase, Directed, Unsigned):
+class TransferEntropy(InfoTheoryBase, Directed):
     """
     Transfer entropy from the row (source) to the column (target) [1]_.
 
@@ -2132,7 +2128,7 @@ class TransferEntropy(InfoTheoryBase, Directed, Unsigned):
         return np.nan
 
 
-class CrossmapEntropy(InfoTheoryBase, Directed, Signed):
+class CrossmapEntropy(InfoTheoryBase, Directed):
     """
     Cross-map entropy of the column given the row's past.
 
@@ -2143,7 +2139,7 @@ class CrossmapEntropy(InfoTheoryBase, Directed, Signed):
     lag 1, so it gives the same quantity as ``history_length=2``. Cross-map
     entropy has no canonical published definition; this is the convention
     pyspi uses. ``A[i, j]`` conditions the column process on the row's past.
-    Signed: a differential entropy, which can be negative.
+    Unsigned, though a differential entropy can be negative.
 
     The ``gaussian`` estimate uses the entropy of a Gaussian with the sample
     covariance (with a relative ridge of 1e-8 on its diagonal), the
@@ -2173,7 +2169,7 @@ class CrossmapEntropy(InfoTheoryBase, Directed, Signed):
 
     name = "Cross-map entropy"
     identifier = "xme"
-    labels = ["signed", "infotheory", "temporal", "directed"]
+    labels = ["unsigned", "infotheory", "temporal", "directed"]
 
     def __init__(self, history_length=10, **kwargs):
         super().__init__(**kwargs)
@@ -2211,7 +2207,7 @@ class CrossmapEntropy(InfoTheoryBase, Directed, Signed):
         return H_xy - H_y
 
 
-class CausalEntropy(InfoTheoryBase, Directed, Signed):
+class CausalEntropy(InfoTheoryBase, Directed):
     """
     Causally conditioned entropy of the column given the row [1]_.
 
@@ -2221,8 +2217,8 @@ class CausalEntropy(InfoTheoryBase, Directed, Signed):
     difference of joint entropies. ``A[i, j]`` conditions the column process
     on the row process up to and including the current sample. An entropy,
     not a dependence: it is also low for a column that is predictable from
-    its own past (`DirectedInfo` measures the dependence). Signed: a sum of
-    differential entropies, which can be negative.
+    its own past (`DirectedInfo` measures the dependence). Unsigned, though a
+    sum of differential entropies can be negative.
 
     The ``gaussian`` estimate uses the entropy of a Gaussian with the sample
     covariance (with a relative ridge of 1e-8 on its diagonal), the
@@ -2254,7 +2250,7 @@ class CausalEntropy(InfoTheoryBase, Directed, Signed):
 
     name = "Causally conditioned entropy"
     identifier = "cce"
-    labels = ["signed", "infotheory", "temporal", "directed"]
+    labels = ["unsigned", "infotheory", "temporal", "directed"]
 
     def __init__(self, n=5, **kwargs):
         super().__init__(**kwargs)
@@ -2349,11 +2345,6 @@ class DirectedInfo(CausalEntropy, Directed):
     identifier = "di"
     labels = ["unsigned", "infotheory", "temporal", "directed"]
 
-    def issigned(self):
-        # A sum of conditional mutual informations: non-negative, unlike the
-        # causally conditioned entropy whose machinery it shares.
-        return False
-
     def __init__(self, n=5, **kwargs):
         # n is handled by CausalEntropy; re-appending here would double the suffix.
         super().__init__(n=n, **kwargs)
@@ -2419,7 +2410,7 @@ class DirectedInfo(CausalEntropy, Directed):
         return total
 
 
-class StochasticInteraction(InfoTheoryBase, Undirected, Unsigned):
+class StochasticInteraction(InfoTheoryBase, Undirected):
     """
     Stochastic interaction of two processes [1]_.
 

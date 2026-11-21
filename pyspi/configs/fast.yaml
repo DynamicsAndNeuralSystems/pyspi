@@ -202,7 +202,7 @@
     labels:
       - undirected
       - nonlinear
-      - signed
+      - unsigned
       - bivariate
       - contemporaneous
       - M14
@@ -215,7 +215,7 @@
     labels:
       - directed
       - nonlinear
-      - signed
+      - unsigned
       - bivariate
       - contemporaneous
       - M14
@@ -225,7 +225,7 @@
   # Cross-map entropy
   CrossmapEntropy:
     labels:
-      - signed
+      - unsigned
       - directed
       - time-dependent
       - bivariate

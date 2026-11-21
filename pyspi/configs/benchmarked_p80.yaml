@@ -221,7 +221,7 @@
     labels:
       - undirected
       - nonlinear
-      - signed
+      - unsigned
       - bivariate
       - contemporaneous
       - M14
@@ -233,7 +233,7 @@
     labels:
       - directed
       - nonlinear
-      - signed
+      - unsigned
       - bivariate
       - contemporaneous
       - M14
@@ -245,7 +245,7 @@
     labels:
       - directed
       - linear
-      - signed
+      - unsigned
       - bivariate
       - time-dependent
       - M03
@@ -254,7 +254,7 @@
 
   CrossmapEntropy:
     labels:
-      - signed
+      - unsigned
       - directed
       - time-dependent
       - bivariate

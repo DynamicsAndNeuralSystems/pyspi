@@ -299,11 +299,25 @@ class Undirected(Directed):
                              mirror=True)
 
 class Signed:
-    """Mixin for SPIs whose sign carries information."""
+    """
+    Mixin for signed SPIs.
+
+    The sign distinguishes two opposite relationships, and no dependence sits
+    in the middle of the range: covariance (positive or negative coupling) is
+    the model case, and a lead/lag whose sign says which process leads is the
+    same kind.
+    """
     def issigned(self):
         return True
 
 class Unsigned:
-    """Mixin for SPIs whose sign carries no information."""
+    """
+    Mixin for unsigned SPIs.
+
+    A strength of dependence on a one-ended scale, with low dependence at one
+    end of the range. The label does not say whether values can be negative:
+    an unsigned SPI can return negative values through estimator bias or
+    because its floor is not 0 (soft-DTW, a differential entropy).
+    """
     def issigned(self):
         return False

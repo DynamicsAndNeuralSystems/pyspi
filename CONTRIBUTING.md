@@ -127,6 +127,9 @@ A note on where pyspi differs from an upstream implementation is worth keeping.
 The bundled configs live in `pyspi/configs/`.
 Each class entry carries its labels: directedness (`directed`, `undirected` or `antisymmetric`), `signed` or `unsigned`, `linear` or `nonlinear`, `bivariate` or `multivariate`, `contemporaneous`, `time-dependent` or `frequency-dependent`, and one module code (`M01` to `M14`).
 An SPI not assigned to a module carries the code `MXX` instead.
+An SPI is `signed` when its sign distinguishes two opposite relationships and no dependence sits in the middle of its range, as for a covariance or a lead/lag whose sign says which process leads.
+It is `unsigned` when it measures a strength of dependence on a one-ended scale, with low dependence at one end.
+The label does not say whether values can be negative: soft-DTW and a differential entropy are unsigned, yet their values can be negative.
 Each config entry adds the labels that depend on its parameters.
 Merged with the class's own labels, every SPI ends up with exactly one label from each of these groups, spelled as here.
 A class may also carry descriptive tags: `basic`, `causal`, `distance`, `embedding`, `infotheory`, `lagged`, `misc`, `normal`, `rank`, `spectral`, `symbolic`, `temporal`, `unordered` and `wavelet`.
