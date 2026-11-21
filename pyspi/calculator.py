@@ -643,8 +643,8 @@ def load_spis_from_yaml(configfile, quiet=False):
     Instantiate every SPI of a config.
 
     Used by :class:`Calculator` and by the parallel workers. Progress is
-    logged by the ``pyspi.calculator`` logger at INFO level. Two SPIs with the
-    same identifier raise ``ValueError``.
+    logged by the ``pyspi.calculator`` logger at INFO level. Two SPIs whose
+    identifiers are equal, or equal ignoring letter case, raise ``ValueError``.
 
     Parameters
     ----------
@@ -687,19 +687,32 @@ def load_spis_from_yaml(configfile, quiet=False):
 
 def _insert_spi(spis, spi, module_name, fcn, params):
     """
-    Insert an SPI, rejecting an identifier already in ``spis``.
+    Insert an SPI, rejecting an identifier already in ``spis``, or one that
+    differs from an identifier in ``spis`` only in letter case.
 
-    The identifier names the table column and the checkpoint file.
+    The identifier names the table column and the checkpoint files, and those
+    files must stay distinct on case-insensitive file systems (the macOS and
+    Windows defaults).
     """
+    source = f"{module_name}.{fcn}{f'({params})' if params else ''}"
     existing = spis.get(spi.identifier)
     if existing is not None:
         raise ValueError(
             f"Duplicate SPI identifier {spi.identifier!r}: "
-            f"{type(existing).__name__} and {module_name}.{fcn}"
-            f"{f'({params})' if params else ''} both produce it. "
+            f"{type(existing).__name__} and {source} both produce it. "
             "Two configs of the same class must differ in a parameter that "
             "reaches the identifier."
         )
+    folded = spi.identifier.casefold()
+    for other in spis:
+        if other.casefold() == folded:
+            raise ValueError(
+                f"SPI identifiers {other!r} ({type(spis[other]).__name__}) and "
+                f"{spi.identifier!r} ({source}) differ only in letter case. "
+                "Each SPI's checkpoint files are named after its identifier, "
+                "and on a case-insensitive file system (the macOS and Windows "
+                "defaults) the two would share one file."
+            )
     spis[spi.identifier] = spi
 
 

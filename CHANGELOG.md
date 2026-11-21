@@ -355,6 +355,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **Parallel computation and checkpoints.**
   `Calculator.compute(n_jobs=...)` follows the joblib convention (see Breaking changes), and `compute(checkpoint_dir=...)` writes each SPI as it finishes and resumes from it.
   A checkpoint directory carries a `run.json` manifest bound to `Calculator.run_digest`, which hashes the config contents, the dataset bytes and the computation version, so a different dataset, config, preprocessing or process order is refused rather than reused; failed checkpoints are retried by default.
+  Checkpoint files are named after SPI identifiers, so a config with two identifiers that are equal ignoring letter case is refused, as they would share one file on a case-insensitive file system (the macOS and Windows defaults).
 - **Run records.**
   `Calculator.errors`, `Calculator.run_spec`, `Calculator.run_digest`, `Calculator.to_frame()` (long-form results, one row per `(spi, source, target)`), `Calculator.summary()` and a `repr` for `Calculator`.
   `run_spec` records `computation_version`, `pyspi_version` and `dependency_versions`, saved with every `.npz` and returned by `load_table` in `attrs`.
