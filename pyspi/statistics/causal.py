@@ -315,7 +315,8 @@ class ConvergentCrossMapping(Directed, Signed):
 
     With ``embedding_dimension=None`` each process gets its own
     simplex-optimal dimension, and each pair uses the larger of its two in
-    both directions.
+    both directions. Embeddings use a delay of one sample, so a weakly
+    autocorrelated source acting at a longer lag can leave the skill near zero.
     """
 
     name = "Convergent cross-mapping"

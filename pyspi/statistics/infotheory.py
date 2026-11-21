@@ -1642,6 +1642,13 @@ class MutualInfo(InfoTheoryBase, Undirected):
 
 
 class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
+    """Time-lagged mutual information from the row (source) to the column (target).
+
+    ``I(x_i(t); x_j(t + 1))`` in nats: the source one sample ahead of the
+    target. The lag is fixed at one sample, so coupling that acts only at a
+    longer lag is seen only through the source's own autocorrelation.
+    """
+
     name = "Time-lagged mutual information"
     identifier = "tlmi"
     labels = ["unsigned", "infotheory", "temporal", "directed"]
@@ -1713,6 +1720,12 @@ class TransferEntropy(InfoTheoryBase, Directed):
     ``0.5 * ln(var_restricted / var_full)`` in nats (Barnett, Barrett & Seth
     2009): half of Geweke's (1982) Granger causality as reported by
     ``statsmodels``.
+
+    With a source history of one sample at a source-target delay of one, the
+    source enters only at lag 1, so coupling at a longer lag from a weakly
+    autocorrelated source is missed. The auto-embedded variants choose the
+    source embedding from the source's own active information storage, which
+    stays short for such a source, so they share this limit.
     """
 
     name = "Transfer entropy"
