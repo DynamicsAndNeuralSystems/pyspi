@@ -15,7 +15,7 @@ Gitignored (bulk / derived, regenerate in seconds):
 Usage:
     python -m bench.analyse_cells                      # defaults: all committed cells
     python -m bench.analyse_cells \
-        --results-glob 'bench/results/cells/physics_config_M*_T*_n1.json' \
+        --results-glob 'bench/results/cells/pbs_config_M*_T*_n1.json' \
         --config full \
         --percentiles 80,90,95 \
         --output-dir bench/results/analysis

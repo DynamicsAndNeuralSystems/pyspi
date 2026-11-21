@@ -13,7 +13,7 @@
 # SITE SETUP (qsub does NOT expand shell variables inside #PBS directives):
 #   * Resources: edit the two `#PBS -l` lines above. A command-line `-l` of the
 #     SAME resource name overrides them (`qsub -l walltime=72:00:00 ...`); a
-#     different form does not (e.g. Gadi wants `-l ncpus=16 -l mem=64GB`
+#     different form does not (e.g. a cluster that wants `-l ncpus=16 -l mem=64GB`
 #     instead of `-l select=...` — edit the line rather than adding a flag).
 #   * Account / queue / storage / mail live only on the qsub command line:
 #       qsub -P <project> -q <queue> -l storage=<...> -m bea -M you@example.org
@@ -89,8 +89,7 @@ export NUMEXPR_NUM_THREADS=1
 export KMP_DUPLICATE_LIB_OK=TRUE
 
 # Some GPU-aware transitive imports do ast.literal_eval() on this if it is set,
-# and the physics queue sets it empty. Kept because the failure it prevents is
-# an import-time crash, not a pyspi one.
+# and some PBS queues set it empty, which crashes the import.
 unset CUDA_VISIBLE_DEVICES
 
 # Explicit M and T override the preset. One array, never empty, so `set -u`

@@ -110,7 +110,7 @@ python -m bench.analyse_cells
 
 # Explicit form
 python -m bench.analyse_cells \
-    --results-glob 'bench/results/cells/physics_config_M*_T*_n1.json' \
+    --results-glob 'bench/results/cells/pbs_config_M*_T*_n1.json' \
     --config full --percentiles 80,90,95,99 \
     --output-dir bench/results/analysis
 
@@ -126,8 +126,8 @@ read `long_costs.csv`, so run `analyse_cells` once before either.
 
 ## Cluster (PBS)
 
-One generic PBS Pro script, `bench/run_benchmark.pbs`, plus a worked site
-example. To run it anywhere:
+One generic PBS Pro script, `bench/run_benchmark.pbs`, plus an example PBS Pro configuration in `bench/pbs_example/`.
+To run it anywhere:
 
 1. Clone the repo on the cluster and create a venv with pyspi installed
    editable (default location `<repo>/.venv`, override with `-v VENV=/path`;
@@ -159,11 +159,10 @@ the shell and passed by name, as above. Other env vars: `NJOBS`, `PRESET`,
 modules to load) — all documented in the script header. Every run is
 `--resume`, so resubmitting skips cells that already have a JSON.
 
-**`bench/physics/run_bench.pbs`** is a worked example to copy and adapt: the
-USYD Physics queue configuration that produced the (untracked)
-`physics_config_M*_T*_n1.json` cells (full config, `repeats=1`, `n_jobs=1`,
-M={4,8,16,32,64} x T={200,400,800,1600,3200}, one cell per array task). It
-pins those defaults and delegates to `run_benchmark.pbs`.
+**`bench/pbs_example/run_bench.pbs`** is an example PBS Pro configuration to copy and adapt.
+It writes the (untracked) `pbs_config_M*_T*_n1.json` cells (full config, `repeats=1`, `n_jobs=1`, M={4,8,16,32,64} x T={200,400,800,1600,3200}, one cell per array task).
+It pins those defaults and delegates to `run_benchmark.pbs`.
+The prefix is only a label: cells written under another prefix work with a matching `--results-glob` for `analyse_cells` and `--bench-json` for `cut_config`.
 
 ## Notes
 

@@ -17,7 +17,7 @@ Cost model — two modes:
              full cost to one variant overcounts. Ungrouped SPIs use raw time.
 
 Usage:
-    python -m bench.cut_config --bench-json bench/results/cells/physics_config_M16_T800_n1.json --keep 90
+    python -m bench.cut_config --bench-json bench/results/cells/pbs_config_M16_T800_n1.json --keep 90
     python -m bench.cut_config --bench-json <path> --keep 80 --mode raw
 """
 
