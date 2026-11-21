@@ -4,7 +4,6 @@ Checked against ``A(f)``, ``H(f)``, ``S(f)`` and ``S(f)^{-1}`` written out
 with loops, against the normalisations that define PDC and the full-frequency
 DTF, on a chain, on an oscillatory coupling, and for sharing ``cgc_*``'s fit.
 """
-import warnings
 
 import numpy as np
 import pytest
@@ -282,10 +281,7 @@ def test_chain_conditional_measures_drop_the_indirect_link(chain):
                       (cohmag, "cohmag")]:
         assert spi.identifier == stem + ident
     pdcoh, dtf, ddtf = (s.multivariate(data) for s in (pdcoh, dtf, ddtf))
-    with warnings.catch_warnings():
-        # cohmag's NaN diagonal: "Mean of empty slice".
-        warnings.simplefilter("ignore", RuntimeWarning)
-        cohmag = cohmag.multivariate(data)
+    cohmag = cohmag.multivariate(data)
 
     # PDC: the direct links are clearly positive, the indirect one is not.
     for direct in (cpdc, cgpdc):

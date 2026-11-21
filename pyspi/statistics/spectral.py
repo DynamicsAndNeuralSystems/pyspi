@@ -18,7 +18,13 @@ from pyspi.base import (
     parse_bivariate,
     parse_multivariate,
 )
-from pyspi.utils import fmt_param, require_int
+from pyspi.utils import (
+    empty_band_error,
+    fmt_param,
+    require_band,
+    require_int,
+    require_positive_float,
+)
 
 try:
     from spectral_connectivity.transforms import prepare_time_series
@@ -165,7 +171,18 @@ class NonparametricSpectral(Unsigned):
     is kept. Phase measures (``_phase_based``) also leave out the real-valued
     bins, 0 Hz and ``fs / 2``: there every taper's Fourier coefficient of a
     real signal is real, so the cross-spectral phase is exactly 0 or pi and
-    carries no estimate. A band left with no frequency raises ``ValueError``.
+    carries no estimate. A band left with no frequency of the series' grid,
+    which depends on ``T``, raises ``ValueError`` when the SPI is computed.
+
+    Frequencies are in the units of the sampling frequency ``fs``: at the
+    default ``fs = 1``, normalised frequency in cycles per sample, with the
+    Nyquist frequency at 0.5. ``fs`` only relabels the frequency axis, so
+    ``fs = 250`` with the band [8, 12] gives the same values as ``fs = 1``
+    with [0.032, 0.048]; GroupDelay's ``slope``, in radians per unit of
+    frequency, is the one output that scales with it. At construction ``fs``
+    must be positive and finite and ``0 <= fmin <= fmax <= fs / 2`` (the
+    upper edge with a relative tolerance of 1e-9), or ``ValueError`` is
+    raised.
 
     For a measure that is antisymmetric at every frequency
     (``_antisymmetric_spectrum``), ``statistic='mean'`` keeps
@@ -198,8 +215,10 @@ class NonparametricSpectral(Unsigned):
 
     def __init__(self, fs=1, fmin=0, fmax=None, statistic="mean",
                  time_halfbandwidth_product=_DEFAULT_NW):
+        require_positive_float("fs", fs)
         if fmax is None:
             fmax = fs / 2
+        require_band(fs, fmin, fmax)
 
         # `fs` reaches the multitaper estimate, the frequency grid, every cache
         # key and GroupDelay's conversion to samples.
@@ -207,18 +226,11 @@ class NonparametricSpectral(Unsigned):
         self._nw = _check_time_halfbandwidth_product(time_halfbandwidth_product)
         self._fmin = fmin
         self._fmax = fmax
-        if statistic == "mean":
-            self._statfn = np.nanmean
-        elif statistic == "max":
-            self._statfn = np.nanmax
-        elif statistic not in ["delay", "slope", "rvalue"]:
-            raise NameError(f"Unknown statistic: {statistic}")
-        else:
-            self._statfn = None
         if statistic not in self._statistics:
             raise ValueError(
                 f"{type(self).__name__} does not support statistic="
                 f"{statistic!r}; it supports {', '.join(self._statistics)}.")
+        self._statfn = {"mean": np.nanmean, "max": np.nanmax}.get(statistic)
         self._statistic = statistic
 
         # PLI, wPLI, PSI and coherence phase carry lead/lag in a sign,
@@ -282,6 +294,40 @@ class NonparametricSpectral(Unsigned):
 
     def _get_statistic(self, C):
         raise NotImplementedError
+
+    def _band(self, freq):
+        """
+        Indices of the frequencies the band statistic reduces over.
+
+        The closed band, less the real-valued bins for a phase measure (see
+        ``NonparametricSpectral``). A band left with no frequency raises
+        ``ValueError``.
+        """
+        in_band = _closed_band(freq, self._fmin, self._fmax)
+        keep = in_band & ~_real_valued_bins(freq, self._fs) if self._phase_based else in_band
+        if not keep.any():
+            what = ("only the real-valued bins (0 Hz and fs/2), where the "
+                    "cross-spectrum of real signals has no phase"
+                    if in_band.any() else "no frequency of the series' grid")
+            step = f" (grid step {freq[1] - freq[0]:.4g})" if freq.size > 1 else ""
+            raise empty_band_error(type(self).__name__, self._fmin, self._fmax,
+                                   what + step)
+        return np.flatnonzero(keep)
+
+    def _band_statistic(self, spectra):
+        """
+        The band statistic of ``spectra[f, i, j]`` for each off-diagonal cell.
+
+        The diagonal is NaN: several backend measures are NaN there at every
+        frequency, and a NaN-ignoring statistic of an all-NaN column would
+        warn on every call.
+        """
+        n = spectra.shape[-1]
+        off = ~np.eye(n, dtype=bool)
+        values = self._statfn(spectra[:, off], axis=0)
+        adj = np.full((n, n), np.nan, dtype=np.result_type(values, float))
+        adj[off] = values
+        return adj
 
 
 def _to_source_target(spi, adj):
@@ -352,34 +398,13 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
         cache[self._freq_key] = freq
         return res, freq
 
-    def _band(self, freq):
-        """
-        Indices of the frequencies the band statistic reduces over.
-
-        The closed band, less the real-valued bins for a phase measure (see
-        ``NonparametricSpectral``).
-        """
-        in_band = _closed_band(freq, self._fmin, self._fmax)
-        if not self._phase_based:
-            return np.flatnonzero(in_band)
-        real = _real_valued_bins(freq, self._fs)
-        if not (in_band & ~real).any():
-            what = ("only the real-valued bins (0 Hz and fs/2), where the "
-                    "cross-spectrum of real signals has no phase"
-                    if in_band.any() else "no frequency of the series' grid")
-            step = f" (grid step {freq[1] - freq[0]:.4g})" if freq.size > 1 else ""
-            raise ValueError(
-                f"{type(self).__name__}: the band [{self._fmin}, {self._fmax}] "
-                f"holds {what}{step}; widen it.")
-        return np.flatnonzero(in_band & ~real)
-
     @parse_multivariate
     def multivariate(self, data):
         adj_freq, freq = self._get_cache(data)
         freq_id = self._band(freq)
 
         try:
-            adj = self._statfn(adj_freq[0, freq_id, :, :], axis=0)
+            adj = self._band_statistic(adj_freq[0, freq_id, :, :])
         except IndexError:  # For phase slope index
             adj = adj_freq[0]
         except TypeError:  # For group delay
@@ -527,8 +552,7 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
     def bivariate(self, data, i=None, j=None):
         bv_freq, freq = self._get_cache(data, i, j)
         # Closed band, as in NonparametricSpectralMultivariate.
-        freq_id = np.flatnonzero(_closed_band(freq, self._fmin, self._fmax))
-        return self._statfn(bv_freq[freq_id])
+        return self._statfn(bv_freq[self._band(freq)])
 
 
 class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
@@ -548,13 +572,14 @@ class CoherenceMagnitude(NonparametricSpectralMultivariate, Undirected):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -592,13 +617,14 @@ class CoherencePhase(NonparametricSpectralMultivariate, Undirected):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         Only ``'mean'``, the circular mean: wrapped phase has no ordinary
         maximum. Default: ``'mean'``.
@@ -660,13 +686,14 @@ class ImaginaryCoherence(NonparametricSpectralMultivariate, Undirected):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -705,13 +732,14 @@ class PhaseLockingValue(NonparametricSpectralMultivariate, Undirected):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -761,13 +789,14 @@ class PhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` (antisymmetric) or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -811,13 +840,14 @@ class WeightedPhaseLagIndex(NonparametricSpectralMultivariate, Undirected):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` (antisymmetric) or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -863,13 +893,14 @@ class DebiasedSquaredPhaseLagIndex(NonparametricSpectralMultivariate, Undirected
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -921,13 +952,14 @@ class DebiasedSquaredWeightedPhaseLagIndex(
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -966,13 +998,14 @@ class PairwisePhaseConsistency(NonparametricSpectralMultivariate, Undirected):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -1031,13 +1064,14 @@ class DirectedCoherence(NonparametricSpectralBivariate, Directed):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -1089,13 +1123,14 @@ class PartialDirectedCoherence(NonparametricSpectralBivariate, Directed):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -1133,13 +1168,14 @@ class GeneralizedPartialDirectedCoherence(NonparametricSpectralBivariate, Direct
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -1182,13 +1218,14 @@ class DirectedTransferFunction(NonparametricSpectralBivariate, Directed):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -1238,13 +1275,14 @@ class DirectDirectedTransferFunction(NonparametricSpectralBivariate, Directed):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band, ignoring NaN.
         Default: ``'mean'``.
@@ -1310,13 +1348,14 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str, optional
         Only ``'mean'``, the name the identifiers (``psi_multitaper_mean_*``)
         give to the sum over the band. Default: ``'mean'``.
@@ -1432,13 +1471,14 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band. Default: 0.
+        Lower edge of the band, in [0, ``fs / 2``]. Default: 0.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     statistic : str
         ``'delay'`` (the slope converted to a delay in samples,
         ``fs * slope / (2 pi)``), ``'slope'`` (radians per unit of
@@ -1452,6 +1492,7 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
     name = "Group delay"
     labels = ["unsigned", "spectral", "directed", "lagged"]
     _statistics = ("delay", "slope", "rvalue")
+    _phase_based = True
 
     def __init__(self, **kwargs):
         self.identifier = "gd"
@@ -1496,8 +1537,7 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         freqs = np.asarray(C.frequencies)
         # The closed band less the real-valued bins, where the phase is forced
         # to 0 or pi whatever the delay.
-        in_band = (_closed_band(freqs, self._fmin, self._fmax)
-                   & ~_real_valued_bins(freqs, self._fs))
+        in_band = self._band(freqs)
         f = freqs[in_band]
         coh = coherency[:, in_band]
         n_trials, _, M, _ = coh.shape
@@ -1535,6 +1575,9 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         # A delay in samples, as every other lagged SPI in pyspi reports.
         return self._fs * slope / (2 * np.pi), slope, r_value
 
+
+# The lower band edge spectral GC uses for fmin = 0, where it is undefined.
+_SGC_FMIN = 1e-5
 
 # nitime.GrangerAnalyzer's grid size: granger_causality_xy evaluates the model at
 # n_freqs // 2 + 1 points on [0, fs/2) (scipy.signal.freqz, endpoint excluded).
@@ -1596,8 +1639,14 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     normalised by ``T``, so the fitted model is stable) and evaluated by
     nitime's ``granger_causality_xy`` on 513 frequencies on ``[0, fs / 2)``.
 
-    Spectral GC is undefined at 0 Hz, so an ``fmin`` of 0 or below is raised
-    to 1e-5 with a warning, and the identifier names the band actually used.
+    Frequencies are in the units of ``fs``, at the default ``fs = 1`` in
+    cycles per sample; ``fs`` only relabels the frequency axis (see
+    ``NonparametricSpectral``). At construction ``fs`` must be positive and
+    finite and ``0 <= fmin <= fmax <= fs / 2``, or ``ValueError`` is raised;
+    a band holding no frequency of the grid raises ``ValueError`` when the SPI
+    is computed. Spectral GC is undefined at 0 Hz, so ``fmin = 0`` means the
+    lowest positive frequency, 1e-5, which the identifier names
+    (``_fmin-1e-05``).
     A cell with more than ``nan_threshold`` of its in-band frequencies NaN is
     set to NaN, with a warning. Automatic order selection that has not
     converged by ``max_order`` raises ``ValueError``: the model is
@@ -1615,14 +1664,15 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     Parameters
     ----------
     fs : float, optional
-        Sampling frequency; ``fmin`` and ``fmax`` are in the same units.
+        Sampling frequency, positive and finite. ``fmin`` and ``fmax`` are
+        in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band; values at or below 0 become 1e-5.
+        Lower edge of the band, in [0, ``fs / 2``]; 0 becomes 1e-5.
         Default: 1e-5.
     fmax : float or None, optional
-        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
-        Default: None.
+        Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
+        Nyquist frequency ``fs / 2``. Default: None.
     method : str, optional
         ``'nonparametric'`` (multitaper and Wilson's factorisation) or
         ``'parametric'`` (a VAR fitted to each pair); any other value raises
@@ -1671,40 +1721,39 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         if method not in ("nonparametric", "parametric"):
             raise ValueError(
                 f"method must be 'nonparametric' or 'parametric', got {method!r}.")
+        require_positive_float("fs", fs)
         if fmax is None:
             fmax = fs / 2
+        require_band(fs, fmin, fmax)
         self._fs = fs  # Reaches the multitaper estimate and the frequency labels.
         self._nw = _check_time_halfbandwidth_product(time_halfbandwidth_product)
         if method != "nonparametric" and self._nw != _DEFAULT_NW:
             raise ValueError(
                 "time_halfbandwidth_product sets the multitaper estimate, which "
                 "method='parametric' does not use.")
-        self._fmin = fmin
+        # Spectral GC is undefined at 0 Hz, so a band from 0 starts at the
+        # lowest positive frequency, 1e-5, which the identifier names.
+        self._fmin = _SGC_FMIN if fmin == 0 else fmin
         self._fmax = fmax
+        if self._fmin > fmax:
+            raise ValueError(
+                f"fmax must be >= {_SGC_FMIN} (spectral GC is undefined at 0 "
+                f"Hz), got {fmax!r}.")
         self.ignore_nan = ignore_nan
         self.nan_threshold = nan_threshold
 
-        if self._fmin <= 0.0:
-            warnings.warn(f"Frequency minimum set to {self._fmin}; overriding to 1e-5.")
-            self._fmin = 1e-5
-
+        if statistic not in ("mean", "max"):
+            raise ValueError(
+                f"SpectralGrangerCausality does not support statistic="
+                f"{statistic!r}; it supports mean, max.")
         if statistic == "mean":
-            if self.ignore_nan:
-                self._statfn = np.nanmean
-            else:
-                self._statfn = np.mean
-        elif statistic == "max":
-            if self.ignore_nan:
-                self._statfn = np.nanmax
-            else:
-                self._statfn = np.max
+            self._statfn = np.nanmean if self.ignore_nan else np.mean
         else:
-            raise NameError(f"Unknown statistic {statistic}")
+            self._statfn = np.nanmax if self.ignore_nan else np.max
 
         self._method = method
-        # `self._fmin`, not the `fmin` argument: spectral GC is undefined at
-        # zero frequency, so `fmin=0` is overridden to 1e-5 above, and the
-        # identifier names the band actually integrated.
+        # `self._fmin`, not the `fmin` argument: the identifier names the band
+        # actually integrated.
         if self._method == "nonparametric":
             self._measure = "pairwise_spectral_granger_prediction"
             paramstr = (f"_nonparametric_{statistic}_fs-{fmt_param(fs)}"
@@ -1799,9 +1848,9 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     def multivariate(self, data):
         try:
             cache, freq = self._get_cache(data)
-            freq_id = np.flatnonzero(_closed_band(freq, self._fmin, self._fmax))
+            freq_id = self._band(freq)
 
-            result = _to_source_target(self, self._statfn(cache[0, freq_id, :, :], axis=0))
+            result = _to_source_target(self, self._band_statistic(cache[0, freq_id, :, :]))
 
             # Oriented as the values it masks, so it blanks the cell and not
             # its mirror.
