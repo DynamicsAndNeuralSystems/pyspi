@@ -3,8 +3,8 @@
 The directed spectral SPIs (``dcoh``, ``pdcoh``, ...) share one factorisation
 per ordered pair, and the nonparametric spectral GC SPIs one per dataset, all
 cached on the ``Data``. Each SPI that reads a factorisation which reached
-Wilson's iteration cap must warn for itself, naming its identifier, whichever
-SPI computed it and however the Calculator is run.
+Wilson's iteration cap must warn for itself, whichever SPI computed it, and
+the Calculator attributes the warning to that SPI however it is run.
 """
 
 import warnings
@@ -46,15 +46,20 @@ def _wilson_config(tmp_path):
     return config
 
 
-def _wilson_warnings(caught):
-    """``{identifier: [message, ...]}`` for the non-convergence warnings caught."""
+def _relayed(caught):
+    """``{identifier: [message, ...]}`` for the non-convergence warnings a Calculator relayed."""
     found = {}
     for w in caught:
         message = str(w.message)
         if CAP in message:
-            spi = message.split('SPI "')[-1].split('"')[0]
+            spi = message.split('SPI "')[1].split('"')[0]
             found.setdefault(spi, []).append(message)
     return found
+
+
+def _direct(caught):
+    """The non-convergence warnings caught from calling an SPI directly."""
+    return [str(w.message) for w in caught if CAP in str(w.message)]
 
 
 @pytest.mark.parametrize("n_jobs", [1, 2])
@@ -71,12 +76,13 @@ def test_every_wilson_spi_of_full_warns_when_the_factorisation_does_not_converge
         calc.compute(n_jobs=n_jobs, progress=False,
                      mp_context="spawn" if n_jobs > 1 else None)
 
-    found = _wilson_warnings(caught)
+    found = _relayed(caught)
     assert set(found) == expected
-    # One warning per SPI, which the Calculator relays under the same identifier.
+    # One warning per SPI, which the Calculator relays under its identifier.
     for spi, messages in found.items():
         assert len(messages) == 1, messages
-        assert messages[0].startswith(f'SPI "{spi}": RuntimeWarning: SPI "{spi}": ')
+        assert messages[0].startswith(
+            f'SPI "{spi}": RuntimeWarning: Wilson\'s spectral factorisation')
     # The values are kept: non-convergence is reported, not an error.
     assert not calc.errors
 
@@ -89,10 +95,11 @@ def test_the_warning_names_the_ordered_pairs_that_did_not_converge():
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             spi.multivariate(data)
-        found = _wilson_warnings(caught)
-        assert list(found) == [spi.identifier]
-        assert ("did not converge for 4 of 42 ordered pairs: "
-                "(0, 6), (4, 6), (6, 0), (6, 4).") in found[spi.identifier][0]
+        found = _direct(caught)
+        assert len(found) == 1, (spi.identifier, found)
+        assert found[0].startswith(
+            "Wilson's spectral factorisation did not converge for 4 of 42 ordered "
+            "pairs: (0, 6), (4, 6), (6, 0), (6, 4).")
 
 
 def test_spectral_gc_counts_the_pairs_that_did_not_converge():
@@ -102,9 +109,9 @@ def test_spectral_gc_counts_the_pairs_that_did_not_converge():
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             spi.multivariate(data)
-        found = _wilson_warnings(caught)
-        assert list(found) == [spi.identifier]
-        assert "did not converge for 2 of 21 pairs." in found[spi.identifier][0]
+        found = _direct(caught)
+        assert len(found) == 1, (spi.identifier, found)
+        assert "did not converge for 2 of 21 pairs." in found[0]
 
 
 def test_a_single_pair_warns_from_bivariate():
@@ -114,9 +121,9 @@ def test_a_single_pair_warns_from_bivariate():
         warnings.simplefilter("always")
         spi.bivariate(data, i=6, j=0)
         spi.bivariate(data, i=1, j=0)
-    found = _wilson_warnings(caught)
-    assert len(found[spi.identifier]) == 1
-    assert "for 1 of 1 ordered pairs: (6, 0)." in found[spi.identifier][0]
+    found = _direct(caught)
+    assert len(found) == 1
+    assert "for 1 of 1 ordered pairs: (6, 0)." in found[0]
 
 
 def test_a_converged_factorisation_gives_no_warning(tmp_path):
@@ -124,5 +131,5 @@ def test_a_converged_factorisation_gives_no_warning(tmp_path):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         calc.compute(progress=False)
-    assert not _wilson_warnings(caught)
+    assert not _relayed(caught)
     assert not [w for w in caught if "spectral_connectivity" in str(w.message)]

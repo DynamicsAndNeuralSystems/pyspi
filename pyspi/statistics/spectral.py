@@ -78,18 +78,19 @@ def _list_pairs(pairs, limit=10):
     return shown + (", ..." if len(pairs) > limit else "")
 
 
-def _warn_factorisation_log(identifier, records, n_pairs, unit):
+def _warn_factorisation_log(records, n_pairs, unit):
     """
-    Warn, naming the SPI, about what the backend logged while factorising.
+    Warn about what the backend logged while factorising.
 
     ``records`` holds ``(pair, message)`` for each logged message, with
     ``pair`` the process indices ``(i, j)``, or None where the backend does
     not say which pair it was factorising. A factorisation that reached
     Wilson's iteration cap gives one warning listing the pairs; any other
     message is passed on as it is, once. pyspi records per-SPI diagnostics
-    from the ``warnings`` channel only (``_parallel.execute_spi``), and an SPI
-    that reads a cached factorisation warns as the one that computed it did.
-    No value changes.
+    from the ``warnings`` channel only (``_parallel.execute_spi``), which
+    attributes each warning to the SPI being computed, and an SPI that reads
+    a cached factorisation warns as the one that computed it did. It only
+    warns; it changes no value.
     """
     capped = [(pair, m) for pair, m in records
               if m.startswith(_WILSON_ITERATION_CAP)]
@@ -98,14 +99,13 @@ def _warn_factorisation_log(identifier, records, n_pairs, unit):
         named = f": {_list_pairs(pairs)}" if pairs else ""
         detail = "; ".join(dict.fromkeys(m for _, m in capped))
         warnings.warn(
-            f'SPI "{identifier}": Wilson\'s spectral factorisation did not '
+            f"Wilson's spectral factorisation did not "
             f"converge for {len(capped)} of {n_pairs} {unit}{named}. Their "
             f"values come from the unconverged factor (spectral_connectivity: "
             f"{detail}).", RuntimeWarning)
     for message in dict.fromkeys(m for _, m in records
                                  if not m.startswith(_WILSON_ITERATION_CAP)):
-        warnings.warn(f'SPI "{identifier}": spectral_connectivity: {message}',
-                      RuntimeWarning)
+        warnings.warn(f"spectral_connectivity: {message}", RuntimeWarning)
 
 
 def _ensure_time_series_3d(z):
@@ -467,8 +467,7 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
         adj = _to_source_target(self, adj)
         np.fill_diagonal(adj, np.nan)
         M = data.n_processes
-        _warn_factorisation_log(self.identifier,
-                                [(None, m) for m in self._backend_log(data)],
+        _warn_factorisation_log([(None, m) for m in self._backend_log(data)],
                                 M * (M - 1) // 2, "pairs")
         return adj
 
@@ -623,8 +622,7 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
             conn = conns.get((self._fs, self._nw, i, j))
             if conn is not None:
                 records += [((i, j), m) for m in conn.factorisation_log]
-        _warn_factorisation_log(self.identifier, records, n_pairs,
-                                "ordered pairs")
+        _warn_factorisation_log(records, n_pairs, "ordered pairs")
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
@@ -635,8 +633,10 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
     @parse_multivariate
     def multivariate(self, data):
         """
-        The ``M x M`` matrix, from every ordered pair as in ``Directed``, with
-        one warning for all the pairs whose factorisation did not converge.
+        The ``M x M`` matrix of every ordered pair, with one convergence warning.
+
+        Computed pair by pair as in ``Directed``; the warning lists every
+        ordered pair whose factorisation did not converge.
         """
         M = data.n_processes
         A = np.full((M, M), np.nan)
@@ -1753,11 +1753,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     is computed. Spectral GC is undefined at 0 Hz, so ``fmin = 0`` means the
     lowest positive frequency, 1e-5, which the identifier names
     (``_fmin-1e-05``). A cell with more than ``nan_threshold`` of its in-band
-    frequencies NaN is set to NaN, with a warning. Where Wilson's
-    factorisation of a pair reaches its iteration cap, the value comes from
-    the unconverged factor and the SPI warns. Automatic order selection that
-    has not converged by ``max_order`` raises ``ValueError``: the model is
-    over-fitting at that record length.
+    frequencies NaN is set to NaN, with a warning. With
+    ``method='nonparametric'``, where Wilson's factorisation of a pair reaches
+    its iteration cap, the value comes from the unconverged factor and the SPI
+    warns. Automatic order selection that has not converged by ``max_order``
+    raises ``ValueError``: the model is over-fitting at that record length.
 
     References
     ----------
@@ -1979,7 +1979,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             M = data.n_processes
             cached = getattr(data, "spectral_gc", {}).get(self._getkey(), {})
             _warn_factorisation_log(
-                self.identifier, [(None, m) for m in cached.get("log", ())],
+                [(None, m) for m in cached.get("log", ())],
                 M * (M - 1) // 2, "pairs")
             return result
         except ValueError as err:
