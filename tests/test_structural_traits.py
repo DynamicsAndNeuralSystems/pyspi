@@ -516,3 +516,44 @@ def test_igci_stays_out_of_the_bundled_configs():
 
     for name in bundled_configs():
         assert "igci" not in load_spis_from_yaml(resolve_config(name), quiet=True)
+
+
+# --------------------------------------------------------------------------
+# Every result-affecting parameter reaches the identifier
+# --------------------------------------------------------------------------
+
+def test_ids_identifier_names_non_default_parameters():
+    """Two IDS parameterisations must not share a table column or checkpoint."""
+    from pyspi.statistics.misc import InterDependenceScore
+
+    assert InterDependenceScore().identifier == "ids"
+    variants = [InterDependenceScore(terms=4), InterDependenceScore(pnorm=2),
+                InterDependenceScore(bandwidth=0.25)]
+    idents = {s.identifier for s in variants}
+    assert len(idents) == 3 and "ids" not in idents, idents
+    assert InterDependenceScore(bandwidth=0.25).identifier == "ids_bw-0-25"
+
+
+def test_sgc_identifier_names_non_default_parameters():
+    from pyspi.statistics.spectral import SpectralGrangerCausality as SGC
+
+    base = SGC(method="parametric").identifier
+    assert base.endswith("_order-None")
+    assert SGC(method="parametric", max_order=20).identifier == base + "_maxorder-20"
+    # max_order is unused when the order is given, so it does not split it.
+    assert (SGC(method="parametric", order=3, max_order=20).identifier
+            == SGC(method="parametric", order=3).identifier)
+    np_base = SGC().identifier
+    assert SGC(ignore_nan=False).identifier == np_base + "_ignorenan-False"
+    assert SGC(nan_threshold=0.25).identifier == np_base + "_nanthr-0-25"
+
+
+def test_squared_barycenter_is_unsigned():
+    """b**2 is non-negative; `issigned()` must say so."""
+    from pyspi.statistics.distance import Barycenter
+
+    for stat in ("mean", "max"):
+        spi = Barycenter(mode="euclidean", squared=True, statistic=stat)
+        assert not spi.issigned() and "unsigned" in spi.labels
+        assert "signed" not in spi.labels
+    assert Barycenter(mode="euclidean", statistic="max").issigned()

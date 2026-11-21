@@ -2164,6 +2164,11 @@ class IntegratedInformation(Undirected, Unsigned):
     labels = ["linear", "unsigned", "infotheory", "temporal", "undirected"]
 
     def __init__(self, phitype="star", delay=1, normalization=0):
+        if phitype not in ("star", "Geo"):
+            raise ValueError(f"Unknown phitype {phitype!r}; use 'star' or 'Geo'.")
+        if normalization not in (0, 1):
+            raise ValueError(f"normalization must be 0 or 1, got {normalization!r}.")
+        delay = utils.require_int("delay", delay, minimum=1)
         self._phitype = phitype
         self._delay = delay
         self._normalization = normalization
@@ -2171,21 +2176,18 @@ class IntegratedInformation(Undirected, Unsigned):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
-        try:
-            from pyspi.lib.phi_native import phi_comp
+        # Not caught here: `fill_pairwise` sets a failed pair to NaN with a
+        # warning, and a failure on every pair reaches `Calculator.errors`.
+        from pyspi.lib.phi_native import phi_comp
 
-            P = np.array([1, 2])
-            X = data.to_numpy(squeeze=True)[[i, j]]
+        P = np.array([1, 2])
+        X = data.to_numpy(squeeze=True)[[i, j]]
 
-            params = {"tau": self._delay}
-            options = {
-                "type_of_phi": self._phitype,
-                "type_of_dist": "Gauss",
-                "normalization": self._normalization
-            }
+        params = {"tau": self._delay}
+        options = {
+            "type_of_phi": self._phitype,
+            "type_of_dist": "Gauss",
+            "normalization": self._normalization
+        }
 
-            return phi_comp(X, P, params, options)
-
-        except Exception as e:
-            logging.error(f"Integrated information computation failed: {e}")
-            return np.nan
+        return phi_comp(X, P, params, options)

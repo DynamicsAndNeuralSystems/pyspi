@@ -656,6 +656,12 @@ class Barycenter(Undirected, Signed):
         else:
             raise NameError(f"Unknown statistic: {statistic}")
 
+        # A squared barycenter and an argmax index are non-negative; `_rmmin`
+        # and the abs() comparison in correlation analyses read `issigned()`.
+        if squared or statistic == "max_time":
+            self.labels = [l for l in self.labels if l != "signed"] + ["unsigned"]
+            self.issigned = lambda: False
+
         self.identifier += f"_{mode}_{statistic}"
 
     @parse_bivariate
