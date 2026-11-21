@@ -112,6 +112,7 @@ class Data:
         "joint_entropy",
         "mne",
         "mne_psi",
+        "nli",
         "spectral_bv",
         "spectral_gc",
         "spectral_mv",
