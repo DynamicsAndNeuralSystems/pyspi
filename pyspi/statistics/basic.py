@@ -205,7 +205,7 @@ class CrossCorrelation(Undirected, Signed):
     ``|r(l)| > 1.96/sqrt(T)`` -- and not a significance test: the band is not
     inflated for the series' own autocorrelation, and it is not corrected for
     being applied at every lag in the window. When no lag clears it the
-    statistic is 0.
+    statistic is 0. NaN when either series is constant.
     """
 
     name = "Cross correlation"
@@ -244,6 +244,9 @@ class CrossCorrelation(Undirected, Signed):
             # (larger, smaller) is the orientation the stored baselines use.
             hi, lo = max(i, j), min(i, j)
             x, y = data.to_numpy(squeeze=True)[[hi, lo]]
+            if np.ptp(x) == 0 or np.ptp(y) == 0:
+                # Undefined, and `sigonly` would otherwise turn it into 0.
+                return np.nan
 
             # Demeaned, and divided by T (the biased estimator) rather than
             # T - |l|: the result is a correlation, so it stays in [-1, 1], the
