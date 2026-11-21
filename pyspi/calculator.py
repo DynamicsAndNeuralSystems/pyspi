@@ -232,11 +232,8 @@ def warn_partial_cache_buckets(spis):
 # computes. They are recorded for provenance and deliberately kept out of
 # `run_digest`, which is a content hash: the same config contents and the same
 # data must digest the same from a checkout, a wheel or a temporary directory.
-#
-# The version fields are provenance too. `COMPUTATION_VERSION` is hashed into
-# the digest separately; the package and dependency versions are recorded so
-# a saved table states what produced it, without making a checkpoint refuse to
-# resume after an upgrade that changes no computed value.
+# The version fields are excluded too: `COMPUTATION_VERSION` is hashed
+# separately, so an upgrade that changes no computed value still resumes.
 _DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({
     "config", "configfile", "dataset_name",
     "computation_version", "pyspi_version", "dependency_versions",

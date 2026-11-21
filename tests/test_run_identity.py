@@ -244,9 +244,8 @@ def test_checkpoint_rejects_a_different_computation_version(tmp_path):
 def test_run_spec_records_versions(tmp_path):
     """A saved table states which computation, pyspi and dependencies made it.
 
-    Without this the rule "do not combine results from different
-    `COMPUTATION_VERSION`s" cannot be checked from a saved file: the version
-    entered only a one-way hash.
+    So results can be checked for mixed `COMPUTATION_VERSION`s from the
+    saved files alone.
     """
     import json
     from pyspi import _parallel
