@@ -41,7 +41,7 @@ def _surface_backend_log_warnings():
     gPDC, nonparametric spectral GC) is computed from that factor.
 
     pyspi records per-SPI diagnostics from the ``warnings`` channel only
-    (``_parallel.run_spi``), and logging is a different channel. This bridges
+    (``_parallel.execute_spi``), and logging is a different channel. This bridges
     the two for the duration of one backend call, so a caller inspecting
     ``calc.errors``/warnings can see which pairs the factorisation failed on.
     It does not change any value. Improving the estimate itself (longer series,
@@ -1117,6 +1117,16 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                         f"_fmax-{fmt_param(fmax)}_order-{order}").replace(
                 ".", "-"
             )
+            # max_order bounds the order search, so it matters only when the
+            # order is selected rather than given.
+            if order is None and max_order != 50:
+                paramstr += f"_maxorder-{max_order}"
+        # Non-default NaN handling changes the value, so it is named; defaults
+        # are not, so bundled identifiers are unchanged.
+        if not ignore_nan:
+            paramstr += "_ignorenan-False"
+        if nan_threshold != 0.5:
+            paramstr += f"_nanthr-{fmt_param(nan_threshold)}".replace(".", "-")
 
         self.identifier = self.identifier + paramstr
 

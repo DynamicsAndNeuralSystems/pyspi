@@ -12,8 +12,7 @@
 <p align="center">
  	<a href="https://zenodo.org/badge/latestdoi/601919618"><img src="https://zenodo.org/badge/601919618.svg" height="20"/></a>
     <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" height="20"/></a>
-    <a href="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml"><img src="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml/badge.svg" height="20"/></a>
-    <a href="https://twitter.com/compTimeSeries"><img src="https://img.shields.io/twitter/url/https/twitter.com/compTimeSeries.svg?style=social&label=Follow%20%40compTimeSeries" height="20"/></a><br>
+    <a href="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml"><img src="https://github.com/DynamicsAndNeuralSystems/pyspi/actions/workflows/run_unit_tests.yaml/badge.svg" height="20"/></a><br>
     <a href="https://www.python.org"><img src="https://img.shields.io/badge/Python-3.11%20|%203.12%20|%203.13-3776AB.svg?style=flat&logo=python&logoColor=white" alt="Python 3.11 | 3.12 | 3.13"></a><br>
     <a href="https://pepy.tech/projects/pyspi"><img src="https://static.pepy.tech/personalized-badge/pyspi?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=BLUE&left_text=downloads" alt="pyspi downloads" height="20"/></a>
 </p>
@@ -70,7 +69,7 @@ uv run pytest -q              # fast test suite
 Optional extras: `.[tsfile]` to load sktime/aeon `.ts` files, `.[bench]` for the
 compute-cost benchmark suite in [`bench/`](bench/).
 
-For a more detailed guide, see the [full documentation](https://time-series-features.gitbook.io/pyspi/installation/installing-pyspi),
+For a more detailed guide, see the [full documentation](https://time-series-features.gitbook.io/pyspi/installing-and-using-pyspi/installation),
 the [troubleshooting guide](https://time-series-features.gitbook.io/pyspi/installation/troubleshooting),
 and [alternative installation options](https://time-series-features.gitbook.io/pyspi/installation/alternative-installation-options).
 
@@ -88,9 +87,14 @@ calc.compute()                         # compute every SPI
 calc.table                             # rows = processes, columns = (SPI, process)
 calc.table["cov_EmpiricalCovariance"]  # one SPI's 5x5 matrix
 
+calc.quality                           # one code per cell: 0 good, else why it is NaN
 calc.save("results.npz")               # canonical on-disk format
 pyspi.load_table("results.npz")        # round-trips exactly
+pyspi.load_results("results.npz")      # table, quality codes, errors, run spec
 ```
+
+Every value in `calc.table` is a real, finite number or NaN.
+`calc.quality` says what each cell is, with the codes of `pyspi.Quality` (shared with hctsa and pyhctsa): good, error, NaN (undefined or not appropriate, including every self-pair), +/-Inf, or complex.
 
 Results are stored as an `(n_spis, M, M)` array plus the SPI and process names,
 which is the data's natural shape. `.csv` is also accepted for eyeballing small
@@ -126,18 +130,18 @@ Walkthrough tutorials in the full documentation:
 
 ## Choosing an SPI set
 
-Computing all 269 SPIs is expensive, and cost grows steeply in both the number
+Computing all 272 SPIs is expensive, and cost grows steeply in both the number
 of processes *M* and the series length *T*. `config=` takes either a bundled
 name or a path to your own YAML:
 
 | `config=` | SPIs | Use when |
 |:----------|-----:|:---------|
-| `"full"` (default) | 269 | You want everything and can afford it. |
-| `"fast"` | 163 | General use; drops the slowest SPIs. |
-| `"benchmarked_p99"` | 254 | Near-complete, with only the worst cost outliers removed. |
-| `"benchmarked_p95"` | 241 | Good coverage/cost trade-off. |
-| `"benchmarked_p90"` | 227 | Recommended default for large batches. |
-| `"benchmarked_p80"` | 206 | Cost-constrained sweeps. |
+| `"full"` (default) | 272 | You want everything and can afford it. |
+| `"fast"` | 165 | General use; drops the slowest SPIs. |
+| `"benchmarked_p99"` | 266 | Near-complete, with only the worst cost outliers removed. |
+| `"benchmarked_p95"` | 253 | Good coverage/cost trade-off. |
+| `"benchmarked_p90"` | 239 | Recommended default for large batches. |
+| `"benchmarked_p80"` | 217 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14). |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |
 
@@ -216,7 +220,7 @@ In contributing to _pyspi_, all participants are expected to adhere to our [code
 We strive to provide the most comprehensive toolkit of SPIs. If you have ideas for new SPIs or suggestions for improvements to existing ones, we are eager to hear from and collaborate with you! 
 Any pairwise dependence measure, provided it is accompanied by a published research paper, typically falls within the scope for consideration in the 
 _pyspi_ library.
-You can access our SPI wishlist via the [projects tab](https://github.com/DynamicsAndNeuralSystems/pyspi/projects) in this repo to open a request.
+To request an SPI, please [open an issue](https://github.com/DynamicsAndNeuralSystems/pyspi/issues) with a link to the paper that describes it.
 
 ## Acknowledgement 👍
 
@@ -250,7 +254,7 @@ Note that [preprint](https://arxiv.org/abs/2201.11941) and [free-to-read](https:
 ## Other highly comparative toolboxes 🧰
 If you are interested in trying other highly comparative toolboxes like _pyspi_, see the below list:
 
-- [_hctsa_](https://github.com/benfulcher/hctsa), the _highly comparative time-series analysis_ toolkit, computes over 7000 time-series features from univariate time series.
+- [_hctsa_](https://github.com/benfulcher/hctsa), the _highly comparative time-series analysis_ toolkit, computes 6392 time-series features from univariate time series.
 - [_hcga_](https://github.com/barahona-research-group/hcga), a _highly comparative graph analysis_ toolkit, computes several thousands of graph features directly from any given network.
 - [_pyhctsa_](https://github.com/DynamicsAndNeuralSystems/pyhctsa), a python implementation of the _highly comparative time-series analysis_ toolkit.
 

@@ -123,13 +123,43 @@ public class JidtReference {
           + " ktau=" + te.getProperty("k_TAU") + " l=" + te.getProperty("l_HISTORY")
           + " ltau=" + te.getProperty("l_TAU")); }
 
-    // Kernel TE (bits). Not reproduced exactly by pyspi; see the test.
+    // Kernel TE (bits), JIDT default (the point itself counted).
     for (int kh : new int[]{1, 2}) {
       TransferEntropyCalculatorKernel te = new TransferEntropyCalculatorKernel();
       te.setProperty("KERNEL_WIDTH", "0.5"); te.setProperty("k_HISTORY", "" + kh);
       te.initialise(); te.setObservations(x, y);
       out("te_kernel_bits_k" + kh, te.computeAverageLocalOfObservations());
     }
+
+    // Kernel MI, time-lagged MI and TE with dynamic correlation exclusion (bits).
+    // JIDT's kernel estimators exclude |t - i| < DYN_CORR_EXCL (self included),
+    // one lag fewer than KSG's |t - i| <= DYN_CORR_EXCL (pyspi's kernel window w
+    // is DYN_CORR_EXCL = w + 1, so both exclude |t - i| <= w). Width 0.1 leaves some
+    // samples with an empty joint box, which JIDT counts as 0.
+    for (String kw : new String[]{"0.5", "0.1"}) {
+      for (int w : new int[]{1, 5, 20}) {
+        String tag = "_W" + kw + "_dce" + w;
+        MutualInfoCalculatorMultiVariateKernel m = new MutualInfoCalculatorMultiVariateKernel();
+        m.setProperty("KERNEL_WIDTH", kw); m.setProperty("DYN_CORR_EXCL", "" + w);
+        m.initialise(1, 1); m.setObservations(x, y);
+        out("mi_kernel_bits" + tag, m.computeAverageLocalOfObservations());
+        m = new MutualInfoCalculatorMultiVariateKernel();
+        m.setProperty("KERNEL_WIDTH", kw); m.setProperty("DYN_CORR_EXCL", "" + w);
+        m.initialise(1, 1);
+        m.setObservations(Arrays.copyOfRange(x, 0, T - 1), Arrays.copyOfRange(y, 1, T));
+        out("tlmi_kernel_bits" + tag, m.computeAverageLocalOfObservations());
+        TransferEntropyCalculatorKernel te = new TransferEntropyCalculatorKernel();
+        te.setProperty("KERNEL_WIDTH", kw); te.setProperty("k_HISTORY", "2");
+        te.setProperty("DYN_CORR_EXCL", "" + w);
+        te.initialise(); te.setObservations(x, y);
+        out("te_kernel_bits_k2" + tag, te.computeAverageLocalOfObservations());
+      }
+    }
+    // Kernel TE at k_history=1 with the point itself excluded (pyspi's default).
+    { TransferEntropyCalculatorKernel te = new TransferEntropyCalculatorKernel();
+      te.setProperty("KERNEL_WIDTH", "0.5"); te.setProperty("DYN_CORR_EXCL", "1");
+      te.initialise(); te.setObservations(x, y);
+      out("te_kernel_bits_k1_W0.5_dce1", te.computeAverageLocalOfObservations()); }
 
     // Symbolic TE (ordinal patterns of length k; bits)
     for (int kh : new int[]{2, 3}) {
