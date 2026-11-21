@@ -416,7 +416,7 @@ def test_surrogates_cannot_see_coupling_to_a_strictly_periodic_source():
 def test_surrogate_identifiers_labels_and_parameters():
     spi = PhaseAmplitudeCoupling(*BANDS[0], statistic="mi_excess")
     assert spi.identifier == "pac_mi_excess_p-0-01-0-05_a-0-15-0-4"
-    assert spi.issigned() and "signed" in spi.labels and "unsigned" not in spi.labels
+    assert not spi.issigned() and "unsigned" in spi.labels and "signed" not in spi.labels
     assert PhaseAmplitudeCoupling(*BANDS[1], statistic="mvl_z").identifier == \
         "pac_mvl_z_p-0-05-0-1_a-0-2-0-45"
     assert PhaseAmplitudeCoupling(statistic="mi_z", n_surr=50).identifier.endswith("_nsurr-50")
@@ -438,6 +438,6 @@ def test_full_config_bundles_the_excess_modulation_index():
     for p, a in BANDS:
         ident = PhaseAmplitudeCoupling(p, a, "mi_excess").identifier
         assert ident in spis
-        assert {"directed", "nonlinear", "signed", "bivariate",
+        assert {"directed", "nonlinear", "unsigned", "bivariate",
                 "frequency-dependent"} <= set(spis[ident].labels)
-        assert "unsigned" not in spis[ident].labels
+        assert "signed" not in spis[ident].labels

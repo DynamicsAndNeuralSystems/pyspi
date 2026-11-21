@@ -856,7 +856,7 @@
         trend: c
         labels:
           - directed
-          - signed
+          - unsigned
 
       - method: aeg
         statistic: tstat
@@ -865,7 +865,7 @@
         trend: ct
         labels:
           - directed
-          - signed
+          - unsigned
 
       - method: aeg
         statistic: tstat
@@ -874,7 +874,7 @@
         trend: ct
         labels:
           - directed
-          - signed
+          - unsigned
 
   # Power envelope correlation
   PowerEnvelopeCorrelation:

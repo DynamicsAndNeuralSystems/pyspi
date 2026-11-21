@@ -507,6 +507,27 @@ def test_full_config_bundles_the_new_identifiers():
     assert "ccm_E-None_slope" not in calc.spis   # available, not bundled
     for ident in new:
         spi = calc.spis[ident]
-        assert spi.issigned()
+        # A skill and its gain are one-ended strengths; the lag of peak skill
+        # is signed.
+        assert spi.issigned() == ident.endswith("_tp")
         assert "directed" in spi.labels and "undirected" not in spi.labels
     assert isinstance(calc.spis["lccm_E-None_k-5_tp"], LaggedConvergentCrossMapping)
+
+
+@pytest.mark.parametrize("statistic,signed", [
+    ("mean", False), ("max", False), ("convergence", False), ("slope", False),
+    ("diff", True)])
+def test_ccm_sign_follows_the_statistic(statistic, signed):
+    """Skill is a one-ended strength; only the antisymmetric diff is signed."""
+    spi = ConvergentCrossMapping(statistic=statistic)
+    assert spi.issigned() is signed
+    assert ("signed" if signed else "unsigned") in spi.labels
+    assert ("unsigned" if signed else "signed") not in spi.labels
+
+
+@pytest.mark.parametrize("statistic,signed", [("tp", True), ("skill", False)])
+def test_lccm_sign_follows_the_statistic(statistic, signed):
+    spi = LaggedConvergentCrossMapping(statistic=statistic)
+    assert spi.issigned() is signed
+    assert ("signed" if signed else "unsigned") in spi.labels
+    assert ("unsigned" if signed else "signed") not in spi.labels

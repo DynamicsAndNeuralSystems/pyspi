@@ -140,8 +140,10 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     f2)``, both in cycles per sample. The two orientations are different
     quantities (``A[j, i]`` takes the phase of ``j``), so the SPI is directed;
     the direction is a role, not temporal precedence, so ``A[i, j] > A[j, i]``
-    does not by itself mean that ``i`` drives ``j``. The raw statistics are in
-    [0, 1] and unsigned; their surrogate-normalised versions are signed.
+    does not by itself mean that ``i`` drives ``j``. Every statistic is
+    unsigned: the raw ones are in [0, 1], and the surrogate-normalised ones
+    have their null at 0, where a negative value is noise, not an opposite
+    relationship.
 
     Each process is band-passed with a zero-phase (forward-backward,
     ``scipy.signal.sosfiltfilt``) order-4 Butterworth filter, and the
@@ -259,10 +261,6 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
         self._surrogate = bool(self._normalise)
         self._n_bins = require_int("n_bins", n_bins, minimum=2)
         self._n_surr = require_int("n_surr", n_surr, minimum=2)
-        if self._surrogate:
-            # Negative when the index is below its surrogates' mean.
-            self.labels = ["signed" if label == "unsigned" else label
-                           for label in PhaseAmplitudeCoupling.labels]
 
         f1, f2 = self._phase_band
         f3, f4 = self._amp_band
@@ -348,9 +346,6 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
         if not power > 0:
             raise ValueError("the target has no amplitude in amp_band.")
         return float(np.abs(np.dot(phasor, amp)) / np.sqrt(amp.size * power))
-
-    def issigned(self):
-        return self._surrogate
 
     def _surrogate_mi(self, onehot, counts, shifted):
         """Modulation index of each row of ``shifted`` (``(n_surr, n)``)."""

@@ -609,7 +609,7 @@ def _ccm_slope(curves, log_L):
     return out
 
 
-class ConvergentCrossMapping(Directed, Signed):
+class ConvergentCrossMapping(Directed, Unsigned):
     """
     Convergent cross-mapping skill, row (source) -> column (target) [1]_.
 
@@ -624,6 +624,11 @@ class ConvergentCrossMapping(Directed, Signed):
     cached on ``data.ccm[E]``. Each skill equals pyEDM 2.5's ``CCM`` at the
     same ``E``; pyEDM's process pools are not used. Every ``statistic`` is
     read off that curve.
+
+    ``mean``, ``max``, ``convergence`` and ``slope`` are unsigned: a skill,
+    or its gain with library size, where a negative value is no evidence of
+    coupling rather than an opposite relationship. ``diff`` is antisymmetric
+    and signed.
 
     With ``embedding_dimension=None`` each process gets its own
     simplex-optimal dimension (``E = 1..10``), and each pair uses the larger
@@ -671,7 +676,7 @@ class ConvergentCrossMapping(Directed, Signed):
 
     name = "Convergent cross-mapping"
     identifier = "ccm"
-    labels = ["causal", "directed", "nonlinear", "temporal", "signed"]
+    labels = ["causal", "directed", "nonlinear", "temporal", "unsigned"]
     # Variants share data.ccm[E], so they run on one parallel worker.
     _cache_namespace = "ccm"
 
@@ -687,9 +692,12 @@ class ConvergentCrossMapping(Directed, Signed):
             else require_int("embedding_dimension", embedding_dimension, minimum=1)
         )
 
-        # diff is ccm(i->j) - ccm(j->i): antisymmetric rather than directed.
+        # diff is ccm(i->j) - ccm(j->i): antisymmetric rather than directed,
+        # and its sign says which direction has the higher skill.
         if statistic == "diff":
-            self.labels = [l for l in self.labels if l != "directed"] + ["antisymmetric"]
+            self.labels = [l for l in self.labels
+                           if l not in ("directed", "unsigned")] + ["antisymmetric", "signed"]
+            self.issigned = lambda: True
 
         self.identifier += f"_E-{self._E}_{statistic}"
 
@@ -819,7 +827,9 @@ class LaggedConvergentCrossMapping(Directed, Signed):
         ``tp`` is unreliable, and a hidden common driver makes both cells
         negative, so compare ``A[i, j]`` with ``A[j, i]`` (the more negative
         marks the driving direction) rather than reading one cell's sign.
-        ``'skill'``: ``max over Tp of rho_ij(Tp)``, signed like ``ccm``.
+        ``'skill'``: ``max over Tp of rho_ij(Tp)``, unsigned like ``ccm``.
+        ``tp`` is signed: its sign says on which side of ``Tp = 0`` the skill
+        peaks.
         Default: ``'tp'``.
     embedding_dimension : int or None, optional
         As in `ConvergentCrossMapping`: None selects each process's
@@ -853,6 +863,10 @@ class LaggedConvergentCrossMapping(Directed, Signed):
         )
         self._k = require_int("max_lag", max_lag, minimum=1)
         self.identifier += f"_E-{self._E}_k-{self._k}_{statistic}"
+        # A skill is a one-ended strength; the lag of its peak is signed.
+        if statistic == "skill":
+            self.labels = [l for l in self.labels if l != "signed"] + ["unsigned"]
+            self.issigned = lambda: False
 
     @property
     def key(self):

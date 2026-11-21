@@ -959,7 +959,7 @@
       trend: c
       labels:
         - directed
-        - signed
+        - unsigned
     - method: aeg
       statistic: tstat
       autolag: aic
@@ -967,7 +967,7 @@
       trend: ct
       labels:
         - directed
-        - signed
+        - unsigned
     - method: aeg
       statistic: tstat
       autolag: bic
@@ -975,7 +975,7 @@
       trend: ct
       labels:
         - directed
-        - signed
+        - unsigned
 
   PowerEnvelopeCorrelation:
     labels:

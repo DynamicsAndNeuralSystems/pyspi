@@ -357,7 +357,7 @@
     labels:
       - directed
       - nonlinear
-      - signed
+      - unsigned
       - bivariate
       - time-dependent
       - M14
@@ -384,7 +384,6 @@
     labels:
       - directed
       - nonlinear
-      - signed
       - bivariate
       - time-dependent
       - M14
@@ -392,8 +391,12 @@
     configs:
       - statistic: tp
         max_lag: 5
+        labels:
+          - signed
       - statistic: skill
         max_lag: 5
+        labels:
+          - unsigned
 
   # Nonlinear interdependence
   NonlinearInterdependence:
@@ -1179,7 +1182,7 @@
     labels:
       - directed
       - nonlinear
-      - signed
+      - unsigned
       - bivariate
       - frequency-dependent
       - M11
@@ -1288,7 +1291,7 @@
         trend: c
         labels:
           - directed
-          - signed
+          - unsigned
 
       - method: aeg
         statistic: tstat
@@ -1297,7 +1300,7 @@
         trend: ct
         labels:
           - directed
-          - signed
+          - unsigned
 
       - method: aeg
         statistic: tstat
@@ -1306,7 +1309,7 @@
         trend: ct
         labels:
           - directed
-          - signed
+          - unsigned
 
   # Power envelope correlation
   PowerEnvelopeCorrelation:

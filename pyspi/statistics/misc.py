@@ -41,8 +41,8 @@ class Cointegration(Directed, Unsigned):
     ``A[i, j]`` regresses process ``j`` on process ``i`` (regressor on the row,
     as for ``lmfit``) and is the unit-root t-statistic of the residuals. It is
     not symmetric, and each orientation is reported as computed (directed).
-    It is signed: more negative is stronger evidence of cointegration, and a
-    positive value means none.
+    It is unsigned, a strength on an inverted scale: more negative is
+    stronger evidence of cointegration.
 
     References
     ----------
@@ -106,11 +106,6 @@ class Cointegration(Directed, Unsigned):
         # aeg is not.
         if method == "aeg":
             self.labels = [l for l in self.labels if l != "undirected"] + ["directed"]
-            if statistic == "tstat":
-                # Signed, so `Calculator._rmmin` and the SPI-SPI correlations
-                # keep the sign.
-                self.labels = [l for l in self.labels if l != "unsigned"] + ["signed"]
-                self.issigned = lambda: True
         if method == "johansen":
             self.identifier += (
                 f"_{method}_{statistic}_order-{det_order}_ardiff-{k_ar_diff}"

@@ -714,7 +714,11 @@ def test_correlation_keeps_the_order_of_a_negative_unsigned_spi():
     ``u_neg`` is unsigned and negative everywhere (as ``softdtw`` and the
     differential entropies can be), ``u_pos`` is unsigned and positive, and
     ``s_pos`` and ``s_neg`` are signed with mixed signs and opposite values.
+    ``coint`` is the Engle-Granger t-statistic, unsigned on an inverted scale
+    (all negative, more negative is stronger), which ``abs()`` would reverse.
     """
+    from pyspi.statistics.misc import Cointegration
+
     m = 4
     calc = Calculator(dataset=np.random.default_rng(5).standard_normal((m, 50)),
                       config="fabfour")
@@ -726,8 +730,11 @@ def test_correlation_keeps_the_order_of_a_negative_unsigned_spi():
         "u_pos": strength,
         "s_pos": sign * strength,
         "s_neg": -sign * strength,
+        "coint": -strength,
     }
     calc._spis = {name: _SignStub(name.startswith("s_")) for name in matrices}
+    calc._spis["coint"] = Cointegration(method="aeg", statistic="tstat")
+    assert not calc._spis["coint"].issigned()
     procs = [f"proc-{i}" for i in range(m)]
     calc._table = pd.concat(
         {name: pd.DataFrame(a, index=procs, columns=procs)
@@ -738,6 +745,8 @@ def test_correlation_keeps_the_order_of_a_negative_unsigned_spi():
     assert calc.table.equals(before)
     # unsigned with unsigned: on the values, so the negative SPI keeps its order
     assert cf.loc["u_neg", "u_pos"] == pytest.approx(1.0)
+    assert cf.loc["coint", "u_pos"] == pytest.approx(-1.0)
+    assert cf.loc["coint", "u_neg"] == pytest.approx(-1.0)
     # signed with signed: on the values
     assert cf.loc["s_pos", "s_neg"] == pytest.approx(-1.0)
     # signed with unsigned: the signed SPI's strength against the unsigned value
@@ -745,6 +754,7 @@ def test_correlation_keeps_the_order_of_a_negative_unsigned_spi():
         for u in ("u_neg", "u_pos"):
             assert cf.loc[s, u] == pytest.approx(1.0), (s, u)
             assert cf.loc[u, s] == pytest.approx(1.0), (u, s)
+        assert cf.loc[s, "coint"] == pytest.approx(-1.0), s
     # rmmin shifts the unsigned SPIs, which leaves every rank correlation as it is
     assert np.allclose(calc._get_correlation_df(rmmin=True), cf)
 
