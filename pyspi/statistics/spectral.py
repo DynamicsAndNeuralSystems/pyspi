@@ -10,6 +10,7 @@ import nitime.utils as nt_utils
 import numpy as np
 import spectral_connectivity as sc
 from scipy import signal
+from spectral_connectivity.transforms import prepare_time_series
 
 from pyspi.base import (
     Directed,
@@ -19,17 +20,6 @@ from pyspi.base import (
     parse_multivariate,
 )
 from pyspi.utils import fmt_param, require_int
-
-try:
-    from spectral_connectivity.transforms import prepare_time_series
-except ImportError:
-    def prepare_time_series(time_series, axis="signals"):
-        if axis != "signals":
-            raise ImportError(
-                "spectral_connectivity is missing prepare_time_series; "
-                "upgrade the package or ensure axis='signals'."
-            )
-        return time_series[:, np.newaxis, :]
 
 
 @contextmanager

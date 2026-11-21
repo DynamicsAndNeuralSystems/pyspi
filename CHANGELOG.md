@@ -8,7 +8,7 @@ The Java/JIDT dependency is gone, the `Calculator` API is simplified, and severa
 
 **Upgrading from 2.0.2 (the current PyPI release), at a glance:**
 
-- Python **>= 3.11** (2.0.2: >= 3.8), numpy **>= 2** (2.0.2: `<2`), scikit-learn **>= 1.8**, pyEDM **>= 2.5** (2.0.2: `==1.15.2.0`), mne **>= 1.6** (2.0.2: `==0.23.0`).
+- Python **>= 3.11** (2.0.2: >= 3.8), numpy **>= 2** (2.0.2: `<2`), scikit-learn **>= 1.8**, pyEDM **>= 2.5** (2.0.2: `==1.15.2.0`), mne **>= 1.6** (2.0.2: `==0.23.0`), spectral-connectivity **>= 2.0** (2.0.2: unpinned).
   No Java, `jpype`, `cdt` or `torch`.
   See [Dependencies](#dependencies).
 - The default `full` set goes from **285 SPIs (2.0.2) to 231**: 74 added, 128 removed, 22 renamed (identifier only), 135 unchanged by name.
@@ -306,7 +306,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **The distance-correlation family centres each series once.**
   `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
-  pyspi applies hyppo 0.5.2's final step itself, so every allowed hyppo (`>=0.4`) gives hyppo 0.5.2's values.
+  pyspi applies hyppo's final step itself, with the same values as hyppo 0.5.2.
 - `hhg` in O(n^2 log n) (about 9x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 - **Undirected SPIs evaluate each unordered pair once** and mirror the value and any failure (`phi_*` 1.9x faster).
   For the distance SPIs among them (`hsic*`, `hhg`, `dcorr*`, `mgc`, `lcss*`, `softdtw*`, `gwtau`), a pair that raises is NaN with a warning, as for every other SPI, instead of failing the SPI.
@@ -372,15 +372,16 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   | scikit-learn | unpinned | **`>=1.8`** |
   | pyEDM | `==1.15.2.0` | **`>=2.5`** |
   | mne | `==0.23.0` | `>=1.6`, plus new `mne-connectivity>=0.5` |
-  | spectral-connectivity | unpinned | `>=1.1,<3` |
-  | scipy / pandas / statsmodels / nitime / hyppo / tslearn | unpinned | `>=1.11` / `>=2.1` / `>=0.14` / `>=0.10` / `>=0.4` / `>=0.10`; new `dtaidistance>=2.3` |
+  | spectral-connectivity | unpinned | **`>=2.0,<3`** |
+  | scipy / pandas / statsmodels / nitime / hyppo / tslearn | unpinned | `>=1.13` / `>=2.2.2` / `>=0.14.2` / `>=0.11` / `>=0.5.2` / `>=0.10`; new `dtaidistance>=2.3.12` |
   | removed | `jpype1`, `cdt==0.5.23`, `torch`, `h5py`, `seaborn`, `sktime`, `dill`, `future`, `setuptools<81` | (`aeon` is an optional `tsfile` extra for `.ts` files) |
 
 - Dropped unused runtime dependencies (`h5py`, `seaborn`, and the intermediate `plotly`, `matplotlib`, `nbformat`). Plotting and notebook packages moved to a `bench` extra.
-- `pandas>=2.1` for `DataFrame.stack(future_stack=True)`, the pandas 3 semantics.
-- **`spectral-connectivity` is upper-bounded: `>=1.1,<3`.**
+- Every floor is a release that installs and runs with NumPy 2 on Python 3.11.
+  Older pandas and statsmodels wheels were built against NumPy 1 and fail to import under NumPy 2 ("numpy.dtype size changed"), and hyppo releases before 0.5.2 do not declare the `future` package they import.
+- **`spectral-connectivity` is bounded: `>=2.0,<3`.**
   `DirectedCoherence` reads two private `Connectivity` properties (`_transfer_function`, `_noise_covariance`), because the public `directed_coherence()` does not compute the bounded form of Baccalá et al. (1998) that pyspi reports.
-  Every symbol pyspi uses is present from 1.1.0 to the current release; 1.1.x returns a 400- rather than 401-point frequency grid, so band statistics differ marginally across the range.
+  1.x returns a frequency grid without the Nyquist bin, which changes the statistics of bands that end at the Nyquist frequency, so 2.0 is the floor.
 - **`cdt` and `torch` are gone.**
   pyspi used four functions from `cdt.causality.pairwise` (the ANM independence score, the conditional distribution similarity statistic, the RECI regression-error score and IGCI), now transcribed in `pyspi/lib/pairwise_causal.py` on NumPy/SciPy/scikit-learn, with cdt's MIT licence retained at `pyspi/lib/LICENSE-cdt.txt`.
   **No value changes**: the transcription is bit-identical to cdt 0.6.
