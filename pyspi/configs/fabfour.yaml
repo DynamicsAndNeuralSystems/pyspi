@@ -24,7 +24,7 @@
       - M14
     dependencies:
     configs:
-      - squared: True
+      - squared: False
 
 # Directed information with a Gaussian density estimator
 .statistics.infotheory:
