@@ -1,9 +1,10 @@
 """Label consistency across the bundled configs.
 
 The same SPI must carry the same labels whichever config it is loaded from,
-no SPI may carry a contradictory pair, and every label must belong to the
-vocabulary used by ``full.yaml`` and the SPI classes (which catches typos
-such as ``unisgned`` or a stray ``directed,``).
+no SPI may carry a contradictory pair, every label must belong to the fixed
+vocabulary of CONTRIBUTING.md (which catches typos such as ``unisgned``, a
+stray ``directed,`` or a compound such as ``linear/nonlinear``), and every
+SPI carries exactly one label from each axis of that vocabulary.
 The labels a config writes for an SPI must also agree with the SPI itself:
 its sign with ``issigned()``, its directedness with the class trait, its
 linearity with the class where the class declares one, and each SPI carries
@@ -33,7 +34,23 @@ CONTRADICTORY = (
     ("directed", "undirected"),
     ("signed", "unsigned"),
 )
-MODULE_LABEL = re.compile(r"^M(\d\d|XX)$")
+# The label vocabulary of CONTRIBUTING.md: each SPI carries exactly one
+# label from each axis.
+LABEL_AXES = {
+    "directedness": {"directed", "undirected", "antisymmetric"},
+    "sign": {"signed", "unsigned"},
+    "linearity": {"linear", "nonlinear"},
+    "arity": {"bivariate", "multivariate"},
+    "time": {"contemporaneous", "time-dependent", "frequency-dependent"},
+    "module": {f"M{n:02d}" for n in range(1, 15)} | {"MXX"},
+}
+# Descriptive tags a class may carry in addition, none required.
+DESCRIPTIVE_TAGS = {
+    "basic", "causal", "distance", "embedding", "infotheory", "lagged", "misc",
+    "normal", "rank", "spectral", "symbolic", "temporal", "unordered",
+    "wavelet",
+}
+VOCABULARY = set().union(*LABEL_AXES.values()) | DESCRIPTIVE_TAGS
 
 
 @pytest.fixture(scope="module")
@@ -74,21 +91,41 @@ def test_no_contradictory_label_pairs(labels_by_config):
     assert not bad, "\n".join(bad)
 
 
-def test_labels_come_from_the_known_vocabulary(labels_by_config):
-    vocabulary = {
-        label for labels in labels_by_config["full"].values() for label in labels
-    }
+def test_labels_come_from_the_documented_vocabulary(labels_by_config):
     unknown = sorted(
         {
             f"{config}/{ident}: {label!r}"
             for config, spis in labels_by_config.items()
             for ident, labels in spis.items()
             for label in labels
-            if label not in vocabulary and not MODULE_LABEL.match(label)
+            if label not in VOCABULARY
         }
     )
     assert not unknown, "\n".join(unknown)
-    assert all(label == label.strip() and "," not in label for label in vocabulary)
+
+
+def test_every_spi_has_one_label_per_axis(labels_by_config):
+    bad = [
+        f"{config}/{ident}: {axis} {sorted(set(labels) & axis_labels)}"
+        for config, spis in labels_by_config.items()
+        for ident, labels in spis.items()
+        for axis, axis_labels in LABEL_AXES.items()
+        if len(set(labels) & axis_labels) != 1
+    ]
+    assert not bad, "\n".join(bad)
+
+
+def test_the_vocabulary_matches_contributing():
+    """Each axis label and module code above is named in CONTRIBUTING.md."""
+    import pathlib
+
+    text = (pathlib.Path(__file__).parents[1] / "CONTRIBUTING.md").read_text()
+    named = set(re.findall(r"`([A-Za-z0-9-]+)`", text))
+    for axis, axis_labels in LABEL_AXES.items():
+        if axis != "module":
+            assert axis_labels <= named, (axis, sorted(axis_labels - named))
+    assert {"M01", "M14", "MXX"} <= named
+    assert DESCRIPTIVE_TAGS <= named, sorted(DESCRIPTIVE_TAGS - named)
 
 
 def test_merge_rejects_unresolvable_contradictions():

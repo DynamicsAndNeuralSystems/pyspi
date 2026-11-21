@@ -15,9 +15,11 @@ Checked here:
   lower one, preserving the lead/lag sign.
 * ``hhg`` is symmetric; ``ce``, ``dcorrx`` and ``mgcx`` are directed.
 
-The symmetry check reads the committed baseline matrices, so it costs no
-computation.
+The checks against matrices read the committed drift baselines of all three
+fixtures, from every archive, so they cost no computation and cover every SPI
+in ``full``.
 """
+import glob
 import os
 
 import numpy as np
@@ -27,9 +29,44 @@ from pyspi.calculator import load_spis_from_yaml, resolve_config
 from pyspi.data import Data
 from pyspi.statistics.misc import Cointegration
 
-BASELINE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "data", "baselines", "var1_M3_T100.npz"
-)
+BASELINE_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "baselines")
+BASELINE = os.path.join(BASELINE_DIR, "var1_M3_T100.npz")
+DATASETS = ("var1_M3_T100", "cml_M5_T100", "kuramoto_M7_T100")
+
+
+def _baselines(dataset):
+    """Every SPI's baseline matrix for ``dataset``, merged over its archives."""
+    paths = [os.path.join(BASELINE_DIR, f"{dataset}.npz")] + sorted(
+        glob.glob(os.path.join(BASELINE_DIR, f"{dataset}.*.npz")))
+    out = {}
+    for path in paths:
+        with np.load(path, allow_pickle=False) as archive:
+            for key in archive.files:
+                if not key.startswith("__"):
+                    assert key not in out, f"{key} is in two archives of {dataset}"
+                    out[key] = np.asarray(archive[key], dtype=float)
+    return out
+
+
+@pytest.fixture(scope="module")
+def full_spis():
+    return load_spis_from_yaml(resolve_config("full"), quiet=True)
+
+
+@pytest.fixture(scope="module")
+def baseline_matrices(full_spis):
+    """``{dataset: {identifier: matrix}}`` for every SPI in ``full``.
+
+    An SPI of ``full`` with no baseline in a fixture fails here, so no SPI is
+    silently left out of the checks below.
+    """
+    out = {dataset: _baselines(dataset) for dataset in DATASETS}
+    missing = [f"{dataset}/{ident}" for dataset in DATASETS
+               for ident in full_spis if ident not in out[dataset]]
+    assert not missing, "SPIs of full with no baseline:\n  " + "\n  ".join(missing)
+    return {dataset: {ident: out[dataset][ident] for ident in full_spis}
+            for dataset in DATASETS}
 
 
 def _offdiag(a):
@@ -109,74 +146,113 @@ def _classify(mat):
     return "asymmetric"
 
 
-def _label_symmetry_violations():
-    """Return {identifier: (declared, observed)} disagreements from baselines."""
-    z = np.load(BASELINE, allow_pickle=False)
-    spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
-
-    disagreements = {}
-    for ident, spi in spis.items():
-        if ident not in z.files:
-            continue
-        mat = np.asarray(z[ident], dtype=float)
-        if mat.ndim != 2 or mat.shape[0] != mat.shape[1]:
-            continue
-
-        observed = _classify(mat)
-        if observed in ("undetermined", "degenerate"):
-            continue  # covered by the degeneracy tests, not by this one
-
-        # Only undirected -> asymmetric is a contradiction. A *directed*
-        # measure may legitimately produce a symmetric matrix on a particular
-        # dataset: lmfit_* and gpfit_DotProduct are symmetric on z-scored data
-        # because a linear model's R^2 is, yet asymmetric with zscore=False.
-        labels = set(getattr(spi, "labels", []) or [])
-        if "undirected" in labels and observed == "asymmetric":
-            disagreements[ident] = ("undirected", observed)
-    return disagreements
-
-
-def test_declared_symmetry_matches_observed_matrices():
-    bad = _label_symmetry_violations()
-    assert not bad, "Declared/observed symmetry disagreements:\n" + "\n".join(
-        f"  {k}: declared {v[0]}, observed {v[1]}" for k, v in sorted(bad.items())
+def test_declared_symmetry_matches_observed_matrices(full_spis, baseline_matrices):
+    # Only undirected -> asymmetric is a contradiction. A *directed* measure
+    # may legitimately produce a symmetric matrix on a particular dataset:
+    # gpfit_DotProduct is symmetric on z-scored data because a linear model's
+    # R^2 is, yet asymmetric with zscore=False.
+    bad = sorted(
+        f"  {dataset}/{ident}: declared undirected, observed asymmetric"
+        for dataset, matrices in baseline_matrices.items()
+        for ident, mat in matrices.items()
+        if "undirected" in full_spis[ident].labels
+        and _classify(mat) == "asymmetric"
     )
+    assert not bad, "Declared/observed symmetry disagreements:\n" + "\n".join(bad)
 
 
-def test_antisymmetric_measures_are_labelled_as_such():
+def test_antisymmetric_measures_are_labelled_as_such(full_spis, baseline_matrices):
     """PLI/wPLI/PSI encode lead-lag in their sign; 'undirected' misdescribes them."""
-    z = np.load(BASELINE, allow_pickle=False)
-    spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
-
-    mislabelled = []
-    for ident, spi in spis.items():
-        if ident not in z.files:
-            continue
-        if _classify(np.asarray(z[ident], dtype=float)) != "antisymmetric":
-            continue
-        labels = set(getattr(spi, "labels", []) or [])
-        if "antisymmetric" not in labels:
-            mislabelled.append(f"{ident} (labelled: {sorted(labels & {'directed', 'undirected'})})")
-
+    mislabelled = sorted({
+        f"{ident} (labelled: "
+        f"{sorted(set(full_spis[ident].labels) & {'directed', 'undirected'})})"
+        for matrices in baseline_matrices.values()
+        for ident, mat in matrices.items()
+        if _classify(mat) == "antisymmetric"
+        and "antisymmetric" not in full_spis[ident].labels
+    })
     assert not mislabelled, (
         "Antisymmetric SPIs carry no 'antisymmetric' label:\n  "
-        + "\n  ".join(sorted(mislabelled))
+        + "\n  ".join(mislabelled)
     )
 
 
-def test_no_bundled_spi_returns_a_constant_matrix():
+def test_no_bundled_spi_returns_a_constant_matrix(baseline_matrices):
     """A constant matrix carries no pairwise information."""
-    z = np.load(BASELINE, allow_pickle=False)
-    spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
-
-    degenerate = [
-        ident for ident in spis
-        if ident in z.files
-        and _classify(np.asarray(z[ident], dtype=float)) == "degenerate"
-    ]
-    assert not degenerate, (
-        "SPIs returning a constant matrix on var1_M3_T100: " + ", ".join(sorted(degenerate))
+    degenerate = sorted(
+        f"{dataset}/{ident}"
+        for dataset, matrices in baseline_matrices.items()
+        for ident, mat in matrices.items()
+        if _classify(mat) == "degenerate"
     )
+    assert not degenerate, (
+        "SPIs returning a constant matrix: " + ", ".join(degenerate)
+    )
+
+
+# Unsigned SPIs whose population value is non-negative (zero for independent
+# processes) but whose estimator scatters about that value, so it can go
+# slightly below zero.
+NEGATIVE_BY_ESTIMATION = {
+    # Chatterjee's xi: the population value is in [0, 1]; the rank estimator
+    # can be negative at small T.
+    "xi_tau-0", "xi_tau-1",
+    # Unbiased (U-statistic) distance correlation, MGC and HSIC, and their
+    # lagged sums: unbiased for a non-negative quantity.
+    "dcorr", "mgc", "hsic", "dcorrx_maxlag-1", "dcorrx_maxlag-10",
+    "mgcx_maxlag-1", "mgcx_maxlag-10",
+    # Nonlinear interdependence H, N and L: about 0 for independent processes.
+    "nli_L_m-5_tau-1_k-5", "nli_N_m-5_tau-1_k-5", "nli_H_m-5_tau-1_k-5",
+    "nli_L_m-3_tau-1_k-5",
+    # Mutual informations, transfer entropies, directed information and
+    # stochastic interaction: non-negative, estimated by nearest-neighbour or
+    # kernel estimators (or differences of entropies) that are not.
+    "mi_kraskov_NN-4", "mi_kraskov_NN-4_DCE-AUTO", "mi_kernel_W-0.25",
+    "mi_kernel_W-0.25_DCE-AUTO", "tlmi_kraskov_NN-4",
+    "tlmi_kraskov_NN-4_DCE-AUTO", "tlmi_kernel_W-0.25",
+    "tlmi_kernel_W-0.25_DCE-AUTO",
+    "te_kraskov_NN-4_MAX-CORR-AIS_k-max-10_tau-max-4",
+    "te_kraskov_NN-4_DCE-AUTO_MAX-CORR-AIS_k-max-10_tau-max-4",
+    "te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1",
+    "te_kraskov_NN-4_DCE-AUTO_k-1_kt-1_l-1_lt-1",
+    "te_kraskov_NN-4_k-1_kt-1_l-1_lt-1",
+    "te_kernel_W-0.25_k-1", "te_kernel_W-0.25_DCE-AUTO_k-1",
+    "di_kraskov_NN-4_n-5", "si_kozachenko_k-1",
+    # Debiased squared phase measures: unbiased estimates of a squared
+    # (non-negative) quantity.
+    "ppc_hilbert_adaptive",
+    "dspli_multitaper_mean_fs-1_fmin-0_fmax-0-5",
+    "dspli_multitaper_mean_fs-1_fmin-0_fmax-0-25",
+    "dspli_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
+    "dswpli_multitaper_mean_fs-1_fmin-0_fmax-0-5",
+    "dswpli_multitaper_mean_fs-1_fmin-0_fmax-0-25",
+    "dswpli_multitaper_mean_fs-1_fmin-0-25_fmax-0-5",
+}
+
+
+def test_unsigned_spis_are_not_negative(full_spis, baseline_matrices):
+    """An SPI that can be negative must be signed.
+
+    `Calculator._get_correlation_df` correlates an unsigned SPI through
+    ``abs()``, which reverses the order of negative values, so an SPI that
+    returns negative values on these fixtures must report ``issigned()`` (as
+    ``softdtw`` and the differential entropies do), unless it is listed above.
+    """
+    negative = sorted(
+        f"{dataset}/{ident}: min {np.nanmin(mat):.3g}"
+        for dataset, matrices in baseline_matrices.items()
+        for ident, mat in matrices.items()
+        if not full_spis[ident].issigned()
+        and ident not in NEGATIVE_BY_ESTIMATION
+        and np.isfinite(mat).any() and np.nanmin(mat) < 0
+    )
+    assert not negative, "Unsigned SPIs with negative values:\n  " + "\n  ".join(negative)
+
+
+def test_negative_by_estimation_lists_only_unsigned_bundled_spis(full_spis):
+    stale = sorted(ident for ident in NEGATIVE_BY_ESTIMATION
+                   if ident not in full_spis or full_spis[ident].issigned())
+    assert not stale, stale
 
 
 def test_conditional_entropy_label_matches_implementation():
@@ -508,6 +584,19 @@ def test_additive_noise_model_is_not_labelled_linear():
 
     labels = set(AdditiveNoiseModel().labels)
     assert "nonlinear" in labels and "linear" not in labels
+
+
+@pytest.mark.parametrize("estimator,linearity", [
+    ("pearson", "linear"), ("spearman", "nonlinear"), ("kendall", "nonlinear")])
+@pytest.mark.parametrize("squared", [False, True])
+def test_lagged_correlation_linearity_follows_the_estimator(estimator, linearity,
+                                                            squared):
+    """Rank correlations capture any monotone dependence, so are nonlinear."""
+    from pyspi.statistics.basic import LaggedCorrelation
+
+    labels = LaggedCorrelation(estimator=estimator, tau=1, squared=squared).labels
+    assert set(labels) & {"linear", "nonlinear"} == {linearity}
+    assert set(labels) & {"signed", "unsigned"} == {"unsigned" if squared else "signed"}
 
 
 def test_igci_stays_out_of_the_bundled_configs():
