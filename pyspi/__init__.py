@@ -18,7 +18,7 @@ if not hasattr(np, "NaN"):
     np.NaN = np.nan
 
 
-from .calculator import Calculator, Results, load_results, load_table  # noqa: E402
+from .calculator import Calculator, Results, feature_vector, load_results, load_table  # noqa: E402
 # Per-cell quality codes (shared with pyhctsa); see Calculator.quality.
 from .quality import Quality  # noqa: E402
 # Bumped whenever a change can alter a valid SPI output. Record it with saved
@@ -26,4 +26,4 @@ from .quality import Quality  # noqa: E402
 from ._parallel import COMPUTATION_VERSION  # noqa: E402
 
 __all__ = ["Calculator", "load_table", "load_results", "Results", "Quality",
-           "COMPUTATION_VERSION"]
+           "feature_vector", "COMPUTATION_VERSION"]

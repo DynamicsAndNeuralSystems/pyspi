@@ -425,6 +425,15 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`ppc_hilbert_adaptive`: spectrally weighted Hilbert phase consistency** (`AdaptivePhaseConsistency` in `pyspi/statistics/spectral.py`), the pairwise phase consistency (Vinck et al. 2010) of band-passed Hilbert phases, averaged over log-spaced bands with weights from the rhythmic power the two processes share above their `1/f` backgrounds, so no band has to be chosen in advance.
   It is undirected and unsigned, about 0 under independence and 1 for a constant phase lag, and has no parameters (bands are in cycles per sample).
   In `full` only; not in `fast` or the `benchmarked_p*` sets until it has been timed.
+- **`Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature.**
+  The table holds every SPI as a full `M x M` matrix.
+  For an `undirected` SPI the lower triangle copies the upper one, and for an `antisymmetric` SPI (`phase`, `pli`, `wpli`, `psi`, `es_q`) it is the negation, so the vector keeps only the pairs `(i, j)` with `i < j` for these.
+  A positive antisymmetric value at `(i, j)` means process `i` leads process `j` (row = source).
+  `directed` and `asymmetric` SPIs keep both orientations.
+  Self-pairs are dropped unless `include_self=True`, and NaNs are kept, so the length and order depend only on the config and `M`.
+  The result is a `pandas.Series` indexed by `(spi, source, target)`, as in `to_frame()`.
+  `pyspi.feature_vector(table)` takes a table from `load_table` and rebuilds each SPI's trait from the config recorded in `table.attrs["run_spec"]`, or takes an explicit `directedness={identifier: trait}`.
+- **`Directed.directedness()`** returns the one symmetry trait an SPI carries: `undirected`, `antisymmetric`, `directed` or `asymmetric`.
 
 ### Dependencies
 
