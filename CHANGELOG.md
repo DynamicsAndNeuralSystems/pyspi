@@ -324,6 +324,13 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   At M=16, T=800 the SPI takes 0.05 s instead of 0.23 s, and 0.14 s instead of 1.8 s in a new process.
   `lcss_constraint-itakura` uses the same mask.
   The `RuntimeWarning` that announced the tslearn fallback is gone.
+- **The distance-correlation family centres each series once, with identical values.**
+  `dcorr`, `hsic` and `dcorrx` recomputed both series' centred distance matrices for every pair.
+  Each series' matrix (for `dcorrx`, one per lag) is now computed once and shared across its pairs, holding at most 256 MB of matrices at a time.
+  At T=800, `dcorr` is 7x faster (0.92 s to 0.13 s at M=16), `hsic` 11x (2.5 s to 0.22 s) and `dcorrx_maxlag-1`/`-10` 5x and 4x (M=8).
+  Values are bit-identical to hyppo 0.5.2's, so `COMPUTATION_VERSION` does not move.
+  pyspi now applies hyppo 0.5.2's final step itself (zero for a non-positive variance, or a non-positive biased covariance; square root of the biased ratio), instead of taking it from whichever hyppo is installed.
+  Under the allowed `hyppo>=0.4`, 0.4.0 returned dCor² for `dcorr_biased` and `hsic_biased`, and 0.5.0 zeroed every negative unbiased value; those installs now give the 0.5.2 values too.
 - **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 - **Undirected SPIs evaluate each unordered pair once, with identical values.**
   `Undirected.multivariate` evaluated `bivariate` for both orders of every pair and then copied the upper triangle over the lower one, discarding half the work.
