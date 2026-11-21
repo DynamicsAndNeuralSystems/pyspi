@@ -906,8 +906,10 @@ class LaggedCorrelation(Undirected, Signed):
     samples, so the result is symmetric (undirected) and does not say which
     process leads. At ``tau = 0`` it is the plain correlation. ``corr`` is
     Pearson's r, Spearman's rho or Kendall's tau-b, as in ``scipy.stats``.
-    Signed, in ``[-1, 1]``, unless ``squared=True``. NaN when ``tau >= T`` or
-    when either of the two correlations is undefined (a constant segment).
+    Signed, in ``[-1, 1]``, unless ``squared=True``. Linear with Pearson's r;
+    nonlinear with Spearman's rho or Kendall's tau, which capture any
+    monotone dependence. NaN when ``tau >= T`` or when either of the two
+    correlations is undefined (a constant segment).
 
     In a config, ``max_tau: K`` stands for the ``K`` SPIs with
     ``tau = 1, ..., K``.
@@ -927,7 +929,7 @@ class LaggedCorrelation(Undirected, Signed):
         Default: False.
     """
     name = "Lagged correlation"
-    labels = ["basic", "linear", "undirected", "temporal"]
+    labels = ["basic", "undirected", "temporal"]
 
     def __init__(self, estimator="pearson", tau=None, max_tau=None, squared=False):
         est = str(estimator).lower()
@@ -940,12 +942,13 @@ class LaggedCorrelation(Undirected, Signed):
 
         self._estimator = est
         self._squared = bool(squared)
+        linearity = "linear" if est == "pearson" else "nonlinear"
         if self._squared:
             self.issigned = lambda: False
-            self.labels = LaggedCorrelation.labels + ["unsigned"]
+            self.labels = LaggedCorrelation.labels + [linearity, "unsigned"]
             suffix = "-sq"
         else:
-            self.labels = LaggedCorrelation.labels + ["signed"]
+            self.labels = LaggedCorrelation.labels + [linearity, "signed"]
             suffix = ""
         self._tau = require_int("tau", tau, minimum=0)
         self.identifier = f"corr_{est}_tau-{self._tau}{suffix}"

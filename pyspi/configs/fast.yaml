@@ -87,6 +87,8 @@
       - unordered
       - nonlinear
       - undirected
+      - bivariate
+      - contemporaneous
       - MXX
     dependencies:
     configs:
@@ -415,7 +417,7 @@
   PhaseSlopeIndex:
     labels:
       - antisymmetric
-      - linear/nonlinear
+      - linear
       - signed
       - bivariate
       - frequency-dependent
@@ -757,8 +759,9 @@
   PhaseSlopeIndex:
     labels:
       - antisymmetric
+      - linear
       - signed
-      - time/frequency dependent
+      - frequency-dependent
       - bivariate
       - M08
     dependencies:
@@ -938,6 +941,8 @@
       - unsigned
       - undirected
       - nonlinear
+      - bivariate
+      - contemporaneous
       - MXX
     dependencies:
     configs:

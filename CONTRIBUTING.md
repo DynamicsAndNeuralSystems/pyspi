@@ -126,7 +126,10 @@ A note on where pyspi differs from an upstream implementation is worth keeping.
 
 The bundled configs live in `pyspi/configs/`.
 Each class entry carries its labels: directedness (`directed`, `undirected` or `antisymmetric`), `signed` or `unsigned`, `linear` or `nonlinear`, `bivariate` or `multivariate`, `contemporaneous`, `time-dependent` or `frequency-dependent`, and one module code (`M01` to `M14`).
+An SPI not assigned to a module carries the code `MXX` instead.
 Each config entry adds the labels that depend on its parameters.
+Merged with the class's own labels, every SPI ends up with exactly one label from each of these groups, spelled as here.
+A class may also carry descriptive tags: `basic`, `causal`, `distance`, `embedding`, `infotheory`, `lagged`, `misc`, `normal`, `rank`, `spectral`, `symbolic`, `temporal`, `unordered` and `wavelet`.
 Comments in a config are one or two lines per class.
 
 ## Tests and values
