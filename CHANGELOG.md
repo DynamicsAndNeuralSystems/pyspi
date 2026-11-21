@@ -2,36 +2,35 @@
 
 ## 3.0.0
 
-A major overhaul. The Java/JIDT dependency is gone, the `Calculator` API is simplified, and several long-standing correctness bugs are fixed. **This release contains breaking changes** — see [Migrating from 2.x](#migrating-from-2x).
+A major overhaul.
+The Java/JIDT dependency is gone, the `Calculator` API is simplified, and several long-standing correctness bugs are fixed.
+**This release contains breaking changes**: see [Migrating from 2.x](#migrating-from-2x).
 
 **Upgrading from 2.0.2 (the current PyPI release), at a glance:**
 
-- Python **>= 3.11** (2.0.2: >= 3.8), numpy **>= 2** (2.0.2: `<2`), scikit-learn **>= 1.8**, pyEDM **>= 2.5** (2.0.2: `==1.15.2.0`), mne **>= 1.6** (2.0.2: `==0.23.0`). No Java, `jpype`, `cdt` or `torch`. See [Dependencies](#dependencies).
-- The default `full` set goes from **285 SPIs (2.0.2) to 231**: 74 added, 128 removed, 22 renamed (identifier only), 135 unchanged by name. The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md). A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
-- The old `Calculator(subset=, configfile=, normalise=)` spellings still work, with a `DeprecationWarning`, until 4.0. See [Breaking changes and deprecations](#breaking-changes-and-deprecations).
-- Results tables written by 2.x (pickle) do not load; six directed spectral SPIs are transposed; many estimator values change (see [Changed](#changed) and the "Values changed" table).
+- Python **>= 3.11** (2.0.2: >= 3.8), numpy **>= 2** (2.0.2: `<2`), scikit-learn **>= 1.8**, pyEDM **>= 2.5** (2.0.2: `==1.15.2.0`), mne **>= 1.6** (2.0.2: `==0.23.0`).
+  No Java, `jpype`, `cdt` or `torch`.
+  See [Dependencies](#dependencies).
+- The default `full` set goes from **285 SPIs (2.0.2) to 231**: 74 added, 128 removed, 22 renamed (identifier only), 135 unchanged by name.
+  The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
+  A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
+- The old `Calculator(subset=, configfile=, normalise=)` spellings still work, with a `DeprecationWarning`, until 4.0.
+  See [Breaking changes and deprecations](#breaking-changes-and-deprecations).
+- Results tables written by 2.x (pickle) do not load; the directed spectral SPIs are transposed; many estimator values change (see [Changed](#changed) and "Further value changes").
 - The license is **GPL-3.0-or-later** (2.0.2: GPL-3.0), agreed by the maintainer, Ben Fulcher.
 
 ### Removed: Java and JIDT
 
-Every information-theoretic estimator is now pure NumPy. `infodynamics.jar`, `jpype` and the JVM startup path are gone, so installing pyspi no longer requires a Java runtime.
+Every information-theoretic estimator is now pure NumPy.
+`infodynamics.jar`, `jpype` and the JVM startup path are gone, so installing pyspi no longer requires a Java runtime.
 
-The port was validated against JIDT 1.6.1 before the dependency was dropped. That work caught four bugs in the port (kernel-entropy normalisation, Theiler-windowed KSG neighbour counting, Gaussian auto-embed bias, and KSG auto-embed estimator consistency), all fixed. Mean absolute error against JIDT at T=1600:
+The KSG, kernel, Gaussian and symbolic estimators follow JIDT 1.6.1 and are checked against it: hard-coded JIDT 1.6.1 outputs are asserted in the test suite, which needs no Java, for KSG MI and TE (with Theiler windows and auto-embedding), Gaussian MI and TE, kernel MI and TE, and symbolic TE.
+They agree to 1e-12 (KSG), to the 1e-8 ridge (Gaussian), and exactly (kernel and symbolic, after the ln 2 conversion).
+Values still differ from 2.0.2 where pyspi departs from JIDT's defaults on purpose: KSG breaks ties with a seeded jitter instead of JIDT's random dither, the kernel MI, TLMI and TE leave each point out of its own neighbour counts, and every estimator reports nats (see **Fixed** and **Changed**).
 
-| estimator | MI | TE | entropy |
-|:----------|---:|---:|--------:|
-| gaussian | 5.9e-17 | 4.7e-16 | 5.0e-09 |
-| kernel | 6.8e-16 | 5.0e-05 | 3.1e-15 |
-| symbolic | — | 2.4e-16 | — |
-| kozachenko | — | — | 4.2e-05 |
-| kraskov | 1.8e-03 | 2.5e-03 | — |
-
-Gaussian/kernel MI, kernel entropy and symbolic TE agree to machine precision. Kernel TE then differed by up to 1.9e-4 bits because pyspi scaled the destination's next value by its own standard deviation, where JIDT uses that of the destination's past; it now does the same and matches exactly (see **Changed**). The gaussian-entropy offset is a deterministic ridge term (the analogue of JIDT's stochastic `NOISE_LEVEL_TO_ADD`).
-
-The k-NN rows are historical measurements under different input policies, not a parity claim: the harness used JIDT's default normalisation and random `1e-8` dither, whereas pyspi standardises continuous inputs and refuses tied coordinates. No convergence rate is inferred from this comparison; KSG bias depends on k, dimensionality and density smoothness (Gao, Oh & Viswanath 2018, *Demystifying fixed k-nearest neighbor information estimators*). 
-Tie-free series are not changed by pyspi's tie handling (see below), and for those the KSG MI and TE (including Theiler windows, dynamic correlation exclusion and auto-embedding) agree with JIDT 1.6.1 run without its default dither to about 1e-15. That evidence is now kept in the repository: `tests/test_jidt_reference.py` asserts pyspi against hard-coded JIDT 1.6.1 outputs for KSG MI at Theiler windows 0, 5 and 20, KSG TE (fixed embeddings, a Theiler window, and auto-embedding with it), Gaussian MI and TE, kernel MI and TE (with and without the point itself and a Theiler window excluded), and symbolic TE (KSG to 1e-12, Gaussian to the 1e-8 ridge, kernel and symbolic exactly after the ln 2 conversion). It needs no Java. The Java harness that generated the constants is in `tests/tools/jidt_reference/`; the jar is not committed.
-
-**Provenance and licence.** The KSG, kernel, Gaussian and symbolic estimators follow, and were validated against, JIDT (Lizier, 2014; [github.com/jlizier/jidt](https://github.com/jlizier/jidt); GPL-3.0-or-later). `pyspi/statistics/infotheory.py` now carries that attribution and citation, and JIDT's copyright notice is retained in `pyspi/lib/LICENSE-jidt.txt` (listed in `license-files`, like the cdt notice).
+**Provenance and licence.**
+The KSG, kernel, Gaussian and symbolic estimators follow, and were validated against, JIDT (Lizier, 2014; [github.com/jlizier/jidt](https://github.com/jlizier/jidt); GPL-3.0-or-later).
+`pyspi/statistics/infotheory.py` carries that attribution and citation, and JIDT's copyright notice is retained in `pyspi/lib/LICENSE-jidt.txt` (listed in `license-files`, like the cdt notice).
 
 ### Breaking changes and deprecations
 
@@ -58,7 +57,10 @@ Tie-free series are not changed by pyspi's tie handling (see below), and for tho
 - **New since 2.0.2: parallel computation.** `Calculator.compute(n_jobs=...)` follows the joblib convention: `-1` is all cores, `-2` all but one, and `n_jobs=0` raises (`PYSPI_N_JOBS` sets the default). 2.0.2 had no `n_jobs`.
 - `import pyspi` no longer replaces `sys.stdout`/`sys.stderr`. `Calculator(verbose=False)` no longer touches logging; `verbose=True` adds one handler, idempotently.
 - The `OMP_NUM_THREADS` `setdefault` at import is removed. It ran after numpy had loaded, so it had no in-process effect, and it altered the environment of every importing program. Thread pinning for workers stays in `_parallel`.
-- **New since 2.0.2: a command line.** `python -m pyspi compute` and a `pyspi` console command (2.0.2 had neither). The output suffix and `n_jobs` are validated before computing, and `PYSPI_N_JOBS` is honoured.
+- **New since 2.0.2: a command line.**
+  `python -m pyspi compute` and a `pyspi` console command (2.0.2 had neither).
+  The output directory, suffix and `n_jobs` are validated before computing, and `PYSPI_N_JOBS` is honoured.
+  Failed SPIs and empty columns are reported on stderr, and the exit status is 1 whenever any SPI failed; `--allow-partial` exits 0 with the partial table written.
 
 ### Removed
 
@@ -67,391 +69,297 @@ Tie-free series are not changed by pyspi's tie handling (see below), and for tho
 - **128 SPIs** from `full` (285 to 231, with 74 added): 30 duplicate, constant or degenerate, 63 carried by an SPI that stays bundled, 27 that track something other than coupling, and 8 other estimators.
   All but four can still be computed from a custom config.
   See [SPI set changes](#spi-set-changes).
-- **Nine wavelet classes that were never in a bundled config**: `statistics.wavelet`'s `CoherenceMagnitude`, `CoherencePhase`, `ImaginaryCoherence`, `PhaseLockingValue`, `PairwisePhaseConsistency`, `PhaseLagIndex`, `weighted_PhaseLagIndex`, `DebiasedSquaredWeightedPhaseLagIndex` and `debiased_weighted_squared_PhaseLagIndex`. Their shared estimate passed `cwt_n_cycles = cwt_freqs / 7` (about 0.03 cycles), a wavelet about one sample wide, and averaged the cross-spectrum over epochs only, of which pyspi passes one. The coherency was then exactly `1 + 0j` at every frequency and time, so a custom config got `cohmag` and `plv` of 1, `icoh` and `dwspli` of 0, `pli` and `wspli` near 1, `ppc` and `dspli` of `-inf`, and `phase` of 0 or NaN, whatever the data. The multitaper classes of the same names in `statistics.spectral` are unaffected; the wavelet `PhaseSlopeIndex` has its own estimate and is unchanged.
-
-### Fixed: state, identity, and estimator contracts
-
-A second pass, driven by a suite of red tests, closed a set of defects that produced valid-looking but wrong results. Full details in each commit; the scientifically material ones:
-
-- **Stale caches survived data mutation.** Statistics cache results directly on the `Data` instance keyed by their own parameters, never by the data. Nothing invalidated them, so `set_data`/`add_process`/`remove_process` left every cached statistic serving the *previous* dataset's numbers, silently. All 15 cache attributes are now registered and dropped on mutation, and `Data` copies and freezes its input so nothing can mutate the series behind a cache.
-
-- **Checkpoints were not bound to a run.** Resume validated only the SPI identifier and an `(M, M)` shape, so a different dataset, config, preprocessing setting, or process order silently inherited the earlier run's results. Checkpoints now carry a `run.json` manifest bound to `Calculator.run_digest` (config *contents*, dataset bytes in native dtype, and a computation-version token). Failed or non-finite checkpoints are retried by default, workers load the parent's config snapshot rather than rereading a path that may have changed, and a directory belonging to another run is refused rather than emptied.
-
-- **Spectral caches ignored `fs`,** and were written under a `str` key but read under a `tuple` key — so the first write was unreachable and staleness only appeared from the *third* call, which is why a two-call probe found nothing.
-
-- **Six measures advertised `kraskov` and ran Gaussian.** Joint/conditional/ crossmap/causal entropy, directed info and stochastic interaction are composed from marginal entropies and have no KSG estimator; the argument is now rejected. No bundled config used it, so no shipped result changed.
-
-- **Cointegration `aeg` was forcibly symmetric.** It is not symmetric in its arguments (~0.8 mean absolute difference between orientations, up to ~1.6), yet the cache wrote each value to both `(i,j)` and `(j,i)`, so the reported value depended on process order. `aeg` is now `directed`; `johansen`, which is symmetric to ~3e-14, is unchanged.
-
-- **KSG accepted inputs it cannot estimate from.** `k=30` on `N=20` returned 0.414 and `k=100` returned 1.63; negative Theiler windows were accepted. The effective-sample and window checks now guard the MI, TE and auto-embedding paths, and the auto-embedding search skips candidates it cannot support instead of ranking them and failing on the winner. Tied and quantised coordinates are handled by the seeded tie-breaking jitter described in the next entry, not rejected.
-
-- **KSG lost JIDT's normalisation and tie policy.** Every KSG-family calculator in JIDT enables `normalise` and a small random dither by default. pyspi 2.x ran with both active, while the pure-NumPy port initially implemented neither. That is not a rounding difference:
-
-  - **Ties.** Independent binary marginals (N=400, k=4) returned MI = **−3.35**; four-level, −1.96; one-decimal-rounded Gaussians, **+0.90** — a confident false positive on independent data. Every kth-nearest-neighbour radius is zero, so the digamma counts saturate on the tie structure and the estimate measures quantisation. Every process in the bundled `forex` dataset is tied: 24–212 distinct values in 250 samples.
-  - **Scale.** KSG's L∞ radius is not invariant to per-coordinate rescaling. With `zscore=False`, scaling one of a correlated Gaussian pair (true MI 0.50) by 1e−3 or 1e3 collapsed the estimate from 0.49 to 0.05 and 0.06.
-
-  Per-coordinate sample standardisation is restored for MI, TLMI, TE, CMI, AIS auto-embedding and directed information. Random dither is not: an unexposed noise draw changes a finite-sample estimate, while content-derived pseudo-random dither was found to depend on observation order. For ties, KSG now follows pyhctsa: in each raw series with a positive standard deviation, every entry whose value occurs more than once gets Gaussian jitter of SD `1e-10 × std` from a fixed-seed local generator before embedding (seeds: source 0, target 1, embedding selection 2), repeated until every value is distinct. Values that occur once are untouched, and unlike hctsa's `BF_TieBreakNoise` the ties of series with more than 90% unique values are broken too. Tie-free series are untouched, so existing tie-free results are bit-identical and still match JIDT 1.6.1 to about 1e-15. The same independent binary, four-level and rounded-Gaussian data (N=400, k=4) that previously gave MI −3.35, −1.96 and +0.90 now give about 0 ± 0.03, and every `kraskov` SPI now computes on the bundled `forex` dataset. The jitter is deterministic but depends on observation order. NaN, infinite and constant series still raise. **Every `kraskov` SPI's values can change**: 2.x ran JIDT with its default dither (seeded, `NOISE_SEED=42`), which 3.0 does not reproduce.
-
-  Kozachenko entropy keeps an explicit tied-data error (it is not jittered): `H(X + εξ) → −∞` as `ε → 0` for discrete `X`, so a dithered differential entropy on quantised data reports the dither level.
-
-- **Symbolic TE packed symbols into an integer that overflowed** at `k_history=10` (reaching `(k!)^3`). Now counts distinct rows directly, validated against a tuple-keyed reference. `k_history=1` is rejected: a length-1 ordinal pattern has one symbol, so TE is identically zero. Those were the only two symbolic variants shipped, so **symbolic TE now has no bundled representation** — reintroducing it needs a defensible `k` with benchmark support. `k_history=10` remains constructible for long series, where the undersampling argument does not apply.
-
-- **Results tables no longer use pickle.** Names are stored as `dtype='U'` and loaded with `allow_pickle=False`; files carry a schema version, run spec, digest and errors. Tables written by pyspi < 3.0.0 will not load — re-save them from a `Calculator`.
-
-- **`load_table()` dropped everything `save()` wrote except the numbers.** The run spec, digest and error map were written and never read, so a loaded table could not be asked which SPIs failed — and a NaN column is otherwise indistinguishable from a legitimately undefined statistic. They now arrive in `DataFrame.attrs` (`schema`, `run_spec`, `run_digest`, `errors`). Validation also covered only `ndim` and the SPI axis; a file whose matrices were the wrong width reached `MultiIndex.from_product` and failed there with a reshape error rather than a statement about the file. The full `(n_spis, M, M)` shape is now checked.
-
-- **`run_digest` did not bind to the algorithm.** It hashed the run spec, the config contents and the dataset bytes, so identical inputs computed by two different estimator implementations produced the same digest and a checkpoint written by one could be resumed by the other. It now covers the computation version too.
-- **`pyspi.COMPUTATION_VERSION` is public.** It is the value checkpoints and `run_digest` are keyed on, bumped whenever a change can alter a valid SPI output. Record it with saved results and do not pool results computed under different values.
-
-- **A successful recomputation left a stale error behind.** `compute(retry_failed=True)` on a resumed run kept the old `calc.errors` entry next to the good column it had just written, and `save()` froze that contradiction into the file.
-
-- **Process names were not validated.** Duplicates surfaced as pandas' "Columns with duplicate values are not supported in stack" from four frames away, with nothing pointing at the names; non-string names were written to the NPZ as a `U` array and came back as their `str()`, so `procnames=[1, 2]` loaded as `["1", "2"]` and the file did not round-trip. Names are now coerced to `str` and required to be unique, on the internal constructor the parallel workers use as well as the public one.
-
-- **`DirectedInfo` did not implement directed information.** It summed `H(Y^i)/i` minus causal entropy, so with a source statistically independent of the target it returned 0.007 at target autocorrelation 0 and 1.53 at 0.95 -- it measured target self-predictability. It now implements Massey's `sum_i [H(Y_i|Y^{i-1}) - H(Y_i|Y^{i-1},X^i)]`, validated against the closed form `0.5*ln(1+c^2)`.
-
-  The kernel and kozachenko variants are dropped. Composing DI from four separately-estimated entropies leaves each with its own dimension-dependent bias, and those do not cancel: on independent data kernel sat at 3.8-4.4 for every `T` from 100 to 8000 (a fixed bandwidth in ~11 dimensions does not improve with sample size), and kozachenko returned negatives. In their place `di_kraskov` estimates each `I(X^i; Y_i | Y^{i-1})` term *directly* with the KSG/Frenzel-Pompe conditional-MI estimator, which fixes one neighbour radius in the joint space and reuses it across marginals so the biases cancel by construction. It matches the closed form as closely as the Gaussian variant. `n` now reaches the identifier for `DirectedInfo` and `CausalEntropy`.
-
-- **Wavelet phase-slope index lost its direction.** `mne_connectivity` returns a lower-triangular matrix and pyspi filled the upper triangle *without* negating, so `psi[i,j] == psi[j,i]` — the sign is PSI's entire lead/lag content. The fill must also happen per frequency, *before* the band statistic: only a statistic commuting with negation may be applied first, and `max_f(-v) = -min_f(v)`, not `-max_f(v)`. `mean` is antisymmetric, `max` asymmetric. `fmin=0` also asked for an unbounded period, giving an ~11.1-million-sample Morlet wavelet at `T=100`; `fmin` is now resolved against the data-supported floor *and* the cycle count capped so the wavelet always fits the signal.
-
-- **Kozachenko entropy returned `-inf` on tied data.** A duplicated observation puts a nearest neighbour at distance zero, and `log(0)` sends the estimate to `-inf`. Quantised series do this readily -- the bundled `forex` dataset has a process with 24 distinct values in 250 samples -- so several kozachenko SPIs silently produced infinities there. They now fail with the cause named.
-
-- **Conditional mutual information did not reduce to MI on an empty conditioning set.** `_ksg_cmi` faked the conditioning count as a constant `N-(2w+1)`, which coincides with the MI estimator only at `w=0` and drifted with the Theiler window (0.005 at `w=1`, 0.051 at `w=10`). It now delegates to the MI estimator. Reachable only from `DirectedInfo`'s first term, whose history is empty; transfer entropy always has at least one history column, so it never took this branch. No bundled SPI is affected — `di_kraskov` ships without a Theiler window — but a hand-configured `dyn_corr_excl` would have hit it.
-
-- **`ConditionalEntropy` is `directed`.** On `var1_M3_T100`, `max|A - Aᵀ|` is 0.115 (kozachenko) and 0.039 (kernel) under z-scoring, and the Gaussian form is asymmetric (0.73) with `zscore=False`. Structural labels describe the measure rather than one estimator under one preprocessing choice.
-
-- **Importing pyspi reseeded NumPy's global RNG.** `pyspi.lib.ids` called `np.random.seed(1717)` at import, silently overriding the caller's seed -- stochastic SPIs looked reproducible but ignored it. Removed.
-
-- **`filter_spis` matched raw YAML family labels**, so per-variant traits set in `__init__` were invisible (`filter_spis(["antisymmetric"])` returned nothing despite 18 matching SPIs) and a matching family selected all of its configs. It now resolves each config and matches on the labels the SPI actually carries.
-
-- **Gaussian joint/conditional entropy used two different regularisations.** The vectorised multivariate path clipped `r^2` while the scalar path applied a ridge, so `bivariate()` and `multivariate()` disagreed by 8.4 nats on singular data. Both now share one primitive.
-
-- **SPI metadata (no value changes).**
-  `InterDependenceScore` left `terms`, `pnorm` and `bandwidth` out of its identifier, and `SpectralGrangerCausality` left out `max_order` (when the order is selected), `ignore_nan` and `nan_threshold`, so two parameterisations of one class could share a table column and a checkpoint file.
-  Non-default values are now appended (e.g. `ids_bw-0-25`, `..._order-None_maxorder-20`); every bundled identifier is unchanged.
-  `bary-sq_*` (and `statistic="max_time"`) now report unsigned: a squared barycenter and an argmax index are non-negative.
-  `IntegratedInformation` rejects an unknown `phitype`, a `normalization` other than 0 or 1 and a non-integer `delay` at construction, and no longer turns every exception into a NaN logged at error level: a failed pair is NaN with a warning, and a failure on every pair is recorded in `Calculator.errors`.
-
-- **A pickled or copied transfer entropy forgot its history length.**
-  Unpickling (including `pickle`/`dill` of a `Calculator`) or `copy.copy` rebuilt the kernel and symbolic TE calculators with their default `k_history=1`.
-  A later computation then gave the k=1 value under the `_k-<k>` identifier: `te_symbolic_k-3` became identically zero.
-  Parallel `compute(n_jobs=...)`, `deepcopy` and `CalculatorFrame` were not affected, since they rebuild SPIs from the config or copy the calculator; results computed before pickling were also unaffected.
-
-New: `Calculator.errors`, `Calculator.run_spec`, `Calculator.run_digest`, `Calculator.to_frame()` (long-form results, one row per `(spi, source, target)`) and `Calculator.summary()`; an `antisymmetric` structural label for measures satisfying `A[i,j] == -A[j,i]`; and a useful `repr` — a computed `Calculator` previously displayed as `<pyspi.calculator.Calculator at 0x...>`.
-
-
-Three group-delay SPIs that shipped as silent all-NaN columns are now recorded failures (values unchanged).
+- **Nine wavelet classes that were never in a bundled config**: `statistics.wavelet`'s `CoherenceMagnitude`, `CoherencePhase`, `ImaginaryCoherence`, `PhaseLockingValue`, `PairwisePhaseConsistency`, `PhaseLagIndex`, `weighted_PhaseLagIndex`, `DebiasedSquaredWeightedPhaseLagIndex` and `debiased_weighted_squared_PhaseLagIndex`.
+  Their shared estimate used a wavelet about one sample wide and averaged the cross-spectrum over epochs only, of which pyspi passes one, so the coherency was exactly `1 + 0j` at every frequency and time whatever the data.
+  The multitaper classes of the same names in `statistics.spectral` are unaffected, and the wavelet `PhaseSlopeIndex` has its own estimate.
+  `WaveletCoherence` (see **Added**) is a separate, smoothed estimate.
 
 ### Fixed
 
-- **Directed spectral SPIs were transposed.** `SpectralGrangerCausality` (both methods), `DirectedCoherence`, `PartialDirectedCoherence`, `GeneralizedPartialDirectedCoherence`, `DirectedTransferFunction` and `DirectDirectedTransferFunction` reported `A[i, j]` as the influence *of j on i*, the opposite of every other directed SPI in the library. The spectral backends follow the DTF/PDC literature convention; their output was passed through unchanged. pyspi's convention is **row = source, column = target**, as set by `base.Directed.multivariate`, and all directed SPIs now follow it. **Results computed with 2.x for these six SPIs need transposing.** Undirected spectral SPIs are unaffected and bit-identical.
-- **`MutualInfo`, `TimeLaggedMutualInfo` and `TransferEntropy` silently returned NaN** when given `estimator="kozachenko"`; there is no Kozachenko-Leonenko path for these measures. They now raise `NotImplementedError` at construction. Use `estimator="kraskov"` instead.
-- **`ccm_E-None_*` never inferred an embedding.** The auto-embedding path read the winning dimension as `pyEDM.EmbedDimension(...).max()["E"]`. `DataFrame.max()` reduces column-wise, so that is the largest *candidate* E — pyEDM's `maxE` default of 10 — for every process on every dataset, whatever the skill curve says. The three shipped `ccm_E-None_{mean,max,diff}` SPIs were therefore **bit-identical to `ccm_E-10_*` on all three frozen fixtures** (verified: max|difference| exactly 0) while their identifiers advertised an inferred embedding. Selection is now `argmax(rho)`, ties to the smaller E; on the fixtures it picks E ∈ {1, 2, 5, 10} depending on the process. **`ccm_E-None_*` values change** (3 SPIs); `ccm_E-1_*` and `ccm_E-10_*` are unaffected.
-- **`ConvergentCrossMapping` broke whenever pyspi was driven from an unguarded script.** pyEDM 2.5's `_get_mp_context` documents that *"fork is never used"* — it takes forkserver, else spawn — and both re-import the caller's `__main__` in every child. Run from a plain `python analysis.py` with no `if __name__ == "__main__":` guard, which is how the README shows pyspi being used, each child re-executed the caller's script; the parent raised `RuntimeError: An attempt has been made to start a new process before the current process has finished its bootstrapping phase`, pyspi caught it, and all nine `ccm_*` SPIs came back as an **all-NaN column** — after the child had already re-run whatever preceded `compute()`. It looked fine from a REPL, a notebook, or a guarded script, which is why the baseline generator and `python -m pyspi` never saw it. pyEDM's nested pools are now off unconditionally: `parallel=False` for `CCM`, and `EmbedDimension` (which has no serial path and starts a child even at `numProcess=1`) replaced by a serial loop over the public `pyEDM.Simplex`, matching its per-E skill exactly. There is no speed cost — measured on an idle machine, `kuramoto_M7_T100`, 21 pairs at E=1, `parallel=True` took 24.8s against 6.8s serial, a **3.6× speedup** from switching it off. Parallelism belongs at the SPI level, where `compute(n_jobs=...)` already provides it.
-- **A failed spectral factorisation was reported to nobody.** Wilson's algorithm is iterative; on hitting its iteration cap it logs `"Maximum iterations reached. N of M converged"` through `logging` and returns the unconverged factor anyway. Every Wilson-derived measure (`dcoh`, `dtf`, `ddtf`, `pdcoh`, `gpdcoh`, nonparametric `sgc`) is built from that factor. pyspi collects per-SPI diagnostics from the `warnings` channel only, so those numbers reached the results table with nothing recorded against them — including on the bundled `kuramoto_M7_T100` fixture, where 2 of 21 pairs fail to converge and the relative factorisation residual `max|S - GGᴴ| / max|S|` runs 0.14–6.0 across pairs. The backend's log warnings are now bridged into the `warnings` channel for the duration of each backend call, so they land in the per-SPI record. No value changes; the estimate is the user's to improve (longer series, a parametric fit), but it is no longer silent.
-- **`python -m pyspi compute --quiet` reported success over a failed run.** Failed SPIs were named only in the computation summary, which `--quiet` suppresses, and the exit status was 0 unconditionally. Failures and empty (all-NaN) columns are now always reported on stderr, and the exit status is **1 whenever any SPI failed** — a results table with failed columns is one an automated pipeline must not ingest silently, and a NaN column is indistinguishable from a legitimately undefined statistic once the process has exited. `--allow-partial` opts back into exiting 0; the partial table is written either way, and a run in which *no* SPI produced a finite value exits 1 regardless.
-- **All three `gd_*` (group delay) SPIs returned no finite value, on any input.** Not a power problem: `spectral_connectivity.statistics.coherence_fisher_z_transform` divides by `sqrt(coherence_bias(n_obs1) + coherence_bias(n_obs2))`, and the one-sample call passes `n_obs2 = 0`, for which `coherence_bias` returns `1/(2·0 − 2) = −0.5`. The radicand is negative for every `n_obs1`, so every p-value is NaN, nothing is ever significant, and the phase regression runs on a fully masked array. Reproduced at 5, 11, 19 and 39 tapers, T up to 4000, on a pair with median coherence 0.998. pyspi now computes the statistic itself with the standard one-sample form `(arctanh|C| − b)/sqrt(b)`, `b = 1/(2n − 2)` (Enochson & Goodman 1965; Bokil et al. 2007), then Benjamini–Hochberg over the band, the largest contiguous significant run thinned to independent points, and a least-squares fit of the unwrapped coherence phase against frequency. On `y(t) = x(t − L)` it recovers L to within 0.005 samples for L ∈ {1, 3, 5, 8}. Partial NaN remains correct — group delay is defined only where the coherence is significant. **`gd_*` values change** (3 SPIs, from nothing to something).
+**Results and their identity.**
 
-- **`MAX_CORR_AIS` searched the destination embedding only (in the intermediate NumPy port).** JIDT 1.6.1, and so pyspi 2.0.2, searched the source embedding as well, so relative to 2.0.2 **only the identifiers change, not the values**. The port had selected `(k, k_tau)` from the destination and hard-coded the source to `(1, 1)`, while the method name denotes selection for both. It now selects `(l, l_tau)` from the source independently, by the same criterion and the same estimator, and passes all four to the estimator; `MAX_CORR_AIS_DEST_ONLY` is the previous behaviour under a name that describes it, and does accept a fixed source embedding. The three shipped auto-embedding SPIs are renamed to carry the method; their values match 2.0.2's search. Auto-embedding and the search bounds are now **refused** by the kernel and symbolic estimators, which have no active-information-storage criterion and used to accept the argument and run a fixed embedding; a fixed embedding that the selected method would override is refused rather than ignored; and search bounds are refused when no auto method is set. Descriptions conflating this with Ragwitz local-prediction selection are corrected — that criterion is not implemented.
+- **Caches survived data mutation.**
+  Statistics cache results on the `Data` instance, keyed by their own parameters; `set_data`, `add_process` and `remove_process` did not invalidate them, so cached statistics served the previous dataset's numbers.
+  Every cache is now dropped on mutation, and `Data` copies and freezes its input.
+- **Spectral caches ignored `fs`**, so two SPIs differing only in sampling rate could share a cached spectrum.
+- **Importing pyspi reseeded NumPy's global RNG** (`pyspi.lib.ids` called `np.random.seed(1717)` at import), overriding the caller's seed.
+- **Process names** are coerced to `str` and must be unique; `Data(procnames=...)` was validated and then discarded, so custom names never reached the results table.
+  `Data.add_process()` no longer creates a duplicate name.
+- **`CalculatorFrame.compute()` accepted no arguments**; it now forwards to `Calculator.compute`.
+- **`CorrelationFrame` reported invalid p-values.**
+  It used each time series' length as the F-test sample size, but the observations are edges, and edges sharing a node are dependent.
+  `get_pvalues()`, `compute_significant_values()` and `get_average_correlation(remove_insig=True)` now raise, directing users to a network-preserving permutation (QAP) analysis.
+- **`CalculatorFrame` and `CorrelationFrame` bookkeeping.**
+  `init_from_yaml` appended a dataset's name and labels before loading it, so after one failed entry every later dataset carried its predecessor's name and labels.
+  `get_correlation_df(rmmin=True)` shifted the calculator's table in place; it now shifts a copy.
+  `CorrelationFrame.ddf` averaged datasets that share a name, including several unnamed ones; unnamed datasets are now named by position (`dataset_0`, `dataset_1`, ...), and a name given to two datasets raises `ValueError`.
+  The SPI-by-SPI correlation is computed as two whole-matrix Spearman correlations (identical output, about 60x faster).
+- **Loading and config errors that were silent or late.**
+  A `.csv` dataset never loaded (`np.genfromtxt` was given `","` as its dtype); it now does.
+  A config entry with an unknown key (for example `config:` for `configs:`) built the class with its default parameters, and a module or class named twice silently lost the first block; both now raise, and a bare `Class:` entry means the defaults.
+- `pyspi/lib/ids/LICENSE.txt` was not shipped, despite MIT requiring it, and `LICENSE.txt` had been altered by a global find-and-replace ("technological *statistics*"); both are fixed.
 
-- **KSG's deterministic dither was observation-order dependent and introduced an arbitrary 12-decimal boundary.** On independently generated binary marginals at N=120/seed=0, jointly permuting aligned observations at Theiler window zero moved MI from **0.000276 to 0.048716**; complete reversal with `w=3` moved it from **0.032949 to 0.068347**, even though all values and `|i-j|` exclusions were unchanged. A four-level fixture moved by **0.047032** under permutation, and CMI moved as well. Separately, the affine-equivalent binary coordinate `x` versus `0.1*x + 0.3` straddled the 12-decimal rounding boundary and moved its paired MI from **0.030391 to −0.002863**. No deterministic procedure can assign distinct pseudo-random values to otherwise indistinguishable tied observations while remaining covariant under every observation permutation. That content-derived dither, its digest keys and the rounding were therefore removed. They were replaced by jitter of the repeated values from a fixed-seed generator (previous entry), which is deterministic for a given observation order but is not claimed to be order-covariant. Tie-free inputs are standardised without rounding or random state and are sample-order, process-order, reflection and nonzero-affine covariant to floating-point tolerance. No finite-sample invariance under arbitrary nonlinear transforms is claimed.
+**Orientation and sign.**
 
-- **KSG's strict marginal counts used a relative tolerance instead of `< ε`.** Every scalar MI, general MI and CMI branch queried at `ε*(1−1e−10)`. On tie-free N=8/k=1 data with `y=x+1e−10·noise`, this discarded genuine interior neighbours and returned **1.7178571429** instead of the exact all-pairs KSG1 value **1.5928571429**. Theiler-window paths had the same defect. Radius queries now use `nextafter(ε, −∞)`, the immediately smaller representable radius, and match independent quadratic-time references. `COMPUTATION_VERSION` is bumped to `3.0.0.r6`. All ten frozen KSG arrays were compared individually and remain bit-exact; their fixture geometries do not hit the corrected boundary.
+- **Directed spectral SPIs were transposed.**
+  `SpectralGrangerCausality` (both methods), `DirectedCoherence`, `PartialDirectedCoherence`, `GeneralizedPartialDirectedCoherence`, `DirectedTransferFunction` and `DirectDirectedTransferFunction` reported `A[i, j]` as the influence *of j on i*, the opposite of every other directed SPI.
+  pyspi's convention is **row = source, column = target**, and all directed SPIs now follow it.
+  **Results computed with 2.x for these SPIs need transposing.**
+  Undirected spectral SPIs are unaffected.
+- **`ccm_*` was transposed.**
+  pyEDM's `a:b` column is `a`'s shadow manifold predicting `b`, which is evidence that `b` drives `a`; it is now stored at `A[b, a]`.
+- **`dcorrx_*`, `mgcx_*` and `coint_aeg_*` are transposed relative to 2.x**: the lagged distance measures follow the published definition with the source on the row, and `coint_aeg_*` regresses the column on the row (as `lmfit_*` does).
+- **Cointegration `aeg` was forced to be symmetric.**
+  The cache wrote each value to both `(i, j)` and `(j, i)`, so the reported value depended on process order; `aeg` is now `directed`.
+- **Wavelet phase-slope index lost its direction.**
+  pyspi filled the upper triangle of the backend's lower-triangular result without negating it, so `psi[i, j] == psi[j, i]`.
+  The fill now happens per frequency, before the band statistic, so `mean` is antisymmetric.
+  `fmin=0` also asked for an unbounded period; `fmin` is now resolved against the data-supported floor, and the cycle count is capped so the wavelet fits the signal.
+- **Antisymmetric SPIs reported themselves as unsigned.**
+  `Calculator._rmmin` subtracts the minimum from every unsigned SPI, which on an antisymmetric matrix destroys the lead/lag its sign carries, and `set_group` correlates unsigned SPIs through `abs()`.
+  `phase`, `pli`, `wpli`, `psi` (multitaper and wavelet), `gd`, `ccm_*_diff` and `coint_aeg_tstat` (a signed Engle-Granger t-statistic: more negative is stronger evidence) are now signed, and an SPI's merged label follows its `issigned()`.
+  `CrossPairwiseDistance` had no `issigned`, so `_rmmin()` raised on any config containing it.
+- **`IGCI` was misnamed and mislabelled.**
+  It is Information-Geometric Causal *Inference*, so `InformationGeometricCausalInference` is the class name, with the old one kept as a deprecated alias; its score is exactly antisymmetric and is now signed.
+  It is not in any bundled config.
 
-- **`CorrelationFrame` reported invalid inferential p-values.** It correlated SPI edge vectors but used each source time series' length `T` as the F-test sample size. The observations are edges, not time samples, and substituting the edge count is still invalid because edges sharing a node are dependent. `get_pvalues()`, `compute_significant_values()` and `get_average_correlation(remove_insig=True)` now raise with that explanation and direct users to an independently validated network-preserving permutation/QAP analysis.
+**Estimators.**
 
-- **Coherence phase used linear statistics on wrapped angles.** The bundled spectral mean violated its antisymmetric label by **0.2463994238** on `var1_M3_T100`; its full-band maximum was exactly π for every off-diagonal entry, a branch-cut artefact rather than a useful pairwise summary. Spectral and nonbundled wavelet phase now use the circular mean `arg(mean(exp(i·phase)))` and construct the opposite orientation explicitly by negation. A resultant indistinguishable from zero under a count-scaled `8·eps·n` floating-point bound returns NaN, as does an indistinguishably antipodal mean: ±π is one valid circular location but has no unique signed ordinary-float orientation. Both classes refuse `statistic="max"`; the three `phase_multitaper_max_*` identifiers are removed from every bundled config, while the three mean identifiers remain and change value. `COMPUTATION_VERSION` is `3.0.0.r7`, so no r6 checkpoint can be reused for the final phase policy.
-
-- **Group delay was reported in seconds, and its `rvalue` flipped under process permutation.** `C.frequencies` is in Hz, so `slope/(2π)` is a delay in seconds: a true 4-sample lag came back as 4.0, 2.0 and 1.0 at fs = 1, 2, 4 while the API and every other lagged SPI count samples. The delay is scaled by `fs` (a no-op at the shipped fs=1). `rvalue` stored the *signed* regression r symmetrically, but the fit is of the phase of `C_ij` and `phase(C_ji) = −phase(C_ij)`, so reversing the process order turned +0.99997 into −0.99997 at the mirrored position; it is now `|r|`, and that variant is labelled undirected and unsigned.
-
-- **The KSG auto-embedding boundary overcounted by one.** The scorer used `N_eff = T − (dim−1)·delay`, but `_ksg_ais` aligns a one-step-ahead future against the embedding and so spends a sample on the shift as well: the aligned arrays have `T − 1 − (dim−1)·delay` rows. At T=5, kNN=4, dimension 1 the guard passed on a claimed N=5 while the real N is 4 — and `_ksg_mi_general` had no guard of its own, so the invalid candidate scored a finite **0.0**. The scorer now uses the aligned count, `_ksg_mi_general` validates the arrays it is given, and the search **raises** when no candidate is scorable rather than falling back to (1, 1) — an embedding it had just rejected. No shipped value moves: at T=100 the smallest aligned N is 63 against k=4.
-
-- **IGCI was misnamed and mislabelled.** It is Information-Geometric Causal *Inference* and tests no conditional independence; `InformationGeometricCausalInference` is the accurate name, with the old one kept as a deprecated alias. Its score is a difference of two entropies and therefore exactly antisymmetric, so reporting it `Unsigned` let `Calculator._rmmin` shift both orientations equally and destroy the sign. It is **not in any bundled config in 3.0**; it was active in 2.0.2's `config.yaml` (as `InformationGeometricConditionalIndependence`, identifier `igci`), so `full` loses that SPI. `AdditiveNoiseModel` was labelled `linear` while fitting a Gaussian process — now `nonlinear`.
-
-- **Structural traits now win over every competing config-declared trait.** The rule removed only `directed`/`undirected`, so an intrinsic `undirected` SPI plus YAML `asymmetric` retained both. The instance's one trait now displaces all of `directed`, `undirected`, `antisymmetric` and `asymmetric`; custom-YAML conflicts are tested in all four directions.
-
-- **Integer parameters no longer advertise values they do not compute.** `ConvergentCrossMapping(embedding_dimension=2.7)` advertised `E-2.7` and later executed `E=2`; lagged-correlation config expansion similarly truncated fractional `max_tau` and accepted booleans/numeric strings. Both now require genuine integers and canonicalise NumPy integer scalars before identifiers and expansion.
-
-- **`run_digest` hashed the config's absolute path.** Identical config contents over identical data therefore digested differently in a source checkout, an installed wheel and a temporary directory, so a reusable checkpoint was refused. Location-only fields are excluded from the digest and stay in `run_spec` as provenance; the config *contents* are hashed. A false negative rather than unsafe reuse, but it defeated the point of a content hash.
-
-- **`Data.add_process()` could create a duplicate process name.** It appended `proc-<index>` unconditionally, so a caller who named their processes `["a", "proc-2"]` and appended twice produced a second `proc-2` — which `to_frame()` cannot stack, and which the constructor rejects.
-
-- **Antisymmetric SPIs reported themselves as unsigned.** `issigned()` is not metadata: `Calculator._rmmin` subtracts the minimum from every SPI reporting unsigned — which on an antisymmetric matrix shifts `A[i,j]` and `A[j,i]` equally and destroys the lead/lag its sign carries — and `set_group` correlates unsigned SPIs through `abs()`. `phase`, `pli`, `wpli`, `psi` (multitaper and wavelet), `gd` and `ccm_*_diff` all declared `unsigned` over antisymmetric output. `coint_aeg_tstat` likewise returns a signed Engle–Granger t-statistic (more negative is stronger evidence; positive means none). All are now signed, and the merged label follows `issigned()` so a config cannot reintroduce the contradiction. `CrossPairwiseDistance` had no `issigned` at all, so `_rmmin()` raised `AttributeError` on any config containing it.
-
-- **Cross-correlation was wrong four ways.** `correlate(x, y) / x.std() / y.std() / (T − 1)` is neither the biased (÷T) nor the unbiased (÷(T−|l|)) normalisation and mixed `std()`'s 1/T with a 1/(T−1) divisor, so a series against itself returned T/(T−1) — exactly **1.1111** at T = 10, for a quantity bounded by 1. The correlate call used the *raw* series while the divisor demeaned, giving **3.8384** for `arange(10)` against itself with `zscore=False`. The lag window was centred on index T rather than T−1, i.e. on lag +1, and the opposite orientation was cached unreversed although r_yx(l) = r_xy(−l) — both breaking the symmetry an *undirected* SPI must have. The significance band was `1.96/sqrt(len(r)//2)`, the half-width of the lag window, so it was twice too wide and scaled with the lag cut rather than the sample size; and the truncation walked a contiguous run outwards from lag 0, which on a pair where i leads j by one sample gave 0.9957 one way and −0.0202 the other. Now: biased normalisation (zero lag = Pearson's r), demeaned, a symmetric window, a `1.96/sqrt(T)` amplitude cut, and `sigonly` reducing over the lags above the cut — a set, hence invariant under l → −l — returning 0 when none clears it, rather than the largest of ~T/2 sample correlations under the null. **`xcorr_*` values change** (6 SPIs). `sigonly` is documented as what it is: a pointwise amplitude threshold `|r(l)| > 1.96/sqrt(T)`, kept under a historical name. It is *not* a significance test — the band is not inflated for the series' own autocorrelation and is not corrected for being applied at every lag, so under the null it keeps something almost surely (no seed in 400 gave an empty set at T=600).
-
-- **Spectral Granger causality ignored `fs` and mis-oriented its NaN mask.** The parametric branch built `TimeSeries(..., sampling_interval=1)` unconditionally although `fs` is in the identifier *and* the cache key, so two SPIs advertising different sampling rates computed the same numbers. And the result was transposed into pyspi's (source, target) orientation while the NaN mask was left in the backend's, so with a directionally asymmetric NaN pattern the genuinely unestimable cell was already NaN and the mask blanked its mirror — a good estimate destroyed. Both fixed; no value change at the shipped `fs=1`.
-
-- **Eleven `sgc_*` identifiers (in `full`) named a frequency band they did not use.** Spectral GC is undefined at zero frequency, so `fmin=0` is overridden to 1e-5 — but the identifier was built from the argument. **`sgc_*_fmin-0_*` is renamed to `sgc_*_fmin-1e-05_*`**; values unchanged.
-
-- **Symbolic and kernel transfer entropy accepted embedding parameters they ignore.** `SymbolicTECalculator` reads only `k_HISTORY` and applies that one ordinal-pattern length to source and destination alike at unit delay — which is how Staniek & Lehnertz (2008) define it — yet `k_tau`, `l_history` and `l_tau` were accepted, stored, never read, and written into the identifier: `te_symbolic_k-3_kt-1_l-1_lt-1` advertised a destination history of 3 against a source history of 1 while computing 3 for both. The kernel calculator has the same contract and accepted them just as silently. They are now refused, symbolic identifiers become `te_symbolic_k-<k>`, and non-positive histories and delays are rejected at construction. Implementing separately aligned histories was the alternative and is the wrong call here: there is no oracle left to validate `k != l` against, and the one shipped symbolic variant, `te_symbolic_k-3`, uses the same history for both.
-
-- **`dyn_corr_excl` named three different Theiler windows with one identifier.** The suffix was a bare `_DCE`, so 5, 10 and `"AUTO"` collided; a config setting two of them produced two identical identifiers. Now `_DCE-<value>`, which reaches `_getkey()` as well. **Shipped SPIs are renamed `..._DCE` → `..._DCE-AUTO`**; values unchanged.
-
-- **Itakura-constrained DTW normalised inconsistently.** The `itakura` branch of `multivariate` skipped the `sqrt(T)` division that both the bivariate path and the dtaidistance path apply, so the two disagreed by `sqrt(T)` under `normalise=True`. Not shipped in any config.
-
-- **`dtw_constraint-sakoe-chiba` is renamed `dtw_constraint-sakoe-chiba_radius-auto` and its values change.** 2.x used tslearn's default Sakoe-Chiba radius of 1; the radius is now chosen from the series length (10% of `T` or `1.5·√T`, whichever is smaller, with a floor of 10 and a cap of `T-1`), tunable with `PYSPI_DTW_SAKOE_LINEAR_FRAC`, `PYSPI_DTW_SAKOE_SQRT_COEFF` and `PYSPI_DTW_SAKOE_MIN_RADIUS`. Values differ from 2.0.1 by up to 8.5.
-- **Kozachenko SPIs were labelled `linear`.** They are k-nearest-neighbour estimators and are now labelled `nonlinear`, so `filter_spis(["linear"])` no longer returns them.
-- **`Data(procnames=...)` was silently discarded.** The length was validated and then never assigned, so custom process names never reached the results table.
-- **`CalculatorFrame.compute()` accepted no arguments**, raising `TypeError` for any keyword. It now forwards to `Calculator.compute`.
-- The default config, and every bundled config, was **missing from built wheels** — an installed pyspi could not construct a `Calculator`. Package data now uses globs.
-- `pyspi/lib/ids/LICENSE.txt` was not shipped, despite MIT requiring it.
-- `LICENSE.txt` had been corrupted by a global find-and-replace, altering the verbatim GPLv3 text ("technological *statistics*"). Restored.
-- **`lcss_constraint-sakoe-chiba` and `lcss_constraint-itakura` were plain `lcss`.**
-  tslearn before 0.10 ignored `global_constraint` in `lcss` (tslearn #526), so in every earlier pyspi release, 2.x included, both constrained SPIs were identical to `lcss` (0.0 difference on every drift fixture).
-  tslearn 0.10 applies the band, but by holding every cell outside it at zero.
-  That is correct for the Sakoe-Chiba band; the Itakura parallelogram, however, narrows to a single cell at each end, so any pair whose last samples differ by more than `eps` scored exactly 0 (43% of random pairs at T=100), and 40 of 94 of the remaining pairs read up to 0.03 low.
-  pyspi now computes constrained LCSS itself (`_banded_lcss` in `pyspi/statistics/distance.py`), with tslearn's own band masks restricting which pairs may match but not where the recursion may pass (Vlachos et al. 2002).
-  It equals tslearn 0.10 exactly for Sakoe-Chiba, and plain `lcss` still calls tslearn and is unchanged.
-  **Both constrained values change**: by up to 0.4 for Sakoe-Chiba and 0.09 for Itakura on the drift fixtures.
-  `lcss_constraint-sakoe-chiba` uses tslearn's default radius of 1, the narrow band that `dtw_constraint-sakoe-chiba` used in 2.x.
-
-Further fixes, each pinned by a test against a closed form, a textbook implementation or a third-party reference (`tests/test_*_reference.py`); the identifiers whose values change are listed under **Further value changes** below.
-
-- **`ccm_*` was transposed, and dropped the largest library sizes.**
-  pyEDM's `a:b` column is `a`'s shadow manifold predicting `b`, which is evidence that `b` drives `a`; it is now stored at `A[b, a]` (row = source), so **results from 2.x need transposing and `ccm_*_diff` negating**.
-  The 22 library sizes now run inclusively up to the largest library.
-- **`dcorrx_*` and `mgcx_*` were transposed, and their lagged terms were wrong.**
-  pyspi now computes the published lagged sum `sum_l (n - l)/n * S(target[l:], source[:n-l])` (Mehta et al. 2020) itself; hyppo 0.5.2's terms for lag >= 1 treat rows of the distance matrices as points.
-- **`coint_aeg_*` now regresses the column on the row** (regressor on the row, as for `lmfit_*`), so the matrices are transposed relative to 2.x.
+- **`DirectedInfo` did not implement directed information.**
+  It summed `H(Y^i)/i` minus the causal entropy, which measures the target's self-predictability: with an independent source it returned 0.007 at target autocorrelation 0 and 1.53 at 0.95.
+  It now implements Massey's `sum_i [H(Y_i|Y^{i-1}) - H(Y_i|Y^{i-1},X^i)]`, which matches the closed form `0.5*ln(1+c^2)` on a Gaussian pair.
+  `di_kraskov` estimates each term directly with the KSG/Frenzel-Pompe conditional-MI estimator, whose biases cancel by construction; the kernel and Kozachenko variants, composed from separately estimated entropies, are not bundled.
+  `n` reaches the identifier of `DirectedInfo` and `CausalEntropy`.
+- **KSG ties and scale.**
+  KSG standardises each coordinate, as JIDT does, and breaks ties deterministically: in each series with a positive standard deviation, every repeated value gets Gaussian jitter of SD `1e-10 × std` from a fixed-seed generator (seeds: source 0, target 1, embedding selection 2), repeated until all values are distinct, as in pyhctsa.
+  Tie-free series are untouched and match JIDT 1.6.1 run without its dither to about 1e-15.
+  Without this, tied data give confident nonzero MI on independent series, since every kth-neighbour radius is zero; every process of the bundled `forex` dataset is tied.
+  The jitter is deterministic but depends on observation order; NaN, infinite and constant series raise.
+  **Every `kraskov` SPI's values can change**: 2.x ran JIDT with its seeded random dither, which 3.0 does not reproduce.
+- **KSG refuses inputs it cannot estimate from**: `k` too large for the effective sample, and negative Theiler windows; the auto-embedding search skips candidates it cannot support.
+- **Kozachenko entropy returned `-inf` on tied data** (a nearest neighbour at distance zero); it now raises with the cause named.
+- **Six measures advertised `kraskov` and ran Gaussian.**
+  Joint, conditional, cross-map and causal entropy, directed information and stochastic interaction are composed from marginal entropies and have no KSG estimator; `estimator="kraskov"` is now refused for them.
+- **`MutualInfo`, `TimeLaggedMutualInfo` and `TransferEntropy` returned NaN** for `estimator="kozachenko"`; they now raise `NotImplementedError` at construction (use `"kraskov"`).
+- **KSG mutual information with a Theiler window was biased upward.**
+  `mi_kraskov_*_DCE-*` and `tlmi_kraskov_*_DCE-*` take the `psi(N)` term over each point's window-reduced neighbour pool (JIDT keeps `psi(N)`); transfer entropy is unaffected.
+- **Auto-embedding names its method.**
+  `MAX_CORR_AIS` selects the destination and source embeddings independently, as JIDT 1.6.1 did, so the three bundled auto-embedding SPIs keep 2.0.2's values and are renamed to carry the method.
+  `MAX_CORR_AIS_DEST_ONLY` selects the destination embedding and takes a fixed source embedding.
+  The kernel and symbolic estimators, which have no active-information-storage criterion, refuse auto-embedding and its search bounds.
+- **Symbolic and kernel transfer entropy accepted embedding parameters they ignore.**
+  Symbolic TE applies one ordinal-pattern length to source and destination at unit delay (Staniek & Lehnertz 2008), yet `k_tau`, `l_history` and `l_tau` were accepted and written into the identifier.
+  They are now refused, symbolic identifiers become `te_symbolic_k-<k>`, and `k_history=1`, whose single symbol gives an identically zero TE, is refused.
+- **`dyn_corr_excl` named three Theiler windows with one identifier.**
+  The suffix was a bare `_DCE`, so 5, 10 and `"AUTO"` collided; it is now `_DCE-<value>`, and the shipped SPIs are renamed `..._DCE` → `..._DCE-AUTO` (values unchanged).
+- **`ccm_E-None_*` never inferred an embedding.**
+  The dimension was read as `EmbedDimension(...).max()["E"]`, the largest candidate (10), so `ccm_E-None_*` equalled `ccm_E-10_*`.
+  Selection is now `argmax(rho)`, ties to the smaller E, and **`ccm_E-None_*` values change**.
+  The library sizes now run up to the largest library.
+- **CCM runs serially inside pyEDM.**
+  pyEDM 2.5 starts its pools with forkserver or spawn, which re-import the caller's `__main__`, so from a script without an `if __name__ == "__main__":` guard every `ccm_*` SPI came back as NaN.
+  pyspi now calls pyEDM without its process pools (3.6x faster on a 7-process example); parallelism comes from `compute(n_jobs=...)`.
+- **Spectral factorisation failures are reported.**
+  Wilson's algorithm logs non-convergence through `logging` and returns the unconverged factor, so every Wilson-derived measure (`dcoh`, `dtf`, `ddtf`, `pdcoh`, `gpdcoh`, nonparametric `sgc`) reached the table silently; the warning now lands in the SPI's record.
+- **Group delay (`GroupDelay`) returned no finite value on any input**: the backend's one-sample coherence test takes the square root of a negative number.
+  pyspi computes the standard one-sample test `(arctanh|C| − b)/sqrt(b)`, `b = 1/(2n − 2)` (Enochson & Goodman 1965; Bokil et al. 2007), applies Benjamini-Hochberg over the band, thins the longest significant run to one point per multitaper bandwidth, and fits the unwrapped phase against frequency.
+  The delay is in samples (it was in seconds), and `rvalue` is `|r|`, undirected and unsigned.
+  It is not bundled (see [SPI set changes](#spi-set-changes)).
+- **Coherence phase used linear statistics on wrapped angles.**
+  `CoherencePhase` uses the circular mean `arg(mean(exp(i·phase)))` and builds the opposite orientation by negation; a resultant indistinguishable from zero, or an antipodal mean, gives NaN.
+  `statistic="max"` is refused, since a maximum of wrapped angles depends on the branch cut.
+  **The three `phase_multitaper_mean_*` values change.**
+- **Spectral Granger causality ignored `fs`** in its parametric branch and mis-oriented its NaN mask, so an estimable cell could be blanked; no value changes at the shipped `fs=1`.
+  Eleven `sgc_*` identifiers named `fmin=0`, which is overridden to 1e-5 because spectral GC is undefined at zero frequency: **`sgc_*_fmin-0_*` is renamed `sgc_*_fmin-1e-05_*`** (values unchanged).
+- **Parametric spectral Granger causality (`sgc_parametric_*`) was fitted on an indefinite autocovariance.**
+  The VAR is now fitted on the Yule-Walker autocovariance, which is positive semidefinite, the band uses the frequencies the model is evaluated at, and the automatic order search terminates.
+- **Directed spectral measures used an open frequency band.**
+  `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` use the closed band their identifiers name, and `ddtf_*` uses the partial coherence in place of `sqrt(PDC)` (Korzeniewska et al. 2003).
+- **Phase measures included 0 Hz and Nyquist**, where a real signal's cross-spectrum has no phase.
+  `phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli`, `dswpli`, `ppc` and `psi_multitaper_*` leave those bins out of the band; amplitude measures keep the closed band.
+- **Debiased squared PLI (`dspli_*`) was wrong where the cross-spectrum is real.**
+  It is now the mean of taper-pair sign products (Vinck et al. 2011).
+- **Cross-correlation (`CrossCorrelation`) was wrong four ways.**
+  It mixed normalisations (a series against itself gave 1.11 at T = 10), correlated the raw series while dividing by demeaned ones, centred its lag window on lag +1, and set a significance band twice too wide that scaled with the lag window.
+  It now uses the biased normalisation (zero lag is Pearson's r), demeaned series, a symmetric window and the amplitude cut `|r(l)| > 1.96/sqrt(T)`, which `sigonly` applies; this is not a significance test.
+  `LagResolvedCorrelation` reads the same profile.
 - **`softdtw_constraint-*` ignored its constraint** and equalled plain `softdtw`; the band is now passed to tslearn.
+- **`lcss_constraint-sakoe-chiba` and `lcss_constraint-itakura` were plain `lcss`**, because tslearn before 0.10 ignored `global_constraint` in `lcss` (tslearn #526).
+  pyspi now computes constrained LCSS itself, with tslearn's band masks restricting which pairs may match but not where the recursion may pass (Vlachos et al. 2002); plain `lcss` still calls tslearn.
+  **Both constrained values change**, by up to 0.4 for Sakoe-Chiba and 0.09 for Itakura.
+- **`dtw_constraint-sakoe-chiba` is renamed `dtw_constraint-sakoe-chiba_radius-auto` and its values change.**
+  2.x used tslearn's default radius of 1; the radius is now 10% of `T` or `1.5·√T`, whichever is smaller, with a floor of 10 and a cap of `T-1`, tunable with `PYSPI_DTW_SAKOE_LINEAR_FRAC`, `PYSPI_DTW_SAKOE_SQRT_COEFF` and `PYSPI_DTW_SAKOE_MIN_RADIUS`.
+  Itakura-constrained DTW also applies the `sqrt(T)` normalisation on every path.
 - **`hsic` and `hsic_biased` depended on the order of the two processes.**
   Each variable now gets its own median-heuristic kernel width (Gretton et al. 2005).
-- **KSG mutual information with a Theiler window was biased upward.**
-  `mi_kraskov_*_DCE-*` and `tlmi_kraskov_*_DCE-*` now take the `psi(N)` term over each point's window-reduced neighbour pool (JIDT keeps `psi(N)`); transfer entropy is unaffected.
 - **`phi_Geo_*` stopped before its model was disconnected.**
-  The augmented-Lagrangian solver now also requires the constraint to be met, and phi_G is evaluated at the block-diagonal projection; it matches a direct minimisation of the Oizumi et al. (2016) objective.
-- **Debiased squared PLI (`dspli_*`) was wrong where the cross-spectrum is real.**
-  It is now the mean of taper-pair sign products (Vinck et al. 2011), computed in pyspi.
-- **Directed spectral measures used an open frequency band.**
-  `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` now use the closed band their identifiers name, with a small relative tolerance at the edges so the Nyquist bin is kept at any `fs`.
-- **`ddtf_*` used `sqrt(PDC)` in place of the partial coherence** (Korzeniewska et al. 2003).
-- **Parametric spectral Granger causality (`sgc_parametric_*`) was fitted on an indefinite autocovariance.**
-  The VAR is now fitted on the Yule-Walker autocovariance (demeaned, divided by `T`), which is positive semidefinite, and the band uses the frequencies the model is evaluated at.
-  The automatic order search now terminates on all fixtures.
-- **Phase measures included 0 Hz and Nyquist, where a real signal's cross-spectrum has no phase.**
-  `phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli`, `dswpli`, `ppc` and `psi_multitaper_*` now leave those bins out of the band (a band holding nothing else raises `ValueError`); amplitude measures keep the closed band.
-- **Group delay (`gd_*`) treated adjacent, correlated frequencies as independent.**
-  The significant coherence run is now thinned to one point per multitaper bandwidth, and the fit leaves out the real-valued bins; at T=100 `gd_*` is often undefined (NaN).
-- **`gwtau` left the start of the trajectory out of its distance vector** (Kravtsova et al. 2023); values change by the constant factor `sqrt((T - 1) / T)`.
-- **`cds` returned 0, its strongest evidence for `i -> j`, when undefined**; it now returns NaN.
-  `anm`, `cds` and `xcorr_*` are NaN for a pair involving a constant series, where they gave 0 (read as independence, or no cross-correlation) or an arbitrary number.
-- **`prec_*`, `prec-sq_*` and `pcorr_*` reported a pseudo-inverse as the precision when the covariance estimate is singular** (no more samples than processes, or collinear processes).
-  For `EmpiricalCovariance` and `MinCovDet` these values are now NaN, with a warning giving the rank; `cov_*` and the shrinkage and graphical-lasso estimators are unchanged.
-- **Loading and config errors that were silent or late.**
-  A `.csv` dataset never loaded (`np.genfromtxt` was given `","` as its dtype), so `Data("x.csv")` raised and `CalculatorFrame.init_from_yaml` dropped the dataset with a warning; it now loads.
-  A config entry with an unknown key (for example `config:` for `configs:`) built the class with its default parameters, and a module or class named twice silently lost the first block; both now raise, and a bare `Class:` entry means the defaults instead of crashing.
-  `python -m pyspi compute` now checks that the output directory exists before computing rather than failing in `save` afterwards.
-- **`pec`, `pec_log`, `pec_orth` and `pec_orth_log` are now labelled signed** (a correlation in [-1, 1]), and `Cointegration` is labelled linear.
-- **Smaller fixes with no value changes:** `Covariance`/`Precision` return a copy of the cached array; `SpearmanR` and `LaggedCorrelation(spearman)` handle a constant series in any position; `LaggedCorrelation.bivariate` returns NaN when either direction is undefined, as `multivariate` does; `CrossmapEntropy` and `StochasticInteraction` reject non-positive `history_length`/`delay`; the wavelet PSI frequency floor is in Hz; spectral classes reject a `statistic` they cannot apply.
-- **`CalculatorFrame` and `CorrelationFrame` bookkeeping.**
-  `init_from_yaml` appended a dataset's name and labels before loading it, so after one failed entry every later dataset carried its predecessor's name and labels; they are now appended only once the dataset loads.
-  `get_correlation_df(rmmin=True)` shifted the calculator's table in place, so a later `save()` wrote the shifted values; it now shifts a copy.
-  `CorrelationFrame.ddf` averaged datasets that share a name into one, including several unnamed ones (all keyed `None`); unnamed datasets are now named by their position in the frame (`dataset_0`, `dataset_1`, ...), and a name given to two datasets raises `ValueError`.
-  The SPI-by-SPI correlation is computed as two whole-matrix Spearman correlations instead of one call per pair (identical output, about 60x faster for 163 SPIs).
+  The solver now also requires the constraint to be met, and phi_G is evaluated at the block-diagonal projection (Oizumi et al. 2016).
+- **`gwtau` left the start of the trajectory out of its distance vector** (Kravtsova et al. 2023); values change by the factor `sqrt((T - 1) / T)`.
+- **Undefined values.**
+  `cds` returned 0, its strongest evidence for `i -> j`, when undefined, and `anm`, `cds` and `xcorr_*` returned 0 or an arbitrary number for a pair with a constant series; all are now NaN.
+  `prec_*` and `pcorr_*` reported a pseudo-inverse when the covariance estimate is singular; for `EmpiricalCovariance` and `MinCovDet` they are now NaN, with a warning giving the rank.
+- **Integer parameters** (`ConvergentCrossMapping(embedding_dimension=2.7)`, a fractional `max_tau`) were truncated after the identifier was built; they must now be integers.
+- **SPI metadata (no value changes).**
+  `InterDependenceScore` left `terms`, `pnorm` and `bandwidth` out of its identifier, and `SpectralGrangerCausality` left out `max_order` (when the order is selected), `ignore_nan` and `nan_threshold`, so two parameterisations could share a table column; non-default values are now appended (e.g. `ids_bw-0-25`), and every bundled identifier is unchanged.
+  `IntegratedInformation` rejects an unknown `phitype`, a `normalization` other than 0 or 1 and a non-integer `delay` at construction.
+  Smaller fixes: `Covariance`/`Precision` return a copy of the cached array; `SpearmanR` and `LaggedCorrelation(spearman)` handle a constant series in any position; `LaggedCorrelation.bivariate` returns NaN when either direction is undefined; `CrossmapEntropy` and `StochasticInteraction` reject non-positive `history_length`/`delay`; the wavelet PSI frequency floor is in Hz; spectral classes reject a `statistic` they cannot apply.
 
 ### Added: per-cell quality codes
 
-Every cell of `calc.table` now has a quality code saying what it is, in `calc.quality`: a `uint8` DataFrame with the same index and columns.
+Every cell of `calc.table` has a quality code saying what it is, in `calc.quality`: a `uint8` DataFrame with the same index and columns.
 The design is shared with hctsa and pyhctsa, in a module (`pyspi/quality.py`) that the two packages keep identical: the value array holds a real, finite number or NaN, so it can be used directly, and the code says why a cell is NaN.
 Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for code.
 `pyspi.Quality` names them: `GOOD` (0), `ERROR` (1), `NAN` (2, undefined or not appropriate, and every diagonal cell), `INF` (3), `NEG_INF` (4), `COMPLEX` (5), and `NOT_COMPUTED` (255) for an SPI that has not run yet.
 `pyspi.quality.quality_labels` and `quality_summary` turn codes into text and counts.
 
-- **An Inf no longer fails the whole SPI.**
-  An SPI that returned an infinity anywhere used to become an all-NaN column with an entry in `calc.errors`.
-  Now its finite cells are kept, the infinite cells are NaN with code `INF` or `NEG_INF`, and a warning gives the count.
+- **An Inf does not fail the whole SPI.**
+  The finite cells are kept, the infinite cells are NaN with code `INF` or `NEG_INF`, and a warning gives the count.
   The SPI is listed in `calc.errors` only if no off-diagonal value is finite, as for an all-NaN result.
 - **Complex output is labelled, not truncated.**
-  The raw output is classified before it is cast to float.
-  `np.array(S, dtype=float)` had dropped a non-zero imaginary part with only a `ComplexWarning`; such a cell is now NaN with code `COMPLEX`.
+  The raw output is classified before it is cast to float, so a cell with a non-zero imaginary part is NaN with code `COMPLEX`.
 - **A failed pair is `ERROR`, not an anonymous NaN.**
-  A pair that raises inside an SPI that otherwise succeeds (see "One undefined pair no longer voids an SPI" under Changed) is still NaN with one warning, and is now labelled `ERROR`, with its message in the new `calc.pair_errors` (`{spi: [(source, target, message), ...]}`).
-  `calc.errors` keeps its shape and holds SPI-level failures only.
-  An undirected SPI built on `Undirected.multivariate` evaluates each pair once, as `(i, j)` with `i < j`, and mirrors it, so a failure is mirrored onto its lower cell, keeping the codes symmetric like the values, and counted once in the warning.
-  Such an SPI now raises when every pair fails, giving the estimator's message in `calc.errors`; it had been an all-NaN failure with a generic message.
-- An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, as before with its message in `calc.errors`.
+  A pair that raises inside an SPI that otherwise succeeds (see "One undefined pair no longer voids an SPI" under Changed) is NaN with one warning, labelled `ERROR`, with its message in `calc.pair_errors` (`{spi: [(source, target, message), ...]}`).
+  `calc.errors` holds SPI-level failures only.
+  An undirected SPI evaluates each pair once, as `(i, j)` with `i < j`, and mirrors it, so a failure is mirrored onto its lower cell and counted once in the warning; such an SPI raises when every pair fails, giving the estimator's message in `calc.errors`.
+- An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, with its message in `calc.errors`.
   An SPI that returns only NaN keeps code `NAN` and its `calc.errors` entry.
 - **Files and checkpoints keep the codes.**
-  `.npz` files gain a `quality` array (`(n_spis, M, M)`, `uint8`) and `pair_errors`, and the schema goes to 2.
-  The new `pyspi.load_results(path)` returns `Results(table, quality, errors, run_spec, pair_errors)`; `load_table` is unchanged and keeps only its small metadata in `attrs`, since a DataFrame there breaks `pd.concat` and is deep-copied by every slice.
-  A file written before this change still loads, with codes derived from its values and `errors`; which NaN cells were failed pairs cannot be recovered from such a file.
-  Checkpoints store the codes in a `<spi>.quality` sidecar (and pair failures in `<spi>.pairs.json`), and older checkpoints without them resume with derived codes.
-  A checkpoint holding an Inf is no longer treated as failed: it resumes with the cell coded `INF` or `NEG_INF`.
-  Writing a checkpoint removes the previous `<spi>.npy` first and replaces it last, so an interrupted write cannot pair one run's values with another run's sidecars.
+  `.npz` files hold a `quality` array (`(n_spis, M, M)`, `uint8`) and `pair_errors`.
+  `pyspi.load_results(path)` returns `Results(table, quality, errors, run_spec, pair_errors)`; `load_table` keeps only its small metadata in `attrs`.
+  Checkpoints store the codes in a `<spi>.quality` sidecar (and pair failures in `<spi>.pairs.json`).
 - The summary printed after `compute()` counts the off-diagonal cells by code and lists each incomplete SPI with its counts, e.g. `one_infinite (1 Inf, 1 -Inf)`.
 
 ### Changed
 
+- **`Calculator(subset=..., configfile=...)` collapsed into `config=`**, which accepts either a bundled name or a path to your own YAML.
+- **`normalise=` renamed to `zscore=`** on `Calculator` and `Data`.
+  Behaviour is unchanged (per-process z-score along time); the old name collided with `utils.normalise`, which was min-max, and with the per-SPI `normalise` arguments in `statistics/distance.py`.
+- **Configs renamed and moved to `pyspi/configs/`.**
+  The filename stem is the lookup key, so the cost-pruned sets are reachable by name.
+- `load_dataset()` exposes only the three demo datasets (`forex`, `cml`, `standard_normal`); `available_datasets()` lists them.
+- Per-SPI timings are printed after `compute()` (total and slowest five).
+- **`Calculator.save()` and `pyspi.load_table()`** store results as `.npz`: the results in their natural `(n_spis, M, M)` shape plus names, the run spec, digest and errors, round-tripping exactly with nothing beyond numpy.
+  Names are stored as `dtype='U'` and loaded with `allow_pickle=False`.
+  `.csv` remains as a one-way human-readable export.
+- **Dropped pickle and parquet output.**
+  Pickle is version-fragile and executes arbitrary code on load, which is wrong for an archival scientific artifact, and parquet bought nothing over `.npz` for a dense float tensor while costing a ~40 MB pyarrow dependency.
+- A config that keeps only part of a shared-cache group warns, since the cache is built regardless and the remaining members are close to free.
+- `JIDTBase` is renamed `InfoTheoryBase`; config files are unaffected.
+- **Every information-theoretic measure reports nats.**
+  In 2.x the kernel and symbolic calculators reported bits while the Gaussian, KSG and Kozachenko ones reported nats (JIDT's split), so magnitudes on either side of that boundary differed by a factor of ln 2.
+  Correlations between columns are unaffected; divide by ln 2 for the JIDT-comparable value.
+  **All `kernel` and `symbolic` SPI values change by that factor.**
 - **Kernel MI, time-lagged MI and TE exclude the point itself from its neighbour counts**, as the KSG estimators do: a leave-one-out density estimate (JIDT's `DYN_CORR_EXCL = 1`; JIDT's default counts the point itself).
   Counting it adds 1 to every count, which inflates the estimate most where counts are small.
   Kernel TE also scales the destination's next value like its past, as JIDT does.
-  **`mi_kernel_*`, `tlmi_kernel_*` and `te_kernel_*` change value**; `COMPUTATION_VERSION` is `3.0.0.r14`.
-  The kernel entropies, and the measures composed from them (`je`, `ce`, `si`, `xme`, `cce`), still count the point itself: a leave-one-out box-kernel entropy is infinite wherever a point's box is otherwise empty, and MI's neutral value for an empty joint box has no entropy counterpart.
-- **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
-  `gpfit_DotProduct` is labelled `linear`.
-- **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
-  `bary_{dtw,sgddtw,softdtw}_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.
+  **`mi_kernel_*`, `tlmi_kernel_*` and `te_kernel_*` change value.**
+  The kernel entropies, and the measures composed from them (`je`, `ce`, `si`, `xme`, `cce`), still count the point itself: a leave-one-out box-kernel entropy is infinite wherever a point's box is otherwise empty.
+- **One singularity policy for every Gaussian quantity.**
+  Each variable is treated as observed with independent noise of variance `1e-8 ×` its own variance (a deterministic analogue of JIDT's `NOISE_LEVEL_TO_ADD`), through one shared log-determinant, in MI, TLMI, entropy, joint and conditional entropy, TE and AIS.
+  Gaussian MI acquires a bias of `ridge·r²/(1−r²)`: 5.6e-9 at ρ=0.6.
+- **The AUTO Theiler window (`dyn_corr_excl="AUTO"`) is capped at `N // 10`** (hctsa's rule), so it can no longer approach the series length.
 - **One undefined pair no longer voids an SPI.**
   A pair whose estimate raises (e.g., tied values for a Kozachenko-Leonenko entropy) is set to NaN with one warning, and the SPI fails only if every pair does.
-- **The AUTO Theiler window (`dyn_corr_excl="AUTO"`) is capped at `N // 10`** (hctsa's rule), so it can no longer approach the series length.
-- **Conventions now stated in the class docstrings:** `gc_gaussian_*` is half of Geweke's Granger causality; `xcorr_*_max` is the largest signed value; lower is stronger evidence for `anm`, `cds` and `reci`, higher for `ccm` and `igci`; `ccm_E-None_*` uses the larger of the pair's two embedding dimensions; `softdtw*` is the raw soft-DTW cost (it can be negative), now named "Soft dynamic time warping"; `cohmag` is the magnitude-squared coherence.
+- **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
+- **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
+  `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.
+- **Multitaper phase slope index follows Nolte et al. (2008) and applies its band.**
+  `psi_multitaper_mean_*` is `Im sum_f conj(C(f)) C(f + df)` over neighbouring in-band frequencies one multitaper bandwidth (six FFT bins) apart.
+  2.x took spectral-connectivity's sum over all pairs of thinned frequencies, which is not the published index, and its band variants all returned the full-band value.
+  The index grows in proportion to the lag, and its sign is reliable up to `T/12` samples; in a single recording it is less sensitive to one-sample leads.
+  It stays unnormalised (the published jackknife needs epochs).
+  **The three `psi_multitaper_mean_*` values change.**
+- **No SPI reads the global NumPy RNG.**
+  tslearn's subgradient barycenter took its update order from the global stream, and `MinCovDet` and `EllipticEnvelope` search from random subsets of the observations, so their values changed with the caller's seed and with which SPIs ran earlier.
+  Each fit now uses its own fixed-seed generator, so a value is a function of the data alone.
+  **`cov_MinCovDet` changes value**, by about the estimator's own run-to-run spread, as do the `sgddtw` barycenter SPIs, which are not bundled.
+- **scikit-learn >= 1.8 changes some covariance values.**
+  scikit-learn 1.8 added the Croux-Haesbroeck consistency correction to `MinCovDet`/`EllipticEnvelope` (scikit-learn #32117), which cannot be switched off, so their covariance, precision and partial-correlation SPIs differ from 2.0.x.
+  `GraphicalLasso` converges at `tol=enet_tol=1e-8`, so the value no longer tracks the solver path, which scikit-learn 1.8 also changed (#31987, #31906); values move by at most 1e-4 and agree across scikit-learn versions to about 1e-9.
+- **`anm` pins its Gaussian-process kernel** to a fixed `ConstantKernel(1.0)*RBF(1.0)` with no optimiser, where it had relied on scikit-learn's default, which in 1.9 became an optimised kernel and shifted values by up to 7.6.
+  Values are unchanged under scikit-learn <= 1.8.
+  The kernel matrix is ill-conditioned, so `anm` varies by about 1e-4 relative across platforms.
+- **Labels describe each SPI as computed.**
+  The labels a bundled config writes for an SPI agree with the SPI: its sign with `issigned()`, its directedness with the class trait, and its linearity with the class where the class sets one; where these vary by variant (`lagcorr_*`, `coint_*`, `es_*`, `pec_*`), the labels are set per config entry.
+  When a config's labels are merged with a class's, the class's directedness trait, its `linear`/`nonlinear` and its `issigned()` win, and any remaining contradictory pair raises.
+  2.0.2 applied only the class labels, not those in its config files.
+  Labels that differ from 2.0.2's: the Kozachenko SPIs and `anm` are `nonlinear`; `gpfit_DotProduct` and `Cointegration` are `linear`; `coint_aeg_*` is `directed` and signed; `hhg` is `undirected`; `phase`, `pli`, `wpli` and `psi` are `antisymmetric` and signed; `pec`, `pec_orth`, `pec_log` and `pec_orth_log` are signed; and the spectral SPIs that had no linearity label are `linear`.
+  Every SPI carries exactly one module label (`M01`-`M14`, or `MXX` for one not assigned to a module).
+  `filter_spis` matches on the labels each SPI carries after merging, not on the raw YAML family labels, so per-variant traits are found and a matching family no longer selects all of its configs.
+- **Conventions stated in the class docstrings:** `gc_gaussian_*` is half of Geweke's Granger causality; `xcorr_*_max` is the largest signed value; lower is stronger evidence for `anm`, `cds` and `reci`, higher for `ccm` and `igci`; `ccm_E-None_*` uses the larger of the pair's two embedding dimensions; `softdtw*` is the raw soft-DTW cost (it can be negative), named "Soft dynamic time warping"; `cohmag` is the magnitude-squared coherence.
+- **Every SPI class has a docstring in one layout, shared with pyhctsa**: a summary line, what is computed with its direction and sign, a `References` section and a `Parameters` section with defaults.
+  `Calculator`, `CalculatorFrame`, `CorrelationFrame`, `Data`, `load_table`, `load_results` and the functions in `pyspi.utils` have `Parameters` and `Returns` sections.
+  Antisymmetric SPIs state their sign convention (`A[i, j] = -A[j, i]`; positive means the row leads).
 
-- **`Calculator(subset=..., configfile=...)` collapsed into `config=`**, which accepts either a bundled name or a path to your own YAML.
-- **`normalise=` renamed to `zscore=`** on `Calculator` and `Data`. Behaviour is unchanged (per-process z-score along time); the old name collided with `utils.normalise`, which was min-max, and with the per-SPI `normalise` arguments in `statistics/distance.py`.
-- **Configs renamed and moved to `pyspi/configs/`.** The filename stem is now the lookup key, so the cost-pruned sets are reachable by name for the first time.
-- `load_dataset()` exposes only the three demo datasets (`forex`, `cml`, `standard_normal`); `available_datasets()` lists them. The regression fixtures moved to `tests/` and no longer ship in the wheel.
-- Per-SPI timings are printed after `compute()` (total and slowest five). `calc.timings` was always populated but never surfaced.
-- **New `Calculator.save()` and `pyspi.load_table()`.** Results had no documented persistence path from the Python API at all -- only the CLI wrote files. `.npz` is now the canonical format: it stores the results in their natural `(n_spis, M, M)` shape plus names, round-trips exactly, and needs nothing beyond numpy. `.csv` remains as a one-way human-readable export.
-- **Dropped pickle and parquet output.** Pickle is version-fragile and executes arbitrary code on load, which is wrong for an archival scientific artifact. Parquet is columnar and built for heterogeneous tabular data; for a dense float tensor it bought nothing over `.npz` while costing a ~40 MB pyarrow dependency. The `parquet` extra is gone.
-- A config that keeps only part of a shared-cache group now warns, since the cache is built regardless and the remaining members are close to free. Only applies to user-written configs and to caches expensive enough to matter.
-- **Every information-theoretic measure now reports nats.** The kernel and symbolic calculators reported bits while the Gaussian, KSG and Kozachenko ones reported nats — JIDT's split between base 2 for its box-kernel/discrete estimators and base e for the rest, carried into a single results table. `mi_kernel_W-0-5` and `mi_gaussian` therefore sat on axes differing by a factor of ln 2 with nothing in either identifier to say so, so any comparison of *magnitudes* across that boundary — a shared threshold, a "which SPI found the most information" ranking across estimators, a difference or ratio of two columns — was off by that factor. (Pearson and Spearman correlations *between* columns are invariant to a positive rescaling and were never affected; the earlier note overstated this.) Divide by ln 2 for the JIDT-comparable value. **All `kernel` and `symbolic` SPI values change by that factor.**
-- **One singularity policy for every Gaussian quantity.** Gaussian MI clipped `r²` at `1 − 1e-15` while the entropy path ridged the covariance: on a pair of identical N=100 series the direct MI was **17.2698** nats and the same quantity assembled from entropies **8.8638**. Each variable is now treated as observed with independent noise of variance `1e-8 × its own variance`, expressed as one shared log-determinant primitive and its closed form, and used by MI, TLMI, entropy, joint/conditional entropy, TE and AIS alike. Both readings give 8.8638, the chain rule closes to 2e-16 on non-degenerate data, and the ridge is equivariant to per-variable rescaling rather than keyed to the loudest process. Gaussian MI acquires a bias of `ridge·r²/(1−r²)` — 5.6e-9 at ρ=0.6.
-- **Parallel scheduling buckets on the cache SPIs actually share.** `build_tasks` grouped by `_cache_namespace` alone, so SPIs sharing no cache were serialised into one task: on `full` that produced a single 84-member `spectral_mv` task spanning 16 independent caches, and the longest task bounds the makespan. There is now one `cache_bucket()` definition, shared with the config advisory and the benchmark tooling; `full` goes from 149 tasks with a largest of 84 to 186 with a largest of 24, ordered by measured amortized cost rather than member count.
-- `JIDTBase` renamed to `InfoTheoryBase`. Config files are unaffected.
-- **scikit-learn >= 1.8 changes some covariance values.** scikit-learn 1.8 added the Croux-Haesbroeck consistency correction to `MinCovDet`/`EllipticEnvelope` (scikit-learn #32117), and it cannot be switched off. `cov_`, `cov-sq_`, `prec_` and `prec-sq_` for these two estimators therefore differ from 2.0.x: maximum absolute change 0.038 (var1), 0.53 (cml) and 35.9 (kuramoto, `prec-sq`). `GraphicalLasso` and `GraphicalLassoCV` now converge at `tol=enet_tol=1e-8`; before, at `tol=1e-4`, the value tracked the solver path, which scikit-learn 1.8 also changed (#31987, #31906). Values move by at most 1e-4, and now agree across scikit-learn versions to about 1e-9. The baselines for exactly these keys were regenerated; every other array is bit-identical.
-- **`anm` pins its Gaussian-process kernel.** `AdditiveNoiseModel` now passes a fixed `ConstantKernel(1.0)*RBF(1.0)` with no optimiser. It had relied on scikit-learn's default, which in 1.9 became an optimised kernel and shifted values by up to 7.6 (absolute). Values are unchanged under scikit-learn <= 1.8 and identical under 1.9. The kernel matrix is ill-conditioned (condition number ~6e11), so `anm` varies by about 1e-4 across platforms; its drift tolerance is rtol 1e-3.
-- **Cross-platform drift tolerances.** The families solved through dense linear algebra (`gc_gaussian`, `di_gaussian`, `xme_gaussian`, `phi_star`, `sgc_parametric`) differ at the rounding level between BLAS/LAPACK builds even with identical package versions. Measured on Linux CI against baselines frozen on another platform, they differed by at most 2.4e-7 relative with the dependencies locked, and 7e-7 with the latest ones. They are checked at rtol 1e-6; every other SPI stays at 1e-9.
-- **Config labels are consistent across all eight bundled configs.** Covariance in `fabfour`/`sonnet` is now signed and multivariate, matching `full`; DTW and Barycenter in `sonnet` are `nonlinear` again (#97 had set `linear`); the PSI time-frequency labels, stray commas and an `unisgned` typo are fixed. Label merging lets a class's `linear`/`nonlinear` win and raises on any remaining contradictory pair (linear/nonlinear, directed/undirected, signed/unsigned); `tests/test_config_labels.py` guards this.
-- **No SPI reads the global NumPy RNG any more.** Two families did, so their values changed with the caller's seed, with which SPIs had run earlier, and between serial and parallel execution. (1) tslearn's subgradient barycenter took its update order from the global stream, so each of the four `bary*_sgddtw_*` values depended on how many pairs had been fitted before it and could not be reproduced for a subset of pairs at all. (2) `MinCovDet` and `EllipticEnvelope` search from random subsets of the observations, which made the eight `cov`/`prec` SPIs built on them differ from run to run. Each fit now uses its own fixed-seed generator, so a value is a function of the data alone. **These twelve SPI values change**, by about the estimators' own run-to-run spread.
-- **Multitaper phase slope index ignored its frequency band.** `psi_multitaper_mean_*` passes `fmin`/`fmax` to the backend only from a fallback that ran on `TypeError`; spectral-connectivity 2.0 accepts the no-argument call, so every band variant returned the same full-band, unthinned matrix (identical to 1e-12 across the three p90 bands, and hundreds of times larger than the banded value at T=2000). The band is now always applied. **The three `psi_multitaper_mean_*` values change.** Wavelet PSI was not affected. With both changes `COMPUTATION_VERSION` is `3.0.0.r8`, so no r7 checkpoint is reused.
-- **Multitaper phase slope index now follows Nolte et al. (2008).** `psi_multitaper_mean_*` is `Im sum_f conj(C(f)) C(f + df)` over neighbouring in-band frequencies one multitaper bandwidth (six FFT bins) apart, computed in pyspi from the backend's coherency. It had been the backend's sum over *all* pairs of about fifty thinned frequencies, which is not the published index: that value fell as the lag between two processes grew and changed sign near 50 samples, and no other implementation (Nolte's `data2psi`, FieldTrip, MNE-connectivity, HERMES) computes it; spectral-connectivity has since replaced it upstream, so pyspi's values would have changed on a dependency upgrade. The index now grows in proportion to the lag and its sign is reliable up to `T/12` samples. The cost is sensitivity to very short lags in a single recording: at `T=1000` a one-sample lead has d' of about 1.4, where the all-pairs sum gave about 90; from five samples up the new index is comparable or better. It stays unnormalised (the published jackknife needs epochs). **The three `psi_multitaper_mean_*` values change**; `COMPUTATION_VERSION` is `3.0.0.r9`.
-- **tslearn >= 0.10 changes the four `bary*_sgddtw_*` values.**
-  tslearn 0.10 changed how `dtw_barycenter_averaging_subgradient` updates and when it stops (it now stops on the cost over a whole epoch; tslearn #764), so the subgradient barycenter converges elsewhere.
-  Against tslearn 0.8.1/0.9.0 the four values move by up to 0.75 (absolute) on the drift fixtures.
-  The floor is raised from `>=0.6` to `>=0.10` so that a fresh install reproduces the stored baselines, and `COMPUTATION_VERSION` is `3.0.0.r10`.
-- **A parallel run no longer leaves its thread pins in the parent's environment.** `compute(n_jobs>1)` set `NUMBA_NUM_THREADS=1` (and the BLAS equivalents) for its workers and never restored them. If numba had already launched its threads in that process, every later numba compilation there raised, so a serial run after a parallel one failed any SPI whose kernel was not yet compiled. The variables are restored when the pool closes.
-- **Distance correlation and the Kraskov estimators are faster, with identical values.** `dcorr` and `dcorr_biased` evaluated both orders of every pair and discarded one; they now evaluate the retained order only (2.0x at M=8, T=5000). Kraskov MI, time-lagged MI and transfer entropy counted marginal neighbours by materialising a Python list per observation, and with a Theiler window by one tree query per observation; counts now come from one batched query, less the temporally excluded neighbours found inside the ball, one time offset at a time in O(N) memory (3-10x on the seven p90 Kraskov SPIs at T=5000, more with `dyn_corr_excl`). Radii, strict boundaries, the exclusion window and errors are unchanged and every output is bit-identical, so `COMPUTATION_VERSION` does not move.
-- **The five directed spectral measures share one spectral factorisation per pair.** `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` (the bundled `dtf`, `dcoh` and `ddtf` are 18 SPIs in `benchmarked_p90`) are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which the backend recomputed on every access: two to four times per measure, fourteen per ordered pair across the five. It is now computed once per ordered pair and the five classes form one scheduling task, so workers no longer repeat it per class. 7.6x faster on those SPIs (184 s to 24 s at M=40, T=1000; they were 44% of a full `benchmarked_p90` run at M=64), with about 40% less memory held per pair, since the Fourier coefficients are released once factorised. Every output is bit-identical.
-- **Itakura-constrained DTW is faster, with identical values.**
-  `dtw_constraint-itakura` called tslearn's `dtw` per pair, and tslearn compiles its Itakura mask and DTW kernel with numba in every new process, without caching them (1.6 s).
-  pyspi now builds the same mask with NumPy and runs tslearn's recursion over each row's admitted columns only, in a numba kernel cached on disk.
-  Every value is bit-identical to tslearn's (checked over 180 pairs at T=3 to 800, and the mask over every size up to 1200).
+**Faster, with identical values.**
+
+- **Distance correlation and the Kraskov estimators.**
+  `dcorr` and `dcorr_biased` evaluate only the retained order of each pair (2.0x at M=8, T=5000).
+  Kraskov MI, time-lagged MI and transfer entropy count marginal neighbours with one batched tree query, less the temporally excluded neighbours, in O(N) memory (3-10x at T=5000, more with `dyn_corr_excl`).
+- **The five directed spectral measures share one spectral factorisation per pair.**
+  `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which is now computed once per ordered pair, and the five classes form one scheduling task.
+  7.6x faster on those measures (184 s to 24 s at M=40, T=1000), with about 40% less memory held per pair.
+- **Itakura-constrained DTW.**
+  pyspi builds tslearn's Itakura mask with NumPy and runs tslearn's recursion over each row's admitted columns only, in a numba kernel cached on disk; values are bit-identical to tslearn's.
   At M=16, T=800 the SPI takes 0.05 s instead of 0.23 s, and 0.14 s instead of 1.8 s in a new process.
   `lcss_constraint-itakura` uses the same mask.
-  The `RuntimeWarning` that announced the tslearn fallback is gone.
-- **The distance-correlation family centres each series once, with identical values.**
-  `dcorr`, `hsic` and `dcorrx` recomputed both series' centred distance matrices for every pair.
-  Each series' matrix (for `dcorrx`, one per lag) is now computed once and shared across its pairs, holding at most 256 MB of matrices at a time.
-  At T=800, `dcorr` is 7x faster (0.92 s to 0.13 s at M=16), `hsic` 11x (2.5 s to 0.22 s) and `dcorrx_maxlag-1`/`-10` 5x and 4x (M=8).
-  Values are bit-identical to hyppo 0.5.2's, so `COMPUTATION_VERSION` does not move.
-  pyspi now applies hyppo 0.5.2's final step itself (zero for a non-positive variance, or a non-positive biased covariance; square root of the biased ratio), instead of taking it from whichever hyppo is installed.
-  Under the allowed `hyppo>=0.4`, 0.4.0 returned dCor² for `dcorr_biased` and `hsic_biased`, and 0.5.0 zeroed every negative unbiased value; those installs now give the 0.5.2 values too.
-- **Faster, with identical values:** `hhg` in O(n^2 log n) (about 9x); `hsic`, `hhg`, `mgc`, `lcss`, `softdtw` and `gwtau` evaluate each unordered pair once (2x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
-- **Undirected SPIs evaluate each unordered pair once, with identical values.**
-  `Undirected.multivariate` evaluated `bivariate` for both orders of every pair and then copied the upper triangle over the lower one, discarding half the work.
-  It now evaluates `i < j` only, in the order the old loop reached those pairs, and mirrors each value and each failure.
-  `phi_*` is 1.9x faster (0.73 s to 0.38 s for the four `full` SPIs at M=10, T=500).
-  The other SPIs on this loop (`bary_*`, `xcorr_*`, `je_kozachenko`, `je_kernel_*`) already served the second order from a cache, and `hsic`, `hhg`, `dcorr`, `mgc`, `lcss`, `softdtw`, `gwtau`, `mi_kernel_*` and `si_*` already skipped it through their own loops, so their cost is unchanged; those loops are removed and the classes use the shared one.
-  For the distance SPIs among them (`hsic*`, `hhg`, `dcorr*`, `mgc`, `lcss*`, `softdtw*`, `gwtau`) this means a pair that raises is NaN with a warning, as for every other SPI, instead of failing the SPI.
-  `xcorr_*` and the joint-entropy cache shared by `je_*` and `ce_*` now compute a pair in one orientation, (larger, smaller), whichever is asked for first: the orientation the old loops computed it in.
-  Every stored value, quality code and pair error is bit-identical on the three drift fixtures and the three bundled datasets, so `COMPUTATION_VERSION` does not move.
+- **The distance-correlation family centres each series once.**
+  `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
+  At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
+  pyspi applies hyppo 0.5.2's final step itself, so every allowed hyppo (`>=0.4`) gives hyppo 0.5.2's values.
+- `hhg` in O(n^2 log n) (about 9x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
+- **Undirected SPIs evaluate each unordered pair once** and mirror the value and any failure (`phi_*` 1.9x faster).
+  For the distance SPIs among them (`hsic*`, `hhg`, `dcorr*`, `mgc`, `lcss*`, `softdtw*`, `gwtau`), a pair that raises is NaN with a warning, as for every other SPI, instead of failing the SPI.
   A direct `bivariate(data, i=i, j=j)` call with `i < j` on a fresh `Data` can differ in the last bit for `xcorr_*`, `je_*` and `ce_*`.
-- **Every SPI class has a docstring in one layout, shared with pyhctsa**: a summary line, what is computed with its direction and sign, a `References` section and a `Parameters` section with defaults.
-  `Calculator`, `CalculatorFrame`, `CorrelationFrame`, `Data`, `load_table`, `load_results` and the functions in `pyspi.utils` gain `Parameters` and `Returns` sections.
-  Antisymmetric SPIs state their sign convention (`A[i, j] = -A[j, i]`; positive means the row leads).
-  Corrected docstrings: `Undirected` (it said "directed"), `Barycenter` (its Euclidean `corr` is Pearson's r only for equal variances, as after z-scoring), `cds_score` (its summary line described another quantity), the `GW_tau` reference, and the `Data` example.
-  No computed value changes.
 
 ### Added
 
-- **`xi_tau-0` and `xi_tau-1`: Chatterjee's rank correlation xi** (Chatterjee 2021, JASA 116:2009), class `ChatterjeeXi` in `pyspi/statistics/basic.py`.
-  It is directed (`A[i, j] = xi(x_i, x_j)`, row = source): it tends to 1 iff the column process is a measurable function of the row process and to 0 iff they are independent, so it also detects non-monotone dependence such as `y = x^2`.
-  `tau > 0` pairs `x_i[:-tau]` with `x_j[tau:]`.
-  Ties in the source are broken by a fixed seeded permutation, so values are deterministic.
-  `xi_tau-0` is also in `fast`.
-- The `benchmarked_p*` sets include the SPIs added after the benchmark that time within their cutoffs on the benchmark's protocol: `xi_tau-{0,1}`, the `pcorr_<estimator>` SPIs, `te_symbolic_k-3` and the kernel `_DCE-AUTO` MI and TLMI from `p80` up, and `te_kernel_W-0.25_DCE-AUTO_k-1` from `p90` up.
-  `di_kraskov_NN-4_n-5` and `phasealigned_welch_nperseg-auto` are not in them.
-- **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
-  It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
-  Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
-- **`LagResolvedCorrelation` (`lagcorr_*`): directed, lag-resolved cross-correlation** (Box et al. 2015; Mitra et al. 2014).
-  It reads the profile `CrossCorrelation` caches, `r_{i->j}(tau) = corr(x_i[t], x_j[t + tau])` (biased, divide by T; positive `tau` is the row leading the column), over `L = min(max_lag, T // 4)` lags each way.
-  It reports the signed lag of the largest `|r|` (`lag`, antisymmetric), the signed `r` at that lag (`peak`, undirected), and the lead/lag asymmetry `(S_{i->j} - S_{j->i}) / (S_{i->j} + S_{j->i})` with `S_{i->j} = sum_{l=1..L} r_{i->j}(l)^2` (`asym`, antisymmetric, in [-1, 1]).
-  `onesided` (directed, signed) is `r_{i->j}(tau)` at one lag shared by both directions of a pair: a fixed `tau` (default 1), or `tau="1e"` for `round(sqrt(l_i l_j))`, where `l_i` is the first lag at which process i's autocorrelation falls below 1/e (hctsa's `CO_f1ecac`), clipped to `1 .. min(T // 10, L)`.
-  `onesidedpeak` (directed, unsigned) is the largest `|r_{i->j}(k)|` over `1 <= k <= l_i + l_j`, with the same clipping.
-  `full` bundles `lagcorr_{lag,peak,asym}_L-None`, `lagcorr_onesided_tau-{1,2,3,5,10}_L-None`, `lagcorr_onesided_tau-1e_L-None`, `lagcorr_onesidedpeak_L-None` and `lagcorr_{lag,peak,asym}_L-10` (13); `fast` bundles `lagcorr_{lag,peak,asym}_L-None` and `lagcorr_onesided_tau-1_L-None`.
-  The four `benchmarked_p*` sets bundle all 13, which read the cached profile; they replace the bundled `xcorr_*` and `corr_*_tau-k` SPIs.
-- **`LaggedCorrelation` (`corr_{pearson,spearman,kendall}_tau-<k>[-sq]`)**: the average of the two one-sided lag-k correlations, `0.5 * (corr(x[k:], y[:-k]) + corr(y[k:], x[:-k]))`, with Pearson, Spearman or Kendall correlation, so it is undirected.
-  It is not in any bundled config; `lagcorr_onesided_tau-<k>` is the directed Pearson form.
-- **Symbolic transfer entropy with 3-sample ordinal patterns** (`te_symbolic_k-3`), an amplitude-free directed coupling measure (Staniek & Lehnertz 2008).
-  Its bias under independence is about 0.13, 0.03 and 0.01 nats at T = 300, 1000 and 3000.
-- **Dynamic correlation exclusion for the kernel estimators** of MI, time-lagged MI and TE: `dyn_corr_excl` (an integer or `"AUTO"`) now applies to `estimator="kernel"` as well as `"kraskov"`, with the same `_DCE-<value>` suffix and window: neighbours `|t - i| <= w` are excluded, besides the point itself (see **Changed**).
-  An AUTO window is at least 1 for series of 10 or more samples.
+- **74 new SPIs in `full`**, by family (the sets other than `full` that bundle them in brackets):
+  - **`LagResolvedCorrelation`** (13): directed, lag-resolved cross-correlation `r_{i->j}(tau) = corr(x_i[t], x_j[t + tau])` over `L = min(max_lag, T // 4)` lags each way (Box et al. 2015; Mitra et al. 2014).
+    `lagcorr_{lag,peak,asym}_L-{None,10}` give the signed lag of the largest `|r|` (antisymmetric), the signed `r` at that lag (undirected) and the lead/lag asymmetry `(S_{i->j} - S_{j->i}) / (S_{i->j} + S_{j->i})` (antisymmetric); `lagcorr_onesided_tau-{1,2,3,5,10,1e}_L-None` is the directed `r_{i->j}(tau)` at one lag shared by both directions of a pair (`1e` from the series' 1/e autocorrelation lengths); `lagcorr_onesidedpeak_L-None` is the largest lead `|r|` within the sum of those lengths.
+    They replace the bundled `xcorr_*` (all 13 in the `benchmarked_p*` sets; `lag`, `peak`, `asym` and `onesided_tau-1` at `L-None` in `fast`).
+  - **Conditional VAR measures** (15), from one OLS VAR of all processes, so an indirect link or a common driver gives about 0: conditional Granger causality `cgc_p-{1,2,bic}` (Geweke 1984; Barnett & Seth 2014; on Geweke's scale, twice that of `gc_gaussian_*`), and `cpdc`, `cgpdc`, `cddtf` and `pcohmag` (partial directed coherence, generalised PDC, direct DTF and squared partial coherence) at `order=bic` over [0, 0.5], [0, 0.25] and [0.25, 0.5] cycles per sample (`cgc_p-bic`, `cpdc_p-bic_mean_fmin-0_fmax-0-5` and `pcohmag_p-bic_mean_fmin-0_fmax-0-5` in `fast`).
+  - **`PartialCorrelation`** (6): `pcorr_<estimator>`, `-P_ij / sqrt(P_ii P_jj)` from the precision matrix of each bundled covariance estimator (`EmpiricalCovariance`, `GraphicalLasso`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`), the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011) (all in the `benchmarked_p*` sets; `EmpiricalCovariance` and `LedoitWolf` in `fast`).
+  - **`NonlinearInterdependence`** (4): `nli_{L,N,H}_m-5_tau-1_k-5` and `nli_L_m-3_tau-1_k-5`, how well close delay vectors of the column process map onto close delay vectors of the row process (Arnhold et al. 1999; Quian Quiroga et al. 2002; Chicharro & Andrzejak 2009); only the asymmetry `A[i, j] - A[j, i]` indicates direction (`nli_L_m-5_tau-1_k-5` in `fast`).
+  - **`LiangInformationFlow`** (4): `liang_{rate,norm}_k-1` and `liang-cond_{rate,norm}_k-1`, the Liang-Kleeman rate of information flow under a linear stochastic model, in nats per sample and signed, pairwise (Liang 2014) or conditioned on every other series (Liang 2021); `norm` divides by the target's entropy budget (Liang 2015) (`liang_norm_k-1` in `fast`).
+  - **`EventSynchronisation`** (4): `es_Q_q-{0-95,0-9}`, the synchronisation strength of extremes in [0, 1] (undirected), and `es_q_q-{0-95,0-9}`, their delay asymmetry in [-1, 1] (antisymmetric; positive when the extremes of the row precede those of the column) (Quian Quiroga, Kreuz & Grassberger 2002; Odenweller & Donner 2020) (`es_q_q-0-95` in `fast`).
+  - **`TailDependenceAsymmetry`** (2): `tailasym_q-{0-95,0-9}`, the empirical upper minus lower tail-dependence coefficient on ranks, in [-1, 1], zero under any elliptical copula (Joe 1997; Schmidt & Stadtmueller 2006) (`tailasym_q-0-95` in `fast`).
+  - **`EdgeTimeSeries`** (3): `edge_excessvar`, `edge_topshare_f-0-05` and `edge_acf1`, whether a correlation is steady or bursty, from the edge time series `e_t = z_x(t) z_y(t)` (Faskowitz et al. 2020; Esfahlani et al. 2020), each about 0 for a Gaussian pair (`edge_excessvar` in `fast`).
+  - **Convergent cross-mapping** (5): `ccm_E-{None,1,10}_convergence`, the cross-map skill at the largest library size minus that at the smallest (Sugihara et al. 2012), and lagged CCM `lccm_E-None_k-5_{tp,skill}` (Ye et al. 2015), the prediction horizon in `[-5, 5]` of peak skill (negative for a causal row -> column link) and that peak skill.
+  - **Kernel MI, TLMI and TE with dynamic correlation exclusion** (3): `mi_kernel_W-0.25_DCE-AUTO`, `tlmi_kernel_W-0.25_DCE-AUTO` and `te_kernel_W-0.25_DCE-AUTO_k-1` (all three in `benchmarked_p90`, `p95` and `p99`; MI and TLMI also in `p80` and `fast`).
+  - **`WaveletCoherence`** (3): `wtc_wavelet_mean_*` over the bands [0, 0.5], [0, 0.25] and [0.25, 0.5], Morlet wavelet coherence smoothed in time and scale (Torrence and Webster 1999; Grinsted et al. 2004), averaged over time outside the cone of influence.
+    It detects coupling that is transient or changes phase lag during the record; the local estimate is biased upwards, so independent series give values well above zero.
+  - **`ChatterjeeXi`** (2): `xi_tau-{0,1}`, Chatterjee's rank correlation xi (Chatterjee 2021), directed, tending to 1 iff the column process is a measurable function of the row process and to 0 iff they are independent (both in the `benchmarked_p*` sets; `xi_tau-0` in `fast`).
+  - **`CrossPairwiseDistance`** (2): `xpdist_euclidean_tau-1_{mean,min}_rmse`, a shifted-path Euclidean upper bound on DTW (in the `benchmarked_p*` sets).
+  - **`Barycenter`** (2): `bary_dtw_corr` and `bary_softdtw_corr` (see **Changed**) (`bary_dtw_corr` in the `benchmarked_p*` sets and `sonnet`; `bary_softdtw_corr` in `p95` and `p99`).
+  - **`PhaseAmplitudeCoupling`** (2): `pac_mi_excess_p-0-01-0-05_a-0-15-0-4` and `pac_mi_excess_p-0-05-0-1_a-0-2-0-45`, the modulation index (Tort et al. 2010) of the column's amplitude envelope by the row's phase, less its mean over 100 circular time-shift surrogates.
+    The `mi`, `mvl` (Özkurt & Schnitzler 2011), `_excess` and `_z` statistics are available at any band pair; an amplitude band narrower than twice the top phase frequency is refused (Aru et al. 2015).
+    Time-shift surrogates do not remove the spurious coupling of sharp non-sinusoidal waveforms (Kramer et al. 2008).
+  - **`di_kraskov_NN-4_n-5`** (1): directed information from the KSG/Frenzel-Pompe conditional-MI estimator (see **Fixed**).
+  - **`te_symbolic_k-3`** (1): symbolic transfer entropy with 3-sample ordinal patterns (Staniek & Lehnertz 2008), with a bias under independence of about 0.13, 0.03 and 0.01 nats at T = 300, 1000 and 3000 (in the `benchmarked_p*` sets).
+  - **`phasealigned_welch_nperseg-auto`** (1): the zero-lag correlation maximised over all-pass (phase-only) filtering of one process, `sum_f w_f |S_jk(f)| / sqrt(sum_f w_f S_jj(f) sum_f w_f S_kk(f))` from Welch cross-spectra, undirected and in [0, 1], with a null floor of about `sqrt(pi / (4K))` for `K` segments.
+  - **`ppc_hilbert_adaptive`** (1): the pairwise phase consistency (Vinck et al. 2010) of band-passed Hilbert phases, averaged over log-spaced bands weighted by the rhythmic power the two processes share above their `1/f` backgrounds, so no band has to be chosen.
+- **Statistics available by name but not bundled:** `LaggedCorrelation` (`corr_{pearson,spearman,kendall}_tau-<k>[-sq]`), the undirected average of the two one-sided lag-k correlations; `ConvergentCrossMapping(statistic="slope")`, the slope of skill against `ln L`; `ConditionalGrangerCausality(statistic="coef")`, the signed net lagged coefficient; and the `PhaseAmplitudeCoupling` statistics above.
+- **Dynamic correlation exclusion for the kernel estimators** of MI, time-lagged MI and TE: `dyn_corr_excl` (an integer or `"AUTO"`) applies to `estimator="kernel"` as well as `"kraskov"`, with the same `_DCE-<value>` suffix.
   As in JIDT (`DYN_CORR_EXCL = w + 1`), each probability is normalised by the number of samples compared and an empty joint box contributes 0; if every joint box is empty the result is NaN (JIDT gives 0).
   The window removes the dependence that autocorrelation adds and can take MI below zero, so read values against surrogates.
-  New SPIs `mi_kernel_W-0.25_DCE-AUTO` and `tlmi_kernel_W-0.25_DCE-AUTO` (in `full`, `fast` and `benchmarked_p90`/`p95`/`p99`) and `te_kernel_W-0.25_DCE-AUTO_k-1` (in `full` and `benchmarked_p90`/`p95`/`p99`). The other kernel measures are composed from marginal entropies and refuse `dyn_corr_excl`.
-- **`run_spec` records the versions that produced a result**: `computation_version` (`COMPUTATION_VERSION`), `pyspi_version` and `dependency_versions` (the installed version of each runtime requirement).
-  They are saved with every `.npz` and returned by `load_table` in `attrs["run_spec"]`, so a corpus can be checked for mixed computation versions from the files alone.
-  They are kept out of `run_digest`, which already hashes `COMPUTATION_VERSION`, so existing checkpoints still resume.
-- **`ccm_E-{None,1,10}_convergence`: CCM convergence** (`ConvergentCrossMapping(statistic="convergence")`; Sugihara et al. 2012, Science 338:496).
-  `convergence` is `rho(L_max) - rho(L_min)`, the cross-map skill at the largest library size minus the skill at the smallest.
-  `statistic="slope"`, the least-squares slope of skill against `ln L` over the finite library sizes, is available but not bundled.
-  Both are signed and directed (negative when skill falls with L) and are read off the cached CCM skill curve.
-  `ConvergentCrossMapping` also has a `bivariate` method.
-- **`lccm_E-None_k-5_{tp,skill}`: lagged convergent cross-mapping** (`LaggedConvergentCrossMapping`, Ye et al. 2015, Sci. Rep. 5:14750).
-  For each ordered pair and each prediction horizon `Tp` in `[-k, k]` it computes the cross-map skill at the largest library size, with the target's shadow manifold at time t estimating the source at `t + Tp`.
-  `tp` is the horizon of peak skill: negative for a causal row -> column link (the target's manifold recovers the source's past), `>= 0` under synchrony.
-  `skill` is the peak skill.
-- **Conditional Granger causality, `cgc_*`** (new module `pyspi/statistics/var.py`).
-  One OLS VAR(p) is fitted to all processes, and `F[i, j] = ln(var_r / var_f)` compares target j's residual variance with and without the lags of source i (Geweke 1984; Barnett & Seth 2014).
-  Conditioning on every other process means an indirect link or a common driver gives about 0.
-  It is on Geweke's scale, twice that of `gc_gaussian_*`.
-  Bundled as `cgc_p-1`, `cgc_p-2` and `cgc_p-bic` (order 1-10 chosen by BIC; also in `fast`).
-  The signed net lagged coefficient is available as `statistic='coef'` (e.g. `cgc_p-bic_coef`) but is not bundled.
-- **Conditional spectral measures `cpdc_*`, `cgpdc_*`, `cddtf_*` and `pcohmag_*`** (`pyspi/statistics/var.py`), read off the same VAR of all processes as `cgc_*`.
-  They are partial directed coherence (Baccalá & Sameshima 2001), generalised PDC (Baccalá et al. 2007), the direct directed transfer function (Korzeniewska et al. 2003) and the squared partial coherence (Dahlhaus 2000), each on the scale of its bivariate counterpart (`pdcoh`, `gpdcoh`, `ddtf`, `cohmag`).
-  Unlike those, they condition on every other process, so an indirect link gives about 0.
-  Bundled as the band mean over [0, 0.5], [0, 0.25] and [0.25, 0.5] cycles per sample at `order=bic` (12 SPIs); `cpdc_p-bic_mean_fmin-0_fmax-0-5` and `pcohmag_p-bic_mean_fmin-0_fmax-0-5` are also in `fast`.
-- **`EdgeTimeSeries`** (`edge_excessvar`, `edge_topshare_f-0-05`, `edge_acf1`; `pyspi/statistics/misc.py`): whether a correlation is steady or bursty.
-  The edge time series `e_t = z_x(t) z_y(t)` resolves Pearson's r into per-frame contributions (Faskowitz et al., 2020; Esfahlani et al., 2020).
-  `excessvar` is its excess variance, `topshare` the excess share of `sum |e|` carried by the 5% highest-amplitude frames, and `acf1` its excess lag-1 autocorrelation.
-  Each is referenced to a Gaussian pair with the sample r, so it is ~0 in expectation for Gaussian data; `edge_excessvar` is also in `fast`.
-- **Event synchronisation of extremes (`EventSynchronisation`, new module `pyspi/statistics/events.py`).**
-  Each series is reduced to the onsets of its runs above its own `quantile`, and coincidences within half the local inter-event gaps are counted (Quian Quiroga, Kreuz & Grassberger 2002; Odenweller & Donner 2020).
-  `es_Q_q-*` is the synchronisation strength in [0, 1] (undirected) and `es_q_q-*` the delay asymmetry in [-1, 1] (antisymmetric; `q[i, j] > 0` when the extremes of i precede those of j).
-  Four SPIs in `full` (`es_{Q,q}_q-0-95`, `es_{Q,q}_q-0-9`), `es_q_q-0-95` in `fast`.
-- **Tail-dependence asymmetry (`TailDependenceAsymmetry`, same module).**
-  `tailasym_q-*` is the empirical upper minus lower tail-dependence coefficient on ranks (Joe 1997; Schmidt & Stadtmueller 2006), in [-1, 1], undirected and signed; it is zero under any elliptical copula.
-  Two SPIs in `full` (`tailasym_q-0-95`, `tailasym_q-0-9`), `tailasym_q-0-95` in `fast`.
-- **`nli_*`: nonlinear interdependence S, H, N and L from delay-embedded neighbourhoods** (Arnhold et al. 1999, Physica D 134:419; Quian Quiroga et al. 2002, PRE 65:041903; Chicharro & Andrzejak 2009, PRE 80:026217), class `NonlinearInterdependence` in `pyspi/statistics/causal.py`.
-  Each measures how well close delay vectors (dimension `m`, delay `tau`) of the column process map onto close delay vectors of the row process, using `k` nearest neighbours and a Theiler window (default `m * tau`).
-  It is directed with `A[i, j] = A(x_i | x_j)`, read as `i -> j` (row = source); only the asymmetry `A[i, j] - A[j, i]` indicates direction.
-  `full` bundles `nli_L_m-5_tau-1_k-5`, `nli_N_m-5_tau-1_k-5`, `nli_H_m-5_tau-1_k-5` and `nli_L_m-3_tau-1_k-5`, and `fast` bundles `nli_L_m-5_tau-1_k-5`.
-- **`LiangInformationFlow`: the Liang-Kleeman rate of information flow** (`liang_rate_k-1`, `liang_norm_k-1`, `liang-cond_rate_k-1`, `liang-cond_norm_k-1`; `liang_norm_k-1` also in `fast`).
-  It is the closed-form maximum-likelihood estimator of the flow from source to target under a linear stochastic model, in nats per sample and signed: positive means the source makes the target more uncertain, negative that it stabilises it.
-  `liang_*` is the pairwise estimator of Liang (2014, *Phys. Rev. E* 90, 052150), `liang-cond_*` the multivariate one of Liang (2021, *Entropy* 23, 679), which conditions on every other series, and `*_norm_*` divides by the target's entropy budget (Liang 2015, *Phys. Rev. E* 92, 022126) to give a share in [-1, 1].
-- **`pac_{mi,mvl}[_{excess,z}]_p-<f1>-<f2>_a-<f3>-<f4>`: phase-amplitude coupling**, class `PhaseAmplitudeCoupling` in the new module `pyspi/statistics/crossfreq.py`.
-  `A[i, j]` measures how strongly the phase of the row process in `phase_band` modulates the amplitude envelope of the column process in `amp_band` (cycles per sample), from zero-phase order-4 Butterworth band-passes and the Hilbert transform, with two filter lengths discarded at each end.
-  `mi` is the modulation index of Tort et al. (2010, J Neurophysiol 104:1195) over 18 phase bins; `mvl` is the normalised mean vector length of Özkurt & Schnitzler (2011, J Neurosci Methods 201:438).
-  Both are directed, unsigned and in [0, 1].
-  An amplitude band narrower than twice the top phase frequency cannot carry the modulation (Aru et al. 2015, Curr Opin Neurobiol 31:51) and is refused at construction.
-  The raw indices are not zero for independent processes, and their chance level grows with the target's own amplitude modulation.
-  `statistic="<stat>_excess"` subtracts the index's mean over `n_surr = 100` circular time shifts of the target's envelope (shifts uniform on `[n/10, 9n/10]` of the `n` retained samples, fixed seed), and `"<stat>_z"` divides that by the surrogates' standard deviation; both are signed.
-  The z-score is a significance score, not an effect size: it saturates as the coupling grows, because the surrogates' spread grows with the target's modulation.
-  Time-shift surrogates cannot see coupling to a strictly periodic source, and neither normalisation removes the spurious PAC of sharp non-sinusoidal waveforms (Kramer et al. 2008, J Neurosci Methods 170:352).
-  `full` bundles `mi_excess` at the band pairs (0.01-0.05, 0.15-0.4) and (0.05-0.1, 0.2-0.45); the other statistics are available by name.
-- **`ppc_hilbert_adaptive`: spectrally weighted Hilbert phase consistency** (`AdaptivePhaseConsistency` in `pyspi/statistics/spectral.py`), the pairwise phase consistency (Vinck et al. 2010) of band-passed Hilbert phases, averaged over log-spaced bands with weights from the rhythmic power the two processes share above their `1/f` backgrounds, so no band has to be chosen in advance.
-  It is undirected and unsigned, about 0 under independence and 1 for a constant phase lag, and has no parameters (bands are in cycles per sample).
-  In `full` only; not in `fast` or the `benchmarked_p*` sets until it has been timed.
-- **Wavelet coherence `wtc_wavelet_mean_*`** (class `WaveletCoherence` in `pyspi/statistics/wavelet.py`, in `full` only): Morlet wavelet coherence smoothed in time and scale (Torrence and Webster 1999; Grinsted et al. 2004), averaged over time outside the cone of influence and over the bands `[0, 0.5]`, `[0, 0.25]` and `[0.25, 0.5]`.
-  It is undirected and unsigned, in [0, 1].
-  Because the coherence is estimated locally in time, it detects coupling that is transient or that changes sign or phase lag during the record, which whole-record multitaper coherence averages away.
-  The defaults (6 cycles, a Gaussian time window of twice the wavelet's width, a 1.2-octave scale window) smooth twice as widely as the minimal windows of Torrence and Webster; `n_cycles`, `time_smoothing`, `scale_smoothing` and `coi` can be changed and are then named in the identifier.
-  The local estimate is biased upwards, so independent series give values well above zero.
 - **The multitaper bandwidth is a parameter.**
-  Every multitaper SPI in `pyspi/statistics/spectral.py` (the coherence and phase measures, `psi`, `gd`, the directed measures and nonparametric `sgc`) takes `time_halfbandwidth_product` (`NW`, default 3, the value every bundled SPI uses).
-  A larger `NW` averages more tapers (`floor(2 NW) - 1`), which lowers the variance and the upward bias of coherence-type measures, at the cost of frequency resolution.
-  A value other than 3 is appended to the identifier as `_nw-<value>`, with dots written as dashes (e.g. `cohmag_multitaper_mean_fs-1_fmin-0_fmax-0-5_nw-8`).
-  No bundled identifier or value changes.
-- **`Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature.**
-  The table holds every SPI as a full `M x M` matrix.
-  For an `undirected` SPI the lower triangle copies the upper one, and for an `antisymmetric` SPI (`phase`, `pli`, `wpli`, `psi`, `es_q`) it is the negation, so the vector keeps only the pairs `(i, j)` with `i < j` for these.
-  A positive antisymmetric value at `(i, j)` means process `i` leads process `j` (row = source).
-  `directed` and `asymmetric` SPIs keep both orientations.
+  Every multitaper SPI in `pyspi/statistics/spectral.py` takes `time_halfbandwidth_product` (`NW`, default 3, the value every bundled SPI uses).
+  A larger `NW` averages more tapers (`floor(2 NW) - 1`), lowering the variance and upward bias of coherence-type measures at the cost of frequency resolution.
+  A value other than 3 is appended to the identifier as `_nw-<value>`, with dots written as dashes.
+- **Feature vectors.**
+  `Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature: only `i < j` for `undirected` and `antisymmetric` SPIs, both orientations for `directed` and `asymmetric` ones.
   Self-pairs are dropped unless `include_self=True`, and NaNs are kept, so the length and order depend only on the config and `M`.
-  The result is a `pandas.Series` indexed by `(spi, source, target)`, as in `to_frame()`.
-  `pyspi.feature_vector(table)` takes a table from `load_table` and rebuilds each SPI's trait from the config recorded in `table.attrs["run_spec"]`, or takes an explicit `directedness={identifier: trait}`.
-- **`Directed.directedness()`** returns the one symmetry trait an SPI carries: `undirected`, `antisymmetric`, `directed` or `asymmetric`.
+  `pyspi.feature_vector(table)` rebuilds each SPI's trait from the config recorded in `table.attrs["run_spec"]`, or takes an explicit `directedness={identifier: trait}`.
+- **`Directed.directedness()`** returns the one symmetry trait an SPI carries: `undirected`, `antisymmetric` (`A[i, j] == -A[j, i]`, a new label), `directed` or `asymmetric`.
+- **Parallel computation and checkpoints.**
+  `Calculator.compute(n_jobs=...)` follows the joblib convention (see Breaking changes), and `compute(checkpoint_dir=...)` writes each SPI as it finishes and resumes from it.
+  A checkpoint directory carries a `run.json` manifest bound to `Calculator.run_digest`, which hashes the config contents, the dataset bytes and the computation version, so a different dataset, config, preprocessing or process order is refused rather than reused; failed checkpoints are retried by default.
+- **Run records.**
+  `Calculator.errors`, `Calculator.run_spec`, `Calculator.run_digest`, `Calculator.to_frame()` (long-form results, one row per `(spi, source, target)`), `Calculator.summary()` and a `repr` for `Calculator`.
+  `run_spec` records `computation_version`, `pyspi_version` and `dependency_versions`, saved with every `.npz` and returned by `load_table` in `attrs`.
+  `pyspi.COMPUTATION_VERSION` is bumped whenever a change can alter a valid SPI output; record it with saved results, and do not pool results computed under different values.
+- `ConvergentCrossMapping` has a `bivariate` method.
 
 ### Dependencies
 
@@ -468,35 +376,29 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   | scipy / pandas / statsmodels / nitime / hyppo / tslearn | unpinned | `>=1.11` / `>=2.1` / `>=0.14` / `>=0.10` / `>=0.4` / `>=0.10`; new `dtaidistance>=2.3` |
   | removed | `jpype1`, `cdt==0.5.23`, `torch`, `h5py`, `seaborn`, `sktime`, `dill`, `future`, `setuptools<81` | (`aeon` is an optional `tsfile` extra for `.ts` files) |
 
-  The pinned versions were checked against the 2.0.2 wheel metadata and the 3.0.0 `pyproject.toml`.
 - Dropped unused runtime dependencies (`h5py`, `seaborn`, and the intermediate `plotly`, `matplotlib`, `nbformat`). Plotting and notebook packages moved to a `bench` extra.
-- Dropped the `setuptools>=68,<80` pin. It existed because pyEDM imported `pkg_resources`; pyEDM 2.5 no longer does, so the floor is now `pyEDM>=2.5` and modern setuptools is usable.
 - `pandas>=2.1` for `DataFrame.stack(future_stack=True)`, the pandas 3 semantics.
-- **`spectral-connectivity` is now upper-bounded: `>=1.1,<3`.** `DirectedCoherence` reads two *private* `Connectivity` properties (`_transfer_function`, `_noise_covariance`) because the public `directed_coherence()` is wrong twice over (above), so an open-ended floor was a promise pyspi cannot keep. The range is verified end to end against the oldest published 1.1 (1.1.0) and the locked current release: both expose every symbol pyspi uses. 1.1.x additionally lacks `transforms.prepare_time_series` (there is a fallback) and returns a 400- rather than 401-point frequency grid, so band statistics differ marginally across the supported range. `tests/test_directionality.py` fails loudly if a private property disappears, rather than the measure silently changing meaning.
-- **`cdt` and `torch` are gone.** pyspi used four functions from `cdt.causality.pairwise` — the ANM independence score, the conditional distribution similarity statistic, the RECI regression-error score and IGCI — now transcribed in `pyspi/lib/pairwise_causal.py` on NumPy/SciPy/scikit-learn, with cdt's MIT licence retained at `pyspi/lib/LICENSE-cdt.txt`. **No value changes**: verified bit-identical against cdt 0.6 over 60 mixed random pairs, with five frozen into `tests/data/fixtures/cdt_pairwise_reference.npz` so the evidence outlives the dependency. torch drove no pyspi computation — `InterDependenceScore` is NumPy — and entered only because cdt eagerly imports its Torch-backed models at package load. Measured: installed size **1.1 GB → 567 MB**, and the 1.5–1.7 s `import cdt.causality.pairwise` (paid once per worker under `compute(n_jobs=…)`) is gone. Per-call runtime is unchanged; the win is install size and start-up, not throughput.
-- `numba>=0.61` is a direct dependency (`DynamicTimeWarping`'s Itakura kernel).
-  It was already installed through tslearn, which requires the same floor.
-- Build requires `setuptools>=77`, matching the PEP 639 licence metadata already in use; older setuptools would build a wheel with no licence metadata.
+- **`spectral-connectivity` is upper-bounded: `>=1.1,<3`.**
+  `DirectedCoherence` reads two private `Connectivity` properties (`_transfer_function`, `_noise_covariance`), because the public `directed_coherence()` does not compute the bounded form of Baccalá et al. (1998) that pyspi reports.
+  Every symbol pyspi uses is present from 1.1.0 to the current release; 1.1.x returns a 400- rather than 401-point frequency grid, so band statistics differ marginally across the range.
+- **`cdt` and `torch` are gone.**
+  pyspi used four functions from `cdt.causality.pairwise` (the ANM independence score, the conditional distribution similarity statistic, the RECI regression-error score and IGCI), now transcribed in `pyspi/lib/pairwise_causal.py` on NumPy/SciPy/scikit-learn, with cdt's MIT licence retained at `pyspi/lib/LICENSE-cdt.txt`.
+  **No value changes**: the transcription is bit-identical to cdt 0.6.
+  torch entered only because cdt imports its Torch-backed models at load; the installed size goes from 1.1 GB to 567 MB, and each worker of `compute(n_jobs=…)` starts 1.5–1.7 s faster.
+- `numba>=0.61` is a direct dependency (`DynamicTimeWarping`'s Itakura kernel); tslearn already requires the same floor.
+- Build requires `setuptools>=77`, matching the PEP 639 licence metadata.
 - New extras: `bench` and `tsfile`; `testing` now requires `pytest>=7` (2.0.2 pinned `pytest==5.4.2`).
-- Licence: **GPL-3.0-or-later** (2.0.2: GPL-3.0), as agreed by the maintainer. `pyspi/lib/LICENSE-jidt.txt` joins the cdt and ids notices in `license-files`.
+- Licence: **GPL-3.0-or-later** (2.0.2: GPL-3.0), as agreed by the maintainer.
+  `pyspi/lib/LICENSE-jidt.txt` joins the cdt and ids notices in `license-files`.
 
 ### Testing
 
-- The test suite previously **did not run at all** — collection aborted on an undeclared `dill` dependency. Fixed.
-- New `tests/test_infotheory_analytic.py`: closed-form checks against `-0.5*ln(1-rho^2)`, `0.5*ln(2*pi*e*sigma^2)`, analytic Gaussian TE on a known AR(1), independence, and information-theoretic identities. Previously the suite contained three assertions comparing a computed value to an independently-known one, and five estimator classes were constructed but never computed.
-- New `tests/test_directionality.py` pins the row=source convention for every directed SPI family.
-- **Drift tolerances are per-SPI, not per-module.** The suite applied a 1e-2 relative band to every SPI in `causal` and `misc` on the assumption that cdt's optimisers, GP restarts and randomised independence tests made them irreproducible. Measured, that is false: computing the full config twice per fixture under the suite's own protocol reproduces **322 of 322 SPIs bit-exactly** (the 322-SPI `full` of that date; `full` is now 316 after the dspli/dswpli removals) on all three fixtures — comparing the non-finite masks as well as the finite values, so an SPI whose NaN pattern moved between the two runs could not be scored as identical — including every `anm`/`cds`/`reci`/`ccm`, every `coint_*`, `gpfit_*` (`GaussianProcessRegressor` defaults to `n_restarts_optimizer=0`, so there are no random restarts), `lmfit_*` (`random_state` pinned) and `ids`. A module-wide band over 62 SPIs, ~50 of them deterministic, is slack wide enough to hide the regressions this suite exists to catch. The map of loosened SPIs is now keyed by identifier and is empty; `tests/tools/measure_reproducibility.py` regenerates the evidence.
-- Merged from `main`: `CITATION.cff` and the PyPI trusted-publishing workflow (`publish.yaml`, which reads the static version in `pyproject.toml`). `setup.py` and `requirements.txt` are deleted in favour of `pyproject.toml`.
-- New `tests/test_jidt_reference.py`: JIDT 1.6.1 outputs hard-coded as constants and asserted against the NumPy estimators, with the Java generator in `tests/tools/jidt_reference/`. No Java is needed to run it (see Removed: Java and JIDT).
+- The test suite runs; in 2.0.2 collection aborted on an undeclared `dill` dependency.
+- The information-theoretic estimators are checked against closed forms (Gaussian MI, entropy and TE on a known AR(1), independence, and information-theoretic identities) and against hard-coded JIDT 1.6.1 outputs, with no Java needed.
+- The corrected measures are each checked against a closed form, a textbook implementation or a third-party reference (see [References](#references)); every directed SPI family is checked for the row = source convention; and each bundled SPI's config labels are checked against the SPI.
+- A drift suite recomputes every SPI in `full` on three small frozen datasets and fails on any change in value beyond rounding, in the NaN pattern, or in the SPI set, and on any SPI that raises or returns no finite value.
 - The source distribution includes the whole test suite with its baselines and fixtures, so `pytest` runs from an unpacked sdist.
-- New `tests/test_config_labels.py` and `tests/test_import_hygiene.py`; the deprecation shims (`tests/test_api_compat.py`) and `n_jobs` resolution are tested.
-- New CLI exit-status tests, and a test that the spectral factorisation's non-convergence warning is not swallowed.
-- **The drift suite reported violations and never failed.** Tolerance breaches went to a session-end banner, which made every tolerance in the file decorative: a deterministic SPI could move by any amount and the run still exited 0. It also returned early when a baseline had no finite entries, so an SPI frozen as an all-NaN column agreed with itself forever — which is how three `gd_*` SPIs stayed broken. Violations now fail, an empty baseline is rejected, and two new gates require that no SPI raises and that none produces an entirely non-finite column. The generator refuses to freeze a run with either condition. Documented exceptions are shared between generator and suite as `KNOWN_UNESTIMABLE`, and the suite fails if a listed exception starts succeeding.
-  The automatic-order `sgc_parametric_*` SPIs are estimable on every fixture; the six `gd_*` cases on `var1_M3_T100` and `cml_M5_T100` are listed.
-- `test_whether_calculator_computes` ran the default config and asserted nothing; it now requires an empty `calc.errors` and a finite value in every column, on a coupled VAR(1) rather than the particular white-noise fixture on which `gd_*` was observed to be empty.
-- New `test_cache_sharing_never_changes_a_value`: computing the whole config against one Data, where every cache is shared, must equal computing each SPI against its own. This is the automatic coverage check for cache-key omissions — a per-SPI "different identifier implies different cache key" rule is the wrong invariant, since several classes cache a shared intermediate on purpose and apply the differing parameters after the lookup.
-- New CI job builds the wheel, installs it into a clean environment, and from a directory containing no pyspi source resolves every bundled config and dataset, computes `fabfour`, and round-trips the NPZ through the CLI. The blocking slow regression job installs from `uv.lock`, the resolution the baselines were frozen against. A non-blocking job, "regression (latest deps, advisory)", reports upstream drift with `PYSPI_DRIFT_TIER=latest`. The unit and packaging workflows run on pull requests and on pushes to `main` only (no duplicate runs), and the slow suite also runs on pushes to `main`. The CI matrix is Python 3.11-3.13. The baseline generator records provenance in each `.npz` (dependency versions, platform, `COMPUTATION_VERSION`), and the workflow that regenerates baselines installs from `uv.lock`.
-- Frozen baselines regenerated from this fork as `.npz` (they were upstream 2.0.1 pickles, the wrong oracle for deliberately-changed estimators), and the drift suite now fails hard on a NaN-pattern change or a baseline/current SPI set mismatch, with tolerances split by estimator family.
+- CI builds the wheel, installs it into a clean environment, and from outside the source tree resolves every bundled config and dataset, computes `fabfour`, and round-trips the NPZ through the CLI. The regression job installs from `uv.lock`, the resolution the baselines were frozen against, and an advisory job reports drift under the latest dependencies.
 
 ### References
 
