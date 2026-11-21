@@ -34,10 +34,9 @@ CASES = [
     ("spectral", "PhaseSlopeIndex", dict(fmin=0.1, fmax=0.12), 100,
      "needs at least two independent frequencies"),
     ("spectral", "SpectralGrangerCausality", dict(method="parametric"), 3,
-     "still improving at order 2, the largest that 3 observations support"),
+     "still improving at order 0, the largest that 3 observations support"),
     ("spectral", "SpectralGrangerCausality", dict(method="parametric", order=20), 12,
-     "order 20 needs autocovariances up to lag 20, but the series has 12 "
-     "observations"),
+     "order 20 needs at least 23 observations, but the series has 12"),
     ("spectral", "PhaseAlignedCorrelation", dict(nperseg=128), 100,
      "nperseg=128 exceeds the series length T=100"),
     ("spectral", "PhaseAlignedCorrelation", {}, 12,
@@ -150,7 +149,7 @@ def test_bands_that_longer_series_fill_are_computed_there():
 def test_a_long_enough_series_is_still_computed():
     """The length checks refuse only what the estimators cannot compute."""
     for spi, T in ((spectral.SpectralGrangerCausality(method="parametric"), 10),
-                   (spectral.SpectralGrangerCausality(method="parametric", order=20), 20),
+                   (spectral.SpectralGrangerCausality(method="parametric", order=20), 23),
                    (spectral.AdaptivePhaseConsistency(), 46),
                    (spectral.PhaseAlignedCorrelation(), 20)):
         with warnings.catch_warnings():

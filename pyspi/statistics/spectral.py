@@ -1716,21 +1716,26 @@ def _fit_bivariate_var(x, order=None, max_order=50):
     nitime's ``autocov_vector`` (normalised by ``T - k``, not demeaned) need
     not be.
 
-    ``max_order`` is the largest order tried, capped at ``T - 1``: the sample
-    autocovariance at lag ``k`` sums ``T - k`` products, so ``T - 1`` is the
-    largest lag it has data for. If BIC is still improving at the cap, the
-    order cannot be selected and ``NotAppropriate`` is raised. An explicit
-    ``order`` above ``T`` is refused before the fit. Returns ``(coef, ecov)``
-    in nitime's convention, ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
+    ``max_order`` is the largest order tried, capped at ``T - 3``: the
+    residual covariance of a higher order is singular for any two demeaned
+    series of ``T`` observations. If BIC is still improving at the cap, the
+    order cannot be selected and ``NotAppropriate`` is raised, as it is for
+    an explicit ``order`` above ``T - 3``. Returns ``(coef, ecov)`` in
+    nitime's convention, ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
     """
     x = x - x.mean(axis=-1, keepdims=True)
     n_obs = x.shape[-1]
-    if order is not None and order > n_obs:
+    supported = n_obs - 3
+    if order is not None and order > supported:
         raise NotAppropriate(
-            f"Parametric spectral Granger causality: order {order} needs "
-            f"autocovariances up to lag {order}, but the series has {n_obs} "
-            f"observations. Set a lower `order`, or use a longer series.")
-    largest = order if order is not None else min(max_order, n_obs - 1)
+            f"Parametric spectral Granger causality: order {order} needs at "
+            f"least {order + 3} observations, but the series has {n_obs}. "
+            f"Set a lower `order`, or use a longer series.")
+    if supported < 0:
+        raise NotAppropriate(
+            f"Parametric spectral Granger causality needs at least 3 "
+            f"observations, but the series has {n_obs}.")
+    largest = order if order is not None else min(max_order, supported)
     # R[k] = (1/T) sum_t x(t+k) x(t)^T: nitime's lag orientation.
     R = np.stack([x[:, k:] @ x[:, :n_obs - k].T
                   for k in range(largest + 1)]) / n_obs
@@ -1791,10 +1796,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     comes from the unconverged factor and the SPI warns. Automatic order
     selection that has not converged by ``max_order`` raises
     ``NotAppropriate``: the model is over-fitting at that record length. The
-    search tries orders up to ``min(max_order, T - 1)``, so a short series is
-    fitted at the order BIC selects, and is not appropriate only if BIC is
-    still improving at ``T - 1``; an explicit ``order`` above ``T`` is not
-    appropriate either.
+    search tries orders up to ``min(max_order, T - 3)``, the largest a series
+    of ``T`` observations supports, so a short series is fitted at the order
+    BIC selects, and is not appropriate only if BIC is still improving at
+    ``T - 3``; an explicit ``order`` above ``T - 3`` is not appropriate
+    either.
 
     References
     ----------

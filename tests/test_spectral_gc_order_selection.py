@@ -1,9 +1,10 @@
 """Automatic VAR order selection of parametric spectral Granger causality.
 
-The search tries orders up to ``min(max_order, T - 1)``, the largest lag at
-which the sample autocovariance has data, and stops at the first order where
-BIC increases. A series on which BIC is still improving at that limit, or an
-explicit ``order`` above ``T``, is not appropriate.
+The search tries orders up to ``min(max_order, T - 3)``, the largest order
+whose residual covariance two demeaned series of ``T`` observations determine,
+and stops at the first order where BIC increases. A series on which BIC is
+still improving at that limit, or an explicit ``order`` above ``T - 3``, is
+not appropriate.
 """
 import warnings
 
@@ -64,11 +65,11 @@ def test_a_bundled_automatic_order_sgc_gives_values_on_a_short_series(make, T):
 
 
 @pytest.mark.parametrize("make", [_white, _coupled_var1], ids=["white", "coupled_var1"])
-@pytest.mark.parametrize("T", [50, 51, 64, 100, 257])
+@pytest.mark.parametrize("T", [50, 51, 52, 53, 64, 100, 257])
 def test_the_fit_is_unchanged_where_the_series_supports_max_order(make, T):
-    """At T >= 51 the autocovariance is the same; at T = 50 the search ends at
-    order 49 instead of 50, which matters only if BIC were still improving
-    there."""
+    """At T >= 53 the autocovariance is the same; at T = 50 to 52 the search
+    ends at order T - 3 instead of 50, which matters only if BIC were still
+    improving there."""
     for seed in SEEDS:
         z = Data(make(seed, T), dim_order="ps").to_numpy(squeeze=True)
         coef, ecov = _fit_bivariate_var(z, None, 50)
@@ -77,16 +78,20 @@ def test_the_fit_is_unchanged_where_the_series_supports_max_order(make, T):
 
 
 def test_bic_still_improving_at_the_longest_supported_order_is_not_appropriate():
-    z = _white(0, 3)
+    z = _white(0, 5)
     with pytest.raises(NotAppropriate,
-                       match="still improving at order 2, the largest that 3 "
+                       match="still improving at order 2, the largest that 5 "
                              "observations support"):
         _fit_bivariate_var(z, None, 50)
 
 
-def test_an_explicit_order_above_the_series_length_is_not_appropriate():
-    with pytest.raises(NotAppropriate,
-                       match="order 20 needs autocovariances up to lag 20, but "
-                             "the series has 12 observations"):
-        _fit_bivariate_var(_white(0, 12), 20)
-    _fit_bivariate_var(_white(0, 20), 20)
+def test_an_explicit_order_the_series_cannot_support_is_not_appropriate():
+    """Order p has a non-singular residual covariance from T = p + 3."""
+    for T in (12, 20, 22):
+        with pytest.raises(NotAppropriate,
+                           match=f"order 20 needs at least 23 observations, "
+                                 f"but the series has {T}"):
+            _fit_bivariate_var(_white(0, T), 20)
+    for seed in SEEDS:
+        _, ecov = _fit_bivariate_var(_white(seed, 23), 20)
+        assert np.linalg.cond(ecov) < 1e6

@@ -207,7 +207,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   An unknown `statistic` raises `ValueError` rather than `NameError`.
   The README's *Frequency bands* section explains the units and how to give bands in Hz.
 - **Spectral SPIs on a series too short for them are NaN, labelled not appropriate, with the cause recorded.**
-  Parametric `sgc` with automatic order selection searches orders up to `T - 1` on a series shorter than `max_order`, so it returns a value on short series, and is not appropriate only when the selection has not converged (BIC still improving at `max_order`, or at `T - 1` on a shorter series); an explicit `order` above `T` is not appropriate.
+  Parametric `sgc` with automatic order selection searches orders up to `T - 3`, the largest a series of `T` observations supports, when that is below `max_order`, so it returns a value on short series, and is not appropriate only when the selection has not converged (BIC still improving at `max_order`, or at `T - 3` on a shorter series); an explicit `order` above `T - 3` is not appropriate.
   Multitaper `psi` is refused with fewer than two independent frequencies in its band.
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
