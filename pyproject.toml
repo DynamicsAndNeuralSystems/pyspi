@@ -59,12 +59,9 @@ dependencies = [
     "statsmodels>=0.14.2",
     "mne>=1.6",
     "mne-connectivity>=0.5",
-    # DirectedCoherence reads two private Connectivity properties
-    # (_transfer_function, _noise_covariance), because the public
-    # directed_coherence() does not compute the bounded form pyspi reports
-    # (see statistics/spectral.py). 1.x returns a frequency grid without the
-    # Nyquist bin, which changes the band statistics, so the floor is 2.0; the
-    # upper bound excludes a major release that may remove either property.
+    # DirectedCoherence reads the private _transfer_function and _noise_covariance
+    # (see statistics/spectral.py); 2.0 is the first release whose frequency grid
+    # includes the Nyquist bin, and <3 guards those private properties.
     "spectral-connectivity>=2.0,<3",
     # 0.11 is the first release that supports NumPy 2.
     "nitime>=0.11",

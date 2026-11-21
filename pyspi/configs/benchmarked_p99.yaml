@@ -2,8 +2,8 @@
 # benchmark, ranked by amortized cost (SPIs that share a cache split its cost)
 # at M = 16, T = 800 on one core.
 # Current set: 183 SPIs (of the 231 in `full`).
-# SPIs added to `full` after the benchmark are in no benchmarked_p* set,
-# whatever their cost; use `fast` or `full` for them.
+# SPIs of `full` that the benchmark did not time are in no benchmarked_p* set,
+# whatever their cost; use `full` for them.
 #
 .statistics.basic:
   Covariance:

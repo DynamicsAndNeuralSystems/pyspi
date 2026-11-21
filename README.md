@@ -41,9 +41,8 @@ Feedback is much appreciated through [issues](https://github.com/DynamicsAndNeur
 
 _pyspi_ requires **Python 3.11 or newer**.
 
-> **Upgrading from 2.x?** Version 3.0 removes the Java/JIDT dependency and
-> changes the `Calculator` API. See the [CHANGELOG](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/CHANGELOG.md#migrating-from-2x) for the
-> migration table.
+> **Upgrading from 2.x?** Version 3.0 removes the Java/JIDT dependency and changes the `Calculator` API.
+> See the [CHANGELOG](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/CHANGELOG.md#migrating-from-2x) for the migration table.
 
 ```bash
 pip install pyspi
@@ -66,8 +65,7 @@ uv sync                       # runtime + dev dependencies from uv.lock
 uv run pytest -q              # fast test suite
 ```
 
-Optional extras: `.[tsfile]` to load sktime/aeon `.ts` files, `.[bench]` for the
-compute-cost benchmark suite in [`bench/`](https://github.com/DynamicsAndNeuralSystems/pyspi/tree/main/bench).
+Optional extras: `.[tsfile]` to load sktime/aeon `.ts` files, `.[bench]` for the compute-cost benchmark suite in [`bench/`](https://github.com/DynamicsAndNeuralSystems/pyspi/tree/main/bench).
 
 ## Getting Started 🚀
 

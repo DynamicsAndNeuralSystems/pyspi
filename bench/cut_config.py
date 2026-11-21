@@ -279,8 +279,8 @@ def main(argv=None) -> int:
     )
     if missing:
         header += (
-            f"# SPIs added to `{source_config.stem}` after the benchmark are in no benchmarked_p* set,\n"
-            "# whatever their cost; use `fast` or `full` for them.\n"
+            f"# SPIs of `{source_config.stem}` that the benchmark did not time are in no benchmarked_p* set,\n"
+            "# whatever their cost; use `full` for them.\n"
         )
     header += "#\n"
     text = emit_config(source_config, records, kept, header,

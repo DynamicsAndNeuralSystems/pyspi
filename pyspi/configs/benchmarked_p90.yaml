@@ -4,8 +4,8 @@
 # Current set: 161 SPIs (of the 231 in `full`).
 # te_kraskov_NN-4_DCE-AUTO_k-{1,2}_kt-1_l-1_lt-1 are included for coverage,
 # although they cost more than the cutoff.
-# SPIs added to `full` after the benchmark are in no benchmarked_p* set,
-# whatever their cost; use `fast` or `full` for them.
+# SPIs of `full` that the benchmark did not time are in no benchmarked_p* set,
+# whatever their cost; use `full` for them.
 #
 .statistics.basic:
   Covariance:
