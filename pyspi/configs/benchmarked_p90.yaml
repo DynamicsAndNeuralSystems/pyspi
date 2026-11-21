@@ -47,7 +47,7 @@
   SpearmanR:
     labels:
       - undirected
-      - linear
+      - nonlinear
       - signed
       - bivariate
       - contemporaneous
