@@ -298,7 +298,7 @@ def test_gwtau_distance_vector_starts_at_zero_and_matches_the_paper():
     sqrt((n - 1) / n)). The reference is Proposition 1(e) of the paper on the
     sorted n-vectors, computed here from scratch.
     """
-    from pyspi.statistics.distance import GromovWasserstainTau
+    from pyspi.statistics.distance import GromovWassersteinTau
 
     rng = np.random.default_rng(0)
     x, y = rng.standard_normal(60), rng.standard_normal(60)
@@ -310,15 +310,56 @@ def test_gwtau_distance_vector_starts_at_zero_and_matches_the_paper():
 
     vx, vy = paper_vector(x), paper_vector(y)
     assert vx[0] == 0 and vx.size == 60
-    assert np.allclose(GromovWasserstainTau.vec_geo_dist(np.column_stack([np.arange(60), x])), vx)
+    assert np.allclose(GromovWassersteinTau.vec_geo_dist(np.column_stack([np.arange(60), x])), vx)
     want = np.sqrt(np.mean((np.sort(vx) - np.sort(vy)) ** 2))
-    assert GromovWasserstainTau.gwtau(x, y) == pytest.approx(want, rel=1e-12)
-    assert GromovWasserstainTau.gwtau(x, x) == 0
+    assert GromovWassersteinTau.gwtau(x, y) == pytest.approx(want, rel=1e-12)
+    assert GromovWassersteinTau.gwtau(x, x) == 0
 
     # Without the k = 1 zero the value is larger by exactly sqrt(n / (n-1)):
     # the same sum of squares (the two zeros pair up) divided by n-1, not n.
     without_zero = np.sqrt(np.mean((np.sort(vx[1:]) - np.sort(vy[1:])) ** 2))
     assert without_zero == pytest.approx(want * np.sqrt(60 / 59), rel=1e-12)
+
+
+def test_the_old_gwtau_class_name_warns_and_gives_identical_values():
+    """`GromovWasserstainTau` is a deprecated alias of `GromovWassersteinTau`."""
+    from pyspi.statistics.distance import GromovWasserstainTau, GromovWassersteinTau
+
+    with pytest.warns(DeprecationWarning, match="GromovWassersteinTau"):
+        old = GromovWasserstainTau()
+    new = GromovWassersteinTau()
+    assert isinstance(old, GromovWassersteinTau)
+    assert old.identifier == new.identifier == "gwtau"
+    assert old.labels == new.labels
+
+    rng = np.random.default_rng(3)
+    data = Data(rng.standard_normal((3, 80)), dim_order="ps")
+    np.testing.assert_array_equal(old.multivariate(data), new.multivariate(data))
+
+
+@pytest.mark.parametrize("name", ["GromovWassersteinTau", "GromovWasserstainTau"])
+def test_a_yaml_config_loads_gwtau_under_either_class_name(name, tmp_path):
+    import warnings
+
+    from pyspi.calculator import load_spis_from_yaml
+    from pyspi.statistics.distance import GromovWassersteinTau
+
+    config = tmp_path / "gwtau.yaml"
+    config.write_text(
+        ".statistics.distance:\n"
+        f"  {name}:\n"
+        "    labels: [unsigned, distance, unordered, nonlinear, undirected]\n"
+        "    dependencies:\n"
+        "    configs:\n"
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        spis = load_spis_from_yaml(str(config), quiet=True)
+    deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)
+                    and "GromovWasserstainTau" in str(w.message)]
+    assert len(deprecations) == (name == "GromovWasserstainTau")
+    assert list(spis) == ["gwtau"]
+    assert isinstance(spis["gwtau"], GromovWassersteinTau)
 
 
 def test_barycenter_corr_is_pearson_for_the_euclidean_mode():

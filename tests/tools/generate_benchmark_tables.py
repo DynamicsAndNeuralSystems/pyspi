@@ -59,31 +59,17 @@ META_PREFIX = "__"
 # statistical reason. Everything else must produce a finite value, and a run
 # with any other failure is not frozen. Imported by tests/test_baseline_drift.py
 # so the test suite and the generator cannot drift apart on what is expected.
-#
-# Group delay regresses coherence phase on at least three *independent*
-# frequencies, one multitaper bandwidth (six bins) apart, so a pair needs a
-# significant coherence run of at least 13 of the 51 bins at T=100. The longest
-# run on any pair is 12 bins on var1_M3_T100 and 10 on cml_M5_T100, in every
-# band.
-_GD_SHORT_RUNS = ("no significant coherence run spans three independent "
-                  "frequencies (13 bins) at T=100")
-KNOWN_UNESTIMABLE = {
-    dataset: {
-        f"gd_multitaper_delay_fs-1_{band}": _GD_SHORT_RUNS
-        for band in ("fmin-0_fmax-0-5", "fmin-0_fmax-0-25",
-                     "fmin-0-25_fmax-0-5")
-    }
-    for dataset in ("var1_M3_T100", "cml_M5_T100")
-}
+KNOWN_UNESTIMABLE = {}
 
 
 # Event synchronisation needs at least two events in each series. At the 0.95
 # quantile on var1_M3_T100 the exceedances fall in runs that collapse to fewer
 # than two events per process, so every pair is undefined for Q and q.
 for _stat in ("Q", "q"):
-    KNOWN_UNESTIMABLE["var1_M3_T100"][f"es_{_stat}_q-0-95"] = (
+    KNOWN_UNESTIMABLE.setdefault("var1_M3_T100", {})[f"es_{_stat}_q-0-95"] = (
         "fewer than two collapsed exceedance events per process at the 0.95 "
         "quantile with T=100")
+
 
 def build_tables(dataset_name, config="full", seed=42):
     """Compute every SPI on ``dataset_name`` and return ``{spi_key: MxM array}``."""
