@@ -145,7 +145,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `n` reaches the identifier of `DirectedInfo` and `CausalEntropy`.
 - **KSG ties and scale.**
   KSG standardises each coordinate, as JIDT does, and breaks ties deterministically: in each series with a positive standard deviation, every repeated value gets Gaussian jitter of SD `1e-10 × std` from a fixed-seed generator (seeds: source 0, target 1, embedding selection 2), repeated until all values are distinct, as in pyhctsa.
-  When the jitter is below the floating-point resolution of the values (an un-z-scored series far from zero), the estimate is NaN, labelled not appropriate.
+  When a repeated value lies more than about 250 standard deviations from zero (an un-z-scored series with a large offset), the jitter spans too few floating-point steps to act as random, and the estimate is NaN, labelled not appropriate.
   Tie-free series are untouched and match JIDT 1.6.1 run without its dither to about 1e-15.
   Without this, tied data give confident nonzero MI on independent series, since every kth-neighbour radius is zero; every process of the bundled `forex` dataset is tied.
   The jitter is deterministic but depends on observation order; NaN, infinite and constant series raise.
