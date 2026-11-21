@@ -2,8 +2,9 @@
 
 ``(M, T)``, one row per process, is the default (``dim_order="ps"``);
 ``dim_order="sp"`` reads ``(T, M)`` arrays and DataFrames with one column per
-process. Data read as more processes than observations warn, since that is
-the usual sign of the other layout.
+process. Data read with no stated ``dim_order`` as more processes than
+observations warn, since that is often the other layout; a stated
+``dim_order``, ``"ps"`` included, never warns.
 """
 import warnings
 
@@ -29,8 +30,35 @@ def test_time_along_rows_warns_once_and_names_the_fix():
         d = Data(X.T)
     (w,) = _orientation_warnings(record)
     assert (d.n_processes, d.n_observations) == (50, 4)
-    assert "shape (50, 4)" in str(w.message) and "dim_order='sp'" in str(w.message)
+    message = str(w.message)
+    assert "shape (50, 4)" in message
+    assert "dim_order='sp'" in message and "dim_order='ps'" in message
     # The warning points at the caller's line, not into pyspi.
+    assert w.filename == __file__
+
+
+def test_a_stated_layout_never_warns():
+    """Many processes and few observations is a legitimate layout once stated."""
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        d = Data(X.T, dim_order="ps")
+        Data(X, dim_order="sp")
+        calc = Calculator(dataset=X.T, dim_order="ps", config="fabfour", verbose=False)
+        # Re-reading on the user's behalf keeps the stated layout silent.
+        d.add_process(np.arange(4.0))
+        d.remove_process(0)
+        calc.load_dataset(d)
+        Calculator(dataset=d, config="fabfour", verbose=False)
+    assert not _orientation_warnings(record)
+    assert (calc.dataset.n_processes, calc.dataset.n_observations) == (50, 4)
+
+
+def test_calculator_default_warns_with_both_options():
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        Calculator(dataset=X.T, config="fabfour", verbose=False)
+    (w,) = _orientation_warnings(record)
+    assert "dim_order='sp'" in str(w.message) and "dim_order='ps'" in str(w.message)
     assert w.filename == __file__
 
 

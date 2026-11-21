@@ -87,14 +87,15 @@ class Data:
         The time series: a numpy array, a pandas DataFrame, or the path of a
         ``.npy``, ``.txt``, ``.csv`` or ``.ts`` file (``.ts`` needs aeon).
         Default: None, an empty ``Data`` to fill with ``add_process``.
-    dim_order : str, optional
+    dim_order : str or None, optional
         The order of the dimensions of ``data``, one character per dimension:
         ``'p'`` for processes, ``'s'`` for observations (samples) and ``'r'``
         for replications. ``'ps'`` reads an ``(M, T)`` array, one row per
         process; ``'sp'`` reads a ``(T, M)`` array or a DataFrame with one
-        column per process. A ``UserWarning`` says when the data are read as
-        more processes than observations, which usually means the other
-        order was meant. Default: ``'ps'``.
+        column per process. None reads ``'ps'`` and warns (``UserWarning``)
+        when that gives more processes than observations, which often means
+        the other order was meant; a ``dim_order`` passed explicitly states
+        the layout and never warns. Default: None.
     detrend : bool, optional
         Remove the least-squares line from each process. Default: False.
     zscore : bool or None, optional
@@ -159,7 +160,7 @@ class Data:
     def __init__(
         self,
         data=None,
-        dim_order="ps",
+        dim_order=None,
         detrend=False,
         zscore=None,
         name=None,
@@ -180,7 +181,7 @@ class Data:
 
         if data is not None:
             if procnames is None:
-                procnames = _frame_procnames(data, dim_order)
+                procnames = _frame_procnames(data, dim_order or "ps")
                 if procnames is not None and n_processes is not None:
                     procnames = procnames[:n_processes]
             dat = self.convert_to_numpy(data)
@@ -374,7 +375,7 @@ class Data:
     def set_data(
         self,
         data,
-        dim_order="ps",
+        dim_order=None,
         name=None,
         n_processes=None,
         n_observations=None,
@@ -387,17 +388,18 @@ class Data:
         truncated, preprocessed with this instance's ``detrend`` and ``zscore``
         settings and checked for non-finite values. Every statistic cache is
         dropped, and process names are kept only if the number of processes
-        is unchanged. A ``UserWarning`` says when the result has more
-        processes than observations.
+        is unchanged.
 
         Parameters
         ----------
         data : numpy.ndarray
             Array of one to three dimensions.
-        dim_order : str, optional
+        dim_order : str or None, optional
             The order of the dimensions of ``data``, one character per
             dimension: ``'p'`` (processes), ``'s'`` (observations) or ``'r'``
-            (replications). Default: ``'ps'``.
+            (replications). None reads ``'ps'`` and warns if that gives more
+            processes than observations; an explicit value never warns.
+            Default: None.
         name : str or None, optional
             New name of the dataset; None keeps the current one.
             Default: None.
@@ -409,6 +411,9 @@ class Data:
         verbose : bool, optional
             Log the new size. Default: False.
         """
+        stated = dim_order is not None
+        if not stated:
+            dim_order = "ps"
         if len(dim_order) > 3:
             raise RuntimeError("dim_order can not have more than two " "entries")
         if len(dim_order) != data.ndim:
@@ -436,13 +441,13 @@ class Data:
         if n_observations is not None:
             data = data[:, :n_observations]
 
-        if data.shape[0] > data.shape[1]:
-            swapped = dim_order.translate(str.maketrans("ps", "sp"))
+        if not stated and data.shape[0] > data.shape[1]:
             warnings.warn(
-                f"Data of shape {shape} read with dim_order={dim_order!r} has "
-                f"{data.shape[0]} processes of {data.shape[1]} observations. "
-                f"If time runs along the other axis, pass "
-                f"dim_order={swapped!r}.",
+                f"Data of shape {shape}, read with the default dim_order='ps', "
+                f"has {data.shape[0]} processes of {data.shape[1]} "
+                f"observations. Pass dim_order='sp' if time runs along the "
+                f"first axis, or dim_order='ps' to state that this layout is "
+                f"intended.",
                 UserWarning, stacklevel=_outside_pyspi_stacklevel(),
             )
 

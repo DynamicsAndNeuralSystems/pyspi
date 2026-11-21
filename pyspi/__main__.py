@@ -47,9 +47,10 @@ def main(argv=None) -> int:
     cp.add_argument("--data", type=Path, required=True,
                     help="Path to time series array (.npy/.csv/.txt). Shape (processes, "
                          "observations), or (observations, processes) with --dim-order sp.")
-    cp.add_argument("--dim-order", choices=["ps", "sp"], default="ps",
-                    help="Layout of the data: ps = one row per process (default), "
-                         "sp = one column per process.")
+    cp.add_argument("--dim-order", choices=["ps", "sp"], default=None,
+                    help="Layout of the data: ps = one row per process, sp = one "
+                         "column per process. If omitted, ps is read and a warning "
+                         "is given when that makes more processes than observations.")
     cp.add_argument("--config", default="full",
                     help="Bundled config name or path to your own YAML (default: full). "
                          "Bundled: " + ", ".join(bundled_configs()) + ".")

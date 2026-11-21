@@ -95,6 +95,7 @@ pyspi.load_results("results.npz")      # table, quality codes, errors, run spec
 ```
 
 The dataset is `(M, T)`, one row per process; for a `(T, M)` array or a DataFrame with one column per process, pass `dim_order="sp"` (`--dim-order sp` on the command line), and a DataFrame's labels become the process names.
+With more processes than observations and no `dim_order`, pyspi warns; pass `dim_order="ps"` to state that the layout is intended.
 
 Every value in `calc.table` is a real, finite number or NaN.
 `calc.quality` says what each cell is, with the codes of `pyspi.Quality` (shared with hctsa and pyhctsa): good, error, NaN (undefined or not appropriate, including every self-pair), +/-Inf, or complex.

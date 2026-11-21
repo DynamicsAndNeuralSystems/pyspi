@@ -67,3 +67,25 @@ def test_dim_order_sp_reads_one_column_per_process(tmp_path):
               "--dim-order", "sp", "--output", str(tmp_path / "sp.npz"), "--quiet"])
     assert pyspi.load_table(tmp_path / "sp.npz").equals(
         pyspi.load_table(tmp_path / "ps.npz"))
+
+
+def _orientation_warnings(record):
+    return [w for w in record if issubclass(w.category, UserWarning)
+            and "processes of" in str(w.message)]
+
+
+@pytest.mark.parametrize("flag, warns", [([], True), (["--dim-order", "ps"], False),
+                                         (["--dim-order", "sp"], False)])
+def test_dim_order_flag_states_the_layout(tmp_path, flag, warns):
+    import warnings
+
+    np.save(tmp_path / "wide.npy", np.random.default_rng(0).standard_normal((30, 20)))
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        cli.main(["compute", "--data", str(tmp_path / "wide.npy"), "--config", "fabfour",
+                  "--output", str(tmp_path / "out.npz"), "--quiet", "--allow-partial", *flag])
+    found = _orientation_warnings(record)
+    assert bool(found) == warns
+    if warns:
+        assert "dim_order='sp'" in str(found[0].message)
+        assert "dim_order='ps'" in str(found[0].message)

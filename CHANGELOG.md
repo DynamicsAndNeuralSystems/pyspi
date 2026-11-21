@@ -358,7 +358,8 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   A value other than 3 is appended to the identifier as `_nw-<value>`, with dots written as dashes.
 - **Input with time along rows.**
   `Calculator(dim_order=...)`, `Calculator.load_dataset(..., dim_order=...)` and the command line's `--dim-order` pass the layout to `Data`, so `dim_order="sp"` reads a `(T, M)` array or a DataFrame with one column per process; the default stays `"ps"`, `(M, T)`.
-  `Data` warns when it reads more processes than observations, the usual sign of the other layout, which 2.0.2 accepted silently.
+  When `dim_order` is not given and the data are read as more processes than observations, which 2.0.2 accepted silently, `Data` warns and names both ways out: `dim_order="sp"` for the other layout, or `dim_order="ps"` to state that this one is intended.
+  An explicit `dim_order` never warns.
   A DataFrame's index (`"ps"`) or columns (`"sp"`) name the processes, unless they are a `RangeIndex`; 2.0.2 dropped them.
 - **Feature vectors.**
   `Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature: only `i < j` for `undirected` and `antisymmetric` SPIs, both orientations for `directed` and `asymmetric` ones.

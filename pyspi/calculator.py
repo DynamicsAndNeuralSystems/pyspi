@@ -822,12 +822,14 @@ class Calculator:
     verbose : bool, optional
         Log progress at INFO level and print a summary after :meth:`compute`.
         Default: True.
-    dim_order : str, optional
+    dim_order : str or None, optional
         How ``dataset`` is laid out, as for :class:`~pyspi.data.Data`:
         ``'ps'`` for an ``(M, T)`` array, one row per process, or ``'sp'``
         for a ``(T, M)`` array or a DataFrame with one column per process. A
         DataFrame's row (``'ps'``) or column (``'sp'``) labels name the
-        processes. Ignored for a ``Data``. Default: ``'ps'``.
+        processes. None reads ``'ps'`` and warns if that gives more processes
+        than observations; an explicit value never warns. Ignored for a
+        ``Data``. Default: None.
     subset, configfile, normalise : optional
         Deprecated spellings of ``config`` (``subset="all"`` is
         ``config="full"``), ``config`` (a path) and ``zscore``, removed in
@@ -844,7 +846,7 @@ class Calculator:
     """
     def __init__(
         self, dataset=None, *, name=None, labels=None, config=None,
-        detrend=False, zscore=None, verbose=True, dim_order="ps",
+        detrend=False, zscore=None, verbose=True, dim_order=None,
         subset=None, configfile=None, normalise=None,
     ):
         # Deprecated spellings (subset, configfile, normalise).
@@ -1220,8 +1222,10 @@ class Calculator:
         dim_order : str or None, optional
             How ``dataset`` is laid out: ``'ps'`` (one row per process) or
             ``'sp'`` (one column per process), as for
-            :class:`~pyspi.data.Data`. Ignored for a ``Data``. Default: None,
-            the ``dim_order`` this Calculator was built with.
+            :class:`~pyspi.data.Data`; None takes the ``dim_order`` this
+            Calculator was built with, and if that is None too, reads
+            ``'ps'`` and warns if that gives more processes than
+            observations. Ignored for a ``Data``. Default: None.
         """
         if not isinstance(dataset, Data):
             self._dataset = Data(
