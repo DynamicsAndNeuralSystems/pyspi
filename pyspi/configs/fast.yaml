@@ -12,35 +12,6 @@
     dependencies:
     configs:
       - estimator: EmpiricalCovariance
-      - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
-
-  # Precision
-  Precision:
-    labels:
-      - undirected
-      - linear
-      - signed
-      - multivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-      - estimator: EmpiricalCovariance
-      - estimator: GraphicalLasso
-      - estimator: LedoitWolf
-      - estimator: OAS
-      - estimator: ShrunkCovariance
-      - estimator: EmpiricalCovariance
-        squared: True
-      - estimator: GraphicalLasso
-        squared: True
-      - estimator: LedoitWolf
-        squared: True
-      - estimator: OAS
-        squared: True
-      - estimator: ShrunkCovariance
-        squared: True
 
   # Partial correlation
   PartialCorrelation:
@@ -67,7 +38,6 @@
       - M14
     dependencies:
     configs:
-      - squared: True
       - squared: False
 
   # Chatterjee's rank correlation xi
@@ -176,36 +146,6 @@
       - biased: False
       - biased: True
 
-  # Barycenter
-  Barycenter:
-    labels:
-      - undirected
-      - nonlinear
-      - unsigned
-      - bivariate
-      - time-dependent
-      - M14
-    dependencies:
-    configs:
-      - mode: euclidean
-        statistic: max
-
-      - mode: euclidean
-        statistic: max
-        squared: True
-        
-  # Gromov-Wasserstein distance (GW_tau)
-  GromovWassersteinTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
-
 # Causal inference statistics
 .statistics.causal:
   # Additive noise model
@@ -244,6 +184,38 @@
     dependencies:
     configs:
 
+  # Nonlinear interdependence
+  NonlinearInterdependence:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: L
+        m: 5
+        tau: 1
+        k: 5
+
+  # Liang-Kleeman information flow
+  LiangInformationFlow:
+    labels:
+      - directed
+      - linear
+      - signed
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - k: 1
+        conditional: False
+        statistic: normalised
+        labels:
+          - bivariate
+
 # Information-theoretic statistics
 .statistics.infotheory:
   # Joint entropy
@@ -256,7 +228,6 @@
       - contemporaneous
       - M14
     configs:
-      - estimator: gaussian
       - estimator: kozachenko
       - estimator: kernel
 
@@ -270,7 +241,6 @@
       - contemporaneous
       - M14
     configs:
-    - estimator: gaussian
     - estimator: kernel
 
   # Cross-map entropy
@@ -621,36 +591,6 @@
         labels:
           - M12
 
-  # Directed transfer function
-  DirectedTransferFunction:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-      - fs: 1
-
-      - fmin: 0
-        fmax: 0.25
-
-      - fmin: 0.25
-        fmax: 0.5
-
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
-
   # Directed coherence
   DirectedCoherence:
     labels:
@@ -680,59 +620,6 @@
       - fmin: 0.25
         fmax: 0.5
         statistic: max
-
-  # Direct directed transfer function
-  DirectDirectedTransferFunction:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-      - fs: 1
-
-      - fmin: 0
-        fmax: 0.25
-
-      - fmin: 0.25
-        fmax: 0.5
-
-      - fs: 1
-        statistic: max
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: max
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: max
-
-  # Group delay
-  GroupDelay:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M01
-    dependencies:
-    configs:
-      - fmin: 0
-        fmax: 0.5
-        statistic: delay
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: delay
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: delay
 
   # Spectral Granger causality
   SpectralGrangerCausality:
@@ -1016,6 +903,19 @@
         log: True
         absolute: True
 
+  # Edge time series (coupling nonstationarity)
+  EdgeTimeSeries:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - time-dependent
+      - M11
+    dependencies:
+    configs:
+      - statistic: excessvar
+
   # Interdependence score
   InterDependenceScore:
     labels:
@@ -1027,3 +927,73 @@
       - terms: 6
         pnorm: 'max'
         bandwidth: 0.5
+
+# Vector autoregressive (VAR) model statistics
+.statistics.var:
+  # Conditional Granger causality
+  ConditionalGrangerCausality:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - time-dependent
+      - M05
+    dependencies:
+    configs:
+      - order: bic
+
+  # Conditional partial directed coherence
+  ConditionalPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+      - order: bic
+
+  # Partial coherence
+  PartialCoherence:
+    labels:
+      - undirected
+      - linear
+      - unsigned
+      - multivariate
+      - frequency-dependent
+      - M12
+    dependencies:
+    configs:
+      - order: bic
+
+# Event and extreme-value statistics
+.statistics.events:
+  # Event synchronisation
+  EventSynchronisation:
+    labels:
+      - undirected
+      - nonlinear
+      - signed/unsigned
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+      - statistic: q
+        quantile: 0.95
+
+  # Tail-dependence asymmetry
+  TailDependenceAsymmetry:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+      - quantile: 0.95

@@ -1732,6 +1732,11 @@ class TransferEntropy(InfoTheoryBase, Directed):
     identifier = "te"
     labels = ["unsigned", "embedding", "infotheory", "temporal", "directed"]
 
+    # Only the two estimators with a genuine embedding implement any of the
+    # embedding and search arguments. The symbolic and kernel calculators read
+    # one history length at unit delay and nothing else.
+    _EMBEDDING_ONLY = ("gaussian", "kraskov")
+
     def __init__(
         self,
         auto_embed_method=None,
@@ -1755,13 +1760,10 @@ class TransferEntropy(InfoTheoryBase, Directed):
                 f"selection is a different criterion and is not implemented."
             )
 
-        # Only the two estimators with a genuine embedding implement any of
-        # this. The symbolic and kernel calculators read one history length at
-        # unit delay and nothing else, so every embedding and search argument
+        # Every embedding and search argument the estimator does not implement
         # is refused rather than accepted and dropped.
-        _EMBEDDING_ONLY = ("gaussian", "kraskov")
         supplied = {"k_tau": k_tau, "l_history": l_history, "l_tau": l_tau}
-        if self._estimator not in _EMBEDDING_ONLY:
+        if self._estimator not in self._EMBEDDING_ONLY:
             for name, value in supplied.items():
                 if value is not None:
                     raise ValueError(
@@ -1836,8 +1838,6 @@ class TransferEntropy(InfoTheoryBase, Directed):
                 "is identically zero."
             )
 
-        self._calc = self._getcalc("TransferEntropy")
-
         # Store embedding params for numpy path
         self._auto_embed_method = auto_embed_method
         self._k_search_max = k_search_max
@@ -1847,10 +1847,9 @@ class TransferEntropy(InfoTheoryBase, Directed):
         self._l_history = l_history
         self._l_tau = l_tau
 
+        self._calc = self._new_te_calc()
+
         if auto_embed_method is not None:
-            self._calc.setProperty(self._AUTO_EMBED_METHOD_PROP_NAME, auto_embed_method)
-            self._calc.setProperty(self._K_SEARCH_MAX_PROP_NAME, str(k_search_max))
-            self._calc.setProperty(self._TAU_SEARCH_MAX_PROP_NAME, str(tau_search_max))
             # The method is in the identifier because it changes what is
             # computed: MAX_CORR_AIS selects the source embedding too, and
             # MAX_CORR_AIS_DEST_ONLY only the destination's.
@@ -1859,11 +1858,7 @@ class TransferEntropy(InfoTheoryBase, Directed):
             if auto_embed_method == _AUTO_EMBED_DEST_ONLY:
                 self.identifier += "_l-{}_lt-{}".format(l_history, l_tau)
         else:
-            self._calc.setProperty(self._K_HISTORY_PROP_NAME, str(k_history))
-            if self._estimator in _EMBEDDING_ONLY:
-                self._calc.setProperty(self._K_TAU_PROP_NAME, str(k_tau))
-                self._calc.setProperty(self._L_HISTORY_PROP_NAME, str(l_history))
-                self._calc.setProperty(self._L_TAU_PROP_NAME, str(l_tau))
+            if self._estimator in self._EMBEDDING_ONLY:
                 self.identifier = self.identifier + "_k-{}_kt-{}_l-{}_lt-{}".format(
                     k_history, k_tau, l_history, l_tau
                 )
@@ -1874,7 +1869,28 @@ class TransferEntropy(InfoTheoryBase, Directed):
 
     def __setstate__(self, state):
         super().__setstate__(state)
-        self._calc = self._getcalc("TransferEntropy")
+        self._calc = self._new_te_calc()
+
+    def _new_te_calc(self):
+        """A TE calculator configured with this instance's embedding.
+
+        Used by ``__init__`` and ``__setstate__``: pickling drops the
+        calculator, and a fresh one has its default history length of 1, so
+        an unpickled or ``copy.copy``-ed kernel or symbolic TE would otherwise
+        compute k_history=1 under a k_history=k identifier.
+        """
+        calc = self._getcalc("TransferEntropy")
+        if self._auto_embed_method is not None:
+            calc.setProperty(self._AUTO_EMBED_METHOD_PROP_NAME, self._auto_embed_method)
+            calc.setProperty(self._K_SEARCH_MAX_PROP_NAME, str(self._k_search_max))
+            calc.setProperty(self._TAU_SEARCH_MAX_PROP_NAME, str(self._tau_search_max))
+        else:
+            calc.setProperty(self._K_HISTORY_PROP_NAME, str(self._k_history))
+            if self._estimator in self._EMBEDDING_ONLY:
+                calc.setProperty(self._K_TAU_PROP_NAME, str(self._k_tau))
+                calc.setProperty(self._L_HISTORY_PROP_NAME, str(self._l_history))
+                calc.setProperty(self._L_TAU_PROP_NAME, str(self._l_tau))
+        return calc
 
     # Overridable so a test can inject a scorer that deliberately picks
     # different source and destination embeddings and check that all four

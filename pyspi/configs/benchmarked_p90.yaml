@@ -24,44 +24,7 @@
     dependencies:
     configs:
     - estimator: EmpiricalCovariance
-    - estimator: GraphicalLasso
-    - estimator: GraphicalLassoCV
     - estimator: MinCovDet
-    - estimator: GraphicalLassoCV
-      squared: true
-
-  Precision:
-    labels:
-      - undirected
-      - linear
-      - signed
-      - multivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-    - estimator: EmpiricalCovariance
-    - estimator: GraphicalLasso
-    - estimator: GraphicalLassoCV
-    - estimator: LedoitWolf
-    - estimator: MinCovDet
-    - estimator: OAS
-    - estimator: ShrunkCovariance
-    - estimator: EmpiricalCovariance
-      squared: true
-      squared: true
-    - estimator: GraphicalLasso
-      squared: true
-    - estimator: GraphicalLassoCV
-      squared: true
-    - estimator: LedoitWolf
-      squared: true
-    - estimator: MinCovDet
-      squared: true
-    - estimator: OAS
-      squared: true
-    - estimator: ShrunkCovariance
-      squared: true
 
   # Partial correlation
   PartialCorrelation:
@@ -91,7 +54,6 @@
       - M14
     dependencies:
     configs:
-    - squared: true
     - squared: false
 
   # Chatterjee's rank correlation xi
@@ -356,41 +318,10 @@
       - M14
     dependencies:
     configs:
-    - mode: euclidean
-      statistic: max
     - mode: dtw
       statistic: corr
       labels:
       - M09
-    - mode: dtw
-      statistic: max
-    - mode: sgddtw
-      statistic: corr
-      labels:
-      - M09
-    - mode: sgddtw
-      statistic: max
-    - mode: euclidean
-      statistic: max
-      squared: true
-    - mode: dtw
-      statistic: max
-      squared: true
-    - mode: sgddtw
-      statistic: max
-      squared: true
-
-  GromovWassersteinTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
-
 
 .statistics.causal:
   ConditionalDistributionSimilarity:
@@ -426,7 +357,6 @@
       - contemporaneous
       - M14
     configs:
-    - estimator: gaussian
     - estimator: kozachenko
     - estimator: kernel
 
@@ -439,7 +369,6 @@
       - contemporaneous
       - M14
     configs:
-    - estimator: gaussian
     - estimator: kozachenko
     - estimator: kernel
 
@@ -799,30 +728,6 @@
       labels:
       - M12
 
-  DirectedTransferFunction:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-    - fs: 1
-    - fmin: 0
-      fmax: 0.25
-    - fmin: 0.25
-      fmax: 0.5
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
-
   DirectedCoherence:
     labels:
       - directed
@@ -846,50 +751,6 @@
     - fmin: 0.25
       fmax: 0.5
       statistic: max
-
-  DirectDirectedTransferFunction:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M06
-    dependencies:
-    configs:
-    - fs: 1
-    - fmin: 0
-      fmax: 0.25
-    - fmin: 0.25
-      fmax: 0.5
-    - fs: 1
-      statistic: max
-    - fmin: 0
-      fmax: 0.25
-      statistic: max
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: max
-
-  GroupDelay:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M01
-    dependencies:
-    configs:
-    - fmin: 0
-      fmax: 0.5
-      statistic: delay
-    - fmin: 0
-      fmax: 0.25
-      statistic: delay
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: delay
 
   SpectralGrangerCausality:
     labels:
