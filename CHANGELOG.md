@@ -359,6 +359,12 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **Partial correlation `pcorr_<estimator>`** (`PartialCorrelation` in `pyspi/statistics/basic.py`): `-P_ij / sqrt(P_ii P_jj)` from the precision matrix `P` of each bundled covariance estimator, the correlation of `x_i` and `x_j` conditional on all other processes (Marrelec et al. 2006; Smith et al. 2011).
   It is the scale-free form of `prec_<estimator>` (opposite sign, same zero pattern, in [-1, 1]) and reuses the same cached covariance fit.
   Seven identifiers in `full` (`EmpiricalCovariance`, `GraphicalLasso`, `GraphicalLassoCV`, `LedoitWolf`, `MinCovDet`, `OAS`, `ShrunkCovariance`); `pcorr_EmpiricalCovariance` and `pcorr_LedoitWolf` in `fast`.
+- **`LagResolvedCorrelation` (`lagcorr_*`): directed, lag-resolved cross-correlation** (Box et al. 2015; Mitra et al. 2014).
+  It reads the profile `CrossCorrelation` caches, `r_{i->j}(tau) = corr(x_i[t], x_j[t + tau])` (biased, divide by T; positive `tau` is the row leading the column), over `L = min(max_lag, T // 4)` lags each way.
+  It reports the signed lag of the largest `|r|` (`lag`, antisymmetric), the signed `r` at that lag (`peak`, undirected), and the lead/lag asymmetry `(S_{i->j} - S_{j->i}) / (S_{i->j} + S_{j->i})` with `S_{i->j} = sum_{l=1..L} r_{i->j}(l)^2` (`asym`, antisymmetric, in [-1, 1]).
+  `onesided` (directed, signed) is `r_{i->j}(tau)` at one lag shared by both directions of a pair: a fixed `tau` (default 1), or `tau="1e"` for `round(sqrt(l_i l_j))`, where `l_i` is the first lag at which process i's autocorrelation falls below 1/e (hctsa's `CO_f1ecac`), clipped to `1 .. min(T // 10, L)`.
+  `onesidedpeak` (directed, unsigned) is the largest `|r_{i->j}(k)|` over `1 <= k <= l_i + l_j`, with the same clipping.
+  `full` bundles `lagcorr_{lag,peak,asym}_L-None`, `lagcorr_onesided_tau-{1,2,3,5,10}_L-None`, `lagcorr_onesided_tau-1e_L-None`, `lagcorr_onesidedpeak_L-None` and `lagcorr_{lag,peak,asym}_L-10` (13); `fast` bundles `lagcorr_{lag,peak,asym}_L-None` and `lagcorr_onesided_tau-1_L-None`.
 - **Symbolic transfer entropy with 3-sample ordinal patterns** (`te_symbolic_k-3`), an amplitude-free directed coupling measure (Staniek & Lehnertz 2008).
   Its bias under independence is about 0.13, 0.03 and 0.01 nats at T = 300, 1000 and 3000.
 - **Dynamic correlation exclusion for the kernel estimators** of MI, time-lagged MI and TE: `dyn_corr_excl` (an integer or `"AUTO"`) now applies to `estimator="kernel"` as well as `"kraskov"`, with the same `_DCE-<value>` suffix and window: neighbours `|t - i| <= w` are excluded, besides the point itself (see **Changed**).
@@ -429,6 +435,15 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   A larger `NW` averages more tapers (`floor(2 NW) - 1`), which lowers the variance and the upward bias of coherence-type measures, at the cost of frequency resolution.
   A value other than 3 is appended to the identifier as `_nw-<value>`, with dots written as dashes (e.g. `cohmag_multitaper_mean_fs-1_fmin-0_fmax-0-5_nw-8`).
   No bundled identifier or value changes.
+- **`Calculator.feature_vector()` and `pyspi.feature_vector(table)` flatten a results table to one value per independent pairwise feature.**
+  The table holds every SPI as a full `M x M` matrix.
+  For an `undirected` SPI the lower triangle copies the upper one, and for an `antisymmetric` SPI (`phase`, `pli`, `wpli`, `psi`, `es_q`) it is the negation, so the vector keeps only the pairs `(i, j)` with `i < j` for these.
+  A positive antisymmetric value at `(i, j)` means process `i` leads process `j` (row = source).
+  `directed` and `asymmetric` SPIs keep both orientations.
+  Self-pairs are dropped unless `include_self=True`, and NaNs are kept, so the length and order depend only on the config and `M`.
+  The result is a `pandas.Series` indexed by `(spi, source, target)`, as in `to_frame()`.
+  `pyspi.feature_vector(table)` takes a table from `load_table` and rebuilds each SPI's trait from the config recorded in `table.attrs["run_spec"]`, or takes an explicit `directedness={identifier: trait}`.
+- **`Directed.directedness()`** returns the one symmetry trait an SPI carries: `undirected`, `antisymmetric`, `directed` or `asymmetric`.
 
 ### Dependencies
 
