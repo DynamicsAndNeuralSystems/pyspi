@@ -26,7 +26,11 @@ class Cointegration(Directed, Unsigned):
 
     ``johansen`` is symmetric by construction: it tests the rank of a VECM
     fitted to the pair, and swapping the columns leaves the trace and maximum
-    eigenvalue statistics unchanged.
+    eigenvalue statistics unchanged. On stationary input its statistics mainly
+    measure how quickly the two processes revert to their means: they fall
+    steeply as the processes become more persistent, with or without coupling,
+    so compare them only across pairs whose processes have similar
+    autocorrelation.
 
     ``aeg`` (augmented Engle-Granger) is *not* symmetric: it regresses the first
     series on the second and unit-root-tests the residuals, so swapping the
