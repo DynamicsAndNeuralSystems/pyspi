@@ -62,7 +62,7 @@ def _half_gaps(t):
 def _es_counts(t_src, h_src, t_tgt, h_tgt, max_delay=None):
     """Directed event-synchronisation counts ``(c(tgt|src), c(src|tgt))``.
 
-    ``c(tgt|src)`` is Quian Quiroga et al.'s ``c(y|x)`` with ``x`` the source:
+    ``c(tgt|src)`` is ``c(y|x)`` of ``EventSynchronisation`` with ``x`` the source:
     the number of target events that *follow* a source event within the local
     tolerance, ``0 < t_tgt - t_src <= tau``, plus 1/2 for each pair at equal
     times. ``c(src|tgt)`` counts the reverse. ``h_*`` are the half gaps of
@@ -71,8 +71,7 @@ def _es_counts(t_src, h_src, t_tgt, h_tgt, max_delay=None):
     Since ``tau`` is at most half of every adjacent gap, a source event can only
     coincide with its nearest target event on either side, so two
     ``searchsorted`` candidates per source event suffice. A coincidence in both
-    directions (an event exactly midway between two others) counts 1/2
-    (Odenweller & Donner 2020).
+    directions (an event exactly midway between two others) counts 1/2.
     """
     m_tgt = t_tgt.size
     k = np.searchsorted(t_tgt, t_src, side="left")  # t_tgt[k] >= t_src > t_tgt[k-1]
@@ -113,7 +112,7 @@ def _es_counts(t_src, h_src, t_tgt, h_tgt, max_delay=None):
 
 
 class EventSynchronisation(Directed):
-    """Event synchronisation of extreme events (Quian Quiroga et al. 2002).
+    """Event synchronisation of extreme events [1]_.
 
     **Events.** Each series ``x`` is reduced to the times at which it exceeds
     its own empirical ``quantile`` (``x[t] > np.quantile(x, quantile)``, upper
@@ -134,14 +133,13 @@ class EventSynchronisation(Directed):
     ``0 < t^y_b - t^x_a <= tau_ab``, ``1/2`` if ``t^y_b == t^x_a`` and 0
     otherwise: the number of times an event of ``y`` follows an event of ``x``
     within the tolerance, and ``c(x|y)`` the same with ``x`` and ``y``
-    exchanged (this is Quian Quiroga et al.'s notation: ``c(x|y)`` counts ``x``
-    events that follow ``y`` events). An event can coincide in both directions
-    only when it lies exactly midway between two events of the other series, at
+    exchanged (the notation of [1]_: ``c(x|y)`` counts ``x`` events that
+    follow ``y`` events). An event can coincide in both directions only when
+    it lies exactly midway between two events of the other series, at
     distance ``tau`` from both; each such coincidence counts 1/2 rather than 1
-    (the double-counting correction of Odenweller & Donner 2020, as in
-    pyunicorn), so ``Q`` cannot exceed 1. Such ties are common with integer
-    sample times, so ``Q`` differs slightly from an uncorrected Quian Quiroga
-    et al. (2002) implementation.
+    (the double-counting correction of [2]_, as in pyunicorn), so ``Q`` cannot
+    exceed 1. Such ties are common with integer sample times, so ``Q`` differs
+    slightly from an implementation of [1]_ without the correction.
 
     **Statistics** (``A[i, j]`` with row ``i`` = ``x`` the source and column
     ``j`` = ``y`` the target, the package's directed convention) are
@@ -164,12 +162,28 @@ class EventSynchronisation(Directed):
     A pair is NaN when either series has fewer than two events (no gap, hence
     no tolerance), which includes a constant series.
 
-    ``quantile`` (in ``(0, 1)``, default 0.95, the top 5% of samples) is the
-    exceedance level defining events, and appears in the identifier as
-    ``q-0-95``. ``max_delay`` (an integer >= 1, default ``None``) caps the
-    tolerance ``tau`` in samples; without it the tolerance is set by the local
-    inter-event gaps alone. When set it is appended to the identifier as
-    ``_maxdelay-<d>``.
+    References
+    ----------
+    .. [1] R. Quian Quiroga, T. Kreuz, P. Grassberger, "Event synchronization:
+           a simple and fast method to measure synchronicity and time delay
+           patterns", Physical Review E 66(4), 041904 (2002).
+    .. [2] A. Odenweller, R. V. Donner, "Disentangling synchrony from serial
+           dependency in paired-event time series", Physical Review E 101(5),
+           052213 (2020).
+
+    Parameters
+    ----------
+    statistic : str, optional
+        ``'Q'``, the strength of synchronisation, or ``'q'``, the delay
+        asymmetry. Default: ``'Q'``.
+    quantile : float, optional
+        Exceedance level defining events, in ``(0, 1)``; 0.95 takes the top
+        5% of samples. It appears in the identifier as ``q-0-95``.
+        Default: 0.95.
+    max_delay : int or None, optional
+        Cap on the tolerance ``tau`` in samples, at least 1; None leaves the
+        tolerance to the local inter-event gaps alone. When set it is
+        appended to the identifier as ``_maxdelay-<d>``. Default: None.
     """
 
     name = "Event synchronisation"
@@ -191,9 +205,8 @@ class EventSynchronisation(Directed):
             None if max_delay is None
             else require_int("max_delay", max_delay, minimum=1)
         )
-        # Q is symmetric and unsigned, q antisymmetric and signed, so the class
-        # takes the generic Directed base and each statistic sets its own
-        # structural trait and sign.
+        # Q is symmetric and unsigned, q antisymmetric and signed: each
+        # statistic sets its own structural trait and sign.
         traits = ["undirected", "unsigned"] if statistic == "Q" else ["antisymmetric", "signed"]
         self.labels = EventSynchronisation.labels + traits
         self.identifier = (
@@ -255,13 +268,13 @@ class EventSynchronisation(Directed):
 
 
 class TailDependenceAsymmetry(Undirected):
-    """Asymmetry between upper and lower empirical tail dependence.
+    """Asymmetry between upper and lower empirical tail dependence [1]_.
 
     With ``R_x(t)`` the rank of ``x[t]`` among the ``T`` samples (average ranks
     for ties), level ``u = quantile`` and ``k = floor((1 - u) T)``, the upper
     and lower tails of ``x`` are the ``k`` samples with ``R_x > T - k`` and the
     ``k`` samples with ``R_x <= k``. The empirical tail-dependence coefficients
-    (Schmidt & Stadtmueller 2006) are
+    [1]_ are
     ``lambda_U = #{t : R_x(t) > T - k and R_y(t) > T - k} / k`` and
     ``lambda_L = #{t : R_x(t) <= k and R_y(t) <= k} / k``, each the fraction of
     one series' tail samples at which the other is in the same tail, the
@@ -272,13 +285,10 @@ class TailDependenceAsymmetry(Undirected):
     the denominator is the geometric mean of the two tail counts, which is
     ``k`` without ties and keeps the coefficient in ``[0, 1]``.
 
-    ``statistic="asymmetry"`` (the bundled one) reports
-    ``lambda_U - lambda_L`` in ``[-1, 1]``: positive when the two series are
-    jointly extreme more often at the top than at the bottom, negative for the
-    reverse. ``statistic="upper"`` and ``"lower"`` give the coefficients
-    themselves (unsigned, in ``[0, 1]``). Reflecting both series
-    (``x, y -> -x, -y``) swaps the two tails and negates the asymmetry
-    exactly.
+    The asymmetry ``lambda_U - lambda_L`` is in ``[-1, 1]``: positive when the
+    two series are jointly extreme more often at the top than at the bottom,
+    negative for the reverse. Reflecting both series (``x, y -> -x, -y``)
+    swaps the two tails and negates the asymmetry exactly.
 
     Under any radially symmetric copula, the elliptical (e.g. Gaussian or
     Student-t) copulas included, ``lambda_U = lambda_L`` at every level, so the
@@ -291,11 +301,23 @@ class TailDependenceAsymmetry(Undirected):
     increasing transform of either series. It ignores time order
     (contemporaneous).
 
-    ``quantile`` (in ``(0.5, 1)``, default 0.95: the top and bottom 5%) is the
-    tail level ``u`` and appears in the identifier as ``q-0-95``. The
-    identifiers are ``tailasym_q-<u>`` for the asymmetry and
-    ``tailasym_upper_q-<u>`` and ``tailasym_lower_q-<u>`` for the
-    coefficients.
+    References
+    ----------
+    .. [1] R. Schmidt, U. Stadtmüller, "Non-parametric estimation of tail
+           dependence", Scandinavian Journal of Statistics 33(2), 307-335
+           (2006).
+
+    Parameters
+    ----------
+    quantile : float, optional
+        Tail level ``u``, in ``(0.5, 1)``; 0.95 takes the top and bottom 5%.
+        It appears in the identifier as ``q-0-95``. Default: 0.95.
+    statistic : str, optional
+        ``'asymmetry'``, ``lambda_U - lambda_L`` (signed; identifier
+        ``tailasym_q-<u>``), or ``'upper'`` or ``'lower'``, the coefficients
+        themselves (unsigned, in ``[0, 1]``; identifiers
+        ``tailasym_upper_q-<u>`` and ``tailasym_lower_q-<u>``).
+        Default: ``'asymmetry'``.
     """
 
     name = "Tail-dependence asymmetry"
