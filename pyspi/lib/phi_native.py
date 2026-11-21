@@ -1,31 +1,45 @@
 """
-Native Python implementation of integrated information (phi) calculation.
+Integrated information (phi) for Gaussian systems, in Python.
 
-This module implements the PhiToolbox phi algorithms in pure Python.
+A Python port of the Gaussian phi* and geometric phi algorithms of the
+PhiToolbox MATLAB implementation, used by
+``pyspi.statistics.infotheory.IntegratedInformation``.
 
-Author:
-Lipeng Lin (https://github.com/ErronLLP)
+Author: Lipeng Lin (https://github.com/ErronLLP)
 
-Based on:
-- Oizumi et al., 2016, PLoS Comp Biol
-- Original PhiToolbox MATLAB implementation
+References
+----------
+.. [1] M. Oizumi, S. Amari, T. Yanagawa, N. Fujii, N. Tsuchiya, "Measuring
+       integrated information from the decoding perspective", PLoS Comput.
+       Biol. 12(1), e1004654 (2016).
+.. [2] M. Oizumi, N. Tsuchiya, S. Amari, "Unified framework for information
+       integration based on information geometry", Proc. Natl. Acad. Sci.
+       USA 113(51), 14817-14822 (2016).
 """
 
-import numpy as np
-from scipy.optimize import minimize
-from scipy.linalg import solve, inv, det, LinAlgError
 import warnings
+
+import numpy as np
+from scipy.linalg import solve, inv, det, LinAlgError
+from scipy.optimize import minimize
 
 
 def logdet(X):
     """
-    Compute log determinant in a numerically stable way.
+    Log-determinant of a square matrix, computed stably.
 
-    Args:
-        X: Square matrix
+    Uses a Cholesky factorisation, falling back to the eigenvalues above
+    1e-12 when ``X`` is not positive definite.
 
-    Returns:
-        Log determinant of X
+    Parameters
+    ----------
+    X : ndarray
+        Square matrix.
+
+    Returns
+    -------
+    float
+        ``ln|X|``, or -inf when no eigenvalue exceeds 1e-12.
     """
     n = X.shape[0]
 
@@ -44,15 +58,23 @@ def logdet(X):
 
 def cov_comp(X, tau, isjoint=True):
     """
-    Compute covariance matrices from time series data.
+    Covariance matrices of the past and present states.
 
-    Args:
-        X: Time series data (units x time)
-        tau: Time lag between past and present states
-        isjoint: Whether to compute joint covariance matrices
+    Parameters
+    ----------
+    X : ndarray
+        Time series, units x time.
+    tau : int
+        Lag between past and present states, in samples.
+    isjoint : bool, optional
+        Compute the past, present and lagged covariances; otherwise only the
+        equal-time covariance of all samples. Default: True.
 
-    Returns:
-        Dictionary containing covariance matrices
+    Returns
+    -------
+    dict
+        ``'Cov_X'`` (past), ``'Cov_Y'`` (present) and ``'Cov_XY'`` (past
+        against present), or only ``'Cov_X'`` when ``isjoint`` is False.
     """
     T = X.shape[1]
 
@@ -82,15 +104,21 @@ def cov_comp(X, tau, isjoint=True):
 
 def cov_cond(Cov_X, Cov_XY, Cov_Y):
     """
-    Compute conditional covariance of X given Y.
+    Conditional covariance of X given Y.
 
-    Args:
-        Cov_X: Covariance of X
-        Cov_XY: Cross-covariance of X and Y
-        Cov_Y: Covariance of Y
+    Parameters
+    ----------
+    Cov_X : ndarray
+        Covariance of X.
+    Cov_XY : ndarray
+        Cross-covariance of X and Y.
+    Cov_Y : ndarray
+        Covariance of Y; a pseudo-inverse is used when it is singular.
 
-    Returns:
-        Conditional covariance of X given Y
+    Returns
+    -------
+    ndarray
+        ``Cov_X - Cov_XY Cov_Y^-1 Cov_XY'``.
     """
     try:
         return Cov_X - Cov_XY @ solve(Cov_Y, Cov_XY.T)
@@ -102,13 +130,17 @@ def cov_cond(Cov_X, Cov_XY, Cov_Y):
 
 def h_gauss(Cov_X):
     """
-    Calculate entropy under Gaussian assumption.
+    Entropy of a Gaussian with covariance ``Cov_X``, in nats.
 
-    Args:
-        Cov_X: Covariance matrix
+    Parameters
+    ----------
+    Cov_X : ndarray
+        Covariance matrix.
 
-    Returns:
-        Gaussian entropy
+    Returns
+    -------
+    float
+        ``0.5 ln|Cov_X| + 0.5 n ln(2 pi e)``.
     """
     n = Cov_X.shape[0]
     return 0.5 * logdet(Cov_X) + 0.5 * n * np.log(2 * np.pi * np.e)
@@ -116,14 +148,21 @@ def h_gauss(Cov_X):
 
 def i_s_objective(beta, C_D_beta1_inv, Cov_X_inv, Cov_X, Cov_Y, C_D_cond, S_left, S_right, I_s_d_Const_part):
     """
-    Objective function for beta optimization in phi_star computation.
+    Negative mismatched-decoding information ``-I*(beta)``, minimised over beta.
 
-    Args:
-        beta: Optimization parameter
-        Various precomputed matrices and constants
+    Parameters
+    ----------
+    beta : float
+        Inverse temperature of the mismatched decoder.
+    C_D_beta1_inv, Cov_X_inv, Cov_X, Cov_Y, C_D_cond, S_left, S_right : ndarray
+        Matrices precomputed by `phi_star_gauss`.
+    I_s_d_Const_part : float
+        Constant term of ``I*``.
 
-    Returns:
-        Negative I_s (for minimization)
+    Returns
+    -------
+    float
+        ``-I*(beta)``, or inf when a matrix is singular.
     """
     C_D_beta_inv = beta * C_D_beta1_inv
     Q_inv = Cov_X_inv + C_D_beta_inv
@@ -146,18 +185,33 @@ def i_s_objective(beta, C_D_beta1_inv, Cov_X_inv, Cov_X, Cov_Y, C_D_cond, S_left
 
 def phi_star_gauss(Cov_X, Cov_XY, Cov_Y, Z, beta_init=1.0, normalization=0):
     """
-    Calculate integrated information phi_star based on mismatched decoding.
+    Integrated information phi* from mismatched decoding [1]_.
 
-    Args:
-        Cov_X: Covariance of past data
-        Cov_XY: Cross-covariance between past and present
-        Cov_Y: Covariance of present data
-        Z: Partition array indicating group membership
-        beta_init: Initial value for optimization
-        normalization: Whether to normalize by entropy
+    ``phi* = I - I*``: the mutual information between past and present less
+    the mismatched-decoding information of the partitioned model, maximised
+    over ``beta`` with L-BFGS-B.
 
-    Returns:
-        Tuple of (phi_star, mutual_information, optimal_beta)
+    Parameters
+    ----------
+    Cov_X : ndarray
+        Covariance of the past states.
+    Cov_XY : ndarray
+        Cross-covariance of past and present.
+    Cov_Y : ndarray
+        Covariance of the present states.
+    Z : ndarray
+        Partition: the group (1, 2, ...) of each unit.
+    beta_init : float, optional
+        Starting value of ``beta``. Default: 1.0.
+    normalization : int, optional
+        1 divides phi* by ``(N_c - 1)`` times the smallest Gaussian entropy of
+        the parts' past states (by that entropy for one part); 0 does not.
+        Default: 0.
+
+    Returns
+    -------
+    tuple
+        ``(phi_star, I, beta_opt)``; NaN entries where the computation fails.
     """
     N = Cov_X.shape[0]
 
@@ -247,19 +301,36 @@ def phi_star_gauss(Cov_X, Cov_XY, Cov_Y, Z, beta_init=1.0, normalization=0):
 
 def phi_g_gauss_al(Cov_X, Cov_E, A, Z, normalization=0, maxiter=100000, error=1e-10):
     """
-    Calculate phi_G using Augmented Lagrangian method.
+    Geometric integrated information phi_G by an augmented Lagrangian method [2]_.
 
-    Args:
-        Cov_X: Equal time covariance of X (past)
-        Cov_E: Covariance of noise E
-        A: Connectivity (autoregressive) matrix
-        Z: Partition array
-        normalization: Whether to normalize by entropy
-        maxiter: Maximum iterations
-        error: Convergence threshold
+    Fits the disconnected autoregressive model (``A_p`` block-diagonal over
+    the partition) closest to ``Y = A X + E``, and evaluates
+    ``phi_G = 0.5 (ln|Cov_E_p| - ln|Cov_E|)`` at the block-diagonal part of
+    the final iterate.
 
-    Returns:
-        Tuple of (phi_G, Cov_E_p, A_p)
+    Parameters
+    ----------
+    Cov_X : ndarray
+        Equal-time covariance of the past states.
+    Cov_E : ndarray
+        Covariance of the noise ``E``.
+    A : ndarray
+        Autoregressive (connectivity) matrix.
+    Z : ndarray
+        Partition: the group (1, 2, ...) of each unit.
+    normalization : int, optional
+        1 normalises by entropy as in `phi_star_gauss`; 0 does not.
+        Default: 0.
+    maxiter : int, optional
+        Maximum number of iterations; a warning is issued if it is reached.
+        Default: 100000.
+    error : float, optional
+        Convergence threshold on the change in ``ln|Cov_E_p|``. Default: 1e-10.
+
+    Returns
+    -------
+    tuple
+        ``(phi_G, Cov_E_p, A_p)``.
     """
     mu = 2.0
     alpha = 0.9
@@ -286,7 +357,7 @@ def phi_g_gauss_al(Cov_X, Cov_E, A, Z, normalization=0, maxiter=100000, error=1e
 
     Cov_E_p = Cov_E.copy()
     val_constraint_past = 0
-    # Converged: the objective has stopped moving and the iterate satisfies
+    # Converged when the objective has stopped moving and the iterate satisfies
     # the disconnection constraint (PhiToolbox tests only the first).
     feasibility_tol = (1e-8 * np.linalg.norm(A)) ** 2
     converged = False
@@ -370,19 +441,33 @@ def phi_g_gauss_al(Cov_X, Cov_E, A, Z, normalization=0, maxiter=100000, error=1e
 
 def phi_g_gauss(Cov_X, Cov_XY, Cov_Y, Z, method=None, normalization=0):
     """
-    Calculate integrated information phi_G based on information geometry.
+    Geometric integrated information phi_G [2]_.
 
-    Args:
-        Cov_X: Covariance of past data
-        Cov_XY: Cross-covariance between past and present
-        Cov_Y: Covariance of present data
-        Z: Partition array
-        method: Optimization method. Only 'AL' (Augmented Lagrangian) is
-            implemented; any other value warns and uses 'AL'.
-        normalization: Whether to normalize by entropy
+    Converts the covariances to the autoregressive model ``Y = A X + E`` and
+    calls `phi_g_gauss_al`.
 
-    Returns:
-        Tuple of (phi_G, Cov_E_p, A_p)
+    Parameters
+    ----------
+    Cov_X : ndarray
+        Covariance of the past states.
+    Cov_XY : ndarray
+        Cross-covariance of past and present.
+    Cov_Y : ndarray
+        Covariance of the present states.
+    Z : ndarray
+        Partition: the group (1, 2, ...) of each unit.
+    method : str or None, optional
+        Optimisation method. Only ``'AL'`` (augmented Lagrangian) is
+        implemented; any other value warns and uses ``'AL'``. Default: None.
+    normalization : int, optional
+        1 normalises by entropy as in `phi_star_gauss`; 0 does not.
+        Default: 0.
+
+    Returns
+    -------
+    tuple
+        ``(phi_G, Cov_E_p, A_p)``, or ``(nan, None, None)`` for a singular
+        covariance.
     """
     # Transform covariance matrices to AR model parameters: Y = AX + E
     try:
@@ -408,17 +493,27 @@ def phi_g_gauss(Cov_X, Cov_XY, Cov_Y, Z, method=None, normalization=0):
 
 def phi_comp(X, Z, params, options):
     """
-    Main function to compute phi from time series data.
-    This provides the same interface as the MATLAB phi_comp function.
+    Integrated information of a multivariate time series.
 
-    Args:
-        X: Time series data (units x time)
-        Z: Partition array
-        params: Dictionary with parameters (must contain 'tau')
-        options: Dictionary with options (must contain 'type_of_phi', 'type_of_dist', 'normalization')
+    Same interface as PhiToolbox's MATLAB ``phi_comp``.
 
-    Returns:
-        Phi value
+    Parameters
+    ----------
+    X : ndarray
+        Time series, units x time.
+    Z : ndarray
+        Partition: the group (1, 2, ...) of each unit.
+    params : dict
+        ``'tau'``, the lag between past and present states (default 1).
+    options : dict
+        ``'type_of_phi'`` (``'star'`` or ``'Geo'``; default ``'star'``),
+        ``'type_of_dist'`` (only ``'Gauss'``), ``'normalization'`` (0 or 1;
+        default 0) and, optionally, ``'phi_G_OptimMethod'``.
+
+    Returns
+    -------
+    float
+        phi* or phi_G.
     """
     # Extract parameters
     tau = params.get('tau', 1)
