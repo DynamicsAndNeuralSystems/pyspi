@@ -1,6 +1,7 @@
 import functools
 import os
 import warnings
+import numba
 import numpy as np
 from scipy.stats import rankdata
 from sklearn.metrics import pairwise_distances, pairwise_kernels
@@ -83,6 +84,71 @@ class PairwiseDistance(Undirected, Unsigned):
 
 """ TODO: include optional kernels in each method
 """
+
+# ---------------------------------------------------------------------------
+# Itakura-constrained DTW
+# ---------------------------------------------------------------------------
+def _itakura_mask(n, m, max_slope=2.0):
+    """``tslearn.metrics.itakura_mask(n, m, max_slope)``, vectorised.
+
+    The same arithmetic, column by column, as tslearn's numba version, without
+    its per-process compilation.
+    """
+    min_slope = 1 / float(max_slope)
+    max_slope = max_slope * (float(n) / float(m))
+    min_slope = min_slope * (float(n) / float(m))
+    j = np.arange(m)
+    lower = np.ceil(np.maximum(
+        np.round(min_slope * j, decimals=2),
+        np.round((n - 1) - max_slope * (m - 1) + max_slope * j, decimals=2)))
+    upper = np.floor(np.minimum(
+        np.round(max_slope * j, decimals=2),
+        np.round((n - 1) - min_slope * (m - 1) + min_slope * j, decimals=2)) + 1)
+    rows = np.arange(n)[:, None]
+    mask = (rows >= lower) & (rows < upper)
+    if not (mask.any(axis=1).all() and mask.any(axis=0).all()):
+        raise RuntimeWarning(
+            "'itakura_max_slope' constraint is unfeasible "
+            "(ie. leads to no admissible path) for the "
+            "provided time series sizes",
+        )
+    return mask
+
+
+@functools.lru_cache(maxsize=8)
+def _itakura_rows(n, m):
+    """Each row's admitted columns ``lo[i]:hi[i]`` (the parallelogram is convex)."""
+    band = _itakura_mask(n, m)
+    lo = band.argmax(axis=1)
+    hi = m - band[:, ::-1].argmax(axis=1)
+    return lo, hi
+
+
+@numba.njit(cache=True, nogil=True)
+def _banded_dtw(x, y, lo, hi):
+    """tslearn's DTW recursion over row ``i``'s columns ``lo[i]:hi[i]`` only.
+
+    Each cell is ``(x_i - y_j)^2 + min(up, left, diagonal)`` in tslearn's
+    order, so the value is bitwise tslearn's; cells outside the band stay at
+    +inf as in tslearn's masked accumulated-cost matrix.
+    """
+    m = y.shape[0]
+    prev = np.full(m + 1, np.inf)
+    prev[0] = 0.0
+    cur = np.empty(m + 1)
+    for i in range(x.shape[0]):
+        cur[:] = np.inf
+        for j in range(lo[i], hi[i]):
+            d = x[i] - y[j]
+            cur[j + 1] = d * d + min(prev[j + 1], cur[j], prev[j])
+        prev, cur = cur, prev
+    return np.sqrt(prev[m])
+
+
+def _itakura_dtw(x, y):
+    """``tslearn.metrics.dtw(x, y, global_constraint="itakura")`` for 1-D series."""
+    lo, hi = _itakura_rows(len(x), len(y))
+    return _banded_dtw(x, y, lo, hi)
 
 
 def _median_gaussian_distance(v):
@@ -351,7 +417,8 @@ class TimeWarping(Undirected, Unsigned):
 class DynamicTimeWarping(TimeWarping):
     """DTW with optional dtaidistance C backend and Sakoe-Chiba band constraint.
 
-    Falls back to tslearn if dtaidistance is not available or for itakura constraint.
+    The Itakura constraint, which dtaidistance lacks, uses `_itakura_dtw`;
+    tslearn is the fallback when dtaidistance is not available.
     """
 
     name = "Dynamic time warping"
@@ -382,7 +449,6 @@ class DynamicTimeWarping(TimeWarping):
         self._sakoe_chiba_radius = sakoe_chiba_radius
         self._sakoe_chiba_ratio = sakoe_chiba_ratio
         self._normalise = normalise
-        self._warned_itakura_fallback = False
         self._warned_c_fallback = False
 
         if global_constraint == "sakoe_chiba":
@@ -412,15 +478,7 @@ class DynamicTimeWarping(TimeWarping):
         n = min(len(x), len(y))
 
         if constraint == "itakura":
-            if not self._warned_itakura_fallback:
-                warnings.warn(
-                    "DynamicTimeWarping(itakura) falls back to tslearn; "
-                    "dtaidistance C backend does not support itakura.",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-                self._warned_itakura_fallback = True
-            d = tslearn.metrics.dtw(x, y, global_constraint="itakura")
+            d = _itakura_dtw(x, y)
             return d / np.sqrt(n) if self._normalise else d
 
         radius = None
@@ -471,13 +529,11 @@ class DynamicTimeWarping(TimeWarping):
         constraint = self._global_constraint
 
         if constraint == "itakura":
-            # dtaidistance doesn't support itakura; fall back to bivariate loop
+            # dtaidistance doesn't support itakura.
             A = np.full((M, M), np.nan)
             for i in range(M):
                 for j in range(i + 1, M):
-                    d = tslearn.metrics.dtw(
-                        series[i], series[j], global_constraint="itakura"
-                    )
+                    d = _itakura_dtw(series[i], series[j])
                     A[i, j] = d
                     A[j, i] = d
             # Divide by sqrt(T) under `normalise`, as the bivariate and
@@ -544,7 +600,7 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
     if global_constraint == "sakoe_chiba":
         band = tslearn.metrics.sakoe_chiba_mask(n, m)
     elif global_constraint == "itakura":
-        band = tslearn.metrics.itakura_mask(n, m)
+        band = _itakura_mask(n, m)
     else:
         raise ValueError(f"Unknown LCSS global constraint: {global_constraint}")
     match = np.asarray(band, dtype=bool) & (np.abs(x[:, None] - y[None, :]) <= eps)

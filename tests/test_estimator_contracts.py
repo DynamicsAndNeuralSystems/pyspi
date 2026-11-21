@@ -850,6 +850,51 @@ def test_itakura_dtw_normalisation_agrees_between_bivariate_and_multivariate():
         spi.multivariate(data)[0, 1], rel=1e-12)
 
 
+def test_itakura_mask_is_tslearns():
+    """pyspi's vectorised mask equals tslearn's for every size it admits.
+
+    Infeasible sizes raise in both. The rows of the parallelogram are
+    contiguous, which `_itakura_rows` relies on.
+    """
+    import tslearn.metrics
+    from pyspi.statistics.distance import _itakura_mask, _itakura_rows
+
+    sizes = [(n, n) for n in range(2, 301)] + [(800, 800), (1000, 1000)]
+    sizes += [(n, m) for n in range(2, 30) for m in range(2, 30) if n != m]
+    for n, m in sizes:
+        try:
+            ref = tslearn.metrics.itakura_mask(n, m)
+        except RuntimeWarning:
+            with pytest.raises(RuntimeWarning):
+                _itakura_mask(n, m)
+            continue
+        band = _itakura_mask(n, m)
+        assert np.array_equal(band, ref), (n, m)
+        lo, hi = _itakura_rows(n, m)
+        cols = np.arange(m)
+        assert np.array_equal(band, (cols >= lo[:, None]) & (cols < hi[:, None]))
+
+
+@pytest.mark.parametrize("T", [3, 4, 7, 100, 257])
+def test_itakura_dtw_is_bitwise_tslearns(T):
+    """Both entry points equal `tslearn.metrics.dtw(..., "itakura")` exactly."""
+    import tslearn.metrics
+    from pyspi.statistics.distance import DynamicTimeWarping
+
+    rng = np.random.default_rng(T)
+    z = rng.standard_normal((4, T))
+    z[1] = np.cumsum(z[1])  # a non-stationary series as well
+    data = Data(data=z, dim_order="ps")
+    x = data.to_numpy(squeeze=True)
+    spi = DynamicTimeWarping(global_constraint="itakura")
+    A = spi.multivariate(data)
+    for i in range(4):
+        for j in range(i + 1, 4):
+            ref = tslearn.metrics.dtw(x[i], x[j], global_constraint="itakura")
+            assert spi.bivariate(data, i=i, j=j) == ref
+            assert A[i, j] == A[j, i] == ref
+
+
 def _lcss_cell_by_cell(x, y, band, eps=1.0):
     """Textbook constrained LCSS: the band limits matches, not the recursion."""
     A = np.zeros((len(x) + 1, len(y) + 1))
