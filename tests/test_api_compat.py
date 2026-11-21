@@ -1,4 +1,5 @@
-"""2.x keyword arguments still work in 3.x, with a DeprecationWarning."""
+"""2.x calls in 3.x: old keywords work with a DeprecationWarning, and a
+positional call that would bind arguments to other slots raises."""
 import warnings
 
 import numpy as np
@@ -25,9 +26,25 @@ def test_subset_maps_to_config(old, new):
     assert old_calc.run_spec["config"] == new_calc.run_spec["config"] == new
 
 
-def test_subset_positional_slot_is_config():
-    # 2.x: Calculator(dataset, name, labels, subset) -- 4th slot still selects SPIs.
-    assert len(Calculator(X, None, None, "fabfour", verbose=False).spis) == 4
+def test_positional_arguments_after_dataset_raise():
+    """A 2.x positional call would bind detrend and zscore to other slots."""
+    # 2.x: Calculator(dataset, name, labels, subset, configfile, detrend, normalise)
+    with pytest.raises(TypeError, match="positional"):
+        Calculator(X, "n", None, "fabfour", None, True, False)
+    with pytest.raises(TypeError, match="positional"):
+        Calculator(X, "n")
+
+
+def test_config_all_names_full():
+    with pytest.raises(ValueError, match="config='full'"):
+        Calculator(config="all", verbose=False)
+
+
+def test_data_positional_arguments_line_up_with_2x():
+    # 2.x: Data(data, dim_order, detrend, normalise, name, procnames)
+    d = Data(X, "ps", False, False, "x", ["a", "b", "c"])
+    assert (d.detrend, d.zscore, d.name, d.procnames) == (False, False, "x", ["a", "b", "c"])
+    np.testing.assert_array_equal(d.to_numpy()[..., 0], X)
 
 
 def test_configfile_maps_to_config_path():

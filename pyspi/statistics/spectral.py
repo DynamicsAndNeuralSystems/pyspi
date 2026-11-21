@@ -1611,12 +1611,13 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     fmin : float, optional
         Lower edge of the band; values at or below 0 become 1e-5.
         Default: 1e-5.
-    fmax : float, optional
-        Upper edge of the band. Default: 0.5 (Nyquist at ``fs = 1``).
+    fmax : float or None, optional
+        Upper edge of the band; None is the Nyquist frequency ``fs / 2``.
+        Default: None.
     method : str, optional
         ``'nonparametric'`` (multitaper and Wilson's factorisation) or
-        ``'parametric'`` (a VAR fitted to each pair).
-        Default: ``'nonparametric'``.
+        ``'parametric'`` (a VAR fitted to each pair); any other value raises
+        ``ValueError``. Default: ``'nonparametric'``.
     order : int or None, optional
         VAR order of the parametric method; None selects it per pair as the
         lowest order at which BIC stops improving. Ignored by the
@@ -1649,7 +1650,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         self,
         fs=1,
         fmin=1e-5,
-        fmax=0.5,
+        fmax=None,
         method="nonparametric",
         order=None,
         max_order=50,
@@ -1658,6 +1659,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         nan_threshold=0.5,
         time_halfbandwidth_product=_DEFAULT_NW,
     ):
+        if method not in ("nonparametric", "parametric"):
+            raise ValueError(
+                f"method must be 'nonparametric' or 'parametric', got {method!r}.")
+        if fmax is None:
+            fmax = fs / 2
         self._fs = fs  # Reaches the multitaper estimate and the frequency labels.
         self._nw = _check_time_halfbandwidth_product(time_halfbandwidth_product)
         if method != "nonparametric" and self._nw != _DEFAULT_NW:
@@ -1702,13 +1708,13 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             self._max_order = max_order
             paramstr = (f"_parametric_{statistic}_fs-{fmt_param(fs)}"
                         f"_fmin-{fmt_param(self._fmin)}"
-                        f"_fmax-{fmt_param(fmax)}_order-{order}").replace(
+                        f"_fmax-{fmt_param(fmax)}_order-{fmt_param(order)}").replace(
                 ".", "-"
             )
             # max_order bounds the order search, so it matters only when the
             # order is selected rather than given.
             if order is None and max_order != 50:
-                paramstr += f"_maxorder-{max_order}"
+                paramstr += f"_maxorder-{fmt_param(max_order)}"
         # Non-default NaN handling changes the value, so it is named; defaults
         # are not, so bundled identifiers are unchanged.
         if not ignore_nan:

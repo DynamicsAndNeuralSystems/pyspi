@@ -163,6 +163,10 @@ def resolve_config(config):
         return str(path)
 
     path = CONFIG_DIR / f"{text}.yaml"
+    if text == "all":
+        raise ValueError(
+            "Unknown config 'all'. The config of every SPI is called 'full': "
+            "pass config='full'.")
     if not path.is_file():
         raise ValueError(
             f"Unknown config '{text}'. Bundled configs are: "
@@ -273,8 +277,9 @@ def _installed_versions():
 
 
 # Version of the .npz layout; 0 is a file without the field. Schema 2 adds
-# `quality`, the per-cell codes, and `pair_errors`; a schema-1 file still
-# loads, with its codes derived from its values and `errors`.
+# `quality`, the per-cell codes, `pair_errors`, and `directedness`, each SPI's
+# symmetry trait; a schema-1 file still loads, with its codes derived from its
+# values and `errors` and its traits rebuilt from the config it names.
 _NPZ_SCHEMA = 2
 
 
@@ -356,6 +361,9 @@ def _read_npz(path):
         quality = f["quality"] if "quality" in f.files else None
         spis = [str(s) for s in f["spis"]]
         procs = [str(p) for p in f["processes"]]
+        directedness = (
+            [str(t) for t in f["directedness"]] if "directedness" in f.files else None
+        )
         # Provenance: which SPIs and pairs failed, and what produced the file.
         meta = {name: str(f[name])
                 for name in ("run_spec", "run_digest", "errors", "pair_errors")
@@ -372,6 +380,15 @@ def _read_npz(path):
             f"{path} is malformed: quality has shape {quality.shape}, expected "
             f"{values.shape}."
         )
+    if directedness is not None:
+        unknown = sorted(set(directedness) - set(DIRECTEDNESS_TRAITS))
+        if len(directedness) != len(spis) or unknown:
+            raise ValueError(
+                f"{path} is malformed: directedness holds {len(directedness)} "
+                f"entries for {len(spis)} SPIs"
+                + (f", and unknown traits {unknown}" if unknown else "") + "."
+            )
+        directedness = dict(zip(spis, directedness))
     parsed = {}
     for name in ("run_spec", "errors", "pair_errors"):
         if name in meta:
@@ -380,7 +397,8 @@ def _read_npz(path):
             except json.JSONDecodeError:
                 parsed[name] = meta[name]
     return dict(schema=schema, values=values, quality=quality, spis=spis,
-                procs=procs, run_digest=meta.get("run_digest"), **parsed)
+                procs=procs, run_digest=meta.get("run_digest"),
+                directedness=directedness, **parsed)
 
 
 def load_table(path):
@@ -400,7 +418,9 @@ def load_table(path):
     pandas.DataFrame
         The table as ``Calculator.table`` holds it: rows are processes,
         columns a ``(spi, process)`` MultiIndex. ``table.attrs`` holds the
-        file's ``schema``, ``run_spec``, ``run_digest`` and ``errors``.
+        file's ``schema``, ``run_spec``, ``run_digest`` and ``errors``, and
+        ``directedness``, ``{identifier: trait}`` with each SPI's symmetry
+        trait, which :func:`feature_vector` uses.
     """
     return _table_from_parts(_read_npz(path))
 
@@ -416,6 +436,8 @@ def _table_from_parts(parts):
             table.attrs[name] = parts[name]
     if parts["run_digest"] is not None:
         table.attrs["run_digest"] = parts["run_digest"]
+    if parts["directedness"] is not None:
+        table.attrs["directedness"] = parts["directedness"]
     return table
 
 
@@ -479,12 +501,13 @@ def feature_vector(table, directedness=None, include_self=False):
         :attr:`Calculator.table`, or the frame :func:`load_table` returns.
     directedness : dict, optional
         ``{identifier: trait}``, with the trait one of ``'undirected'``,
-        ``'antisymmetric'``, ``'directed'`` or ``'asymmetric'``. If None, it
-        is rebuilt from the config named in ``table.attrs["run_spec"]`` (set
-        by :func:`load_table`), using each SPI's
-        :meth:`~pyspi.base.Directed.directedness`. Identifiers missing from
-        the mapping are treated as ``'directed'``, which keeps both
-        orientations. Default: None.
+        ``'antisymmetric'``, ``'directed'`` or ``'asymmetric'``. If None, the
+        traits :meth:`Calculator.save` recorded are used, which
+        :func:`load_table` puts in ``table.attrs["directedness"]``; for a
+        file that does not record them, they are rebuilt from the config
+        named in ``table.attrs["run_spec"]``, using each SPI's
+        :meth:`~pyspi.base.Directed.directedness`. An SPI of the table with
+        no trait raises ``ValueError``. Default: None.
     include_self : bool, optional
         Also keep the self-pairs ``(i, i)``, one per process and SPI. The
         diagonal is NaN for pairwise SPIs and a constant for the few
@@ -499,9 +522,24 @@ def feature_vector(table, directedness=None, include_self=False):
         are kept so the length is fixed; a feature is NaN wherever its cell in
         :attr:`Calculator.quality` is not ``GOOD``, and that code says why.
     """
+    source = ""
+    if directedness is None:
+        directedness = getattr(table, "attrs", {}).get("directedness")
     if directedness is None:
         directedness = _directedness_from_table(table)
+        source = (f" The file records no traits, and the config it names, "
+                  f"{table.attrs['run_spec']['config']!r}, does not hold them.")
     spis = list(table.columns.unique(level="spi"))
+    missing = [spi for spi in spis if spi not in directedness]
+    if missing:
+        shown = ", ".join(missing[:5]) + (f", +{len(missing) - 5} more"
+                                          if len(missing) > 5 else "")
+        raise ValueError(
+            f"No symmetry trait for {len(missing)} SPI(s) of the table "
+            f"({shown}), so it is unknown whether each holds one value per "
+            f"pair or two.{source} Pass directedness={{identifier: trait}} "
+            f"with a trait for every SPI."
+        )
     procs = list(table.index)
     M = len(procs)
     if list(table.columns.unique(level="process")) != procs:
@@ -517,7 +555,7 @@ def feature_vector(table, directedness=None, include_self=False):
     keys, sources, targets, values = [], [], [], []
     src_idx, tgt_idx = np.indices((M, M))
     for spi in spis:
-        trait = directedness.get(spi, "directed")
+        trait = directedness[spi]
         if trait not in DIRECTEDNESS_TRAITS:
             raise ValueError(
                 f"Unknown directedness {trait!r} for SPI {spi!r}; expected one "
@@ -546,7 +584,7 @@ def feature_vector(table, directedness=None, include_self=False):
 
 def _directedness_from_table(table):
     """
-    Recover ``{identifier: trait}`` for a table loaded from disk.
+    Recover ``{identifier: trait}`` for a table from a file that does not record it.
 
     ``table.attrs["run_spec"]["config"]`` names the bundled config or YAML
     path the SPIs were built from; they are instantiated again to read their
@@ -643,8 +681,8 @@ def load_spis_from_yaml(configfile, quiet=False):
     Instantiate every SPI of a config.
 
     Used by :class:`Calculator` and by the parallel workers. Progress is
-    logged by the ``pyspi.calculator`` logger at INFO level. Two SPIs with the
-    same identifier raise ``ValueError``.
+    logged by the ``pyspi.calculator`` logger at INFO level. Two SPIs whose
+    identifiers are equal, or equal ignoring letter case, raise ``ValueError``.
 
     Parameters
     ----------
@@ -687,19 +725,32 @@ def load_spis_from_yaml(configfile, quiet=False):
 
 def _insert_spi(spis, spi, module_name, fcn, params):
     """
-    Insert an SPI, rejecting an identifier already in ``spis``.
+    Insert an SPI, rejecting an identifier already in ``spis``, or one that
+    differs from an identifier in ``spis`` only in letter case.
 
-    The identifier names the table column and the checkpoint file.
+    The identifier names the table column and the checkpoint files, and those
+    files must stay distinct on case-insensitive file systems (the macOS and
+    Windows defaults).
     """
+    source = f"{module_name}.{fcn}{f'({params})' if params else ''}"
     existing = spis.get(spi.identifier)
     if existing is not None:
         raise ValueError(
             f"Duplicate SPI identifier {spi.identifier!r}: "
-            f"{type(existing).__name__} and {module_name}.{fcn}"
-            f"{f'({params})' if params else ''} both produce it. "
+            f"{type(existing).__name__} and {source} both produce it. "
             "Two configs of the same class must differ in a parameter that "
             "reaches the identifier."
         )
+    folded = spi.identifier.casefold()
+    for other in spis:
+        if other.casefold() == folded:
+            raise ValueError(
+                f"SPI identifiers {other!r} ({type(spis[other]).__name__}) and "
+                f"{spi.identifier!r} ({source}) differ only in letter case. "
+                "Each SPI's checkpoint files are named after its identifier, "
+                "and on a case-insensitive file system (the macOS and Windows "
+                "defaults) the two would share one file."
+            )
     spis[spi.identifier] = spi
 
 
@@ -730,14 +781,16 @@ class Calculator:
     row = source and column = target, and :attr:`quality`, which says why any
     value is NaN. :meth:`save` writes both to a file.
 
+    Every argument after ``dataset`` is keyword-only.
+
     Parameters
     ----------
     dataset : Data, array-like or None, optional
         The ``M`` processes of ``T`` observations, as a :class:`~pyspi.data.Data`
-        (used as it is preprocessed) or anything ``Data`` reads (an
-        ``(M, T)`` array, a DataFrame or a file path), which is detrended and
-        z-scored as set here. Default: None; load one later with
-        :meth:`load_dataset`.
+        (used as it is preprocessed) or anything ``Data`` reads (an array, a
+        DataFrame or a file path, laid out as ``dim_order`` says), which is
+        detrended and z-scored as set here. Default: None; load one later
+        with :meth:`load_dataset`.
     name : str or None, optional
         Name of the calculator, shown in progress output and used to tell
         datasets apart in a :class:`CalculatorFrame`. Default: None.
@@ -751,11 +804,13 @@ class Calculator:
 
         - ``"full"``: every SPI.
         - ``"fast"``: all but the slowest SPIs.
-        - ``"sonnet"``: 14 representative SPIs, one per module (M01-M14).
+        - ``"sonnet"``: 14 representative SPIs, one from each module
+          (M01-M14) except M07, which has no bundled SPI, and two from M14.
         - ``"fabfour"``: 4 SPIs: covariance, Spearman's correlation, directed
           information and power-envelope correlation.
         - ``"benchmarked_p80"``, ``"_p90"``, ``"_p95"``, ``"_p99"``: the
-          fastest 80, 90, 95 or 99% of SPIs by measured compute cost.
+          SPIs below the 80th, 90th, 95th or 99th percentile of measured
+          compute cost; SPIs without a measured cost are in none of them.
     detrend : bool, optional
         Remove the least-squares line from each process. Default: False.
     zscore : bool or None, optional
@@ -766,6 +821,14 @@ class Calculator:
     verbose : bool, optional
         Log progress at INFO level and print a summary after :meth:`compute`.
         Default: True.
+    dim_order : str or None, optional
+        How ``dataset`` is laid out, as for :class:`~pyspi.data.Data`:
+        ``'ps'`` for an ``(M, T)`` array, one row per process, or ``'sp'``
+        for a ``(T, M)`` array or a DataFrame with one column per process. A
+        DataFrame's row (``'ps'``) or column (``'sp'``) labels name the
+        processes. None reads ``'ps'`` and warns if that gives more processes
+        than observations; an explicit value never warns. Ignored for a
+        ``Data``. Default: None.
     subset, configfile, normalise : optional
         Deprecated spellings of ``config`` (``subset="all"`` is
         ``config="full"``), ``config`` (a path) and ``zscore``, removed in
@@ -781,8 +844,8 @@ class Calculator:
     >>> calc.table  # one 5 x 5 block of columns per SPI
     """
     def __init__(
-        self, dataset=None, name=None, labels=None, config=None,
-        detrend=False, zscore=None, verbose=True,
+        self, dataset=None, *, name=None, labels=None, config=None,
+        detrend=False, zscore=None, verbose=True, dim_order=None,
         subset=None, configfile=None, normalise=None,
     ):
         # Deprecated spellings (subset, configfile, normalise).
@@ -791,6 +854,7 @@ class Calculator:
         self._spis = {}
         self._zscore = zscore
         self._detrend = detrend
+        self._dim_order = dim_order
         self._timings = {}
         self._errors = {}
         self._pair_errors = {}
@@ -1144,7 +1208,7 @@ class Calculator:
     def group_name(self, g):
         raise Exception("Do not set this property externally. Use the group() method.")
 
-    def load_dataset(self, dataset):
+    def load_dataset(self, dataset, dim_order=None):
         """
         Load a dataset, replacing any earlier one and its results.
 
@@ -1154,10 +1218,18 @@ class Calculator:
             A :class:`~pyspi.data.Data`, copied and used as it is
             preprocessed, or anything ``Data`` reads, which is detrended and
             z-scored as set for this Calculator.
+        dim_order : str or None, optional
+            How ``dataset`` is laid out: ``'ps'`` (one row per process) or
+            ``'sp'`` (one column per process), as for
+            :class:`~pyspi.data.Data`; None takes the ``dim_order`` this
+            Calculator was built with, and if that is None too, reads
+            ``'ps'`` and warns if that gives more processes than
+            observations. Ignored for a ``Data``. Default: None.
         """
         if not isinstance(dataset, Data):
             self._dataset = Data(
-                Data.convert_to_numpy(dataset),
+                dataset,
+                dim_order=self._dim_order if dim_order is None else dim_order,
                 zscore=self._zscore,
                 detrend=self._detrend,
             )
@@ -1190,8 +1262,10 @@ class Calculator:
         ``.npz`` (recommended) stores the values as an ``(n_spis, M, M)`` array
         with the SPI and process names, and round-trips exactly through
         :func:`pyspi.load_table`. It also stores :attr:`quality`,
-        :attr:`errors`, :attr:`pair_errors` and the run's provenance, which
-        :func:`pyspi.load_results` reads back. ``.csv`` holds the values only,
+        :attr:`errors`, :attr:`pair_errors`, the run's provenance, which
+        :func:`pyspi.load_results` reads back, and each SPI's symmetry trait
+        (:meth:`~pyspi.base.Directed.directedness`), which
+        :func:`pyspi.feature_vector` uses. ``.csv`` holds the values only,
         for looking at small results.
 
         Parameters
@@ -1217,6 +1291,9 @@ class Calculator:
                 # dtype='U', not object, which would need allow_pickle to load.
                 spis=np.array(keys, dtype="U"),
                 processes=np.array(self.dataset.procnames, dtype="U"),
+                directedness=np.array(
+                    [self.spis[k].directedness() for k in keys], dtype="U"
+                ),
                 schema=np.array(_NPZ_SCHEMA),
                 run_spec=np.array(
                     json.dumps(self.run_spec, sort_keys=True, default=str), dtype="U"
