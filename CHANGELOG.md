@@ -131,6 +131,11 @@ A second pass, driven by a suite of red tests, closed a set of defects that prod
   `bary-sq_*` (and `statistic="max_time"`) now report unsigned: a squared barycenter and an argmax index are non-negative.
   `IntegratedInformation` rejects an unknown `phitype`, a `normalization` other than 0 or 1 and a non-integer `delay` at construction, and no longer turns every exception into a NaN logged at error level: a failed pair is NaN with a warning, and a failure on every pair is recorded in `Calculator.errors`.
 
+- **A pickled or copied transfer entropy forgot its history length.**
+  Unpickling (including `pickle`/`dill` of a `Calculator`) or `copy.copy` rebuilt the kernel and symbolic TE calculators with their default `k_history=1`.
+  A later computation then gave the k=1 value under the `_k-<k>` identifier: `te_symbolic_k-3` became identically zero.
+  Parallel `compute(n_jobs=...)`, `deepcopy` and `CalculatorFrame` were not affected, since they rebuild SPIs from the config or copy the calculator; results computed before pickling were also unaffected.
+
 New: `Calculator.errors`, `Calculator.run_spec`, `Calculator.run_digest`, `Calculator.to_frame()` (long-form results, one row per `(spi, source, target)`) and `Calculator.summary()`; an `antisymmetric` structural label for measures satisfying `A[i,j] == -A[j,i]`; and a useful `repr` — a computed `Calculator` previously displayed as `<pyspi.calculator.Calculator at 0x...>`.
 
 
