@@ -9,6 +9,7 @@ from sklearn.gaussian_process import kernels, GaussianProcessRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn import linear_model
 from mne_connectivity import envelope_correlation
+from pyspi.utils import fmt_param
 from pyspi.lib.ids.dependence import compute_IDS
 
 from pyspi.base import (
@@ -25,7 +26,11 @@ class Cointegration(Directed, Unsigned):
 
     ``johansen`` is symmetric by construction: it tests the rank of a VECM
     fitted to the pair, and swapping the columns leaves the trace and maximum
-    eigenvalue statistics unchanged.
+    eigenvalue statistics unchanged. On stationary input its statistics mainly
+    measure how quickly the two processes revert to their means: they fall
+    steeply as the processes become more persistent, with or without coupling,
+    so compare them only across pairs whose processes have similar
+    autocorrelation.
 
     ``aeg`` (augmented Engle-Granger) is *not* symmetric: it regresses the first
     series on the second and unit-root-tests the residuals, so swapping the
@@ -266,6 +271,12 @@ class InterDependenceScore(Undirected, Unsigned):
         self._num_terms = terms
         self._p_norm = pnorm
         self._bandwidth_term = bandwidth
+        # Every result-affecting parameter must reach the identifier. Only
+        # non-default values are appended, so the bundled `ids` keeps its name.
+        for tag, value, default in (("terms", terms, 6), ("pnorm", pnorm, "max"),
+                                    ("bw", bandwidth, 0.5)):
+            if value != default:
+                self.identifier += f"_{tag}-{fmt_param(value)}".replace(".", "-")
 
 
     @parse_multivariate

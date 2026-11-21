@@ -3,10 +3,13 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 227 of the 296 SPIs benchmarked (including two manual te_kraskov DCE variants).
+# Current set: 239 SPIs; 227 of the 296 SPIs benchmarked (including two manual te_kraskov DCE variants), plus 12 timed separately (below).
 # Cutoff        : fastest kept <= 5.520s ; slowest dropped >= 6.790s.
 #
 # Manual edit: te_kraskov_NN-4_DCE_k-{1,2}_kt-1_l-1_lt-1 are kept for coverage;
+# re-apply after re-running bench/cut_config.py.
+# Manual edit: added after a separate timing run on the same protocol: xi_tau-{0,1}, pcorr_<estimator> (6), te_symbolic_k-3,
+# {mi,tlmi}_kernel_W-0.25_DCE-AUTO and te_kernel_W-0.25_DCE-AUTO_k-1;
 # re-apply after re-running bench/cut_config.py.
 #
 .statistics.basic:
@@ -60,6 +63,24 @@
     - estimator: ShrunkCovariance
       squared: true
 
+  # Partial correlation
+  PartialCorrelation:
+    labels:
+      - undirected
+      - linear
+      - signed
+      - multivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+    - estimator: EmpiricalCovariance
+    - estimator: GraphicalLasso
+    - estimator: LedoitWolf
+    - estimator: MinCovDet
+    - estimator: OAS
+    - estimator: ShrunkCovariance
+
   SpearmanR:
     labels:
       - undirected
@@ -72,6 +93,23 @@
     configs:
     - squared: true
     - squared: false
+
+  # Chatterjee's rank correlation xi
+  ChatterjeeXi:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - M14
+    dependencies:
+    configs:
+    - tau: 0
+      labels:
+      - contemporaneous
+    - tau: 1
+      labels:
+      - time-dependent
 
   LaggedCorrelation:
     labels:
@@ -466,6 +504,9 @@
       dyn_corr_excl: AUTO
     - estimator: kernel
       kernel_width: 0.25
+    - estimator: kernel
+      kernel_width: 0.25
+      dyn_corr_excl: AUTO
 
   TimeLaggedMutualInfo:
     labels:
@@ -484,6 +525,9 @@
       dyn_corr_excl: AUTO
     - estimator: kernel
       kernel_width: 0.25
+    - estimator: kernel
+      kernel_width: 0.25
+      dyn_corr_excl: AUTO
 
   TransferEntropy:
     labels:
@@ -501,6 +545,12 @@
     - estimator: kernel
       kernel_width: 0.25
       k_history: 1
+      labels:
+      - M14
+    - estimator: kernel
+      kernel_width: 0.25
+      k_history: 1
+      dyn_corr_excl: AUTO
       labels:
       - M14
     - estimator: gaussian
@@ -524,6 +574,10 @@
       k_history: 1
       l_history: 1
       dyn_corr_excl: AUTO
+    - estimator: symbolic
+      k_history: 3
+      labels:
+      - M05
 
   IntegratedInformation:
     labels:
