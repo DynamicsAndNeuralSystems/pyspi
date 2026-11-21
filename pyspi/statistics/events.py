@@ -150,10 +150,10 @@ class EventSynchronisation(Directed):
     ``Q[i, j] = (c(y|x) + c(x|y)) / sqrt(m_x m_y)``, in ``[0, 1]``, and
     ``q[i, j] = (c(y|x) - c(x|y)) / sqrt(m_x m_y)``, in ``[-1, 1]``.
 
-    ``Q`` (``statistic="Q"``) is the strength of synchronisation and is
+    ``Q`` (``statistic="strength"``) is the strength of synchronisation and is
     symmetric (``undirected``, unsigned); 1 means every event of the sparser
     series has a partner and the two series have equally many events. ``q``
-    (``statistic="q"``) is the delay asymmetry and is exactly antisymmetric,
+    (``statistic="asym"``) is the delay asymmetry and is exactly antisymmetric,
     ``q[j, i] = -q[i, j]``: **``q[i, j] > 0`` means the events of row ``i``
     precede those of column ``j``**, i.e. ``i`` leads ``j``. It is 1 when
     every event of ``i`` is followed by one of ``j`` and the counts are equal.
@@ -178,8 +178,9 @@ class EventSynchronisation(Directed):
     Parameters
     ----------
     statistic : str, optional
-        ``'Q'``, the strength of synchronisation, or ``'q'``, the delay
-        asymmetry. Default: ``'Q'``.
+        ``'strength'``, the strength of synchronisation ``Q``, or ``'asym'``,
+        the delay asymmetry ``q``. It appears in the identifier as
+        ``es_strength`` or ``es_asym``. Default: ``'strength'``.
     quantile : float, optional
         Exceedance level defining events, in ``(0, 1)``; 0.95 takes the top
         5% of samples. It appears in the identifier as ``q-0-95``.
@@ -193,25 +194,27 @@ class EventSynchronisation(Directed):
     name = "Event synchronisation"
     identifier = "es"
     labels = ["misc", "nonlinear", "temporal"]
-    # Event times are cached per quantile, shared by Q, q and every max_delay.
+    # Event times are cached per quantile, shared by both statistics and every max_delay.
     _cache_namespace = "events"
 
     @property
     def _cache_subkey(self):
         return (self._quantile,)
 
-    def __init__(self, statistic="Q", quantile=0.95, max_delay=None):
-        if statistic not in ("Q", "q"):
-            raise ValueError(f"statistic must be 'Q' or 'q', got {statistic!r}.")
+    _STATISTICS = ("strength", "asym")
+
+    def __init__(self, statistic="strength", quantile=0.95, max_delay=None):
+        if statistic not in self._STATISTICS:
+            raise ValueError(f"statistic must be one of {self._STATISTICS}, got {statistic!r}.")
         self._statistic = statistic
         self._quantile = _require_level("quantile", quantile, 0.0, 1.0)
         self._max_delay = (
             None if max_delay is None
             else require_int("max_delay", max_delay, minimum=1)
         )
-        # Q is symmetric and unsigned, q antisymmetric and signed: each
-        # statistic sets its own structural trait and sign.
-        traits = ["undirected"] if statistic == "Q" else ["antisymmetric", "signed"]
+        # Q is symmetric and one-ended, q antisymmetric and signed: each
+        # statistic sets its own structural trait and sign flag.
+        traits = ["undirected"] if statistic == "strength" else ["antisymmetric", "signed"]
         self.labels = EventSynchronisation.labels + traits
         self.identifier = (
             f"{EventSynchronisation.identifier}_{statistic}"
@@ -222,7 +225,7 @@ class EventSynchronisation(Directed):
 
     def issigned(self):
         # Q is a normalised count in [0, 1]; q carries the lead/lag in its sign.
-        return self._statistic == "q"
+        return self._statistic == "asym"
 
     def _events(self, data):
         """``[(event times, half gaps)]`` per process, cached on ``data``."""
@@ -253,7 +256,7 @@ class EventSynchronisation(Directed):
     def bivariate(self, data, i=None, j=None):
         events = self._events(data)
         Q, q = self._pair(events[i], events[j])
-        return Q if self._statistic == "Q" else q
+        return Q if self._statistic == "strength" else q
 
     @parse_multivariate
     def multivariate(self, data):
@@ -263,7 +266,7 @@ class EventSynchronisation(Directed):
         for i in range(M):
             for j in range(i + 1, M):
                 Q, q = self._pair(events[i], events[j])
-                if self._statistic == "Q":
+                if self._statistic == "strength":
                     A[i, j] = A[j, i] = Q
                 else:
                     # Exact: c(i|j) and c(j|i) swap roles, the norm is shared.
