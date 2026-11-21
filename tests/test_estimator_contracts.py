@@ -653,6 +653,28 @@ def test_symbolic_transfer_entropy_identifier_matches_what_is_computed():
                               k_history=3).identifier == "te_symbolic_k-3"
 
 
+@pytest.mark.parametrize("estimator", ["kernel", "symbolic"])
+@pytest.mark.parametrize("clone", ["pickle", "copy", "deepcopy"])
+def test_transfer_entropy_history_survives_copy_and_pickle(estimator, clone):
+    """A copied TE computes the history length its identifier names.
+
+    Pickling drops the calculator, and ``__setstate__`` used to rebuild it
+    without its history: symbolic k=3 became identically zero (k=1) and
+    kernel k=3 became kernel k=1, still under the k-3 identifier.
+    """
+    import copy
+    import pickle
+
+    clones = {"pickle": lambda s: pickle.loads(pickle.dumps(s)),
+              "copy": copy.copy, "deepcopy": copy.deepcopy}
+    spi = it.TransferEntropy(estimator=estimator, k_history=3)
+    expected = spi.bivariate(_data(m=2, t=300), i=0, j=1)
+
+    other = clones[clone](spi)
+    assert other.identifier == spi.identifier
+    assert other.bivariate(_data(m=2, t=300), i=0, j=1) == expected
+
+
 # ---------------------------------------------------------------------------
 # CrossCorrelation
 # ---------------------------------------------------------------------------
