@@ -12,35 +12,6 @@
     dependencies:
     configs:
       - estimator: EmpiricalCovariance
-      - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
-
-  # Precision
-  Precision:
-    labels:
-      - undirected
-      - linear
-      - signed
-      - multivariate
-      - contemporaneous
-      - M14
-    dependencies:
-    configs:
-      - estimator: EmpiricalCovariance
-      - estimator: GraphicalLasso
-      - estimator: LedoitWolf
-      - estimator: OAS
-      - estimator: ShrunkCovariance
-      - estimator: EmpiricalCovariance
-        squared: True
-      - estimator: GraphicalLasso
-        squared: True
-      - estimator: LedoitWolf
-        squared: True
-      - estimator: OAS
-        squared: True
-      - estimator: ShrunkCovariance
-        squared: True
 
   # Partial correlation
   PartialCorrelation:
@@ -158,18 +129,6 @@
     configs:
       - biased: False
       - biased: True
-
-  # Gromov-Wasserstein distance (GW_tau)
-  GromovWasserstainTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
 
 # Causal inference statistics
 .statistics.causal:
@@ -301,6 +260,10 @@
       - estimator: kernel
         kernel_width: 0.25
 
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
+
   # Time-lagged mutual information
   TimeLaggedMutualInfo:
     labels:
@@ -322,6 +285,10 @@
 
       - estimator: kernel
         kernel_width: 0.25
+
+      - estimator: kernel
+        kernel_width: 0.25
+        dyn_corr_excl: AUTO
 
   # Transfer entropy
   TransferEntropy:
@@ -667,29 +634,6 @@
       - fmin: 0.25
         fmax: 0.5
         statistic: max
-
-  # Group delay
-  GroupDelay:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M01
-    dependencies:
-    configs:
-      - fmin: 0
-        fmax: 0.5
-        statistic: delay
-
-      - fmin: 0
-        fmax: 0.25
-        statistic: delay
-
-      - fmin: 0.25
-        fmax: 0.5
-        statistic: delay
 
   # Spectral Granger causality
   SpectralGrangerCausality:
