@@ -541,6 +541,59 @@ def _directedness_from_table(table):
     return {k: spi.directedness() for k, spi in spis.items()}
 
 
+class _ConfigLoader(yaml.FullLoader):
+    """FullLoader that refuses a key repeated within one mapping.
+
+    PyYAML keeps the last of two equal keys, so a module named twice in a
+    config would silently lose its first block of SPIs.
+    """
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    f"found duplicate key {key!r}", key_node.start_mark)
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
+_CONFIG_ENTRY_KEYS = ("labels", "configs", "dependencies")
+
+
+def load_config_yaml(configfile):
+    """Read an SPI config as ``{module: {class: entry}}``, refusing malformed ones.
+
+    A key other than ``labels``, ``configs`` or ``dependencies`` in a class
+    entry is refused rather than ignored: a misspelt ``config:`` would
+    otherwise build the class with its default parameters. A bare ``Class:``
+    line is an entry with no keys.
+    """
+    with open(configfile) as f:
+        yf = yaml.load(f, Loader=_ConfigLoader)
+    if not isinstance(yf, dict):
+        raise ValueError(f"{configfile}: expected a mapping of modules to SPI classes.")
+    out = {}
+    for module_name, module_spis in yf.items():
+        module_spis = module_spis or {}
+        if not isinstance(module_spis, dict):
+            raise ValueError(f"{configfile}: {module_name} must map class names to entries.")
+        out[module_name] = {}
+        for fcn, entry in module_spis.items():
+            entry = entry or {}
+            if not isinstance(entry, dict):
+                raise ValueError(f"{configfile}: {module_name}.{fcn} must be a mapping.")
+            unknown = sorted(set(entry) - set(_CONFIG_ENTRY_KEYS))
+            if unknown:
+                raise ValueError(
+                    f"{configfile}: {module_name}.{fcn} has unknown key(s) "
+                    f"{unknown}; allowed: {list(_CONFIG_ENTRY_KEYS)}.")
+            out[module_name][fcn] = entry
+    return out
+
+
 def load_spis_from_yaml(configfile, quiet=False):
     """Instantiate all SPIs from a configfile.
 
@@ -554,12 +607,11 @@ def load_spis_from_yaml(configfile, quiet=False):
     spis = {}
     log = (lambda *a, **k: None) if quiet else logger.info
     log("Loading configuration file: %s", configfile)
-    with open(configfile) as f:
-        yf = yaml.load(f, Loader=yaml.FullLoader)
+    yf = load_config_yaml(configfile)
     for module_name, module_spis in yf.items():
         log("Importing module %s", module_name)
         module = importlib.import_module(module_name, __package__)
-        for fcn, entry in (module_spis or {}).items():
+        for fcn, entry in module_spis.items():
             family_labels = entry.get("labels")
             configs = entry.get("configs")
             if fcn == "LaggedCorrelation" and configs is not None:

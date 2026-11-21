@@ -107,14 +107,19 @@ class Data:
         "ccm",
         "coint",
         "covariance",
+        "crossfreq",
         "entropy",
+        "events",
         "joint_entropy",
+        "liang",
         "mne",
         "mne_psi",
+        "nli",
         "spectral_bv",
         "spectral_gc",
         "spectral_mv",
         "theiler",
+        "var",
         "xcorr",
     )
 
@@ -298,7 +303,7 @@ class Data:
             elif ext == ".txt":
                 npdat = np.genfromtxt(data)
             elif ext == ".csv":
-                npdat = np.genfromtxt(data, ",")
+                npdat = np.genfromtxt(data, delimiter=",")
             elif ext == ".ts":
                 try:
                     from aeon.datasets import load_from_ts_file
