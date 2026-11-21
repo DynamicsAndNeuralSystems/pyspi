@@ -150,6 +150,7 @@ OPTIONAL_IN_FULL = frozenset({
     "ccm_E-1_diff",
     "ccm_E-None_diff",
     "cov-sq_GraphicalLassoCV",
+    "cov_GraphicalLasso",
     "cov_GraphicalLassoCV",
     "ddtf_multitaper_max_fs-1_fmin-0-25_fmax-0-5",
     "ddtf_multitaper_max_fs-1_fmin-0_fmax-0-25",

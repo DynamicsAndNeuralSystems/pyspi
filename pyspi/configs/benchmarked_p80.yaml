@@ -21,7 +21,6 @@
     dependencies:
     configs:
     - estimator: EmpiricalCovariance
-    - estimator: GraphicalLasso
     - estimator: MinCovDet
 
   # Partial correlation
