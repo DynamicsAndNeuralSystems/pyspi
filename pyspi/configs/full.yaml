@@ -50,7 +50,6 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - M14
     dependencies:
@@ -75,6 +74,7 @@
         labels:
           - antisymmetric
           - signed
+          - timing
       - statistic: peak
         labels:
           - undirected
@@ -116,12 +116,12 @@
       - statistic: onesidedpeak
         labels:
           - directed
-          - unsigned
       - statistic: lag
         max_lag: 10
         labels:
           - antisymmetric
           - signed
+          - timing
       - statistic: peak
         max_lag: 10
         labels:
@@ -138,10 +138,12 @@
   # Pairwise distance
   PairwiseDistance:
     labels:
-      - unsigned
       - unordered
       - nonlinear
       - undirected
+      - bivariate
+      - contemporaneous
+      - inverted
       - MXX
     dependencies:
     configs:
@@ -155,7 +157,6 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
       - M14
@@ -169,7 +170,6 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
       - M14
@@ -181,7 +181,6 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
       - M14
@@ -195,7 +194,6 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
       - M14
@@ -207,7 +205,6 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
       - M14
@@ -221,7 +218,6 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
       - M14
@@ -235,9 +231,9 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
+      - inverted
       - M10
     dependencies:
     configs:
@@ -250,9 +246,9 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
+      - inverted
       - MXX
     dependencies:
     configs:
@@ -268,9 +264,9 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
+      - inverted
       - M10
     dependencies:
     configs:
@@ -283,7 +279,6 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
       - M10
@@ -319,9 +314,9 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
+      - inverted
       - M02
     dependencies:
     configs:
@@ -331,9 +326,9 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
+      - inverted
       - M02
     dependencies:
     configs:
@@ -343,9 +338,9 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
+      - inverted
       - M14
     dependencies:
     configs:
@@ -355,7 +350,6 @@
     labels:
       - directed
       - nonlinear
-      - signed
       - bivariate
       - time-dependent
       - M14
@@ -382,7 +376,6 @@
     labels:
       - directed
       - nonlinear
-      - signed
       - bivariate
       - time-dependent
       - M14
@@ -390,6 +383,9 @@
     configs:
       - statistic: tp
         max_lag: 5
+        labels:
+          - signed
+          - timing
       - statistic: skill
         max_lag: 5
 
@@ -398,7 +394,6 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - time-dependent
       - M14
@@ -459,9 +454,9 @@
     labels:
       - undirected
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
+      - inverted
       - M14
     configs:
       - estimator: kozachenko
@@ -472,9 +467,9 @@
     labels:
       - directed
       - nonlinear
-      - unsigned
       - bivariate
       - contemporaneous
+      - inverted
       - M14
     configs:
       - estimator: kozachenko
@@ -484,9 +479,9 @@
   CausalEntropy:
     labels:
       - directed
-      - unsigned
       - bivariate
       - time-dependent
+      - inverted
       - M03
     configs:
       - estimator: gaussian
@@ -495,10 +490,10 @@
   # Cross-map entropy
   CrossmapEntropy:
     labels:
-      - unsigned
       - directed
       - time-dependent
       - bivariate
+      - inverted
       - MXX
     configs:
       - estimator: gaussian
@@ -521,7 +516,6 @@
   DirectedInfo:
     labels:
       - directed
-      - unsigned
       - bivariate
       - time-dependent
       - M03
@@ -534,7 +528,6 @@
   StochasticInteraction:
     labels:
       - undirected
-      - unsigned
       - bivariate
       - time-dependent
       - M14
@@ -549,7 +542,6 @@
   MutualInfo:
     labels:
       - undirected
-      - unsigned
       - bivariate
       - contemporaneous
       - M14
@@ -574,7 +566,6 @@
   TimeLaggedMutualInfo:
     labels:
       - directed
-      - unsigned
       - bivariate
       - time-dependent
       - M14
@@ -599,7 +590,6 @@
   TransferEntropy:
     labels:
       - directed
-      - unsigned
       - bivariate
       - time-dependent
       - M04
@@ -670,7 +660,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - time-dependent
       - M05
@@ -687,6 +676,7 @@
     labels:
       - linear
       - signed
+      - timing
       - antisymmetric
       - bivariate
       - frequency-dependent
@@ -706,7 +696,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - M12
@@ -736,7 +725,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - MXX
@@ -749,7 +737,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - M12
@@ -778,7 +765,7 @@
   PhaseSlopeIndex:
     labels:
       - antisymmetric
-      - linear/nonlinear
+      - linear
       - signed
       - bivariate
       - frequency-dependent
@@ -799,7 +786,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - M10
@@ -833,7 +819,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - MXX
@@ -895,7 +880,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
     dependencies:
@@ -919,7 +903,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
     dependencies:
@@ -943,7 +926,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - M06
@@ -973,7 +955,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - bivariate
       - frequency-dependent
       - M06
@@ -1136,8 +1117,9 @@
   PhaseSlopeIndex:
     labels:
       - antisymmetric
+      - linear
       - signed
-      - time/frequency dependent
+      - frequency-dependent
       - bivariate
       - M08
     dependencies:
@@ -1155,9 +1137,8 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - bivariate
-      - time/frequency dependent
+      - frequency-dependent
       - MXX
     dependencies:
     configs:
@@ -1176,7 +1157,6 @@
     labels:
       - directed
       - nonlinear
-      - signed
       - bivariate
       - frequency-dependent
       - M11
@@ -1196,9 +1176,9 @@
   GPModel:
     labels:
       - directed
-      - unsigned
       - bivariate
       - contemporaneous
+      - inverted
       - M14
     dependencies:
     configs:
@@ -1220,7 +1200,6 @@
         k_ar_diff: 10
         labels:
           - undirected
-          - unsigned
 
       - method: johansen
         statistic: trace_stat
@@ -1228,7 +1207,6 @@
         k_ar_diff: 10
         labels:
           - undirected
-          - unsigned
 
       - method: johansen
         statistic: max_eig_stat
@@ -1236,7 +1214,6 @@
         k_ar_diff: 1
         labels:
           - undirected
-          - unsigned
 
       - method: johansen
         statistic: trace_stat
@@ -1244,7 +1221,6 @@
         k_ar_diff: 1
         labels:
           - undirected
-          - unsigned
 
       - method: johansen
         statistic: max_eig_stat
@@ -1252,7 +1228,6 @@
         k_ar_diff: 10
         labels:
           - undirected
-          - unsigned
 
       - method: johansen
         statistic: trace_stat
@@ -1260,7 +1235,6 @@
         k_ar_diff: 10
         labels:
           - undirected
-          - unsigned
 
       - method: johansen
         statistic: max_eig_stat
@@ -1268,7 +1242,6 @@
         k_ar_diff: 1
         labels:
           - undirected
-          - unsigned
 
       - method: johansen
         statistic: trace_stat
@@ -1276,7 +1249,6 @@
         k_ar_diff: 1
         labels:
           - undirected
-          - unsigned
 
       - method: aeg
         statistic: tstat
@@ -1285,7 +1257,7 @@
         trend: c
         labels:
           - directed
-          - signed
+          - inverted
 
       - method: aeg
         statistic: tstat
@@ -1294,7 +1266,7 @@
         trend: ct
         labels:
           - directed
-          - signed
+          - inverted
 
       - method: aeg
         statistic: tstat
@@ -1303,7 +1275,7 @@
         trend: ct
         labels:
           - directed
-          - signed
+          - inverted
 
   # Power envelope correlation
   PowerEnvelopeCorrelation:
@@ -1342,14 +1314,10 @@
       - orth: True
         log: False
         absolute: True
-        labels:
-          - unsigned
 
       - orth: True
         log: True
         absolute: True
-        labels:
-          - unsigned
 
   # Edge time series (coupling nonstationarity)
   EdgeTimeSeries:
@@ -1357,6 +1325,7 @@
       - undirected
       - nonlinear
       - signed
+      - profile
       - bivariate
       - time-dependent
       - M11
@@ -1370,9 +1339,10 @@
   # Interdependence score
   InterDependenceScore:
     labels:
-      - unsigned
       - undirected
       - nonlinear
+      - bivariate
+      - contemporaneous
       - MXX
     dependencies:
     configs:
@@ -1387,7 +1357,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - multivariate
       - time-dependent
       - M05
@@ -1402,7 +1371,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - multivariate
       - frequency-dependent
       - M06
@@ -1423,7 +1391,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - multivariate
       - frequency-dependent
       - M06
@@ -1444,7 +1411,6 @@
     labels:
       - directed
       - linear
-      - unsigned
       - multivariate
       - frequency-dependent
       - M06
@@ -1465,7 +1431,6 @@
     labels:
       - undirected
       - linear
-      - unsigned
       - multivariate
       - frequency-dependent
       - M12
@@ -1496,7 +1461,6 @@
         quantile: 0.95
         labels:
           - undirected
-          - unsigned
       - statistic: asym
         quantile: 0.95
         labels:
@@ -1506,7 +1470,6 @@
         quantile: 0.9
         labels:
           - undirected
-          - unsigned
       - statistic: asym
         quantile: 0.9
         labels:
@@ -1519,6 +1482,7 @@
       - undirected
       - nonlinear
       - signed
+      - profile
       - bivariate
       - contemporaneous
       - M14

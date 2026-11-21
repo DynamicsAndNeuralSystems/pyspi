@@ -292,7 +292,7 @@ class ConditionalGrangerCausality(Directed, Unsigned):
 
     name = "Conditional Granger causality"
     identifier = "cgc"
-    labels = ["causal", "directed", "linear", "temporal", "unsigned", "multivariate"]
+    labels = ["causal", "directed", "linear", "temporal", "multivariate"]
     # Variants with the same (order, max_order) share one fit in data.var.
     _cache_namespace = "var"
 
@@ -312,8 +312,7 @@ class ConditionalGrangerCausality(Directed, Unsigned):
             self.identifier += f"_pmax-{self._max_order}"
         if statistic == "coef":
             self.identifier += "_coef"
-            self.labels = [label if label != "unsigned" else "signed"
-                           for label in self.labels]
+            self.labels = self.labels + ["signed"]
 
     def issigned(self):
         return self._statistic == "coef"
@@ -656,7 +655,7 @@ class ConditionalPartialDirectedCoherence(ConditionalSpectral, Directed):
 
     name = "Conditional partial directed coherence"
     identifier = "cpdc"
-    labels = ["spectral", "directed", "linear", "unsigned", "multivariate"]
+    labels = ["spectral", "directed", "linear", "multivariate"]
     _measure = "pdc"
 
 
@@ -703,7 +702,7 @@ class ConditionalGeneralizedPartialDirectedCoherence(ConditionalSpectral, Direct
 
     name = "Conditional generalized partial directed coherence"
     identifier = "cgpdc"
-    labels = ["spectral", "directed", "linear", "unsigned", "multivariate"]
+    labels = ["spectral", "directed", "linear", "multivariate"]
     _measure = "gpdc"
 
 
@@ -754,7 +753,7 @@ class ConditionalDirectDirectedTransferFunction(ConditionalSpectral, Directed):
 
     name = "Conditional direct directed transfer function"
     identifier = "cddtf"
-    labels = ["spectral", "directed", "linear", "unsigned", "multivariate"]
+    labels = ["spectral", "directed", "linear", "multivariate"]
     _measure = "ddtf"
 
 
@@ -803,5 +802,5 @@ class PartialCoherence(ConditionalSpectral, Undirected):
 
     name = "Partial coherence"
     identifier = "pcohmag"
-    labels = ["spectral", "undirected", "linear", "unsigned", "multivariate"]
+    labels = ["spectral", "undirected", "linear", "multivariate"]
     _measure = "pcoh"

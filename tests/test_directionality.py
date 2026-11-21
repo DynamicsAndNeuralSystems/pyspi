@@ -565,7 +565,7 @@ def test_group_delay_structural_labels_match_the_matrices():
     for statistic in ("delay", "slope"):
         spi = GroupDelay(statistic=statistic, fmin=0, fmax=0.5)
         assert "antisymmetric" in spi.labels and spi.issigned()
-        assert not {"directed", "undirected", "unsigned"} & set(spi.labels)
+        assert not {"directed", "undirected"} & set(spi.labels)
 
     r = GroupDelay(statistic="rvalue", fmin=0, fmax=0.5)
     assert "undirected" in r.labels and not r.issigned()

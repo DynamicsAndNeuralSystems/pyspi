@@ -3,6 +3,7 @@ from pyspi.calculator import (Calculator, Data, CalculatorFrame, CorrelationFram
                               bundled_configs)
 from pyspi.data import available_datasets, load_dataset
 import numpy as np
+import pandas as pd
 import os
 import pytest
 
@@ -678,8 +679,8 @@ def test_correlation_with_rmmin_leaves_the_table_unchanged():
     assert calc.table.equals(before)
 
 
-def test_correlation_compares_unsigned_pairs_through_abs():
-    """Signed pairs are correlated as is; a pair with an unsigned SPI via abs()."""
+def test_correlation_compares_signed_with_unsigned_through_strength():
+    """Same-sign pairs on their values; signed with unsigned via the signed |value|."""
     calc = Calculator(dataset=np.random.default_rng(2).standard_normal((5, 100)),
                       config="fabfour")
     calc.compute()
@@ -689,11 +690,73 @@ def test_correlation_compares_unsigned_pairs_through_abs():
         for s1 in edges.columns:
             if s0 == s1:
                 continue
-            pair = edges[[s0, s1]]
-            if not (calc.spis[s0].issigned() and calc.spis[s1].issigned()):
-                pair = pair.abs()
+            pair = edges[[s0, s1]].copy()
+            if calc.spis[s0].issigned() != calc.spis[s1].issigned():
+                for s in (s0, s1):
+                    if calc.spis[s].issigned():
+                        pair[s] = pair[s].abs()
             expected = pair.corr(method="spearman").iloc[0, 1]
             assert np.isclose(cf.loc[s0, s1], expected, equal_nan=True), (s0, s1)
+
+
+class _SignStub:
+    def __init__(self, signed):
+        self._signed = signed
+        self.labels = ["signed"] if signed else []
+
+    def issigned(self):
+        return self._signed
+
+
+def test_correlation_keeps_the_order_of_a_negative_unsigned_spi():
+    """An unsigned SPI is never transformed, even where it is negative.
+
+    ``u_neg`` is unsigned and negative everywhere (as ``softdtw`` and the
+    differential entropies can be), ``u_pos`` is unsigned and positive, and
+    ``s_pos`` and ``s_neg`` are signed with mixed signs and opposite values.
+    ``coint`` is the Engle-Granger t-statistic, unsigned on an inverted scale
+    (all negative, more negative is stronger), which ``abs()`` would reverse.
+    """
+    from pyspi.statistics.misc import Cointegration
+
+    m = 4
+    calc = Calculator(dataset=np.random.default_rng(5).standard_normal((m, 50)),
+                      config="fabfour")
+    strength = np.arange(1.0, m * m + 1).reshape(m, m)
+    np.fill_diagonal(strength, np.nan)
+    sign = np.where(np.arange(m * m).reshape(m, m) % 2, 1.0, -1.0)
+    matrices = {
+        "u_neg": strength - 100.0,
+        "u_pos": strength,
+        "s_pos": sign * strength,
+        "s_neg": -sign * strength,
+        "coint": -strength,
+    }
+    calc._spis = {name: _SignStub(name.startswith("s_")) for name in matrices}
+    calc._spis["coint"] = Cointegration(method="aeg", statistic="tstat")
+    assert not calc._spis["coint"].issigned()
+    procs = [f"proc-{i}" for i in range(m)]
+    calc._table = pd.concat(
+        {name: pd.DataFrame(a, index=procs, columns=procs)
+         for name, a in matrices.items()}, axis=1)
+    before = calc.table.copy()
+
+    cf = calc._get_correlation_df()
+    assert calc.table.equals(before)
+    # unsigned with unsigned: on the values, so the negative SPI keeps its order
+    assert cf.loc["u_neg", "u_pos"] == pytest.approx(1.0)
+    assert cf.loc["coint", "u_pos"] == pytest.approx(-1.0)
+    assert cf.loc["coint", "u_neg"] == pytest.approx(-1.0)
+    # signed with signed: on the values
+    assert cf.loc["s_pos", "s_neg"] == pytest.approx(-1.0)
+    # signed with unsigned: the signed SPI's strength against the unsigned value
+    for s in ("s_pos", "s_neg"):
+        for u in ("u_neg", "u_pos"):
+            assert cf.loc[s, u] == pytest.approx(1.0), (s, u)
+            assert cf.loc[u, s] == pytest.approx(1.0), (u, s)
+        assert cf.loc[s, "coint"] == pytest.approx(-1.0), s
+    # rmmin shifts the unsigned SPIs, which leaves every rank correlation as it is
+    assert np.allclose(calc._get_correlation_df(rmmin=True), cf)
 
 
 def test_duplicate_dataset_names_are_refused():
