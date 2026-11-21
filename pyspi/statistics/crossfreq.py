@@ -16,6 +16,7 @@ from scipy import signal, special
 
 from pyspi.base import (
     Directed,
+    NotAppropriate,
     Unsigned,
     fill_pairwise,
     parse_bivariate,
@@ -334,14 +335,14 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
         nb = self._n_bins
         empty = np.count_nonzero(counts == 0)
         if empty:
-            raise ValueError(
+            raise NotAppropriate(
                 f"{empty} of {nb} phase bins are empty in the {bins.size}-sample "
                 f"window; the modulation index needs every bin occupied (use a "
                 f"longer record or fewer bins).")
         mean_amp = np.bincount(bins, weights=amp, minlength=nb) / counts
         total = mean_amp.sum()
         if not total > 0:
-            raise ValueError("the target has no amplitude in amp_band.")
+            raise NotAppropriate("the target has no amplitude in amp_band.")
         p = mean_amp / total
         p = p[p > 0]
         entropy = -np.sum(p * np.log(p))
@@ -352,7 +353,7 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     def _mean_vector_length(phasor, amp):
         power = np.dot(amp, amp)
         if not power > 0:
-            raise ValueError("the target has no amplitude in amp_band.")
+            raise NotAppropriate("the target has no amplitude in amp_band.")
         return float(np.abs(np.dot(phasor, amp)) / np.sqrt(amp.size * power))
 
     def _surrogate_mi(self, onehot, counts, shifted):
@@ -369,7 +370,7 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
             return float(excess)
         sd = surrogates.std()
         if not sd > 0:
-            raise ValueError(
+            raise NotAppropriate(
                 "the statistic is identical on every time-shifted surrogate, "
                 "so its z-score is undefined.")
         return float(excess / sd)

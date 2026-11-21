@@ -13,6 +13,7 @@ from statsmodels.tsa.vector_ar.vecm import coint_johansen
 
 from pyspi.base import (
     Directed,
+    NotAppropriate,
     Undirected,
     Signed,
     Unsigned,
@@ -628,7 +629,8 @@ class EdgeTimeSeries(Undirected, Signed):
     def _matrix(self, Z):
         Z = self._zscore(Z)
         if Z.shape[1] < 3:
-            raise ValueError("EdgeTimeSeries needs at least 3 observations.")
+            raise NotAppropriate(
+                f"EdgeTimeSeries needs at least 3 observations; got {Z.shape[1]}.")
         with np.errstate(invalid="ignore", divide="ignore"):
             A = getattr(self, "_" + self._statistic)(Z)
         A = 0.5 * (A + A.T)  # symmetric by construction; remove BLAS round-off

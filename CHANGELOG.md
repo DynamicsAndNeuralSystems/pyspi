@@ -292,6 +292,11 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **The AUTO Theiler window (`dyn_corr_excl="AUTO"`) is capped at `N // 10`** (hctsa's rule), so it can no longer approach the series length.
 - **One undefined pair no longer voids an SPI.**
   A pair whose estimate raises (e.g., tied values for a Kozachenko-Leonenko entropy) is set to NaN with one warning, and the SPI fails only if every pair does.
+- **Input that cannot support an estimate is NaN, labelled not appropriate, with the reason recorded.**
+  A refusal driven by the data (a series too short for a lag, order, embedding or window, ties, collinear series, no amplitude in a band) raises `pyspi.base.NotAppropriate`: the Calculator stores NaN with `Quality.NAN` and keeps the reason in `Calculator.errors`, or in `Calculator.pair_errors` for a single pair.
+  A bad parameter or a failed computation is still `Quality.ERROR`.
+  This applies to the information-theoretic SPIs, `lagcorr_*`, `ccm_*`, `lccm_*`, `nli_*`, `liang_*`, `cgc_*`, the conditional spectral SPIs (`cpdc_*`, `cgpdc_*`, `cddtf_*`, `pcohmag_*`), `pac_*` and `edge_*`.
+  `ccm_E-None_*` and `lccm_E-None_*` refuse a series of fewer than 41 observations before calling pyEDM, which failed there with an `IndexError`.
 - **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
 - **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.

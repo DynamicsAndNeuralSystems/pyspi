@@ -26,8 +26,8 @@ import warnings
 
 import numpy as np
 
-from pyspi.base import (Directed, Undirected, Unsigned, parse_bivariate,
-                        parse_multivariate)
+from pyspi.base import (Directed, NotAppropriate, Undirected, Unsigned,
+                        parse_bivariate, parse_multivariate)
 from pyspi.statistics.spectral import _closed_band
 from pyspi.utils import fmt_param, require_int
 
@@ -193,7 +193,7 @@ def select_order_bic(Z, max_order=DEFAULT_MAX_ORDER):
     cap = max_feasible_order(M, T)
     p_max = min(max_order, cap)
     if p_max < 1:
-        raise ValueError(
+        raise NotAppropriate(
             f"No feasible VAR order for M={M} processes and T={T} observations: "
             f"a well-posed VAR(p) fit needs p <= (T - 1) // (M + 1) - 1 = {cap}."
         )
@@ -203,7 +203,7 @@ def select_order_bic(Z, max_order=DEFAULT_MAX_ORDER):
         sigma = fit_var(Z, p, start=p_max)["sigma"]
         eig = np.linalg.eigvalsh(sigma)
         if eig[0] <= eig[-1] * _SINGULAR_RCOND:
-            raise ValueError(
+            raise NotAppropriate(
                 f"The VAR({p}) residual covariance is singular (smallest/largest "
                 f"eigenvalue {eig[0] / eig[-1]:.2g}): the processes are linearly "
                 f"dependent, so ln det Sigma and BIC order selection are undefined. "
@@ -332,7 +332,7 @@ class ConditionalGrangerCausality(Directed, Unsigned):
                 p = self._order
                 cap = max_feasible_order(M, T)
                 if p > cap:
-                    raise ValueError(
+                    raise NotAppropriate(
                         f"VAR order p={p} is infeasible for M={M} processes and "
                         f"T={T} observations: a well-posed fit needs "
                         f"p <= (T - 1) // (M + 1) - 1 = {cap}."
@@ -434,7 +434,7 @@ def _innovation_precision(fit):
     sigma = fit["sigma"]
     eig = np.linalg.eigvalsh(sigma)
     if not (eig[-1] > 0 and eig[0] > eig[-1] * _SINGULAR_RCOND):
-        raise ValueError(
+        raise NotAppropriate(
             f"The VAR({fit['order']}) residual covariance is singular "
             f"(eigenvalues {eig[0]:.3g} to {eig[-1]:.3g}): the processes are "
             f"linearly dependent, so the inverse spectral matrix, the partial "
@@ -466,7 +466,7 @@ def conditional_spectrum(fit, measure, nfreq=DEFAULT_NFREQ):
         if measure == "gpdc":
             variance = np.diag(fit["sigma"]).copy()
             if not np.all(variance > 0):
-                raise ValueError(
+                raise NotAppropriate(
                     "gPDC is undefined: a process has zero innovation variance "
                     "(it is predicted exactly by the VAR).")
             power = power / variance[:, None]       # 1 / sigma_k^2 on target k
