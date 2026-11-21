@@ -18,6 +18,7 @@ process instead.
 import numpy as np
 import pytest
 
+from pyspi.base import NotAppropriate
 from pyspi.data import Data
 
 from unchecked_data import unchecked_data
@@ -482,11 +483,12 @@ def test_spectral_gc_parametric_honours_the_sampling_frequency():
 
 
 def test_spectral_gc_names_the_cause_when_order_selection_does_not_converge():
-    """A search that never turns over is a recorded failure, with its cause.
+    """A search that never turns over is not appropriate, with its cause.
 
     nitime's own message -- "Model estimation order did not converge at
-    max_order = 50" -- says nothing about the data, so pyspi records a failure
-    that names the cause in `Calculator.errors`.
+    max_order = 50" -- says nothing about the data, so pyspi refuses the
+    series as not appropriate with a reason that names the cause, which the
+    Calculator records in `Calculator.errors` with NaN values.
 
     The criterion genuinely improves to the cap: an MA(1) process has an
     infinite-order AR representation, and max_order=3 stops the search inside
@@ -498,7 +500,7 @@ def test_spectral_gc_names_the_cause_when_order_selection_does_not_converge():
     e = rng.standard_normal((2, 2001))
     X = e[:, 1:] + 0.9 * e[:, :-1]
     spi = SpectralGrangerCausality(method="parametric", order=None, max_order=3)
-    with pytest.raises(ValueError, match="order selection did not converge"):
+    with pytest.raises(NotAppropriate, match="order selection did not converge"):
         spi.multivariate(Data(data=X, dim_order="ps"))
 
 

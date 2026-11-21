@@ -15,6 +15,7 @@ import pytest
 import spectral_connectivity as sc
 from scipy import signal
 
+from pyspi.base import NotAppropriate
 from pyspi.data import Data
 from pyspi.statistics.spectral import AdaptivePhaseConsistency
 
@@ -210,9 +211,10 @@ def test_constant_process_gives_nan(level):
 
 
 @pytest.mark.parametrize("T", [10, 23, 45])
-def test_series_too_short_for_six_segments_gives_nan(T):
+def test_series_too_short_for_six_segments_is_not_appropriate(T):
     z = _white(np.random.default_rng(T), 2, T)
-    assert np.isnan(AdaptivePhaseConsistency().bivariate(_data(z), i=0, j=1))
+    with pytest.raises(NotAppropriate, match=f"a series of {T} samples"):
+        AdaptivePhaseConsistency().bivariate(_data(z), i=0, j=1)
 
 
 def test_shortest_defined_series():

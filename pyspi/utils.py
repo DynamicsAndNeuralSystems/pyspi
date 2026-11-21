@@ -146,7 +146,11 @@ def require_band(fs, fmin, fmax, strict=False):
 
 def empty_band_error(owner, fmin, fmax, detail):
     """
-    The ``ValueError`` for a band that holds no frequency of a series' grid.
+    The ``NotAppropriate`` for a band that holds no frequency of a series' grid.
+
+    The grid depends on the series' length, so the band cannot support an
+    estimate for this input; a band that is invalid for any series is refused
+    at construction instead (``require_band``).
 
     Parameters
     ----------
@@ -160,10 +164,12 @@ def empty_band_error(owner, fmin, fmax, detail):
 
     Returns
     -------
-    ValueError
+    pyspi.base.NotAppropriate
         The error, for the caller to raise.
     """
-    return ValueError(
+    # Imported here: pyspi.base imports pyspi.data, which imports this module.
+    from pyspi.base import NotAppropriate
+    return NotAppropriate(
         f"{owner}: the band [{fmin}, {fmax}] holds {detail}; widen it.")
 
 

@@ -1,7 +1,7 @@
 import numpy as np
 from mne_connectivity import phase_slope_index
 
-from pyspi.base import Undirected, Unsigned, parse_multivariate
+from pyspi.base import NotAppropriate, Undirected, Unsigned, parse_multivariate
 from pyspi.utils import (
     empty_band_error,
     fmt_param,
@@ -87,7 +87,8 @@ class PhaseSlopeIndex(mne, Undirected):
     with [0.032, 0.048], up to floating-point rounding. At construction
     ``fs`` must be positive and finite and ``0 <= fmin < fmax <= fs / 2``, or
     ``ValueError`` is raised; a band whose upper edge is at or below the floor
-    ``5 fs / T`` raises ``ValueError`` when the SPI is computed.
+    ``5 fs / T`` raises ``NotAppropriate`` when the SPI is computed, which the
+    Calculator records as NaN with the reason.
 
     References
     ----------
@@ -270,8 +271,10 @@ class WaveletCoherence(Unsigned, Undirected):
     ``fs = 250`` with the band [8, 12] gives the same values as ``fs = 1``
     with [0.032, 0.048], up to floating-point rounding. At construction
     ``fs`` must be positive and finite and ``0 <= fmin <= fmax <= fs / 2``,
-    or ``ValueError`` is raised; a band holding no frequency of the grid,
-    which depends on ``T``, raises ``ValueError`` when the SPI is computed.
+    or ``ValueError`` is raised. A band holding no frequency of the grid,
+    which depends on ``T``, and a series too short for any wavelet to fit
+    raise ``NotAppropriate`` when the SPI is computed, which the Calculator
+    records as NaN with the reason.
 
     References
     ----------
@@ -395,7 +398,7 @@ class WaveletCoherence(Unsigned, Undirected):
         n_proc, n_obs = z.shape
         freqs = _morlet_frequencies(n_obs, self._fs, self._n_cycles)
         if freqs.size == 0:
-            raise ValueError(
+            raise NotAppropriate(
                 f"WaveletCoherence: a series of {n_obs} samples is too short for "
                 f"{self._n_cycles}-cycle wavelets.")
         W = _morlet_coefficients(z, freqs, self._fs, self._n_cycles)

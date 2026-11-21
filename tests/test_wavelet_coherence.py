@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 
+from pyspi.base import NotAppropriate
 from pyspi.data import Data
 from pyspi.statistics.wavelet import WaveletCoherence
 
@@ -144,12 +145,12 @@ def test_invalid_settings_are_refused(kwargs):
         WaveletCoherence(**kwargs)
 
 
-def test_short_series_and_empty_bands_are_refused():
-    with pytest.raises(ValueError, match="too short"):
+def test_short_series_and_empty_bands_are_not_appropriate():
+    with pytest.raises(NotAppropriate, match="too short"):
         WaveletCoherence().multivariate(Data(np.random.default_rng(8).standard_normal((2, 8)),
                                              dim_order="ps"))
     d = Data(np.random.default_rng(9).standard_normal((2, 100)), dim_order="ps")
-    with pytest.raises(ValueError, match="holds no frequency"):
+    with pytest.raises(NotAppropriate, match="holds no frequency"):
         WaveletCoherence(fmin=0, fmax=0.01).multivariate(d)
 
 

@@ -202,9 +202,10 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Frequency bands were not checked.**
   In 2.0.2 a band above `fs / 2`, with `fmin > fmax`, or holding no frequency of the series' grid gave NaN, or a value under an identifier that named a different band (`fmax=0.9` at `fs=1` gave the full-band value).
   Every multitaper and wavelet SPI, and spectral GC, now raises `ValueError` at construction unless `fs` is positive and finite and `0 <= fmin <= fmax <= fs / 2` (`fmin < fmax` for the wavelet `psi`), and the message says that the band is in the units of `fs`, which defaults to 1.
-  A band with no frequency of the series' grid raises `ValueError` when computed, so the SPI is listed in `Calculator.errors`.
+  A band with no frequency of the series' grid gives NaN when computed, labelled not appropriate, with the cause recorded in `Calculator.errors`; parametric `sgc`, whose grid does not depend on the series, refuses such a band with `ValueError` at construction.
   An unknown `statistic` raises `ValueError` rather than `NameError`.
   The README's *Frequency bands* section explains the units and how to give bands in Hz.
+- **Spectral and wavelet SPIs on a series too short for them are NaN, labelled not appropriate, with the cause recorded**: parametric `sgc` with fewer observations than the largest order it fits (with automatic order selection, `T < 50`, which raised a NumPy shape error) or whose order selection is still improving at `max_order`, multitaper `psi` with fewer than two independent frequencies in its band, `phasealigned` with too few samples for its segments, `ppc_hilbert_adaptive` at `T < 46`, and `wtc` too short for its wavelets.
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
   Neither warns now; for spectral GC `fmin=0` means the lowest positive frequency, 1e-5, as its identifier states.
