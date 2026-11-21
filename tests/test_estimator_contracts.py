@@ -658,9 +658,8 @@ def test_symbolic_transfer_entropy_identifier_matches_what_is_computed():
 def test_transfer_entropy_history_survives_copy_and_pickle(estimator, clone):
     """A copied TE computes the history length its identifier names.
 
-    Pickling drops the calculator, and ``__setstate__`` used to rebuild it
-    without its history: symbolic k=3 became identically zero (k=1) and
-    kernel k=3 became kernel k=1, still under the k-3 identifier.
+    Pickling drops the calculator, so ``__setstate__`` must rebuild it with its
+    history; with k=1, symbolic TE is identically zero.
     """
     import copy
     import pickle
