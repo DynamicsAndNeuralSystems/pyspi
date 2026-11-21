@@ -350,18 +350,6 @@
       statistic: max
       squared: true
 
-  GromovWassersteinTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
-
-
 .statistics.causal:
   RegressionErrorCausalInference:
     labels:
