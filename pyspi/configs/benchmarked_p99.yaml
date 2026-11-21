@@ -3,8 +3,12 @@
 # Source config : pyspi/configs/full.yaml
 # Bench JSON    : physics_config_M16_T800_n1.json (pyspi badfb4ebdb6b, M=16 T=800 n_jobs=1)
 # Cost model    : amortized
-# Current set: 254 of the 296 SPIs benchmarked.
+# Current set: 266 SPIs; 254 of the 296 SPIs benchmarked, plus 12 timed separately (below).
 # Cutoff        : fastest kept <= 332.132s ; slowest dropped >= 342.692s.
+#
+# Manual edit: added after a separate timing run on the same protocol: xi_tau-{0,1}, pcorr_<estimator> (6), te_symbolic_k-3,
+# {mi,tlmi}_kernel_W-0.25_DCE-AUTO and te_kernel_W-0.25_DCE-AUTO_k-1;
+# re-apply after re-running bench/cut_config.py.
 #
 .statistics.basic:
   Covariance:
@@ -18,13 +22,10 @@
     dependencies:
     configs:
     - estimator: EmpiricalCovariance
-    - estimator: GraphicalLasso
-    - estimator: GraphicalLassoCV
     - estimator: MinCovDet
-    - estimator: GraphicalLassoCV
-      squared: true
 
-  Precision:
+  # Partial correlation
+  PartialCorrelation:
     labels:
       - undirected
       - linear
@@ -36,26 +37,10 @@
     configs:
     - estimator: EmpiricalCovariance
     - estimator: GraphicalLasso
-    - estimator: GraphicalLassoCV
     - estimator: LedoitWolf
     - estimator: MinCovDet
     - estimator: OAS
     - estimator: ShrunkCovariance
-    - estimator: EmpiricalCovariance
-      squared: true
-      squared: true
-    - estimator: GraphicalLasso
-      squared: true
-    - estimator: GraphicalLassoCV
-      squared: true
-    - estimator: LedoitWolf
-      squared: true
-    - estimator: MinCovDet
-      squared: true
-    - estimator: OAS
-      squared: true
-    - estimator: ShrunkCovariance
-      squared: true
 
   SpearmanR:
     labels:
@@ -69,6 +54,23 @@
     configs:
     - squared: true
     - squared: false
+
+  # Chatterjee's rank correlation xi
+  ChatterjeeXi:
+    labels:
+      - directed
+      - nonlinear
+      - unsigned
+      - bivariate
+      - M14
+    dependencies:
+    configs:
+    - tau: 0
+      labels:
+      - contemporaneous
+    - tau: 1
+      labels:
+      - time-dependent
 
   LaggedCorrelation:
     labels:
@@ -387,18 +389,6 @@
       labels:
       - M09
 
-  GromovWasserstainTau:
-    labels:
-      - unsigned
-      - distance
-      - unordered
-      - nonlinear
-      - undirected
-      - MXX
-    dependencies:
-    configs:
-
-
 .statistics.causal:
   AdditiveNoiseModel:
     labels:
@@ -561,6 +551,9 @@
       dyn_corr_excl: AUTO
     - estimator: kernel
       kernel_width: 0.25
+    - estimator: kernel
+      kernel_width: 0.25
+      dyn_corr_excl: AUTO
 
   TimeLaggedMutualInfo:
     labels:
@@ -579,6 +572,9 @@
       dyn_corr_excl: AUTO
     - estimator: kernel
       kernel_width: 0.25
+    - estimator: kernel
+      kernel_width: 0.25
+      dyn_corr_excl: AUTO
 
   TransferEntropy:
     labels:
@@ -619,6 +615,12 @@
       k_history: 1
       labels:
       - M14
+    - estimator: kernel
+      kernel_width: 0.25
+      k_history: 1
+      dyn_corr_excl: AUTO
+      labels:
+      - M14
     - estimator: gaussian
       auto_embed_method: MAX_CORR_AIS
       k_search_max: 10
@@ -628,6 +630,10 @@
     - estimator: gaussian
       k_history: 1
       l_history: 1
+      labels:
+      - M05
+    - estimator: symbolic
+      k_history: 3
       labels:
       - M05
 
@@ -910,26 +916,6 @@
     - fmin: 0.25
       fmax: 0.5
       statistic: max
-
-  GroupDelay:
-    labels:
-      - directed
-      - linear
-      - unsigned
-      - bivariate
-      - frequency-dependent
-      - M01
-    dependencies:
-    configs:
-    - fmin: 0
-      fmax: 0.5
-      statistic: delay
-    - fmin: 0
-      fmax: 0.25
-      statistic: delay
-    - fmin: 0.25
-      fmax: 0.5
-      statistic: delay
 
   SpectralGrangerCausality:
     labels:

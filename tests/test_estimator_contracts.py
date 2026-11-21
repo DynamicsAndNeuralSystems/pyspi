@@ -422,7 +422,7 @@ def test_ksg_mi_is_invariant_to_per_coordinate_rescaling(scale):
 @pytest.mark.parametrize("w", [0, 5])
 @pytest.mark.parametrize("levels", [2, 4, None])
 def test_ksg_mi_of_independent_quantised_marginals_is_near_zero(levels, w):
-    """Ties are broken by hctsa-style jitter, so independent data give MI ~ 0.
+    """Ties are broken by seeded jitter, so independent data give MI ~ 0.
 
     Without a tie-break, quantised inputs give values far from zero, of either
     sign. The tolerance of 0.15 is more than four sampling SDs of the estimator
@@ -450,21 +450,83 @@ def test_ksg_mi_on_dependent_binary_data_is_positive():
     assert _ksg_mi_pair(x.astype(float), y.astype(float), 4, 0) > 0.2
 
 
-def test_tie_break_is_untouched_when_mostly_unique_and_deterministic_otherwise():
+def test_tie_break_jitters_every_repeated_entry_of_a_mostly_unique_series():
+    """Three repeats in 200 values (98.5% unique) still get broken."""
     from pyspi.statistics.infotheory import _tie_break
 
     rng = np.random.default_rng(3)
     x = rng.standard_normal(200)
-    x[10] = x[9]                       # one duplicate: 99.5% unique
-    assert np.array_equal(_tie_break(x, 0), x)
+    x[[10, 11]] = x[9]
+    x[50] = x[40]
+    out = _tie_break(x, 0)
+    assert np.unique(out).size == x.size
+    repeated = np.isin(np.arange(200), [9, 10, 11, 40, 50])
+    assert np.array_equal(out[~repeated], x[~repeated])      # singletons untouched
+    # entry i gets draw i of the seeded stream, scaled by 1e-10 * std
+    draws = np.random.default_rng(0).standard_normal(200)
+    assert np.array_equal(out[repeated],
+                          x[repeated] + 1e-10 * x.std(ddof=1) * draws[repeated])
+    assert np.array_equal(x[[9, 10, 11]], np.repeat(x[9], 3))  # input not modified
 
-    q = rng.integers(0, 4, 200).astype(float)
+
+def test_tie_break_is_deterministic_and_seed_specific_on_quantised_data():
+    from pyspi.statistics.infotheory import _tie_break
+
+    q = np.random.default_rng(3).integers(0, 4, 200).astype(float)
     a, b = _tie_break(q, 0), _tie_break(q, 0)
     assert np.array_equal(a, b)
     assert not np.array_equal(a, _tie_break(q, 1))
     assert np.unique(a).size == q.size
     assert np.max(np.abs(a - q)) < 1e-8 * q.std(ddof=1)
+    assert np.array_equal(_tie_break(a, 0), a)                 # idempotent
     assert np.array_equal(_tie_break(np.ones(50), 0), np.ones(50))  # constant: untouched
+
+
+def test_tie_break_returns_a_series_without_repeats_bit_for_bit():
+    from pyspi.statistics.infotheory import _tie_break
+
+    x = np.random.default_rng(6).standard_normal(500)
+    out = _tie_break(x, 0)
+    assert out.tobytes() == x.tobytes()
+    grid = np.arange(100.0)        # equal spacings are distance ties, not repeats
+    assert _tie_break(grid, 1).tobytes() == grid.tobytes()
+
+
+def test_tie_break_resolves_a_large_tie_block():
+    """1e-10 jitter on 10000 copies of one value collides at round-off
+    resolution; the repeated passes still leave every value distinct."""
+    from pyspi.statistics.infotheory import _tie_break
+
+    x = np.r_[np.zeros(10000), np.ones(10000)]
+    out = _tie_break(x, 0)
+    assert np.unique(out).size == x.size
+    assert np.max(np.abs(out - x)) < 1e-8
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+@pytest.mark.parametrize("kind", ["duplicated_points", "repeated_value"])
+def test_ksg_mi_with_a_few_exact_ties_moves_towards_the_untied_value(kind, seed, monkeypatch):
+    """Exact ties in a mostly unique pair bias KSG; breaking them gives the
+    value of the same data with the ties separated at a larger scale."""
+    import pyspi.statistics.infotheory as it
+
+    n = 400
+    x, y = _correlated_pair(n=n, rho=0.6, seed=seed)
+    rng = np.random.default_rng(seed + 10)
+    if kind == "duplicated_points":     # 10 joint points copied: 97.5% unique
+        src = rng.choice(n, 10, replace=False)
+        dst = rng.choice(np.setdiff1d(np.arange(n), src), 10, replace=False)
+        x[dst], y[dst] = x[src], y[src]
+        tied = np.isin(np.arange(n), np.r_[src, dst])
+    else:                               # one x value in 8% of entries: 92.25% unique
+        tied = np.isin(np.arange(n), rng.choice(n, 32, replace=False))
+        x[tied] = np.median(x)
+    sep = np.random.default_rng(99).standard_normal((2, n)) * tied
+    untied = it._ksg_mi_pair(x + 1e-6 * sep[0], y + 1e-6 * sep[1], 4, 0)
+    broken = it._ksg_mi_pair(x, y, 4, 0)
+    monkeypatch.setattr(it, "_tie_break", lambda v, seed=0: np.asarray(v, float))
+    exact = it._ksg_mi_pair(x, y, 4, 0)
+    assert abs(broken - untied) < 0.5 * abs(exact - untied), (exact, broken, untied)
 
 
 def test_tie_break_does_not_touch_the_global_rng():
@@ -1819,7 +1881,7 @@ def _dcorr_inputs():
 
 @pytest.mark.parametrize("biased", [False, True])
 @pytest.mark.parametrize("case", list(_dcorr_inputs()))
-def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
+def test_distance_correlation_equals_the_both_orders_pair_loop(case, biased):
     """Same matrix, bit for bit, as evaluating both orders and keeping one.
 
     Constant and three-sample inputs are included: the outcome (NaN, or a
@@ -1827,8 +1889,15 @@ def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
     """
     import warnings
 
-    from pyspi.base import Undirected
+    from pyspi.base import Directed
     from pyspi.statistics.distance import DistanceCorrelation
+
+    def both_orders(spi, data):
+        # What `Undirected.multivariate` did before it evaluated i < j only.
+        A = Directed.multivariate(spi, data)
+        lower = np.tril_indices(data.n_processes, -1)
+        A[lower] = A.T[lower]
+        return A
 
     series = _dcorr_inputs()[case]
     spi = DistanceCorrelation(biased=biased)
@@ -1846,7 +1915,7 @@ def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
         return out
 
     retained, reference = (run(DistanceCorrelation.multivariate),
-                           run(Undirected.multivariate))
+                           run(both_orders))
     assert retained[0] == reference[0]
     if retained[0] == "raised":
         assert retained == reference
@@ -1857,8 +1926,9 @@ def test_distance_correlation_equals_the_inherited_pair_loop(case, biased):
 
 
 def test_distance_correlation_calls_each_pair_once_in_the_retained_order(monkeypatch):
-    """Half the calls, each as (i, j) with i < j, in the inherited order."""
-    from pyspi.base import Undirected
+    """Half the calls of the both-orders loop, each as (i, j) with i < j, in
+    the order that loop reached them."""
+    from pyspi.base import Directed
     from pyspi.statistics.distance import DistanceCorrelation
 
     data = _data(m=5, t=40)
@@ -1871,7 +1941,7 @@ def test_distance_correlation_calls_each_pair_once_in_the_retained_order(monkeyp
     spi = DistanceCorrelation()
     spi.multivariate(data)
     retained, calls[:] = list(calls), []
-    Undirected.multivariate(spi, data)
+    Directed.multivariate(spi, data)
 
     assert len(retained) == 10 and len(calls) == 20
     assert retained == [(i, j) for i, j in calls if i < j]

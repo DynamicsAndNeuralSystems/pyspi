@@ -45,24 +45,6 @@ def _auto_sakoe_radius(length):
     return min(radius, length - 1)
 
 
-class _RetainedHalf:
-    """Evaluate only the half of the pairs that `Undirected` keeps.
-
-    `Undirected.multivariate` evaluates both orders of every pair and keeps
-    bivariate(i, j) with i < j. For a stateless statistic this gives the same
-    matrix at half the cost. List it before `Undirected` in the bases.
-    """
-
-    @parse_multivariate
-    def multivariate(self, data):
-        M = data.n_processes
-        A = np.full((M, M), np.nan)
-        for j in range(M):
-            for i in range(j):
-                A[i, j] = A[j, i] = self.bivariate(data, i=i, j=j)
-        return A
-
-
 class PairwiseDistance(Undirected, Unsigned):
     """``metric`` distance between each pair of processes, optionally / sqrt(T).
 
@@ -120,7 +102,7 @@ def _median_gaussian_distance(v):
     return 1 - K / np.max(K)
 
 
-class HilbertSchmidtIndependenceCriterion(_RetainedHalf, Undirected, Unsigned):
+class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
     """Normalised Hilbert-Schmidt Independence Criterion (HSIC).
 
     hyppo's statistic: dcorr of the distances ``1 - K / max(K)`` induced by a
@@ -224,7 +206,7 @@ def _hhg_statistic(x, y):
     return np.sum(S[mask])
 
 
-class HellerHellerGorfine(_RetainedHalf, Undirected, Unsigned):
+class HellerHellerGorfine(Undirected, Unsigned):
     """Heller-Heller-Gorfine independence criterion (see `_hhg_statistic`)."""
 
     name = "Heller-Heller-Gorfine Independence Criterion"
@@ -238,7 +220,7 @@ class HellerHellerGorfine(_RetainedHalf, Undirected, Unsigned):
         return _hhg_statistic(x, y)
 
 
-class DistanceCorrelation(_RetainedHalf, Undirected, Unsigned):
+class DistanceCorrelation(Undirected, Unsigned):
     """Distance correlation"""
 
     name = "Distance correlation"
@@ -258,7 +240,7 @@ class DistanceCorrelation(_RetainedHalf, Undirected, Unsigned):
         return stat
 
 
-class MultiscaleGraphCorrelation(_RetainedHalf, Undirected, Unsigned):
+class MultiscaleGraphCorrelation(Undirected, Unsigned):
     """Multiscale graph correlation"""
 
     name = "Multiscale graph correlation"
@@ -340,7 +322,7 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
         return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)
 
 
-class TimeWarping(_RetainedHalf, Undirected, Unsigned):
+class TimeWarping(Undirected, Unsigned):
 
     labels = ["unsigned", "distance", "temporal", "undirected", "nonlinear"]
 
@@ -674,6 +656,12 @@ class Barycenter(Undirected, Signed):
         else:
             raise NameError(f"Unknown statistic: {statistic}")
 
+        # A squared barycenter and an argmax index are non-negative; `_rmmin`
+        # and the abs() comparison in correlation analyses read `issigned()`.
+        if squared or statistic == "max_time":
+            self.labels = [l for l in self.labels if l != "signed"] + ["unsigned"]
+            self.issigned = lambda: False
+
         self.identifier += f"_{mode}_{statistic}"
 
     @parse_bivariate
@@ -700,7 +688,7 @@ class Barycenter(Undirected, Signed):
         return self._statfn(bc)
 
 
-class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
+class GromovWassersteinTau(Undirected, Unsigned):
     """GW_tau (Kravtsova, McGee & Dawes 2023, Bull. Math. Biol. 85, 71).
 
     Each series becomes the planar trajectory ``(t, x_t)``; ``vec_geo_dist``
@@ -712,8 +700,6 @@ class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
     The distance vector has one entry per point, the first being 0 for the
     start itself (the paper's ``d_X(r_X, x_k)`` for ``k = 1..n``; the authors'
     MATLAB omits it, which only rescales the value by a constant).
-
-    The class name keeps its misspelling because configs refer to it.
     """
 
     name = "Gromov-Wasserstein distance (GW_tau)"
@@ -759,9 +745,9 @@ class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
         traji = np.column_stack([timei, xi])
         trajj = np.column_stack([timej, xj])
 
-        vi = GromovWasserstainTau.vec_geo_dist(traji)
-        vj = GromovWasserstainTau.vec_geo_dist(trajj)
-        gw = GromovWasserstainTau.wass_sorted(vi, vj)
+        vi = GromovWassersteinTau.vec_geo_dist(traji)
+        vj = GromovWassersteinTau.vec_geo_dist(trajj)
+        gw = GromovWassersteinTau.wass_sorted(vi, vj)
 
         return gw
 
@@ -770,6 +756,23 @@ class GromovWasserstainTau(_RetainedHalf, Undirected, Unsigned):
         x, y = data.to_numpy()[[i, j]]
         stat = self.gwtau(x, y)
         return stat
+
+
+class GromovWasserstainTau(GromovWassersteinTau):
+    """Deprecated alias for :class:`GromovWassersteinTau`.
+
+    The old name is misspelled. Kept so existing configs and scripts keep
+    working; the identifier (`gwtau`) and the computation are unchanged.
+    """
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "GromovWasserstainTau is deprecated and will be removed in pyspi "
+            "4.0; use GromovWassersteinTau. The identifier and the computed "
+            "values are identical.",
+            DeprecationWarning, stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
 
 # ---------------------------------------------------------------------------

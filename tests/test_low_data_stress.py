@@ -524,6 +524,49 @@ def test_constant_process_is_refused_by_the_ksg_estimators():
         it.MutualInfo(estimator="kraskov").bivariate(data, i=0, j=1)
 
 
+@pytest.mark.parametrize("module,cls,kwargs", [
+    ("basic", "CrossCorrelation", {"statistic": "max"}),
+    ("basic", "CrossCorrelation", {"statistic": "mean", "sigonly": False}),
+    ("causal", "AdditiveNoiseModel", {}),
+    ("causal", "ConditionalDistributionSimilarity", {}),
+], ids=["xcorr_max_sig-True", "xcorr_mean_sig-False", "anm", "cds"])
+@pytest.mark.parametrize("level", [3.0, 0.1], ids=["exact", "inexact"])
+def test_constant_process_gives_nan_for_its_pairs_only(module, cls, kwargs, level):
+    """No value of these statistics is defined for a constant series, so its
+    pairs are NaN in both directions rather than a finite 0, and every other
+    pair is still finite.
+
+    ``0.1`` is a constant whose sample mean and standard deviation are not
+    exact, so a check on ``std == 0`` would let it through.
+    """
+    import importlib
+
+    spi = getattr(importlib.import_module(f"pyspi.statistics.{module}"), cls)(**kwargs)
+    Z = np.random.default_rng(0).standard_normal((3, 128))
+    Z[1] = level
+    data = Data(data=Z, dim_order="ps", zscore=False)
+    for i in range(3):
+        for j in range(3):
+            if i == j:
+                continue
+            value = spi.bivariate(data, i=i, j=j)
+            if 1 in (i, j):
+                assert np.isnan(value), (i, j, value)
+            else:
+                assert np.isfinite(value), (i, j, value)
+
+
+def test_pairwise_causal_scores_are_nan_on_a_constant_input():
+    """The HSIC and CDS scores cannot standardise a constant input."""
+    from pyspi.lib.pairwise_causal import cds_score, normalized_hsic
+
+    x = np.random.default_rng(0).standard_normal(200)
+    c = np.full(200, 0.1)
+    for score in (normalized_hsic, cds_score):
+        assert np.isnan(score(x, c))
+        assert np.isnan(score(c, x))
+
+
 @pytest.mark.parametrize("name", ["heavy_tailed", "coupled_var"])
 def test_serial_and_parallel_agree_on_the_awkward_fixtures(name, tmp_path):
     """Bit-for-bit, on exactly the inputs where the estimators branch."""

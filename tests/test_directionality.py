@@ -647,6 +647,6 @@ def test_directed_spectral_spis_share_one_task_and_one_factorisation_per_pair(mo
     monkeypatch.setattr(backend, "minimum_phase_decomposition",
                         lambda *a, **k: calls.append(1) or inner(*a, **k))
     for key in keys:
-        S, err, _, _ = _parallel.run_spi(calc.spis[key], calc.dataset, key, 3)
-        assert err is None and np.isfinite(S[~np.eye(3, dtype=bool)]).all(), key
+        res = _parallel.execute_spi(calc.spis[key], calc.dataset, key, 3)
+        assert res.err is None and np.isfinite(res.values[~np.eye(3, dtype=bool)]).all(), key
     assert len(calls) == 6                              # one per ordered pair
