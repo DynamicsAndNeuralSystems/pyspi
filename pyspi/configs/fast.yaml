@@ -13,7 +13,6 @@
     configs:
       - estimator: EmpiricalCovariance
       - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
 
   # Partial correlation
   PartialCorrelation:

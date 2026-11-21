@@ -13,10 +13,7 @@
     configs:
       - estimator: EmpiricalCovariance
       - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
       - estimator: MinCovDet
-      - estimator: GraphicalLassoCV
-        squared: True
 
   # Partial correlation
   PartialCorrelation:
@@ -31,7 +28,6 @@
     configs:
       - estimator: EmpiricalCovariance
       - estimator: GraphicalLasso
-      - estimator: GraphicalLassoCV
       - estimator: LedoitWolf
       - estimator: MinCovDet
       - estimator: OAS
