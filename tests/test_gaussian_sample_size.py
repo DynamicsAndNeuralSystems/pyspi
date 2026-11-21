@@ -6,7 +6,8 @@ estimate needs, the log-determinant is set by the 1e-8 ridge, not by the data.
 Each Gaussian estimate is then not appropriate: a direct call raises
 ``NotAppropriate`` naming ``n`` and ``d``, and through the Calculator the cells
 are NaN with ``Quality.NAN`` and the reason in ``calc.errors``. ``n = d + 1``
-is accepted, and the values computed there and above are unchanged.
+is accepted, and the values there and above match reference values to a
+relative tolerance.
 """
 import re
 import warnings
@@ -21,10 +22,8 @@ from pyspi.calculator import Calculator
 from pyspi.data import Data
 from pyspi.quality import Quality
 
-# (factory, smallest accepted T, (n, d) at T - 1, values of bivariate(0, 1) at
-# that T, the next T and T = 60, on `_pair(T)`; the values are those of the
-# implementation without the sample-size check, so accepted input is
-# unchanged).
+# (factory, smallest accepted T, (n, d) at T - 1, reference values of
+# bivariate(0, 1) at that T, the next T and T = 60, on `_pair(T)`).
 CASES = {
     "je": (lambda: it.JointEntropy(estimator="gaussian"), 3, (2, 2),
            (2.5250926667871783, 2.7639908077467323, 2.837824153970789)),
@@ -80,7 +79,7 @@ def test_one_sample_too_few_is_not_appropriate_and_names_the_numbers(name):
 
 
 @pytest.mark.parametrize("name", CASES)
-def test_values_at_and_above_the_threshold_are_unchanged(name):
+def test_values_at_and_above_the_threshold_match_reference_values(name):
     make, t_min, _, expected = CASES[name]
     for T, value in zip((t_min, t_min + 1, 60), expected):
         # To the drift suite's tolerance: a log-determinant differs in its
@@ -140,12 +139,11 @@ def test_through_the_calculator_the_cells_are_nan_with_the_reason(tmp_path):
     assert "xme_gaussian_k1" not in calc.errors
 
 
-def test_no_bundled_spi_on_the_drift_fixtures_is_refused():
+def test_no_bundled_gaussian_spi_is_refused_at_T_100():
     """T = 100 is far above every bundled embedding's threshold."""
-    import yaml as _yaml
     from importlib import resources
 
-    full = _yaml.safe_load(
+    full = yaml.safe_load(
         resources.files("pyspi").joinpath("configs/full.yaml").read_text())
     X = np.random.default_rng(0).standard_normal((3, 100))
     data = Data(X, dim_order="ps")

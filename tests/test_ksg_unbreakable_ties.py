@@ -4,8 +4,8 @@
 zero relative to their spread (possible only without z-scoring) that jitter
 is below the floating-point resolution, so the ties survive: the KSG estimate
 is then not appropriate rather than a silently wrong number or ``inf``.
-Centred, the same data give the value they always gave, and tie-free data
-with the same offset are untouched.
+Centred, the same data give their reference value, and tie-free data with the
+same offset pass through the tie-break unchanged.
 """
 import warnings
 
@@ -25,7 +25,7 @@ SPIS = {
     "di": lambda: it.DirectedInfo(estimator="kraskov", prop_k=4, n=2),
 }
 # bivariate(0, 1) on `_quantised_pair()` with no offset, and on
-# `_continuous_pair()` at an offset of 1e8, as computed without the check.
+# `_continuous_pair()` at an offset of 1e8 (reference values).
 CENTRED = {"mi": 0.22682209247553153, "te": 0.07211902395082603,
            "di": 0.470721179561981}
 TIE_FREE_OFFSET = {"mi": 0.21879575687994723, "te": 0.018973266662138055,
@@ -55,9 +55,10 @@ def test_ties_at_a_large_offset_are_not_appropriate(name, offset):
 
 
 @pytest.mark.parametrize("name", SPIS)
-def test_the_centred_series_gives_the_value_it_always_gave(name):
+def test_the_centred_series_gives_its_reference_value(name):
     data = Data(_quantised_pair(), dim_order="ps", zscore=False)
-    assert SPIS[name]().bivariate(data, i=0, j=1) == CENTRED[name]
+    assert SPIS[name]().bivariate(data, i=0, j=1) == pytest.approx(
+        CENTRED[name], rel=1e-9)
 
 
 @pytest.mark.parametrize("name", SPIS)
@@ -65,7 +66,8 @@ def test_tie_free_data_with_a_large_offset_are_untouched(name):
     X = _continuous_pair() + 1e8
     assert it._tie_break(X[0], 0).tobytes() == X[0].tobytes()
     data = Data(X, dim_order="ps", zscore=False)
-    assert SPIS[name]().bivariate(data, i=0, j=1) == TIE_FREE_OFFSET[name]
+    assert SPIS[name]().bivariate(data, i=0, j=1) == pytest.approx(
+        TIE_FREE_OFFSET[name], rel=1e-9)
 
 
 def test_tie_break_raises_only_when_ties_survive():

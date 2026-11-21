@@ -339,10 +339,11 @@ def derive_quality(values, err) -> np.ndarray:
     Quality codes for a stored result saved without them (a file or checkpoint).
 
     Codes follow the stored values (NaN, +/-Inf, finite), and the diagonal is
-    NaN. If the SPI carries an error that does not describe its values (one
-    of ``_VALUE_ERRORS`` or a ``NotAppropriate`` reason), its computation
-    failed, and every off-diagonal cell that is not a finite value is ERROR. Results without codes recorded
-    an Inf anywhere as a failure of the whole SPI, so for them this is exact.
+    NaN. If the SPI carries an error other than one that describes its
+    values (``_VALUE_ERRORS`` or a ``NotAppropriate`` reason), its
+    computation failed, and every off-diagonal cell that is not a finite
+    value is ERROR. Results without codes recorded an Inf anywhere as a
+    failure of the whole SPI, so for them this is exact.
     Which NaN cells were failed pairs inside ``fill_pairwise`` cannot be
     recovered: those read as NaN.
     """

@@ -131,7 +131,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `di_kraskov` estimates each term directly with the KSG/Frenzel-Pompe conditional-MI estimator, whose biases cancel by construction; the kernel and Kozachenko variants, composed from separately estimated entropies, are not bundled.
   `n` reaches the identifier of `DirectedInfo` and `CausalEntropy`.
 - **KSG ties and scale.**
-  KSG standardises each coordinate, as JIDT does, and breaks ties deterministically: in each series with a positive standard deviation, every repeated value gets Gaussian jitter of SD `1e-10 × std` from a fixed-seed generator (seeds: source 0, target 1, embedding selection 2), repeated until all values are distinct, as in pyhctsa, or NaN, labelled not appropriate, when the jitter is below the floating-point resolution of the values (an un-z-scored series far from zero).
+  KSG standardises each coordinate, as JIDT does, and breaks ties deterministically: in each series with a positive standard deviation, every repeated value gets Gaussian jitter of SD `1e-10 × std` from a fixed-seed generator (seeds: source 0, target 1, embedding selection 2), repeated until all values are distinct, as in pyhctsa.
+  When the jitter is below the floating-point resolution of the values (an un-z-scored series far from zero), the estimate is NaN, labelled not appropriate.
   Tie-free series are untouched and match JIDT 1.6.1 run without its dither to about 1e-15.
   Without this, tied data give confident nonzero MI on independent series, since every kth-neighbour radius is zero; every process of the bundled `forex` dataset is tied.
   The jitter is deterministic but depends on observation order; NaN, infinite and constant series raise.
@@ -141,6 +142,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Kozachenko entropy returned `-inf` on tied data** (a nearest neighbour at distance zero); it is now NaN, labelled not appropriate, with the cause recorded.
 - **Gaussian estimates from too few samples returned values set by the ridge.**
   A Gaussian information-theoretic SPI whose aligned samples do not exceed the dimension of its largest covariance block (for example `xme_gaussian_k10` at T ≤ 20 or `di_gaussian_n-5` at T ≤ 15) is now NaN, labelled not appropriate, with the cause recorded.
+  The Gaussian auto-embedding search skips candidates with no more aligned samples than dimensions, so auto-embedded Gaussian TE can change on short series.
 - **Six measures advertised `kraskov` and ran Gaussian.**
   Joint, conditional, cross-map and causal entropy, directed information and stochastic interaction are composed from marginal entropies and have no KSG estimator; `estimator="kraskov"` is now refused for them.
 - **`MutualInfo`, `TimeLaggedMutualInfo` and `TransferEntropy` returned NaN** for `estimator="kozachenko"`; they now raise `NotImplementedError` at construction (use `"kraskov"`).
@@ -222,9 +224,10 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The raw output is classified before it is cast to float, so a cell with a non-zero imaginary part is NaN with code `COMPLEX`.
 - **A failed pair is `ERROR`, not an anonymous NaN.**
   A pair that raises inside an SPI that otherwise succeeds (see "One undefined pair no longer voids an SPI" under Changed) is NaN with one warning, labelled `ERROR`, with its message in `calc.pair_errors` (`{spi: [(source, target, message), ...]}`).
+  A pair whose input cannot support the estimate raises `pyspi.base.NotAppropriate` (a `ValueError`) and is labelled `NAN` instead, with its reason, prefixed `NotAppropriate: `, in `calc.pair_errors`.
   `calc.errors` holds SPI-level failures only.
   An undirected SPI evaluates each pair once, as `(i, j)` with `i < j`, and mirrors it, so a failure is mirrored onto its lower cell and counted once in the warning; such an SPI raises when every pair fails, giving the estimator's message in `calc.errors`.
-- An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, with its message in `calc.errors`.
+- An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, with its message in `calc.errors`; an SPI that raises `NotAppropriate`, or whose every pair does, is `NAN` in every cell, with its reason in `calc.errors`.
   An SPI that returns only NaN keeps code `NAN` and its `calc.errors` entry.
 - **Files and checkpoints keep the codes.**
   `.npz` files hold a `quality` array (`(n_spis, M, M)`, `uint8`) and `pair_errors`.

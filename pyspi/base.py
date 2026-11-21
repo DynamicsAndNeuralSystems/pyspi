@@ -113,9 +113,10 @@ class NotAppropriate(ValueError):
 
 # Pair-level failures of the SPI being computed: `fill_pairwise` appends
 # `(i, j, message)` for each cell whose computation raised, so the Calculator
-# can label it `Quality.ERROR` rather than NaN. A ContextVar, not a return
-# value, because the public `multivariate` returns only the matrix. Outside a
-# collector (an SPI called directly) nothing is recorded.
+# can label it (`Quality.ERROR`, or `Quality.NAN` for `NotAppropriate`) and
+# keep its message. A ContextVar, not a return value, because the public
+# `multivariate` returns only the matrix. Outside a collector (an SPI called
+# directly) nothing is recorded.
 _PAIR_FAILURES: ContextVar = ContextVar("pyspi_pair_failures", default=None)
 
 

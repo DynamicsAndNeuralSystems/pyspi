@@ -844,7 +844,10 @@ class Calculator:
         An SPI whose every off-diagonal value is undefined (NaN, Inf, ...) is
         listed too, with ``"ValueError: SPI returned no finite off-diagonal
         values"``, although its cells keep the codes of what it returned.
-        Failures of single pairs are in :attr:`pair_errors`, not here.
+        An SPI that raised :class:`pyspi.base.NotAppropriate`, or whose every
+        pair did, is listed with ``"NotAppropriate: <reason>"`` and its cells
+        are ``Quality.NAN``. Failures of single pairs are in
+        :attr:`pair_errors`, not here.
         """
         return dict(self._errors)
 
@@ -855,7 +858,9 @@ class Calculator:
 
         A pair whose computation raised inside an SPI that otherwise succeeded
         (see :func:`pyspi.base.fill_pairwise`) is NaN in :attr:`table` and
-        ``Quality.ERROR`` in :attr:`quality`; this keeps its message.
+        ``Quality.ERROR`` in :attr:`quality`, or ``Quality.NAN`` if it raised
+        :class:`pyspi.base.NotAppropriate` (its message then starts
+        ``"NotAppropriate: "``); this keeps its message.
         ``source`` and ``target`` are process names: the row and column of the
         cell. SPIs with no failed pair are absent.
         """
@@ -987,8 +992,9 @@ class Calculator:
         Each cell holds a :class:`pyspi.quality.Quality` code. ``GOOD`` (0)
         means the value in :attr:`table` is a real, finite number; every other
         code means the value is NaN and says why: ``ERROR`` (the SPI, or that
-        pair, raised), ``NAN`` (the SPI returned NaN: undefined or not
-        appropriate here; also every diagonal cell), ``INF`` / ``NEG_INF``,
+        pair, raised), ``NAN`` (undefined or not appropriate here: the SPI
+        returned NaN or raised :class:`pyspi.base.NotAppropriate`; also every
+        diagonal cell), ``INF`` / ``NEG_INF``,
         ``COMPLEX``, or ``NOT_COMPUTED`` (255) before :meth:`compute` reaches
         the SPI. ``pyspi.quality.quality_labels`` turns the codes into text.
         """
