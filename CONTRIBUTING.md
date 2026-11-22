@@ -126,24 +126,50 @@ A note on where pyspi differs from an upstream implementation is worth keeping.
 ## Configs
 
 The bundled configs live in `pyspi/configs/`.
-Each class entry carries its labels: directedness (`directed`, `undirected` or `antisymmetric`), `linear` or `nonlinear`, `bivariate` or `multivariate`, `contemporaneous`, `time-dependent` or `frequency-dependent`, and one module code (`M01` to `M14`).
-An SPI not assigned to a module carries the code `MXX` instead.
-Each config entry adds the labels that depend on its parameters.
-Merged with the class's own labels, every SPI ends up with exactly one label from each of these groups, spelled as here.
-One more group says what an SPI's value is, and every SPI carries exactly one of its labels: `strength`, `timing` or `profile`.
-`strength` marks a value that measures how strongly the pair depends: it answers "how much".
-`timing` marks a value that is a time or phase offset, such as a lag in samples or a phase in radians, not a strength: it answers "when".
-`profile` marks a value that describes how the dependence is distributed, over time or over the range of values, not how strong it is.
+Each class entry carries its labels, and each config entry adds the labels that depend on its parameters.
+Comments in a config are one or two lines per class.
+
+### Required labels
+
+Once the class and config labels are merged, every SPI carries exactly one label from each group, spelled as here:
+
+| Group | Labels |
+|---|---|
+| Directedness | `directed`, `undirected` or `antisymmetric` |
+| Linearity | `linear` or `nonlinear` |
+| Arity | `bivariate` or `multivariate` |
+| Time | `contemporaneous`, `time-dependent` or `frequency-dependent` |
+| Module | one of `M01` to `M14`, or `MXX` for an SPI not assigned to a module |
+| Value kind | `strength`, `timing` or `profile` |
+
+### Value kind
+
+The value kind says what an SPI's value is:
+
+- `strength`: how strongly the pair depends. It answers "how much".
+- `timing`: a time or phase offset, such as a lag in samples or a phase in radians, not a strength. It answers "when".
+- `profile`: how the dependence is distributed, over time or over the range of values, not how strong it is.
+
 A class sets `timing` or `profile` itself, and an SPI that declares neither is labelled `strength` when its config is loaded.
 The group may gain labels as pyspi captures other kinds of dependence structure.
-Two optional flags say how to read the scale.
-With neither, a `strength` is one-ended and higher means stronger, whatever values it takes.
-`signed` marks a value for which zero has a special meaning (no relationship, or no lead) and the sign says which of two opposite cases holds, as for a covariance; the absolute value of a `signed` `strength` is the strength, and `signed` also combines with `timing` (a lag whose sign says which process leads) and with `profile`.
-`inverted` marks a one-ended `strength` whose scale runs the other way, so that lower means stronger dependence or stronger evidence, as for a distance, an entropy or the Engle-Granger t-statistic, whose values can be negative without the SPI being `signed`; it goes only with `strength` and never with `signed`, and a config that combines them otherwise is refused.
-`unsigned` is not a label.
 `timing` says what the value is; `time-dependent` and the descriptive tag `lagged` say how the SPI is computed.
+
+### Scale flags
+
+Two optional flags say how to read the scale:
+
+- Neither: a `strength` is one-ended and higher means stronger, whatever values it takes.
+- `signed`: zero has a special meaning (no relationship, or no lead) and the sign says which of two opposite cases holds, as for a covariance.
+  The absolute value of a `signed` `strength` is the strength.
+  `signed` also combines with `timing` (a lag whose sign says which process leads) and with `profile`.
+- `inverted`: a one-ended `strength` whose scale runs the other way, so that lower means stronger dependence or stronger evidence, as for a distance, an entropy or the Engle-Granger t-statistic, whose values can be negative without the SPI being `signed`.
+  It goes only with `strength` and never with `signed`, and a config that combines them otherwise is refused.
+
+`unsigned` is not a label.
+
+### Descriptive tags
+
 A class may also carry descriptive tags: `basic`, `causal`, `distance`, `embedding`, `infotheory`, `lagged`, `misc`, `normal`, `rank`, `spectral`, `symbolic`, `temporal`, `unordered` and `wavelet`.
-Comments in a config are one or two lines per class.
 
 ## Tests and values
 
