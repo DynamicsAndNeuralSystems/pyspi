@@ -134,7 +134,7 @@ One more group says what an SPI's value is, and every SPI carries exactly one of
 `strength` marks a value that measures how strongly the pair depends: it answers "how much".
 `timing` marks a value that is a time or phase offset, such as a lag in samples or a phase in radians, not a strength: it answers "when".
 `profile` marks a value that describes how the dependence is distributed, over time or over the range of values, not how strong it is.
-A class sets `timing` or `profile` itself, and an SPI that declares neither is labelled `strength` when its config is loaded.
+A class sets `timing` or `profile` itself where its value is one, and the class's own kind overrides the config's; a config may give the kind of a class that declares none; and an SPI for which neither does is labelled `strength` when its config is loaded.
 The group may gain labels as pyspi captures other kinds of dependence structure.
 Two optional flags say how to read the scale.
 With neither, a `strength` is one-ended and higher means stronger, whatever values it takes.

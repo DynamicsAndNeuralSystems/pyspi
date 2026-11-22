@@ -332,9 +332,9 @@ class Signed:
     Zero has a special meaning (no relationship, or no lead) and the sign says
     which of two opposite cases holds, so the absolute value is the size of
     the effect. Covariance (positive or negative coupling) is the model case.
-    ``signed`` combines with the default one-ended strength and with the
-    flags ``timing`` (a lead/lag whose sign says which process leads) and
-    ``profile``.
+    ``signed`` combines with ``strength`` (the absolute value is then the
+    strength), with ``timing`` (a lead/lag whose sign says which process
+    leads) and with ``profile``.
     """
     def issigned(self):
         return True

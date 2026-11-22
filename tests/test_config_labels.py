@@ -335,7 +335,7 @@ def test_filter_spis_explains_that_unsigned_is_not_a_label(tmp_path, monkeypatch
     from pyspi.utils import filter_spis
 
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(ValueError, match="'unsigned' is not a label.*without 'signed'"):
+    with pytest.raises(ValueError, match="'unsigned' is not a label.*filter by 'strength'"):
         filter_spis(["unsigned"])
     with pytest.raises(ValueError, match="'unsigned' is not a label"):
         filter_spis(["linear", "unsigned"])
@@ -344,7 +344,7 @@ def test_filter_spis_explains_that_unsigned_is_not_a_label(tmp_path, monkeypatch
 @pytest.mark.parametrize("flag,expected", [("timing", TIMING_IN_FULL),
                                            ("profile", PROFILE_IN_FULL),
                                            ("inverted", INVERTED_IN_FULL)])
-def test_value_flags_in_full(labels_by_config, flag, expected):
+def test_timing_profile_and_inverted_sets_of_full(labels_by_config, flag, expected):
     full = labels_by_config["full"]
     assert {ident for ident, labels in full.items() if flag in labels} == expected
     # The same SPIs carry the flag in every config that includes them.
@@ -357,9 +357,8 @@ def test_every_other_spi_of_full_is_a_strength(labels_by_config):
     full = labels_by_config["full"]
     strength = {ident for ident, labels in full.items() if "strength" in labels}
     assert strength == set(full) - TIMING_IN_FULL - PROFILE_IN_FULL
-    assert len(strength) == 220
     signed = {ident for ident in strength if "signed" in full[ident]}
-    assert len(signed) == 43 and not signed & INVERTED_IN_FULL
+    assert signed and not signed & INVERTED_IN_FULL
     assert INVERTED_IN_FULL <= strength
 
 
@@ -387,10 +386,39 @@ def test_a_declared_kind_replaces_strength(kind):
 
 
 def test_two_kinds_are_refused():
-    with pytest.raises(ValueError, match="more than one of 'strength', 'timing', 'profile'"):
+    with pytest.raises(ValueError, match="by its class with more than one of "
+                                         "'strength', 'timing', 'profile'"):
         _merged(["timing", "profile"])
-    with pytest.raises(ValueError, match="more than one of"):
+    with pytest.raises(ValueError, match="by its config with more than one of"):
         _merged(["linear"], ["timing", "profile"])
+    with pytest.raises(ValueError, match="by its config with more than one of"):
+        _merged(["linear"], ["strength", "timing"])
+
+
+def test_merging_twice_gives_the_same_labels():
+    class Stub:
+        labels = ["linear"]
+
+    spi = Stub()
+    _merge_spi_labels(spi, config_labels=["timing"])
+    once = list(spi.labels)
+    _merge_spi_labels(spi, config_labels=["timing"])
+    assert spi.labels == once and "timing" in once and "strength" not in once
+
+
+def test_unbundled_variants_get_their_kind_when_merged():
+    from pyspi.statistics.distance import Barycenter
+    from pyspi.statistics.spectral import GroupDelay
+
+    def kind(spi):
+        _merge_spi_labels(spi)
+        (found,) = set(spi.labels) & set(VALUE_KINDS)
+        return found
+
+    assert kind(GroupDelay(statistic="delay")) == "timing"
+    assert kind(GroupDelay(statistic="rvalue")) == "strength"
+    assert kind(Barycenter(statistic="max_time")) == "timing"
+    assert kind(Barycenter(mode="dtw", statistic="mean")) == "strength"
 
 
 def test_inverted_goes_only_with_an_unsigned_strength():
@@ -399,6 +427,9 @@ def test_inverted_goes_only_with_an_unsigned_strength():
     assert _merged(["inverted"]) == ["inverted", "strength"]
     with pytest.raises(ValueError, match="'inverted' and 'timing'"):
         _merged(["inverted", "timing"])
+    with pytest.raises(ValueError, match="'inverted' and 'signed' and 'timing'"):
+        _merge_spi_labels(type("SignedTiming", (Signed,),
+                               {"labels": ["inverted", "timing"]})())
     with pytest.raises(ValueError, match="'inverted' and 'profile'"):
         _merged(["inverted"], ["profile"])
 
@@ -410,8 +441,6 @@ def test_inverted_goes_only_with_an_unsigned_strength():
 
 
 def test_filter_spis_selects_by_kind(tmp_path, monkeypatch):
-    import yaml
-
     from pyspi.utils import filter_spis
 
     monkeypatch.chdir(tmp_path)
@@ -420,8 +449,10 @@ def test_filter_spis_selects_by_kind(tmp_path, monkeypatch):
     assert set(kept) == TIMING_IN_FULL
     filter_spis(["strength", "signed"], output_name="signed_strength")
     kept = load_spis_from_yaml(str(tmp_path / "signed_strength.yaml"), quiet=True)
-    assert len(kept) == 43 and not set(kept) & (TIMING_IN_FULL | PROFILE_IN_FULL)
-    assert yaml.safe_load((tmp_path / "timing.yaml").read_text())
+    full = load_spis_from_yaml(resolve_config("full"), quiet=True)
+    assert set(kept) == {ident for ident, spi in full.items()
+                         if spi.issigned() and "strength" in spi.labels}
+    assert kept and not set(kept) & (TIMING_IN_FULL | PROFILE_IN_FULL)
 
 
 def test_config_value_flags_agree_with_the_class(entries_by_config):

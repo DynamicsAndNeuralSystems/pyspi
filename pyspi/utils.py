@@ -306,8 +306,8 @@ def filter_spis(keywords, output_name = None, configfile= None):
         raise ValueError(
             "'unsigned' is not a label. An SPI is labelled 'signed' when zero "
             "means no relationship and the sign says which of two opposite "
-            "relationships holds; the SPIs without 'signed' are the one-ended "
-            "ones.")
+            "relationships holds. For the one-ended strengths of dependence, "
+            "filter by 'strength' and leave out the SPIs labelled 'signed'.")
 
     # Default to the full bundled config; otherwise accept a bundled name or path.
     from pyspi.calculator import resolve_config, load_config_yaml
