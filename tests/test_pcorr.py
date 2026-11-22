@@ -170,7 +170,7 @@ def test_calculator_round_trip(tmp_path):
     X = _series()
     calc = Calculator(dataset=_data(X), config=str(path))
     calc.compute()
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     assert set(calc.spis) == {"pcorr_EmpiricalCovariance", "pcorr_LedoitWolf"}
     got = calc.table["pcorr_EmpiricalCovariance"].to_numpy()
     _, ref = _pcorr_from_inverse(_data(X).to_numpy(squeeze=True))

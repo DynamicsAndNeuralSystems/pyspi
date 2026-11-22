@@ -529,7 +529,7 @@ def test_calculator_round_trip(tmp_path):
     expected = {"es_strength_q-0-95", "es_asym_q-0-95", "es_asym_q-0-9_maxdelay-4",
                 "tailasym_q-0-95", "tailasym_lower_q-0-9"}
     assert set(calc.spis) == expected
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     for ident in expected:
         A = calc.table[ident].to_numpy(dtype=float)
         direct = calc.spis[ident].multivariate(Data(Z, dim_order="ps"))

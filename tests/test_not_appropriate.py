@@ -2,9 +2,10 @@
 
 An SPI or a pair whose input cannot support the estimate (too short, tied)
 raises ``NotAppropriate``. The Calculator then stores NaN with
-``Quality.NAN`` and keeps the reason, prefixed ``"NotAppropriate: "``: in
-``calc.errors`` for the whole SPI, in ``calc.pair_errors`` for single pairs.
-Any other exception is still ``Quality.ERROR``. These tests pin that in the
+``Quality.NAN`` and keeps the reason: in ``calc.not_appropriate`` for the
+whole SPI, in ``calc.pair_not_appropriate`` for single pairs. This is not a
+failure, so neither is in ``calc.errors`` or ``calc.pair_errors``, where any
+other exception goes, as ``Quality.ERROR``. These tests pin that in the
 serial and parallel paths, through checkpoints and through ``.npz`` files.
 
 The stub SPIs live in ``tests/failing_spis.py``; ``tests/`` is put on
@@ -28,9 +29,9 @@ M = 3
 OFF = ~np.eye(M, dtype=bool)
 GOOD, ERROR, NAN = Quality.GOOD, Quality.ERROR, Quality.NAN
 
-WHOLE = "NotAppropriate: needs more than 40 samples"
-PAIRS = "NotAppropriate: the series are too short for this lag"
-ONE_PAIR = "NotAppropriate: pair (0, 1) has tied values"
+WHOLE = "needs more than 40 samples"
+PAIRS = "the series are too short for this lag"
+ONE_PAIR = "pair (0, 1) has tied values"
 
 
 @pytest.fixture(autouse=True)
@@ -56,9 +57,10 @@ def _compute(calc, **kwargs):
 
 
 def _state(calc):
-    """Everything a run records about its failures, for comparing runs."""
+    """Everything a run records about cells with no value, for comparing runs."""
     quality = {k: calc.quality[k].to_numpy().tolist() for k in calc.spis}
-    return quality, calc.errors, calc.pair_errors
+    return (quality, calc.errors, calc.pair_errors, calc.not_appropriate,
+            calc.pair_not_appropriate)
 
 
 @pytest.fixture(scope="module")
@@ -85,13 +87,15 @@ def test_a_whole_spi_not_appropriate_is_nan_with_its_reason(serial):
     q = _q(serial, "never_appropriate")
     assert (q == NAN).all()
     assert np.isnan(serial.table["never_appropriate"].to_numpy(dtype=float)).all()
-    assert serial.errors["never_appropriate"] == WHOLE
-    assert "never_appropriate" not in serial.pair_errors
+    assert serial.not_appropriate["never_appropriate"] == WHOLE
+    assert "never_appropriate" not in serial.errors
+    assert "never_appropriate" not in serial.pair_not_appropriate
 
 
 def test_every_pair_not_appropriate_gives_the_reason_not_the_generic_message(serial):
     assert (_q(serial, "no_pair_appropriate") == NAN).all()
-    assert serial.errors["no_pair_appropriate"] == PAIRS
+    assert serial.not_appropriate["no_pair_appropriate"] == PAIRS
+    assert "no_pair_appropriate" not in serial.errors
 
 
 def test_one_pair_not_appropriate_is_nan_and_the_others_stay_good(serial):
@@ -101,15 +105,17 @@ def test_one_pair_not_appropriate_is_nan_and_the_others_stay_good(serial):
     expected[0, 1] = NAN
     np.testing.assert_array_equal(q, expected)
     procs = list(serial.dataset.procnames)
-    assert serial.pair_errors["one_pair_not_appropriate"] == [
+    assert serial.pair_not_appropriate["one_pair_not_appropriate"] == [
         (procs[0], procs[1], ONE_PAIR)]
-    assert "one_pair_not_appropriate" not in serial.errors
+    for record in (serial.errors, serial.pair_errors, serial.not_appropriate):
+        assert "one_pair_not_appropriate" not in record
 
 
 def test_an_ordinary_exception_is_still_an_error(serial):
     q = _q(serial, "always_raises")
     assert (q[OFF] == ERROR).all()
     assert serial.errors["always_raises"].startswith("RuntimeError: ")
+    assert "always_raises" not in serial.not_appropriate
     assert (_q(serial, "cov_EmpiricalCovariance")[OFF] == GOOD).all()
 
 
@@ -143,7 +149,7 @@ def test_fill_pairwise_marks_not_appropriate_pairs_by_prefix():
 def test_derive_quality_reads_a_not_appropriate_reason_as_nan():
     values = np.full((M, M), np.nan)
     np.testing.assert_array_equal(
-        _parallel.derive_quality(values, WHOLE)[OFF], NAN)
+        _parallel.derive_quality(values, "NotAppropriate: " + WHOLE)[OFF], NAN)
     np.testing.assert_array_equal(
         _parallel.derive_quality(values, "RuntimeError: boom")[OFF], ERROR)
 
@@ -165,8 +171,35 @@ def test_checkpoint_without_quality_sidecars_derives_nan(serial, tmp_path):
         path.unlink()
     resumed = _compute(_calc(), checkpoint_dir=tmp_path, retry_failed=False)
     assert (_q(resumed, "never_appropriate") == NAN).all()
-    assert resumed.errors["never_appropriate"] == WHOLE
+    assert resumed.not_appropriate["never_appropriate"] == WHOLE
     assert (_q(resumed, "always_raises")[OFF] == ERROR).all()
+
+
+def test_resume_retries_failures_and_keeps_not_appropriate_spis(tmp_path):
+    """A not-appropriate SPI has not failed, so its checkpoint is not recomputed."""
+    _compute(_calc(), checkpoint_dir=tmp_path)
+    resumed = _compute(_calc(), checkpoint_dir=tmp_path)
+    recomputed = {k for k, seconds in resumed.timings.items() if seconds > 0}
+    assert recomputed == set(resumed.errors)
+    assert set(resumed.not_appropriate) == {"never_appropriate", "no_pair_appropriate"}
+
+
+def test_a_not_appropriate_checkpoint_that_holds_values_is_recomputed(tmp_path):
+    """The message and the values disagree, so the checkpoint is not trusted."""
+    _compute(_calc(), checkpoint_dir=tmp_path)
+    np.save(tmp_path / "never_appropriate.npy", np.ones((M, M)))
+    (tmp_path / "never_appropriate.quality").unlink()
+    resumed = _compute(_calc(), checkpoint_dir=tmp_path)
+    assert resumed.timings["never_appropriate"] > 0
+    assert (_q(resumed, "never_appropriate") == NAN).all()
+    assert resumed.not_appropriate["never_appropriate"] == WHOLE
+
+
+def test_load_table_keeps_the_not_appropriate_reasons(serial, tmp_path):
+    from pyspi import load_table
+    table = load_table(serial.save(tmp_path / "r.npz"))
+    assert table.attrs["not_appropriate"] == serial.not_appropriate
+    assert table.attrs["errors"] == serial.errors
 
 
 def test_npz_round_trip_keeps_codes_and_reasons(serial, tmp_path):
@@ -175,11 +208,27 @@ def test_npz_round_trip_keeps_codes_and_reasons(serial, tmp_path):
         np.testing.assert_array_equal(res.quality[key].to_numpy(), _q(serial, key))
     assert res.errors == serial.errors
     assert res.pair_errors == serial.pair_errors
+    assert res.not_appropriate == serial.not_appropriate
+    assert res.pair_not_appropriate == serial.pair_not_appropriate
 
 
-def test_summary_and_errors_treat_a_refusal_like_an_spi_with_no_finite_values(serial):
-    """Listed among the failed SPIs, as an all-NaN SPI is (the CLI exits 1)."""
+def test_summary_counts_a_not_appropriate_spi_apart_from_the_failed(serial):
     summary = serial.summary()
-    assert "never_appropriate" in summary["failed"]
-    assert "no_pair_appropriate" in summary["failed"]
-    assert "one_pair_not_appropriate" not in summary["failed"]
+    assert summary["not_appropriate"] == ["never_appropriate", "no_pair_appropriate"]
+    assert summary["n_not_appropriate"] == 2
+    assert summary["failed"] == sorted(serial.errors)
+    assert summary["n_failed"] == len(serial.errors)
+    assert not set(summary["failed"]) & set(summary["not_appropriate"])
+    assert "2 not appropriate" in repr(serial)
+
+
+def test_a_not_appropriate_spi_warns_that_it_is_not_appropriate():
+    with pytest.MonkeyPatch.context() as mp:
+        mp.syspath_prepend(TESTS_DIR)
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            _calc().compute(progress=False)
+    messages = [str(w.message) for w in record]
+    assert any(m == f'SPI "never_appropriate" is not appropriate for this '
+                    f'dataset: {WHOLE}' for m in messages)
+    assert not any("Caught error" in m and "never_appropriate" in m for m in messages)

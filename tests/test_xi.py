@@ -202,7 +202,7 @@ def test_calculator_round_trip(tmp_path):
     z = rng.standard_normal((3, 200))
     calc = Calculator(dataset=Data(data=z, dim_order="ps"), config=str(path))
     calc.compute()
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     assert set(calc.spis) == {"xi_tau-0", "xi_tau-1"}
     ref = ChatterjeeXi().multivariate(Data(data=z, dim_order="ps"))
     got = calc.table["xi_tau-0"].to_numpy()

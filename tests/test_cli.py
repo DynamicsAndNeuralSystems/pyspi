@@ -89,3 +89,42 @@ def test_dim_order_flag_states_the_layout(tmp_path, flag, warns):
     if warns:
         assert "dim_order='sp'" in str(found[0].message)
         assert "dim_order='ps'" in str(found[0].message)
+
+
+def _config(tmp_path, order):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        ".statistics.basic:\n"
+        "  Covariance:\n"
+        "    labels: [undirected]\n"
+        "    configs:\n"
+        "      - estimator: EmpiricalCovariance\n"
+        ".statistics.spectral:\n"
+        "  SpectralGrangerCausality:\n"
+        "    labels: [directed]\n"
+        "    configs:\n"
+        "      - method: parametric\n"
+        f"        order: {order}\n")
+    return path
+
+
+def test_a_not_appropriate_spi_is_reported_and_is_not_a_failure(data_file, tmp_path, capsys):
+    """Order 20 needs 61 observations; the data has 60."""
+    import warnings
+
+    out = tmp_path / "out.npz"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        status = cli.main(["compute", "--data", str(data_file), "--config",
+                           str(_config(tmp_path, 20)), "--output", str(out), "--quiet"])
+    err = capsys.readouterr().err
+    assert status == 0
+    assert "1 of 2 SPI(s) are not appropriate for this dataset (NaN, not failed): " in err
+    assert "sgc_parametric_mean_fs-1_fmin-1e-05_fmax-0-5_order-20" in err
+    assert "failed:" not in err and "Exiting 1" not in err
+
+    from pyspi import load_results
+    res = load_results(out)
+    assert res.errors == {}
+    (reason,) = res.not_appropriate.values()
+    assert "order 20 needs at least 61 observations" in reason

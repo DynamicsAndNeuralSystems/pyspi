@@ -80,7 +80,10 @@ def main(argv=None) -> int:
                          "is indistinguishable from a legitimately undefined "
                          "statistic once the process has exited. The failed "
                          "identifiers are printed on stderr and stored in the "
-                         "NPZ either way. A run in which *nothing* succeeded "
+                         "NPZ either way. An SPI that is not appropriate for "
+                         "the dataset (calc.not_appropriate) has not failed: "
+                         "it is reported on stderr and does not change the "
+                         "exit code. A run in which *nothing* succeeded "
                          "exits 1 regardless of this flag.")
 
     args = parser.parse_args(argv)
@@ -128,6 +131,12 @@ def main(argv=None) -> int:
     if n_failed:
         print(f"{n_failed} of {calc.n_spis} SPI(s) failed: "
               f"{', '.join(sorted(calc.errors))}", file=sys.stderr)
+    # Not a failure, but the user should know which columns are NaN; the
+    # reasons are in the output file (`load_results(...).not_appropriate`).
+    if calc.not_appropriate:
+        print(f"{len(calc.not_appropriate)} of {calc.n_spis} SPI(s) are not "
+              f"appropriate for this dataset (NaN, not failed): "
+              f"{', '.join(sorted(calc.not_appropriate))}", file=sys.stderr)
 
     values = np.stack([calc.table[k].to_numpy(dtype=float) for k in calc.spis])
     off_diagonal = ~np.eye(calc.dataset.n_processes, dtype=bool)

@@ -338,8 +338,9 @@ def test_calculator_records_an_infeasible_order(tmp_path):
                       config=str(path))
     with pytest.warns(UserWarning, match='"cgc_p-3"'):
         calc.compute()
-    assert set(calc.errors) == {"cgc_p-3"}
-    assert "infeasible" in calc.errors["cgc_p-3"]
+    assert set(calc.not_appropriate) == {"cgc_p-3"}
+    assert "infeasible" in calc.not_appropriate["cgc_p-3"]
+    assert calc.errors == {}
     assert np.isnan(calc.table["cgc_p-3"].to_numpy(dtype=float)).all()
     assert np.isfinite(calc.table["cgc_p-bic"].to_numpy(dtype=float)[_offdiag(5)]).all()
 
@@ -421,7 +422,7 @@ def test_calculator_round_trip(tmp_path):
     calc = Calculator(dataset=_data(x), config=str(path))
     calc.compute()
 
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     assert set(calc.spis) == set(CONFIGS)
     off = _offdiag(4)
     for ident, kwargs in CONFIGS.items():

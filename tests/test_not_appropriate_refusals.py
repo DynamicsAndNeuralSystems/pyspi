@@ -4,7 +4,7 @@ A series too short for a lag, order, embedding or window, repeated values
 where an estimate needs distinct ones, collinear series, or a band with no
 power: each raises ``pyspi.base.NotAppropriate`` with a reason naming the
 numbers, so through the Calculator the cells are NaN with ``Quality.NAN``
-and the reason is kept in ``calc.errors``. A bad parameter is still an
+and the reason is kept in ``calc.not_appropriate``. A bad parameter is still an
 error, raised at construction.
 """
 import importlib
@@ -117,8 +117,8 @@ def test_through_the_calculator_the_cells_are_nan_with_the_reason(name, tmp_path
     (key,) = calc.spis
     q = calc.quality[key].to_numpy()
     assert (q == Quality.NAN).all(), q
-    assert calc.errors[key].startswith("NotAppropriate: "), calc.errors
-    assert match in calc.errors[key]
+    assert match in calc.not_appropriate[key], calc.errors
+    assert key not in calc.errors
 
 
 def test_liang_collinear_pair_is_nan_with_its_reason_and_the_others_good(tmp_path):
@@ -145,10 +145,9 @@ def test_nli_repeated_delay_vectors_make_only_their_pairs_nan(tmp_path):
     (key,) = calc.spis
     q = calc.quality[key].to_numpy()
     assert q[0, 1] == q[1, 0] == Quality.NAN
-    assert key not in calc.errors
-    reasons = {(a, b): msg for a, b, msg in calc.pair_errors[key]}
+    assert key not in calc.errors and key not in calc.pair_errors
+    reasons = {(a, b): msg for a, b, msg in calc.pair_not_appropriate[key]}
     procs = list(calc.dataset.procnames)
-    assert reasons[(procs[0], procs[1])].startswith("NotAppropriate: ")
     assert "repeated delay vectors" in reasons[(procs[0], procs[1])]
 
 

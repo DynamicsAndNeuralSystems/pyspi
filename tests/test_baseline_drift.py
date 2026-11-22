@@ -249,7 +249,7 @@ def current_tables():
             cache[dataset_name] = (
                 {spi: calc.table[spi].to_numpy() for spi in calc.spis},
                 dict(calc.spis),
-                dict(calc.errors),
+                {**calc.errors, **calc.not_appropriate},
             )
         return cache[dataset_name]
 
@@ -369,8 +369,9 @@ def test_no_spi_raises_on_the_frozen_fixtures(dataset_name, current_tables):
     """A completed computation is not the same as a clean one.
 
     `Calculator.compute()` catches per-SPI exceptions and records them in
-    `calc.errors`, so the suite could run the whole config to completion over a
-    table with failed columns in it and report nothing. Nothing in the config
+    `calc.errors`, or in `calc.not_appropriate` for an SPI the data cannot
+    support, so the suite could run the whole config to completion over a
+    table with empty columns in it and report nothing. Nothing in the config
     is expected to fail on these fixtures; if something legitimately cannot be
     estimated on data this small, the exception belongs in an explicit
     allow-list here with the statistical reason, not in silence.

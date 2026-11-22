@@ -281,6 +281,9 @@ def _installed_versions():
 # symmetry trait; a schema-1 file still loads, with its codes derived from its
 # values and `errors` and its traits rebuilt from the config it names.
 _NPZ_SCHEMA = 2
+# The JSON fields of a results file that say why cells hold no value.
+_OUTCOME_FIELDS = ("errors", "pair_errors", "not_appropriate",
+                   "pair_not_appropriate")
 
 
 class Results(NamedTuple):
@@ -303,12 +306,20 @@ class Results(NamedTuple):
         The resolved specification of the run (``Calculator.run_spec``).
     pair_errors : dict or None
         The messages of failed pairs (``Calculator.pair_errors``).
+    not_appropriate : dict or None
+        ``{identifier: reason}`` for the SPIs that are not appropriate for
+        the dataset (``Calculator.not_appropriate``).
+    pair_not_appropriate : dict or None
+        The reasons of the pairs an SPI is not appropriate for
+        (``Calculator.pair_not_appropriate``).
     """
     table: pd.DataFrame
     quality: pd.DataFrame
     errors: Optional[dict]
     run_spec: Optional[dict]
     pair_errors: Optional[dict]
+    not_appropriate: Optional[dict] = None
+    pair_not_appropriate: Optional[dict] = None
 
 
 def _frame_from_matrices(matrices, spis, procs):
@@ -364,9 +375,10 @@ def _read_npz(path):
         directedness = (
             [str(t) for t in f["directedness"]] if "directedness" in f.files else None
         )
-        # Provenance: which SPIs and pairs failed, and what produced the file.
+        # Provenance: which SPIs and pairs failed or were not appropriate, and
+        # what produced the file.
         meta = {name: str(f[name])
-                for name in ("run_spec", "run_digest", "errors", "pair_errors")
+                for name in ("run_spec", "run_digest") + _OUTCOME_FIELDS
                 if name in f.files}
 
     # Check the whole shape, so a malformed file fails here and says so.
@@ -390,7 +402,7 @@ def _read_npz(path):
             )
         directedness = dict(zip(spis, directedness))
     parsed = {}
-    for name in ("run_spec", "errors", "pair_errors"):
+    for name in ("run_spec",) + _OUTCOME_FIELDS:
         if name in meta:
             try:
                 parsed[name] = json.loads(meta[name])
@@ -418,9 +430,9 @@ def load_table(path):
     pandas.DataFrame
         The table as ``Calculator.table`` holds it: rows are processes,
         columns a ``(spi, process)`` MultiIndex. ``table.attrs`` holds the
-        file's ``schema``, ``run_spec``, ``run_digest`` and ``errors``, and
-        ``directedness``, ``{identifier: trait}`` with each SPI's symmetry
-        trait, which :func:`feature_vector` uses.
+        file's ``schema``, ``run_spec``, ``run_digest``, ``errors`` and
+        ``not_appropriate``, and ``directedness``, ``{identifier: trait}``
+        with each SPI's symmetry trait, which :func:`feature_vector` uses.
     """
     return _table_from_parts(_read_npz(path))
 
@@ -431,7 +443,7 @@ def _table_from_parts(parts):
     # Only small values go in `attrs`: pandas deep-copies them on every derived
     # frame and compares them in `concat`, so the quality codes stay out.
     table.attrs["schema"] = parts["schema"]
-    for name in ("run_spec", "errors"):
+    for name in ("run_spec", "errors", "not_appropriate"):
         if name in parts:
             table.attrs[name] = parts[name]
     if parts["run_digest"] is not None:
@@ -459,8 +471,9 @@ def load_results(path):
     Returns
     -------
     Results
-        ``Results(table, quality, errors, run_spec, pair_errors)``: ``table``
-        as :func:`load_table` returns it, ``quality`` the matching ``uint8``
+        ``Results(table, quality, errors, run_spec, pair_errors,
+        not_appropriate, pair_not_appropriate)``: ``table`` as
+        :func:`load_table` returns it, ``quality`` the matching ``uint8``
         DataFrame of :class:`pyspi.quality.Quality` codes, and the rest as
         described in :class:`Results`.
     """
@@ -475,11 +488,18 @@ def load_results(path):
             quality[n] = _parallel.derive_quality(values, (errors or {}).get(key))
     quality = _frame_from_matrices(quality.astype(np.uint8, copy=False),
                                    parts["spis"], parts["procs"])
-    pair_errors = as_dict(parts.get("pair_errors"))
-    if pair_errors is not None:
-        pair_errors = {k: [tuple(p) for p in v] for k, v in pair_errors.items()}
+
+    def pairs(name):
+        found = as_dict(parts.get(name))
+        if found is not None:
+            found = {k: [tuple(p) for p in v] for k, v in found.items()}
+        return found
+
     return Results(table=table, quality=quality, errors=errors,
-                   run_spec=as_dict(parts.get("run_spec")), pair_errors=pair_errors)
+                   run_spec=as_dict(parts.get("run_spec")),
+                   pair_errors=pairs("pair_errors"),
+                   not_appropriate=as_dict(parts.get("not_appropriate")),
+                   pair_not_appropriate=pairs("pair_not_appropriate"))
 
 
 def feature_vector(table, directedness=None, include_self=False):
@@ -858,6 +878,8 @@ class Calculator:
         self._timings = {}
         self._errors = {}
         self._pair_errors = {}
+        self._not_appropriate = {}
+        self._pair_not_appropriate = {}
         self._verbose = verbose
 
         # verbose maps to a process-global pyspi logger level (INFO vs WARNING).
@@ -901,19 +923,34 @@ class Calculator:
         ``{identifier: "ExcType: message"}`` for every SPI that failed.
 
         A failed SPI still occupies its column in :attr:`table`, filled with
-        NaN. Consult this before interpreting a table: a NaN column is
-        otherwise indistinguishable from a legitimately undefined statistic.
-        :attr:`quality` says the same per cell.
+        NaN. Consult this and :attr:`not_appropriate` before interpreting a
+        table: they say why a NaN column is NaN. :attr:`quality` says the
+        same per cell.
 
         An SPI whose every off-diagonal value is undefined (NaN, Inf, ...) is
         listed too, with ``"ValueError: SPI returned no finite off-diagonal
         values"``, although its cells keep the codes of what it returned.
-        An SPI that raised :class:`pyspi.base.NotAppropriate`, or whose every
-        pair did, is listed with ``"NotAppropriate: <reason>"`` and its cells
-        are ``Quality.NAN``. Failures of single pairs are in
-        :attr:`pair_errors`, not here.
+        Failures of single pairs are in :attr:`pair_errors`, not here. An SPI
+        that is not appropriate for the dataset has not failed: it is in
+        :attr:`not_appropriate`.
         """
         return dict(self._errors)
+
+    @property
+    def not_appropriate(self):
+        """
+        ``{identifier: reason}`` for every SPI that is not appropriate for the dataset.
+
+        The SPI raised :class:`pyspi.base.NotAppropriate`, or every one of its
+        pairs did: the data cannot support the estimate (too few
+        observations, a constant series, tied values, ...). Its column in
+        :attr:`table` is NaN and its cells are ``Quality.NAN`` in
+        :attr:`quality`. This is an expected outcome, not a failure, so the
+        SPI is absent from :attr:`errors`. Pairs an SPI is not appropriate
+        for, when it has values for others, are in
+        :attr:`pair_not_appropriate`.
+        """
+        return dict(self._not_appropriate)
 
     @property
     def pair_errors(self):
@@ -922,13 +959,26 @@ class Calculator:
 
         A pair whose computation raised inside an SPI that otherwise succeeded
         (see :func:`pyspi.base.fill_pairwise`) is NaN in :attr:`table` and
-        ``Quality.ERROR`` in :attr:`quality`, or ``Quality.NAN`` if it raised
-        :class:`pyspi.base.NotAppropriate` (its message then starts
-        ``"NotAppropriate: "``); this keeps its message.
+        ``Quality.ERROR`` in :attr:`quality`; this keeps its message.
         ``source`` and ``target`` are process names: the row and column of the
-        cell. SPIs with no failed pair are absent.
+        cell. SPIs with no failed pair are absent. A pair that raised
+        :class:`pyspi.base.NotAppropriate` is in
+        :attr:`pair_not_appropriate`.
         """
         return {k: list(v) for k, v in self._pair_errors.items()}
+
+    @property
+    def pair_not_appropriate(self):
+        """
+        ``{identifier: [(source, target, reason), ...]}`` for pairs an SPI is not appropriate for.
+
+        A pair that raised :class:`pyspi.base.NotAppropriate` inside an SPI
+        that has values for other pairs is NaN in :attr:`table` and
+        ``Quality.NAN`` in :attr:`quality`; this keeps its reason.
+        ``source`` and ``target`` are process names: the row and column of the
+        cell. SPIs with no such pair are absent.
+        """
+        return {k: list(v) for k, v in self._pair_not_appropriate.items()}
 
     @property
     def run_digest(self):
@@ -1076,7 +1126,9 @@ class Calculator:
         done = len(self._timings)
         state = "not computed" if not done else f"{done}/{self.n_spis} computed"
         failed = f", {len(self._errors)} failed" if self._errors else ""
-        return f"<Calculator config={self._config!r} {shape} {state}{failed}>"
+        refused = (f", {len(self._not_appropriate)} not appropriate"
+                   if self._not_appropriate else "")
+        return f"<Calculator config={self._config!r} {shape} {state}{failed}{refused}>"
 
     def _repr_html_(self):
         """A table of :meth:`summary`, shown by Jupyter."""
@@ -1086,6 +1138,8 @@ class Calculator:
             ("dataset", f'{s["n_processes"]} x {s["n_observations"]}'),
             ("SPIs", f'{s["n_computed"]}/{s["n_spis"]} computed'),
             ("failed", ", ".join(s["failed"]) if s["failed"] else "none"),
+            ("not appropriate",
+             ", ".join(s["not_appropriate"]) if s["not_appropriate"] else "none"),
             ("time", f'{s["total_seconds"]}s'),
             ("slowest", ", ".join(f"{k} ({v}s)" for k, v in s["slowest"][:3]) or "-"),
         ]
@@ -1167,8 +1221,10 @@ class Calculator:
         -------
         dict
             The dataset's name and shape, the config, the numbers of SPIs,
-            computed SPIs and failed SPIs, the failed identifiers, the total
-            time in seconds and the five slowest SPIs with their times.
+            computed SPIs and failed SPIs, the failed identifiers, the number
+            and identifiers of the SPIs that are not appropriate for the
+            dataset (which are not counted as failed), the total time in
+            seconds and the five slowest SPIs with their times.
         """
         timings = self._timings
         total = sum(timings.values())
@@ -1182,6 +1238,8 @@ class Calculator:
             "n_computed": len(timings),
             "n_failed": len(self._errors),
             "failed": sorted(self._errors),
+            "n_not_appropriate": len(self._not_appropriate),
+            "not_appropriate": sorted(self._not_appropriate),
             "total_seconds": round(total, 3),
             "slowest": [(k, round(v, 3)) for k, v in slowest],
         }
@@ -1253,6 +1311,8 @@ class Calculator:
         # Results belong to the dataset that produced them.
         self._errors = {}
         self._pair_errors = {}
+        self._not_appropriate = {}
+        self._pair_not_appropriate = {}
         self._timings = {}
 
         shape = (self.n_spis, self.dataset.n_processes, self.dataset.n_processes)
@@ -1268,7 +1328,8 @@ class Calculator:
         ``.npz`` (recommended) stores the values as an ``(n_spis, M, M)`` array
         with the SPI and process names, and round-trips exactly through
         :func:`pyspi.load_table`. It also stores :attr:`quality`,
-        :attr:`errors`, :attr:`pair_errors`, the run's provenance, which
+        :attr:`errors`, :attr:`pair_errors`, :attr:`not_appropriate`,
+        :attr:`pair_not_appropriate`, the run's provenance, which
         :func:`pyspi.load_results` reads back, and each SPI's symmetry trait
         (:meth:`~pyspi.base.Directed.directedness`), which
         :func:`pyspi.feature_vector` uses. ``.csv`` holds the values only,
@@ -1311,6 +1372,14 @@ class Calculator:
                 pair_errors=np.array(
                     json.dumps(self.pair_errors, sort_keys=True, default=str), dtype="U"
                 ),
+                not_appropriate=np.array(
+                    json.dumps(self.not_appropriate, sort_keys=True, default=str),
+                    dtype="U"
+                ),
+                pair_not_appropriate=np.array(
+                    json.dumps(self.pair_not_appropriate, sort_keys=True, default=str),
+                    dtype="U"
+                ),
             )
         else:
             raise ValueError(
@@ -1333,7 +1402,9 @@ class Calculator:
         Compute every SPI on the loaded dataset.
 
         Fills :attr:`table` and :attr:`quality`, and records failures in
-        :attr:`errors` and :attr:`pair_errors` and times in :attr:`timings`.
+        :attr:`errors` and :attr:`pair_errors`, the SPIs and pairs that are
+        not appropriate for the dataset in :attr:`not_appropriate` and
+        :attr:`pair_not_appropriate`, and times in :attr:`timings`.
         A failed SPI does not stop the run.
 
         With ``n_jobs > 1`` each worker pins its BLAS and OpenMP pools to one
@@ -1364,7 +1435,8 @@ class Calculator:
             Default: True.
         retry_failed : bool, optional
             Recompute, rather than resume, checkpoints of SPIs that failed.
-            Default: True.
+            An SPI that is not appropriate for the dataset has not failed,
+            and is resumed. Default: True.
         mp_context : str or None, optional
             Multiprocessing start method when ``n_jobs > 1``: ``'fork'``,
             ``'spawn'`` or ``'forkserver'``. Default: None, ``'fork'`` on
@@ -1460,19 +1532,30 @@ class Calculator:
         self._quality[key] = np.asarray(res.quality, dtype=np.uint8)
         self._timings[key] = res.elapsed
         procs = list(self._dataset.procnames)
-        if res.pair_errors:
-            self._pair_errors[key] = [(procs[i], procs[j], msg)
-                                      for i, j, msg in res.pair_errors]
-        else:
-            self._pair_errors.pop(key, None)
+        prefix = _parallel.NOT_APPROPRIATE
+        # A recomputation replaces whatever an earlier one recorded.
+        for record in (self._pair_errors, self._pair_not_appropriate,
+                       self._errors, self._not_appropriate):
+            record.pop(key, None)
+        for i, j, msg in res.pair_errors:
+            if msg.startswith(prefix):
+                self._pair_not_appropriate.setdefault(key, []).append(
+                    (procs[i], procs[j], msg[len(prefix):]))
+            else:
+                self._pair_errors.setdefault(key, []).append(
+                    (procs[i], procs[j], msg))
         for w in warns:
             warnings.warn(f'SPI "{key}": {w}')
-        if err is not None:
+        if err is None:
+            return
+        if err.startswith(prefix):
+            self._not_appropriate[key] = err[len(prefix):]
+            warnings.warn(
+                f'SPI "{key}" is not appropriate for this dataset: '
+                f'{err[len(prefix):]}')
+        else:
             self._errors[key] = err
             warnings.warn(f'Caught error for SPI "{key}": {err}')
-        else:
-            # A successful recomputation clears an earlier failure.
-            self._errors.pop(key, None)
 
     def _rmmin(self):
         """

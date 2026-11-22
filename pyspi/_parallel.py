@@ -13,8 +13,8 @@ Design:
 - If ``checkpoint_dir`` is set, each finished SPI is atomically written to
   ``<dir>/<identifier>.npy``, with its quality codes in
   ``<identifier>.quality``, its pair failures (if any) in
-  ``<identifier>.pairs.json`` and its error (on failure) in
-  ``<identifier>.error``. A subsequent run with ``resume=True`` will load these
+  ``<identifier>.pairs.json`` and, if it failed or is not appropriate for
+  the data, its message in ``<identifier>.error``. A subsequent run with ``resume=True`` will load these
   and skip the SPIs.
 - Progress is per-SPI, not per-bucket: workers post a lightweight event to a
   shared queue after each SPI so the tqdm bar advances one tick per SPI and
@@ -294,7 +294,7 @@ def _run_task(spi_keys, checkpoint_dir):
     """
     Compute a bucket of SPIs sequentially in this worker.
 
-    Posts ``(key, failed)`` to the progress queue after each SPI, and returns
+    Posts ``(key, has_message)`` to the progress queue after each SPI, and returns
     the list of ``(key, SPIResult)`` pairs.
     """
     data = _WORKER_STATE["data"]
@@ -616,7 +616,9 @@ SCHEMA_VERSION = 1
 #   r13 -- the AUTO Theiler window is capped at N // 10.
 #   r14 -- kernel MI, TLMI and TE exclude the point itself from its counts.
 #   r15 -- KSG breaks every exact tie.
-COMPUTATION_VERSION = "3.0.0.r15"
+#   r16 -- parametric spectral GC needs max(20, 3p + 1) observations for
+#          order p.
+COMPUTATION_VERSION = "3.0.0.r16"
 
 
 def read_manifest(checkpoint_dir: Path):
@@ -718,10 +720,13 @@ def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool 
     checkpoint without one, from the values and the error sidecar (see
     :func:`derive_quality`).
 
-    A checkpoint carrying an ``.error`` sidecar records a *failed* SPI. By
-    default those are retried rather than resumed: a failure is usually caused
-    by something transient or since-fixed, and silently inheriting a NaN column
-    from a previous run is the outcome resume is least likely to be wanted for.
+    A checkpoint carrying an ``.error`` sidecar records an SPI with no value.
+    If its message starts ``"NotAppropriate: "`` and the checkpoint holds no
+    finite value, the SPI is not appropriate for the dataset: that is not a
+    failure, and it is resumed. Any other is a *failed* SPI. By default those
+    are retried rather than resumed: a failure is usually caused by something
+    transient or since-fixed, and silently inheriting a NaN column from a
+    previous run is the outcome resume is least likely to be wanted for.
     Pass ``retry_failed=False`` to resume them as-is.
     """
     done: dict = {}
@@ -748,7 +753,9 @@ def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool 
         off = arr[~np.eye(M, dtype=bool)]
         if off.size and not np.isfinite(off).any():
             err = err or "ValueError: checkpoint contains no finite values"
-        if err is not None and retry_failed:
+        not_appropriate = (err is not None and err.startswith(NOT_APPROPRIATE)
+                           and not np.isfinite(off).any())
+        if err is not None and retry_failed and not not_appropriate:
             remaining.append(key)
             continue
         q = _read_checkpoint_quality(checkpoint_dir, key, arr, err, M)

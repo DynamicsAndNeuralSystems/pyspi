@@ -1698,6 +1698,15 @@ _SGC_FMIN = 1e-5
 _GC_N_FREQS = 1024
 
 
+# The shortest series the parametric method takes, at any order.
+_GC_MIN_OBSERVATIONS = 20
+
+
+def _var_min_observations(order):
+    """The shortest series an order ``order`` VAR of a pair is fitted to."""
+    return max(_GC_MIN_OBSERVATIONS, 3 * order + 1)
+
+
 def _parametric_gc_frequencies(fs):
     """The grid ``granger_causality_xy`` evaluates on, ``k fs / 1026`` for k = 0 to 512."""
     w = np.linspace(0, np.pi, _GC_N_FREQS // 2 + 1, endpoint=False)
@@ -1716,25 +1725,29 @@ def _fit_bivariate_var(x, order=None, max_order=50):
     nitime's ``autocov_vector`` (normalised by ``T - k``, not demeaned) need
     not be.
 
-    ``max_order`` is the largest order tried, capped at ``T - 3``: the
-    residual covariance of a higher order is singular for any two demeaned
-    series of ``T`` observations. If BIC is still improving at the cap, the
-    order cannot be selected and ``NotAppropriate`` is raised, as it is for
-    an explicit ``order`` above ``T - 3``. Returns ``(coef, ecov)`` in
-    nitime's convention, ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
+    An order ``p`` fit needs ``max(20, 3p + 1)`` observations, or
+    ``NotAppropriate`` is raised. Each equation of the model has ``2p``
+    coefficients and ``T - p`` observations to fit them, so ``3p + 1`` is the
+    shortest series with more observations than coefficients; and on fewer
+    than 20 observations the estimate does not separate coupled from
+    uncoupled simulated pairs at any order. Automatic selection therefore
+    tries orders up to ``min(max_order, (T - 1) // 3)``, and raises
+    ``NotAppropriate`` if BIC is still improving at the last of them.
+    Returns ``(coef, ecov)`` in nitime's convention,
+    ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
     """
     x = x - x.mean(axis=-1, keepdims=True)
     n_obs = x.shape[-1]
-    supported = n_obs - 3
-    if order is not None and order > supported:
+    if order is not None and n_obs < _var_min_observations(order):
         raise NotAppropriate(
             f"Parametric spectral Granger causality: order {order} needs at "
-            f"least {order + 3} observations, but the series has {n_obs}. "
-            f"Set a lower `order`, or use a longer series.")
-    if supported < 0:
+            f"least {_var_min_observations(order)} observations, but the "
+            f"series has {n_obs}. Set a lower `order`, or use a longer series.")
+    if n_obs < _GC_MIN_OBSERVATIONS:
         raise NotAppropriate(
-            f"Parametric spectral Granger causality needs at least 3 "
-            f"observations, but the series has {n_obs}.")
+            f"Parametric spectral Granger causality needs at least "
+            f"{_GC_MIN_OBSERVATIONS} observations, but the series has {n_obs}.")
+    supported = (n_obs - 1) // 3
     largest = order if order is not None else min(max_order, supported)
     # R[k] = (1/T) sum_t x(t+k) x(t)^T: nitime's lag orientation.
     R = np.stack([x[:, k:] @ x[:, :n_obs - k].T
@@ -1793,14 +1806,15 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     A cell with more than ``nan_threshold`` of its in-band frequencies NaN is
     set to NaN, with a warning. With ``method='nonparametric'``, where
     Wilson's factorisation of a pair reaches its iteration cap, the value
-    comes from the unconverged factor and the SPI warns. Automatic order
-    selection that has not converged by ``max_order`` raises
-    ``NotAppropriate``: the model is over-fitting at that record length. The
-    search tries orders up to ``min(max_order, T - 3)``, the largest a series
-    of ``T`` observations supports, so a short series is fitted at the order
-    BIC selects, and is not appropriate only if BIC is still improving at
-    ``T - 3``; an explicit ``order`` above ``T - 3`` is not appropriate
-    either.
+    comes from the unconverged factor and the SPI warns. The parametric
+    method fits an order ``p`` model only to a series of at least
+    ``max(20, 3p + 1)`` observations: more observations than each equation
+    has coefficients, and at least 20, below which the estimate does not
+    separate coupled from uncoupled simulated pairs. A shorter series raises
+    ``NotAppropriate``. Automatic selection tries orders up to
+    ``min(max_order, (T - 1) // 3)`` on ``T`` observations, and raises
+    ``NotAppropriate`` if BIC is still improving at the last of them: the
+    order cannot be selected at that record length.
 
     References
     ----------
@@ -1828,11 +1842,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         ``'parametric'`` (a VAR fitted to each pair); any other value raises
         ``ValueError``. Default: ``'nonparametric'``.
     order : int or None, optional
-        VAR order of the parametric method; None selects it per pair as the
-        lowest order at which BIC stops improving. Ignored by the
+        VAR order of the parametric method, at least 0; None selects it per
+        pair as the lowest order at which BIC stops improving. Ignored by the
         nonparametric method. Default: None.
     max_order : int, optional
-        Largest order the parametric selection tries; a value other than 50
+        Largest order the parametric selection tries, at least 1; a value other than 50
         with ``order=None`` is appended to the identifier as
         ``_maxorder-<n>``. Default: 50.
     statistic : str, optional
@@ -1919,6 +1933,9 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                 ".", "-"
             ) + _nw_suffix(self._nw)
         else:
+            if order is not None:
+                require_int("order", order, minimum=0)
+            require_int("max_order", max_order)
             self._order = order
             self._max_order = max_order
             paramstr = (f"_parametric_{statistic}_fs-{fmt_param(fs)}"
@@ -2033,8 +2050,9 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                 M * (M - 1) // 2, "pairs")
             return result
         except ValueError as err:
-            # The model could not be fitted: the error reaches
-            # `Calculator.errors` with its cause, not an all-NaN table.
+            # The model could not be fitted: the cause reaches
+            # `Calculator.errors`, or `Calculator.not_appropriate` when the
+            # data cannot support the fit, not an all-NaN table.
             raise
 
 

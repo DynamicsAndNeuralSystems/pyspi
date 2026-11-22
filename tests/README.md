@@ -99,9 +99,10 @@ reproduces.
 5. any numerical difference outside the SPI's tolerance.
    A session-end summary table lists these failures.
 
-Two further gates run per fixture: no SPI may raise (`calc.errors` must be
-empty) and none may produce an entirely non-finite column. Documented
-exceptions, each with its statistical reason, live in `KNOWN_UNESTIMABLE`,
+Two further gates run per fixture: no SPI may raise or be not appropriate
+(`calc.errors` and `calc.not_appropriate` must be empty) and none may produce
+an entirely non-finite column. Documented exceptions, each with its
+statistical reason, live in `KNOWN_UNESTIMABLE`,
 shared with the baseline generator so the two cannot disagree, and the suite
 fails if a listed exception starts succeeding.
 

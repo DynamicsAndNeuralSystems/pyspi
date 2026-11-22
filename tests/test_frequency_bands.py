@@ -152,15 +152,16 @@ def test_calculator_records_an_empty_band_as_not_appropriate(tmp_path):
         "        fmax: 0.5\n")
     d = _data(T=100)
     calc = Calculator(dataset=d.to_numpy(squeeze=True), config=str(config))
-    with pytest.warns(UserWarning, match="Caught error"):
+    with pytest.warns(UserWarning, match="is not appropriate for this dataset"):
         calc.compute()
     empty = "cohmag_multitaper_mean_fs-1_fmin-0-101_fmax-0-109"
-    assert calc.errors[empty].startswith("NotAppropriate: CoherenceMagnitude: ")
-    assert "holds no frequency of the series' grid" in calc.errors[empty]
+    assert calc.not_appropriate[empty].startswith("CoherenceMagnitude: ")
+    assert "holds no frequency of the series' grid" in calc.not_appropriate[empty]
+    assert calc.errors == {}
     q = calc.quality[empty].to_numpy()
     off = ~np.eye(q.shape[0], dtype=bool)
     assert (q[off] == Quality.NAN).all()
-    assert "cohmag_multitaper_mean_fs-1_fmin-0_fmax-0-5" not in calc.errors
+    assert "cohmag_multitaper_mean_fs-1_fmin-0_fmax-0-5" not in calc.not_appropriate
 
 
 # --------------------------------------------------------------------------

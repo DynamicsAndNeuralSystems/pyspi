@@ -66,6 +66,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `python -m pyspi compute` and a `pyspi` console command (2.0.2 had neither).
   The output directory, suffix and `n_jobs` are validated before computing, and `PYSPI_N_JOBS` is honoured.
   Failed SPIs and empty columns are reported on stderr, and the exit status is 1 whenever any SPI failed; `--allow-partial` exits 0 with the partial table written.
+  SPIs that are not appropriate for the dataset are reported on stderr too, and do not make the exit status 1 unless no SPI has a value.
 
 ### Removed
 
@@ -203,11 +204,13 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   In 2.0.2 a band above `fs / 2`, with `fmin > fmax`, or holding no frequency of the series' grid gave NaN, or a value under an identifier that named a different band (`fmax=0.9` at `fs=1` gave the full-band value).
   Every multitaper and wavelet SPI, and spectral GC, now raises `ValueError` at construction unless `fs` is positive and finite and `0 <= fmin <= fmax <= fs / 2` (`fmin < fmax` for both `psi` classes), and the message says that the band is in the units of `fs`, which defaults to 1.
   A phase measure's band of zero width at 0 or `fs / 2`, which holds nothing but a real-valued bin at any length, is refused at construction too.
-  A band with no frequency of the series' grid gives NaN when computed, labelled not appropriate, with the cause recorded in `Calculator.errors`; parametric `sgc`, whose grid does not depend on the series, refuses such a band with `ValueError` at construction.
+  A band with no frequency of the series' grid gives NaN when computed, labelled not appropriate, with the cause recorded in `Calculator.not_appropriate`; parametric `sgc`, whose grid does not depend on the series, refuses such a band with `ValueError` at construction.
   An unknown `statistic` raises `ValueError` rather than `NameError`.
   The README's *Frequency bands* section explains the units and how to give bands in Hz.
 - **Spectral SPIs on a series too short for them are NaN, labelled not appropriate, with the cause recorded.**
-  Parametric `sgc` with automatic order selection searches orders up to `T - 3`, the largest a series of `T` observations supports, when that is below `max_order`, so it returns a value on short series, and is not appropriate only when the selection has not converged (BIC still improving at `max_order`, or at `T - 3` on a shorter series); an explicit `order` above `T - 3` is not appropriate.
+  Parametric `sgc` fits an order `p` model only to a series of at least `max(20, 3p + 1)` observations: more observations than each equation has coefficients, and at least 20, below which the estimate does not separate coupled from uncoupled simulated pairs.
+  So `sgc_parametric_*_order-None` and `sgc_parametric_*_order-1` are not appropriate below 20 observations and `sgc_parametric_*_order-20` below 61.
+  Automatic order selection searches orders up to `min(max_order, (T - 1) // 3)` on `T` observations, and is not appropriate when BIC is still improving at the last of them.
   Multitaper `psi` is refused with fewer than two independent frequencies in its band.
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
@@ -254,14 +257,15 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The raw output is classified before it is cast to float, so a cell with a non-zero imaginary part is NaN with code `COMPLEX`.
 - **A failed pair is `ERROR`, not an anonymous NaN.**
   A pair that raises inside an SPI that otherwise succeeds (see "One undefined pair no longer voids an SPI" under Changed) is NaN with one warning, labelled `ERROR`, with its message in `calc.pair_errors` (`{spi: [(source, target, message), ...]}`).
-  A pair whose input cannot support the estimate raises `pyspi.base.NotAppropriate` (a `ValueError`) and is labelled `NAN` instead, with its reason, prefixed `NotAppropriate: `, in `calc.pair_errors`.
+  A pair whose input cannot support the estimate raises `pyspi.base.NotAppropriate` (a `ValueError`) and is labelled `NAN` instead, with its reason in `calc.pair_not_appropriate`, not in `calc.pair_errors`.
   `calc.errors` holds SPI-level failures only.
   An undirected SPI evaluates each pair once, as `(i, j)` with `i < j`, and mirrors it, so a failure is mirrored onto its lower cell and counted once in the warning; such an SPI raises when every pair fails, giving the estimator's message in `calc.errors`.
-- An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, with its message in `calc.errors`; an SPI that raises `NotAppropriate`, or whose every pair does, is `NAN` in every cell, with its reason in `calc.errors`.
+- An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, with its message in `calc.errors`; an SPI that raises `NotAppropriate`, or whose every pair does, is `NAN` in every cell, with its reason in `calc.not_appropriate`.
+  Such an SPI has not failed: it is absent from `calc.errors`, counted apart from the failed SPIs by `calc.summary()` (`n_not_appropriate`, `not_appropriate`), and resumed from a checkpoint rather than recomputed.
   An SPI that returns only NaN keeps code `NAN` and its `calc.errors` entry.
 - **Files and checkpoints keep the codes.**
-  `.npz` files hold a `quality` array (`(n_spis, M, M)`, `uint8`) and `pair_errors`.
-  `pyspi.load_results(path)` returns `Results(table, quality, errors, run_spec, pair_errors)`; `load_table` keeps only its small metadata in `attrs`.
+  `.npz` files hold a `quality` array (`(n_spis, M, M)`, `uint8`), `pair_errors`, `not_appropriate` and `pair_not_appropriate`.
+  `pyspi.load_results(path)` returns `Results(table, quality, errors, run_spec, pair_errors, not_appropriate, pair_not_appropriate)`; `load_table` keeps only its small metadata in `attrs`.
   Checkpoints store the codes in a `<spi>.quality` sidecar (and pair failures in `<spi>.pairs.json`).
 - The summary printed after `compute()` counts the off-diagonal cells by code and lists each incomplete SPI with its counts, e.g. `one_infinite (1 Inf, 1 -Inf)`.
 
@@ -296,7 +300,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **The AUTO Theiler window (`dyn_corr_excl="AUTO"`) is capped at `N // 10`** (hctsa's rule), so it can no longer approach the series length.
 - **One undefined pair no longer voids an SPI.**
   A pair whose estimate raises (e.g., tied values for a Kozachenko-Leonenko entropy) is set to NaN with one warning, and the SPI fails only if every pair does.
-- **Input that cannot support an estimate is NaN, labelled not appropriate, with the reason in `calc.errors` or `calc.pair_errors`.**
+- **Input that cannot support an estimate is NaN, labelled not appropriate, with the reason in `calc.not_appropriate` or `calc.pair_not_appropriate`.**
   This covers refusals driven by the data (a series too short for a lag, order, embedding or window, ties, collinear series, no amplitude in a band) in the information-theoretic SPIs, `lagcorr_*`, `ccm_*`, `lccm_*`, `nli_*`, `liang_*`, `cgc_*`, the conditional spectral SPIs (`cpdc_*`, `cgpdc_*`, `cddtf_*`, `pcohmag_*`), `pac_*` and `edge_*`.
   `ccm_E-None_*` and `lccm_E-None_*` are not appropriate for a series of fewer than 41 observations, too few for their search over E = 1 to 10 (2.0.2 failed inside pyEDM for the shortest of these).
 - **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
