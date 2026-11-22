@@ -20,7 +20,7 @@ import yaml
 from . import _parallel
 from ._compat import resolve_config_arg, resolve_zscore, translate_calculator_kwargs
 from ._logging import configure as _configure_logging, get_logger
-from .base import DIRECTEDNESS_TRAITS, ONE_VALUE_PER_PAIR
+from .base import DIRECTEDNESS_TRAITS, ONE_VALUE_PER_PAIR, VALUE_KINDS
 from .data import Data
 from .quality import Quality
 from .utils import convert_mdf_to_ddf, inspect_calc_results, require_int
@@ -100,6 +100,27 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
         merged = [label for label in merged if label != "signed"]
         if issigned():
             merged.append("signed")
+
+    # Exactly one of VALUE_KINDS says what the value is. The class's own kind
+    # overrides the config's, as its trait does, and an SPI that declares
+    # none measures a strength of dependence.
+    kinds = ([kind for kind in VALUE_KINDS if kind in labels]
+             or [kind for kind in VALUE_KINDS if kind in merged])
+    if len(kinds) > 1:
+        raise ValueError(
+            f"{type(spi).__name__} is labelled with more than one of "
+            f"{', '.join(map(repr, VALUE_KINDS))}: {kinds}. An SPI's value is "
+            f"one of them.")
+    kind = kinds[0] if kinds else "strength"
+    merged = [label for label in merged if label not in VALUE_KINDS] + [kind]
+    # `inverted` reads a one-ended strength from the other end.
+    if "inverted" in merged and (kind != "strength" or "signed" in merged):
+        other = "signed" if "signed" in merged else kind
+        raise ValueError(
+            f"{type(spi).__name__} is labelled 'inverted' and {other!r}: "
+            f"'inverted' marks a one-ended strength for which lower means "
+            f"stronger, so it goes only with 'strength' and never with "
+            f"'signed'.")
 
     # Whatever the class did not settle must not be left contradictory.
     for pair in _CONTRADICTORY_LABELS:

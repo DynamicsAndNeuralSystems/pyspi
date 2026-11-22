@@ -4,10 +4,12 @@ The same SPI must carry the same labels whichever config it is loaded from,
 no SPI may carry a contradictory pair, every label must belong to the fixed
 vocabulary of CONTRIBUTING.md (which catches typos such as ``sigend``, a
 stray ``directed,`` or a compound such as ``linear/nonlinear``), and every
-SPI carries exactly one label from each axis of that vocabulary.
-``signed`` is a flag, carried exactly when ``issigned()`` is true; ``unsigned``
-is not a label, and one in a config is dropped. ``timing``, ``profile`` and
-``inverted`` are flags set by the class, on fixed sets of bundled SPIs.
+SPI carries exactly one label from each axis of that vocabulary. One axis
+says what the value is: ``strength``, the kind of an SPI that declares no
+other, or ``timing`` or ``profile``, set by the class on fixed sets of bundled
+SPIs. ``signed`` is a flag, carried exactly when ``issigned()`` is true;
+``unsigned`` is not a label, and one in a config is dropped. ``inverted`` is a
+flag set by the class, only on a ``strength`` SPI that is not ``signed``.
 The labels a config writes for an SPI must also agree with the SPI itself:
 its sign with ``issigned()``, its directedness with the class trait, its
 linearity with the class where the class declares one, and each SPI carries
@@ -20,7 +22,7 @@ import re
 
 import pytest
 
-from pyspi.base import DIRECTEDNESS_TRAITS, Undirected
+from pyspi.base import DIRECTEDNESS_TRAITS, VALUE_KINDS, Undirected
 from pyspi.calculator import (
     _expand_lagged_correlation_configs,
     _is_module_label,
@@ -37,14 +39,15 @@ CONTRADICTORY = (
     ("directed", "undirected"),
 )
 # The label vocabulary of CONTRIBUTING.md: each SPI carries exactly one
-# label from each axis, and the flags ``signed``, ``timing``, ``profile`` and
-# ``inverted`` where they apply.
+# label from each axis, and the flags ``signed`` and ``inverted`` where they
+# apply.
 LABEL_AXES = {
     "directedness": {"directed", "undirected", "antisymmetric"},
     "linearity": {"linear", "nonlinear"},
     "arity": {"bivariate", "multivariate"},
     "time": {"contemporaneous", "time-dependent", "frequency-dependent"},
     "module": {f"M{n:02d}" for n in range(1, 15)} | {"MXX"},
+    "value": set(VALUE_KINDS),
 }
 # Descriptive tags a class may carry in addition, none required.
 DESCRIPTIVE_TAGS = {
@@ -52,7 +55,7 @@ DESCRIPTIVE_TAGS = {
     "normal", "rank", "spectral", "symbolic", "temporal", "unordered",
     "wavelet",
 }
-FLAGS = {"signed", "timing", "profile", "inverted"}
+FLAGS = {"signed", "inverted"}
 VOCABULARY = set().union(*LABEL_AXES.values()) | DESCRIPTIVE_TAGS | FLAGS
 # The SPIs of `full` whose value is an offset (timing) or describes how the
 # dependence is distributed (profile).
@@ -180,7 +183,7 @@ def test_class_trait_wins_over_config_linearity():
 
     spi = Nonlinear()
     _merge_spi_labels(spi, config_labels=["linear"])
-    assert spi.labels == ["nonlinear"]
+    assert spi.labels == ["nonlinear", "strength"]
 
 
 def _config_entries(name):
@@ -350,10 +353,75 @@ def test_value_flags_in_full(labels_by_config, flag, expected):
             == expected & set(spis), config
 
 
-def test_no_spi_is_both_timing_and_profile(labels_by_config):
-    bad = [f"{config}/{ident}" for config, spis in labels_by_config.items()
-           for ident, labels in spis.items() if {"timing", "profile"} <= set(labels)]
-    assert not bad, bad
+def test_every_other_spi_of_full_is_a_strength(labels_by_config):
+    full = labels_by_config["full"]
+    strength = {ident for ident, labels in full.items() if "strength" in labels}
+    assert strength == set(full) - TIMING_IN_FULL - PROFILE_IN_FULL
+    assert len(strength) == 220
+    signed = {ident for ident in strength if "signed" in full[ident]}
+    assert len(signed) == 43 and not signed & INVERTED_IN_FULL
+    assert INVERTED_IN_FULL <= strength
+
+
+def _merged(own, config_labels=None):
+    class Stub:
+        labels = list(own)
+
+    spi = Stub()
+    _merge_spi_labels(spi, config_labels=config_labels)
+    return spi.labels
+
+
+def test_an_spi_that_declares_no_kind_is_a_strength():
+    assert _merged(["linear"]) == ["linear", "strength"]
+    assert _merged(["linear"], ["strength"]) == ["linear", "strength"]
+
+
+@pytest.mark.parametrize("kind", ["timing", "profile"])
+def test_a_declared_kind_replaces_strength(kind):
+    assert set(_merged([kind])) & set(VALUE_KINDS) == {kind}
+    # A config may give the kind of a class that declares none.
+    assert set(_merged(["linear"], [kind])) & set(VALUE_KINDS) == {kind}
+    # The class's own kind overrides the config's, as its trait does.
+    assert set(_merged([kind], ["strength"])) & set(VALUE_KINDS) == {kind}
+
+
+def test_two_kinds_are_refused():
+    with pytest.raises(ValueError, match="more than one of 'strength', 'timing', 'profile'"):
+        _merged(["timing", "profile"])
+    with pytest.raises(ValueError, match="more than one of"):
+        _merged(["linear"], ["timing", "profile"])
+
+
+def test_inverted_goes_only_with_an_unsigned_strength():
+    from pyspi.base import Signed
+
+    assert _merged(["inverted"]) == ["inverted", "strength"]
+    with pytest.raises(ValueError, match="'inverted' and 'timing'"):
+        _merged(["inverted", "timing"])
+    with pytest.raises(ValueError, match="'inverted' and 'profile'"):
+        _merged(["inverted"], ["profile"])
+
+    class SignedStub(Signed):
+        labels = ["inverted"]
+
+    with pytest.raises(ValueError, match="'inverted' and 'signed'"):
+        _merge_spi_labels(SignedStub())
+
+
+def test_filter_spis_selects_by_kind(tmp_path, monkeypatch):
+    import yaml
+
+    from pyspi.utils import filter_spis
+
+    monkeypatch.chdir(tmp_path)
+    filter_spis(["timing"], output_name="timing")
+    kept = load_spis_from_yaml(str(tmp_path / "timing.yaml"), quiet=True)
+    assert set(kept) == TIMING_IN_FULL
+    filter_spis(["strength", "signed"], output_name="signed_strength")
+    kept = load_spis_from_yaml(str(tmp_path / "signed_strength.yaml"), quiet=True)
+    assert len(kept) == 43 and not set(kept) & (TIMING_IN_FULL | PROFILE_IN_FULL)
+    assert yaml.safe_load((tmp_path / "timing.yaml").read_text())
 
 
 def test_config_value_flags_agree_with_the_class(entries_by_config):

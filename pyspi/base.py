@@ -197,6 +197,11 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
 # The four symmetry traits a matrix can declare, in the order `_merge_spi_labels`
 # resolves them. Exactly one survives on every configured SPI.
 DIRECTEDNESS_TRAITS = ("antisymmetric", "asymmetric", "undirected", "directed")
+# What an SPI's value is: how strongly the pair depends (`strength`), when
+# (`timing`: a lag or phase offset), or how the dependence is distributed over
+# time or over the range of values (`profile`). Every configured SPI carries
+# exactly one; `strength` is the kind of an SPI that declares no other.
+VALUE_KINDS = ("strength", "timing", "profile")
 # Traits whose matrix holds one independent value per unordered pair: the lower
 # triangle is the upper one copied (undirected) or negated (antisymmetric).
 ONE_VALUE_PER_PAIR = ("undirected", "antisymmetric")
@@ -338,13 +343,12 @@ class Unsigned:
     """
     Mixin for every SPI that is not signed, which carries no sign label.
 
-    By default its value is a one-ended strength of dependence, higher meaning
-    stronger (with the flag ``inverted``, lower meaning stronger, as for a
-    distance or an entropy; with ``timing`` or ``profile``, an offset or a
-    description of how the dependence is distributed), whatever values it
+    Where it is labelled ``strength``, its value is a one-ended strength of
+    dependence, higher meaning stronger (with the flag ``inverted``, lower
+    meaning stronger, as for a distance or an entropy), whatever values it
     takes: it can be negative through estimator bias, a floor that is not 0
-    (soft-DTW, a differential entropy) or an inverted scale (the Engle-Granger
-    t-statistic, more negative for stronger evidence).
+    (soft-DTW, a differential entropy) or an inverted scale (the
+    Engle-Granger t-statistic, more negative for stronger evidence).
     """
     def issigned(self):
         return False
