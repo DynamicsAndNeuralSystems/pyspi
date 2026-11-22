@@ -17,6 +17,7 @@ import yaml
 import sklearn.covariance
 
 import pyspi
+from pyspi.base import NotAppropriate
 from pyspi.calculator import Calculator
 from pyspi.data import Data
 from pyspi.statistics.basic import Covariance, PartialCorrelation, Precision
@@ -211,18 +212,15 @@ def _wide(M, T, seed=3):
 @pytest.mark.parametrize("estimator", PSEUDO_INVERSE_ESTIMATORS)
 @pytest.mark.parametrize("cls", [Precision, PartialCorrelation])
 @pytest.mark.parametrize("squared", [False, True])
-def test_singular_covariance_gives_nan_and_one_warning(M, T, estimator, cls, squared):
+def test_singular_covariance_is_not_appropriate(M, T, estimator, cls, squared):
     data = _wide(M, T)
     spi = cls(estimator=estimator, squared=squared)
-    with pytest.warns(UserWarning) as caught:
-        A = spi.multivariate(data)
-    assert A.shape == (M, M)
-    assert np.isnan(A).all()
-    messages = [str(w.message) for w in caught]
-    assert len(messages) == 1
-    assert estimator in messages[0]
-    assert f"rank {T - 1} < M = {M}" in messages[0]
-    assert spi.identifier in messages[0]
+    with pytest.raises(NotAppropriate) as refused:
+        spi.multivariate(data)
+    reason = str(refused.value)
+    assert estimator in reason
+    assert f"rank {T - 1} < M = {M}" in reason
+    assert spi.identifier in reason
 
 
 @pytest.mark.parametrize("M,T", [(12, 10), (20, 20)])
@@ -272,9 +270,8 @@ def test_duplicated_process_makes_the_covariance_singular():
     X = _series()
     X[4] = X[0]
     data = _data(X)
-    with pytest.warns(UserWarning, match=r"rank 4 < M = 5"):
-        A = PartialCorrelation().multivariate(data)
-    assert np.isnan(A).all()
+    with pytest.raises(NotAppropriate, match=r"rank 4 < M = 5"):
+        PartialCorrelation().multivariate(data)
 
 
 def test_singular_covariance_in_the_calculator(tmp_path):
@@ -300,8 +297,11 @@ def test_singular_covariance_in_the_calculator(tmp_path):
         assert np.isnan(calc.table[key].to_numpy()).all()
         assert (calc.quality[key].to_numpy()[off] == Quality.NAN).all()
         assert any(key in m and "rank 9 < M = 12" in m for m in messages)
+        assert key in calc.not_appropriate[key]
+        assert "rank 9 < M = 12" in calc.not_appropriate[key]
+        assert key not in calc.errors
     for key in ("cov_EmpiricalCovariance", "cov_LedoitWolf",
                 "prec_LedoitWolf", "pcorr_LedoitWolf"):
         assert np.isfinite(calc.table[key].to_numpy()[off]).all()
         assert (calc.quality[key].to_numpy()[off] == Quality.GOOD).all()
-        assert key not in calc.errors
+        assert key not in calc.errors and key not in calc.not_appropriate

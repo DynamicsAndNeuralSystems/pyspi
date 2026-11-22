@@ -334,17 +334,23 @@ class SPIResult(NamedTuple):
     elapsed: float
 
 
-# SPI-level error messages that describe the *values* (every off-diagonal cell
-# undefined) rather than a computation that raised. A result carrying one keeps
-# the quality codes of its values (NaN, Inf, ...); any other error means the
-# computation failed, so its cells are labelled ERROR.
-NO_FINITE_VALUES = "ValueError: SPI returned no finite off-diagonal values"
-_VALUE_ERRORS = (NO_FINITE_VALUES,
-                 "ValueError: checkpoint contains no finite values")
-# The prefix of the message of an SPI or pair that raised
-# `pyspi.base.NotAppropriate`: the input cannot support the estimate, so its
+# The prefix of the message of an SPI or pair that is not appropriate for the
+# data (it raised `pyspi.base.NotAppropriate`, or returned no value): its
 # cells are NAN, not ERROR, and the message is the reason.
 NOT_APPROPRIATE = "NotAppropriate: "
+# An SPI that raised nothing and has no finite off-diagonal value. Returning
+# NaN is an SPI's way of saying the data cannot support the estimate, so
+# without a failed pair it is not appropriate, with this as its reason; with
+# one, something went wrong and it is an error. Either way the cells keep the
+# quality codes of what was returned (NaN, Inf, ...).
+RETURNED_NO_VALUE = (f"{NOT_APPROPRIATE}the SPI returned no finite value and "
+                     f"gave no reason")
+NO_FINITE_VALUES = "ValueError: SPI returned no finite off-diagonal values"
+# SPI-level error messages that describe the *values* rather than a
+# computation that raised; any other error means the computation failed, so
+# its cells are labelled ERROR.
+_VALUE_ERRORS = (NO_FINITE_VALUES,
+                 "ValueError: checkpoint contains no finite values")
 
 
 def describes_values(msg) -> bool:
@@ -406,8 +412,10 @@ def execute_spi(spi, data, key, M) -> SPIResult:
       ``"NotAppropriate: "``, is in ``pair_errors`` all the same.
     - The diagonal is NAN: a self-pair is not appropriate by construction.
 
-    If no off-diagonal cell is GOOD, ``err`` is set to ``NO_FINITE_VALUES`` but
-    the cells keep their codes (NAN, INF, ...).
+    If no off-diagonal cell is GOOD, the cells keep their codes (NAN, INF,
+    ...) and ``err`` is set: to ``NO_FINITE_VALUES`` if a pair failed, and
+    otherwise to ``RETURNED_NO_VALUE``, which records the SPI as not
+    appropriate.
     """
     from .base import NotAppropriate, collect_pair_failures
 
@@ -444,7 +452,8 @@ def execute_spi(spi, data, key, M) -> SPIResult:
         off = ~np.eye(M, dtype=bool)
         if off.any():
             if not (Q[off] == Quality.GOOD).any():
-                err = NO_FINITE_VALUES
+                err = (NO_FINITE_VALUES if (Q[off] == Quality.ERROR).any()
+                       else RETURNED_NO_VALUE)
             else:
                 special = {label: int(np.count_nonzero(Q[off] == code))
                            for label, code in (("Inf", Quality.INF),

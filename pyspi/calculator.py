@@ -959,11 +959,12 @@ class Calculator:
         table: they say why a NaN column is NaN. :attr:`quality` says the
         same per cell.
 
-        An SPI whose every off-diagonal value is undefined (NaN, Inf, ...) is
-        listed too, with ``"ValueError: SPI returned no finite off-diagonal
-        values"``, although its cells keep the codes of what it returned.
+        Every SPI listed has a cell coded ``Quality.ERROR`` and no value: it
+        raised, or some of its pairs failed and the rest returned no finite
+        value (``"ValueError: SPI returned no finite off-diagonal values"``).
         Failures of single pairs are in :attr:`pair_errors`, not here. An SPI
-        that is not appropriate for the dataset has not failed: it is in
+        that is not appropriate for the dataset, or that returned no finite
+        value without a failure, has not failed: it is in
         :attr:`not_appropriate`.
         """
         return dict(self._errors)
@@ -977,8 +978,11 @@ class Calculator:
         pairs did: the data cannot support the estimate (too few
         observations, a constant series, tied values, ...). Its column in
         :attr:`table` is NaN and its cells are ``Quality.NAN`` in
-        :attr:`quality`. This is an expected outcome, not a failure, so the
-        SPI is absent from :attr:`errors`. Pairs an SPI is not appropriate
+        :attr:`quality`. An SPI that raised nothing and returned no finite
+        value is listed too, with the reason ``"the SPI returned no finite
+        value and gave no reason"``; its cells keep the codes of what it
+        returned (NaN, Inf, ...). Neither is a failure, so the SPI is absent
+        from :attr:`errors`, and none of its cells is ``Quality.ERROR``. Pairs an SPI is not appropriate
         for, when it has values for others, are in
         :attr:`pair_not_appropriate`.
         """

@@ -135,11 +135,60 @@ def test_complex_output_is_labelled_not_truncated(serial):
     assert any(key in m and "1 complex" in m for m in msgs), msgs
 
 
-def test_an_all_nan_spi_keeps_its_nan_codes_and_its_error(serial):
-    """An all-NaN SPI keeps its NAN codes and still carries an error, so it is not silent."""
+def test_an_all_nan_spi_is_not_appropriate_with_a_stock_reason(serial):
+    """It raised nothing, so it has not failed; it is listed, so it is not silent."""
     calc, _ = serial
     assert np.array_equal(_q(calc, "all_nan"), _expected(NAN))
-    assert calc.errors["all_nan"] == _parallel.NO_FINITE_VALUES
+    assert calc.not_appropriate["all_nan"] == (
+        "the SPI returned no finite value and gave no reason")
+    assert "all_nan" not in calc.errors
+
+
+def test_the_records_agree_with_the_codes(serial):
+    """An SPI with no value is in exactly one record, by whether a cell is ERROR."""
+    calc, _ = serial
+    off = ~np.eye(calc.dataset.n_processes, dtype=bool)
+    seen = set()
+    for key in calc.spis:
+        codes = _q(calc, key)[off]
+        failed, refused = key in calc.errors, key in calc.not_appropriate
+        assert (failed or refused) == (not (codes == GOOD).any()), key
+        assert not (failed and refused), key
+        if failed:
+            assert (codes == ERROR).any(), key
+        if refused:
+            assert not (codes == ERROR).any(), key
+        seen.add((failed, refused))
+    assert seen == {(True, False), (False, True), (False, False)}
+
+
+def test_no_value_with_a_failed_pair_is_an_error():
+    """Something went wrong for a pair, and no other pair has a value."""
+    from pyspi.data import Data
+
+    class OnePairFailsTheRestAreNan:
+        identifier = "mixed"
+
+        def multivariate(self, data):
+            M = data.n_processes
+            A = np.full((M, M), np.nan)
+
+            def compute(i, j):
+                if (i, j) == (0, 1):
+                    raise RuntimeError("boom")
+                return np.nan
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                return fill_pairwise(self.identifier, A,
+                                     [(i, j) for i in range(M) for j in range(M) if i != j],
+                                     compute)
+
+    data = Data(_dataset(), dim_order="ps")
+    res = _parallel.execute_spi(OnePairFailsTheRestAreNan(), data, "mixed", 3)
+    assert res.err == _parallel.NO_FINITE_VALUES
+    assert res.quality[0, 1] == ERROR and res.quality[1, 0] == NAN
+    assert [(i, j) for i, j, _ in res.pair_errors] == [(0, 1)]
 
 
 def test_a_wrong_shape_is_error():
@@ -248,7 +297,7 @@ def test_checkpoint_without_quality_derives_it(tmp_path):
     np.save(tmp_path / "always_raises.npy", np.full((3, 3), np.nan))
     (tmp_path / "always_raises.error").write_text("RuntimeError: old failure")
     np.save(tmp_path / "all_nan.npy", np.full((3, 3), np.nan))
-    (tmp_path / "all_nan.error").write_text(_parallel.NO_FINITE_VALUES)
+    (tmp_path / "all_nan.error").write_text(_parallel.RETURNED_NO_VALUE)
 
     _compute(calc, checkpoint_dir=tmp_path, retry_failed=False)
     assert np.array_equal(_q(calc, "always_raises"), _expected(ERROR))

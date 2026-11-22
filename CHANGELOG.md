@@ -238,7 +238,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **`gwtau` left the start of the trajectory out of its distance vector** (Kravtsova et al. 2023); values change by the factor `sqrt((T - 1) / T)`.
 - **Undefined values.**
   `cds` returned 0, its strongest evidence for `i -> j`, when undefined, and `anm`, `cds` and `xcorr_*` returned 0 or an arbitrary number for a pair with a constant series; all are now NaN.
-  `prec_*` and `pcorr_*` reported a pseudo-inverse when the covariance estimate is singular; for `EmpiricalCovariance` and `MinCovDet` they are now NaN, with a warning giving the rank.
+  `prec_*` and `pcorr_*` reported a pseudo-inverse when the covariance estimate is singular; for `EmpiricalCovariance` and `MinCovDet` they are now NaN, labelled not appropriate, with the rank in the reason.
 - **Integer parameters** (`ConvergentCrossMapping(embedding_dimension=2.7)`, a fractional `max_tau`) were truncated after the identifier was built; they must now be integers.
 - **SPI metadata (no value changes).**
   `InterDependenceScore` left `terms`, `pnorm` and `bandwidth` out of its identifier, and `SpectralGrangerCausality` left out `max_order` (when the order is selected), `ignore_nan` and `nan_threshold`, so two parameterisations could share a table column; non-default values are now appended (e.g. `ids_bw-0-25`), and every bundled identifier is unchanged.
@@ -255,7 +255,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 
 - **An Inf does not fail the whole SPI.**
   The finite cells are kept, the infinite cells are NaN with code `INF` or `NEG_INF`, and a warning gives the count.
-  The SPI is listed in `calc.errors` only if no off-diagonal value is finite, as for an all-NaN result.
+  An SPI with no finite off-diagonal value that raised nothing is listed in `calc.not_appropriate`, as an all-NaN result is.
 - **Complex output is labelled, not truncated.**
   The raw output is classified before it is cast to float, so a cell with a non-zero imaginary part is NaN with code `COMPLEX`.
 - **A failed pair is `ERROR`, not an anonymous NaN.**
@@ -265,7 +265,8 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   An undirected SPI evaluates each pair once, as `(i, j)` with `i < j`, and mirrors it, so a failure is mirrored onto its lower cell and counted once in the warning; such an SPI raises when every pair fails, giving the estimator's message in `calc.errors`.
 - An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, with its message in `calc.errors`; an SPI that raises `NotAppropriate`, or whose every pair does, is `NAN` in every cell, with its reason in `calc.not_appropriate`.
   Such an SPI has not failed: it is absent from `calc.errors`, counted apart from the failed SPIs by `calc.summary()` (`n_not_appropriate`, `not_appropriate`), and resumed from a checkpoint rather than recomputed.
-  An SPI that returns only NaN keeps code `NAN` and its `calc.errors` entry.
+  An SPI that returns no finite value without raising keeps the codes of what it returned and is listed in `calc.not_appropriate` with the reason "the SPI returned no finite value and gave no reason"; if one of its pairs failed, it is in `calc.errors`.
+  So an SPI is in `calc.errors` only if a cell of it is coded `ERROR`, and in `calc.not_appropriate` only if none is.
 - **Files and checkpoints keep the codes.**
   `.npz` files hold a `quality` array (`(n_spis, M, M)`, `uint8`), `pair_errors`, `not_appropriate` and `pair_not_appropriate`.
   `pyspi.load_results(path)` returns `Results(table, quality, errors, run_spec, pair_errors, not_appropriate, pair_not_appropriate)`; `load_table` keeps only its small metadata in `attrs`.
