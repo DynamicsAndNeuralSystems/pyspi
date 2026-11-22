@@ -450,7 +450,7 @@ def test_calculator_round_trip(tmp_path):
     calc = Calculator(dataset=_data(x), config=str(path))
     calc.compute()
 
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     assert set(calc.spis) == set(BUNDLED) | {"cgc_p-bic"}
     off = _offdiag(4)
     for ident, (cls, kwargs) in BUNDLED.items():

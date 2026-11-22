@@ -1842,11 +1842,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         ``'parametric'`` (a VAR fitted to each pair); any other value raises
         ``ValueError``. Default: ``'nonparametric'``.
     order : int or None, optional
-        VAR order of the parametric method; None selects it per pair as the
-        lowest order at which BIC stops improving. Ignored by the
+        VAR order of the parametric method, at least 0; None selects it per
+        pair as the lowest order at which BIC stops improving. Ignored by the
         nonparametric method. Default: None.
     max_order : int, optional
-        Largest order the parametric selection tries; a value other than 50
+        Largest order the parametric selection tries, at least 1; a value other than 50
         with ``order=None`` is appended to the identifier as
         ``_maxorder-<n>``. Default: 50.
     statistic : str, optional
@@ -1933,6 +1933,9 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                 ".", "-"
             ) + _nw_suffix(self._nw)
         else:
+            if order is not None:
+                require_int("order", order, minimum=0)
+            require_int("max_order", max_order)
             self._order = order
             self._max_order = max_order
             paramstr = (f"_parametric_{statistic}_fs-{fmt_param(fs)}"
@@ -2047,8 +2050,9 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                 M * (M - 1) // 2, "pairs")
             return result
         except ValueError as err:
-            # The model could not be fitted: the error reaches
-            # `Calculator.errors` with its cause, not an all-NaN table.
+            # The model could not be fitted: the cause reaches
+            # `Calculator.errors`, or `Calculator.not_appropriate` when the
+            # data cannot support the fit, not an all-NaN table.
             raise
 
 

@@ -86,6 +86,15 @@ def test_an_explicit_order_needs_more_observations_than_coefficients(order, shor
         assert np.linalg.cond(ecov) < 1e6
 
 
+@pytest.mark.parametrize("kwargs, error", [
+    (dict(order=-1), ValueError), (dict(order=2.5), TypeError),
+    (dict(max_order=0), ValueError), (dict(max_order=True), TypeError)])
+def test_an_order_that_is_not_a_count_is_refused_at_construction(kwargs, error):
+    with pytest.raises(error, match="order must be"):
+        spectral.SpectralGrangerCausality(method="parametric", **kwargs)
+    spectral.SpectralGrangerCausality(method="parametric", order=0, max_order=1)
+
+
 @pytest.mark.parametrize("make", [_white, _coupled_var1], ids=["white", "coupled_var1"])
 @pytest.mark.parametrize("T", [20, 31, 50, 64, 100, 150, 151, 257])
 def test_the_search_selects_the_order_the_full_search_does(make, T):

@@ -66,7 +66,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `python -m pyspi compute` and a `pyspi` console command (2.0.2 had neither).
   The output directory, suffix and `n_jobs` are validated before computing, and `PYSPI_N_JOBS` is honoured.
   Failed SPIs and empty columns are reported on stderr, and the exit status is 1 whenever any SPI failed; `--allow-partial` exits 0 with the partial table written.
-  SPIs that are not appropriate for the dataset are reported on stderr too, and do not change the exit status.
+  SPIs that are not appropriate for the dataset are reported on stderr too, and do not make the exit status 1 unless no SPI has a value.
 
 ### Removed
 
@@ -209,7 +209,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   The README's *Frequency bands* section explains the units and how to give bands in Hz.
 - **Spectral SPIs on a series too short for them are NaN, labelled not appropriate, with the cause recorded.**
   Parametric `sgc` fits an order `p` model only to a series of at least `max(20, 3p + 1)` observations: more observations than each equation has coefficients, and at least 20, below which the estimate does not separate coupled from uncoupled simulated pairs.
-  So `sgc_parametric_*_order-None` and `sgc_parametric_*_order-1` are not appropriate below 20 observations and `sgc_parametric_*_order-20` below 61 (2.0.2 returned a value at any length).
+  So `sgc_parametric_*_order-None` and `sgc_parametric_*_order-1` are not appropriate below 20 observations and `sgc_parametric_*_order-20` below 61.
   Automatic order selection searches orders up to `min(max_order, (T - 1) // 3)` on `T` observations, and is not appropriate when BIC is still improving at the last of them.
   Multitaper `psi` is refused with fewer than two independent frequencies in its band.
 - **Spurious warnings from valid spectral SPIs.**

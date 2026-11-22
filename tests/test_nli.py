@@ -298,7 +298,7 @@ def test_calculator_round_trip(tmp_path):
     z = np.random.default_rng(10).standard_normal((3, 200))
     calc = Calculator(dataset=Data(data=z, dim_order="ps"), config=str(path))
     calc.compute()
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     assert set(calc.spis) == set(BUNDLED)
     for ident, (stat, m) in BUNDLED.items():
         ref = NonlinearInterdependence(stat, m=m).multivariate(

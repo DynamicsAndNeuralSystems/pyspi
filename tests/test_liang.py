@@ -354,7 +354,7 @@ def test_calculator_round_trip(tmp_path):
     z = _fixture(M=4, T=300, seed=12)
     calc = Calculator(dataset=Data(z, dim_order="ps"), config=str(path))
     calc.compute()
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     assert sorted(calc.spis) == sorted(IDENTIFIERS)
     for ident, params in zip(IDENTIFIERS, VARIANTS):
         got = calc.table[ident].to_numpy(dtype=float)

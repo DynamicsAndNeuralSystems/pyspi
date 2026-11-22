@@ -684,7 +684,7 @@ def test_calculator_round_trip(tmp_path):
     X = _series()
     calc = Calculator(dataset=_data(X), config=str(path))
     calc.compute()
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     ids = [k for k in calc.spis if k.startswith("lagcorr_")]
     assert ids == EXPECTED_IDS
     off = ~np.eye(len(X), dtype=bool)

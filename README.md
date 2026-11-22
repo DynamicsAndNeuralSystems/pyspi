@@ -85,7 +85,7 @@ calc.feature_vector()                  # one value per independent pair, for ML
 calc.quality                           # one code per cell: 0 good, else why it is NaN
 calc.save("results.npz")               # canonical on-disk format
 pyspi.load_table("results.npz")        # round-trips exactly
-pyspi.load_results("results.npz")      # table, quality codes, errors, reasons, run spec
+pyspi.load_results("results.npz")      # table, quality codes, run spec, errors, reasons
 ```
 
 The dataset is `(M, T)`, one row per process; for a `(T, M)` array or a DataFrame with one column per process, pass `dim_order="sp"` (`--dim-order sp` on the command line), and a DataFrame's labels become the process names.

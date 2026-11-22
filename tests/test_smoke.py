@@ -249,6 +249,7 @@ def _assert_finite_through_calculator(X, config, tmp_path):
         warnings.simplefilter("ignore")
         calc.compute(progress=False)
     assert calc.errors == {}, calc.errors
+    assert calc.not_appropriate == {}, calc.not_appropriate
     assert calc.pair_errors == {}, calc.pair_errors
     for key in calc.spis:
         q = calc.quality[key].to_numpy()

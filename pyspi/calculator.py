@@ -430,9 +430,9 @@ def load_table(path):
     pandas.DataFrame
         The table as ``Calculator.table`` holds it: rows are processes,
         columns a ``(spi, process)`` MultiIndex. ``table.attrs`` holds the
-        file's ``schema``, ``run_spec``, ``run_digest`` and ``errors``, and
-        ``directedness``, ``{identifier: trait}`` with each SPI's symmetry
-        trait, which :func:`feature_vector` uses.
+        file's ``schema``, ``run_spec``, ``run_digest``, ``errors`` and
+        ``not_appropriate``, and ``directedness``, ``{identifier: trait}``
+        with each SPI's symmetry trait, which :func:`feature_vector` uses.
     """
     return _table_from_parts(_read_npz(path))
 
@@ -443,7 +443,7 @@ def _table_from_parts(parts):
     # Only small values go in `attrs`: pandas deep-copies them on every derived
     # frame and compares them in `concat`, so the quality codes stay out.
     table.attrs["schema"] = parts["schema"]
-    for name in ("run_spec", "errors"):
+    for name in ("run_spec", "errors", "not_appropriate"):
         if name in parts:
             table.attrs[name] = parts[name]
     if parts["run_digest"] is not None:
@@ -923,9 +923,9 @@ class Calculator:
         ``{identifier: "ExcType: message"}`` for every SPI that failed.
 
         A failed SPI still occupies its column in :attr:`table`, filled with
-        NaN. Consult this before interpreting a table: a NaN column is
-        otherwise indistinguishable from a legitimately undefined statistic.
-        :attr:`quality` says the same per cell.
+        NaN. Consult this and :attr:`not_appropriate` before interpreting a
+        table: they say why a NaN column is NaN. :attr:`quality` says the
+        same per cell.
 
         An SPI whose every off-diagonal value is undefined (NaN, Inf, ...) is
         listed too, with ``"ValueError: SPI returned no finite off-diagonal

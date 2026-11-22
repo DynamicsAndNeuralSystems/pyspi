@@ -479,7 +479,7 @@ def test_calculator_round_trip():
     expected = {"ccm_E-2_convergence", "ccm_E-2_slope",
                 "lccm_E-2_k-3_tp", "lccm_E-2_k-3_skill"}
     assert set(calc.spis) == expected
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     off = _off(3)
     direct = {
         "ccm_E-2_convergence": ConvergentCrossMapping("convergence", 2),

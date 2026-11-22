@@ -306,7 +306,7 @@ def test_calculator_round_trip(tmp_path):
     calc = Calculator(dataset=Data(data=arr, dim_order="ps"), config=str(path))
     assert sorted(calc.spis) == sorted(IDENTIFIERS)
     calc.compute()
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     for (p, a), s in [(b, s) for b in BANDS for s in ("mi", "mvl")]:
         spi = PhaseAmplitudeCoupling(p, a, s)
         want = spi.multivariate(Data(data=arr, dim_order="ps"))

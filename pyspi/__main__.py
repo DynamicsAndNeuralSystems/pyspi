@@ -131,7 +131,8 @@ def main(argv=None) -> int:
     if n_failed:
         print(f"{n_failed} of {calc.n_spis} SPI(s) failed: "
               f"{', '.join(sorted(calc.errors))}", file=sys.stderr)
-    # Not a failure, but the user should know which columns are NaN and why.
+    # Not a failure, but the user should know which columns are NaN; the
+    # reasons are in the output file (`load_results(...).not_appropriate`).
     if calc.not_appropriate:
         print(f"{len(calc.not_appropriate)} of {calc.n_spis} SPI(s) are not "
               f"appropriate for this dataset (NaN, not failed): "

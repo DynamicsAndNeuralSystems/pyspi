@@ -50,6 +50,7 @@ def test_whether_calculator_computes():
         f"{len(calc.errors)} SPI(s) raised on the default config:\n  "
         + "\n  ".join(f"{k}: {v}" for k, v in sorted(calc.errors.items()))
     )
+    assert not calc.not_appropriate, calc.not_appropriate
     off_diagonal = ~np.eye(calc.dataset.n_processes, dtype=bool)
     empty = sorted(
         key for key in calc.spis

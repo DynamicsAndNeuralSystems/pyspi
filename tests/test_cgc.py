@@ -422,7 +422,7 @@ def test_calculator_round_trip(tmp_path):
     calc = Calculator(dataset=_data(x), config=str(path))
     calc.compute()
 
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     assert set(calc.spis) == set(CONFIGS)
     off = _offdiag(4)
     for ident, kwargs in CONFIGS.items():

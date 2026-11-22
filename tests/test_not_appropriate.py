@@ -5,7 +5,7 @@ raises ``NotAppropriate``. The Calculator then stores NaN with
 ``Quality.NAN`` and keeps the reason: in ``calc.not_appropriate`` for the
 whole SPI, in ``calc.pair_not_appropriate`` for single pairs. This is not a
 failure, so neither is in ``calc.errors`` or ``calc.pair_errors``, where any
-other exception still goes, as ``Quality.ERROR``. These tests pin that in the
+other exception goes, as ``Quality.ERROR``. These tests pin that in the
 serial and parallel paths, through checkpoints and through ``.npz`` files.
 
 The stub SPIs live in ``tests/failing_spis.py``; ``tests/`` is put on
@@ -182,6 +182,24 @@ def test_resume_retries_failures_and_keeps_not_appropriate_spis(tmp_path):
     recomputed = {k for k, seconds in resumed.timings.items() if seconds > 0}
     assert recomputed == set(resumed.errors)
     assert set(resumed.not_appropriate) == {"never_appropriate", "no_pair_appropriate"}
+
+
+def test_a_not_appropriate_checkpoint_that_holds_values_is_recomputed(tmp_path):
+    """The message and the values disagree, so the checkpoint is not trusted."""
+    _compute(_calc(), checkpoint_dir=tmp_path)
+    np.save(tmp_path / "never_appropriate.npy", np.ones((M, M)))
+    (tmp_path / "never_appropriate.quality").unlink()
+    resumed = _compute(_calc(), checkpoint_dir=tmp_path)
+    assert resumed.timings["never_appropriate"] > 0
+    assert (_q(resumed, "never_appropriate") == NAN).all()
+    assert resumed.not_appropriate["never_appropriate"] == WHOLE
+
+
+def test_load_table_keeps_the_not_appropriate_reasons(serial, tmp_path):
+    from pyspi import load_table
+    table = load_table(serial.save(tmp_path / "r.npz"))
+    assert table.attrs["not_appropriate"] == serial.not_appropriate
+    assert table.attrs["errors"] == serial.errors
 
 
 def test_npz_round_trip_keeps_codes_and_reasons(serial, tmp_path):

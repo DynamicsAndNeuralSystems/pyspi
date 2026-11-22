@@ -310,7 +310,7 @@ def test_calculator_round_trip(fixture):
         calc.compute()
     finally:
         os.unlink(f.name)
-    assert calc.errors == {}
+    assert calc.errors == {} and calc.not_appropriate == {}
     assert set(calc.spis) == set(IDS.values())
     for s, ident in IDS.items():
         ref = EdgeTimeSeries(s).multivariate(Data(fixture, dim_order="ps"))

@@ -299,8 +299,8 @@ def test_load_table_keeps_quality_out_of_attrs(serial, tmp_path):
     calc, _ = serial
     path = calc.save(tmp_path / "r.npz")
     t1, t2 = load_table(path), load_table(path)
-    assert set(t1.attrs) == {"schema", "run_spec", "errors", "run_digest",
-                             "directedness"}
+    assert set(t1.attrs) == {"schema", "run_spec", "errors", "not_appropriate",
+                             "run_digest", "directedness"}
     assert t1.equals(calc.table)
     pd.concat([t1, t2])
 

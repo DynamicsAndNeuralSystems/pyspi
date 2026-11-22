@@ -161,7 +161,7 @@ def test_calculator_records_an_empty_band_as_not_appropriate(tmp_path):
     q = calc.quality[empty].to_numpy()
     off = ~np.eye(q.shape[0], dtype=bool)
     assert (q[off] == Quality.NAN).all()
-    assert "cohmag_multitaper_mean_fs-1_fmin-0_fmax-0-5" not in calc.errors
+    assert "cohmag_multitaper_mean_fs-1_fmin-0_fmax-0-5" not in calc.not_appropriate
 
 
 # --------------------------------------------------------------------------
