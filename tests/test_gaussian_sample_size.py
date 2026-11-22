@@ -5,7 +5,7 @@ A sample covariance of ``n`` observations has rank at most ``n - 1``, so with
 estimate needs, the log-determinant is set by the 1e-8 ridge, not by the data.
 Each Gaussian estimate is then not appropriate: a direct call raises
 ``NotAppropriate`` naming ``n`` and ``d``, and through the Calculator the cells
-are NaN with ``Quality.NAN`` and the reason in ``calc.errors``. ``n = d + 1``
+are NaN with ``Quality.NAN`` and the reason in ``calc.not_appropriate``. ``n = d + 1``
 is accepted, and the values there and above match reference values to a
 relative tolerance.
 """
@@ -133,10 +133,12 @@ def test_through_the_calculator_the_cells_are_nan_with_the_reason(tmp_path):
     off = ~np.eye(3, dtype=bool)
     for key in ("xme_gaussian_k10", "di_gaussian_n-5"):
         assert (calc.quality[key].to_numpy() == Quality.NAN).all(), key
-        assert calc.errors[key].startswith("NotAppropriate: The Gaussian "), key
-        assert "samples for d = 10" in calc.errors[key]
+        assert calc.not_appropriate[key].startswith("The Gaussian "), key
+        assert "samples for d = 10" in calc.not_appropriate[key]
+        assert key not in calc.errors
     assert (calc.quality["xme_gaussian_k1"].to_numpy()[off] == Quality.GOOD).all()
     assert "xme_gaussian_k1" not in calc.errors
+    assert "xme_gaussian_k1" not in calc.not_appropriate
 
 
 def test_no_bundled_gaussian_spi_is_refused_at_T_100():

@@ -83,7 +83,8 @@ def build_tables(dataset_name, config="full", seed=42):
     calc = Calculator(dataset=load_fixture(dataset_name), config=config)
     calc.compute()
     expected = KNOWN_UNESTIMABLE.get(dataset_name, {})
-    unexpected = {k: v for k, v in calc.errors.items() if k not in expected}
+    without_values = {**calc.errors, **calc.not_appropriate}
+    unexpected = {k: v for k, v in without_values.items() if k not in expected}
     if unexpected:
         # Refusing rather than freezing. A baseline written from a run with
         # failed SPIs records the failure as the expected answer, and the drift

@@ -722,7 +722,9 @@ def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool 
     default those are retried rather than resumed: a failure is usually caused
     by something transient or since-fixed, and silently inheriting a NaN column
     from a previous run is the outcome resume is least likely to be wanted for.
-    Pass ``retry_failed=False`` to resume them as-is.
+    Pass ``retry_failed=False`` to resume them as-is. A sidecar whose message
+    starts ``"NotAppropriate: "`` records an SPI that is not appropriate for
+    the dataset, which is not a failure and is always resumed.
     """
     done: dict = {}
     remaining: list = []
@@ -748,7 +750,8 @@ def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool 
         off = arr[~np.eye(M, dtype=bool)]
         if off.size and not np.isfinite(off).any():
             err = err or "ValueError: checkpoint contains no finite values"
-        if err is not None and retry_failed:
+        if (err is not None and retry_failed
+                and not err.startswith(NOT_APPROPRIATE)):
             remaining.append(key)
             continue
         q = _read_checkpoint_quality(checkpoint_dir, key, arr, err, M)

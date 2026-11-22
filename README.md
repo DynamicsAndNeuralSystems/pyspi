@@ -85,7 +85,7 @@ calc.feature_vector()                  # one value per independent pair, for ML
 calc.quality                           # one code per cell: 0 good, else why it is NaN
 calc.save("results.npz")               # canonical on-disk format
 pyspi.load_table("results.npz")        # round-trips exactly
-pyspi.load_results("results.npz")      # table, quality codes, errors, run spec
+pyspi.load_results("results.npz")      # table, quality codes, errors, reasons, run spec
 ```
 
 The dataset is `(M, T)`, one row per process; for a `(T, M)` array or a DataFrame with one column per process, pass `dim_order="sp"` (`--dim-order sp` on the command line), and a DataFrame's labels become the process names.
@@ -93,6 +93,8 @@ With more processes than observations and no `dim_order`, pyspi warns; pass `dim
 
 Every value in `calc.table` is a real, finite number or NaN.
 `calc.quality` says what each cell is, with the codes of `pyspi.Quality` (shared with hctsa and pyhctsa): good, error, NaN (undefined or not appropriate, including every self-pair), +/-Inf, or complex.
+An error means that something went wrong, and its message is in `calc.errors` (or `calc.pair_errors` for a single pair).
+Not appropriate means that the SPI ran as intended and the data cannot support its estimate (too few observations, tied values, a constant series): the reason is in `calc.not_appropriate` (or `calc.pair_not_appropriate`), and the SPI is not counted as failed.
 
 Results are stored as an `(n_spis, M, M)` array, the data's natural shape, plus the SPI and process names and each SPI's symmetry trait.
 `.csv` is also accepted for eyeballing small results, but it is one-way and impractical for the full SPI set.
@@ -121,7 +123,7 @@ calc.compute()
 ```
 
 `forex` is quantised: every one of its seven processes contains repeated values (24–212 distinct values across 250 observations).
-The Kozachenko-Leonenko entropy is undefined on tied values, so on `forex` the SPIs built on it (`je_kozachenko`, `ce_kozachenko`, `cce_kozachenko_n-5`, `xme_kozachenko_k1` and `si_kozachenko_k-1`) are not appropriate for it: their values are NaN, with the reason in `calc.errors` and the code `Quality.NAN` in `calc.quality`.
+The Kozachenko-Leonenko entropy is undefined on tied values, so on `forex` the SPIs built on it (`je_kozachenko`, `ce_kozachenko`, `cce_kozachenko_n-5`, `xme_kozachenko_k1` and `si_kozachenko_k-1`) are not appropriate for it: their values are NaN, with the reason in `calc.not_appropriate` and the code `Quality.NAN` in `calc.quality`.
 The KSG (`kraskov`) SPIs run, because they break ties with a tiny fixed-seed jitter.
 
 The [tutorial notebook](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/demos/pyspi_tutorial.ipynb) walks through the 3.0 API.
@@ -175,7 +177,7 @@ To define bands in Hz, set `fs`, `fmin` and `fmax` on the multitaper and wavelet
 
 The conditional VAR (`cpdc`, `cgpdc`, `cddtf`, `pcohmag`) and phase-amplitude coupling (`pac`) entries take cycles per sample only, so divide their band edges by `fs`.
 A band outside `[0, fs / 2]` is refused when the config is loaded.
-A band that holds no frequency of the series' frequency grid, which depends on its length, gives NaN labelled not appropriate, with its reason in `calc.errors`.
+A band that holds no frequency of the series' frequency grid, which depends on its length, gives NaN labelled not appropriate, with its reason in `calc.not_appropriate`.
 
 ## Running at scale
 

@@ -338,8 +338,9 @@ def test_calculator_records_an_infeasible_order(tmp_path):
                       config=str(path))
     with pytest.warns(UserWarning, match='"cgc_p-3"'):
         calc.compute()
-    assert set(calc.errors) == {"cgc_p-3"}
-    assert "infeasible" in calc.errors["cgc_p-3"]
+    assert set(calc.not_appropriate) == {"cgc_p-3"}
+    assert "infeasible" in calc.not_appropriate["cgc_p-3"]
+    assert calc.errors == {}
     assert np.isnan(calc.table["cgc_p-3"].to_numpy(dtype=float)).all()
     assert np.isfinite(calc.table["cgc_p-bic"].to_numpy(dtype=float)[_offdiag(5)]).all()
 

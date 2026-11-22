@@ -66,8 +66,8 @@ def test_a_series_too_short_for_the_estimator_is_not_appropriate(make, T, match,
     (key,) = calc.spis
     assert key == spi.identifier
     assert (calc.quality[key].to_numpy() == Quality.NAN).all()
-    assert calc.errors[key].startswith("NotAppropriate: ")
-    assert match in calc.errors[key]
+    assert match in calc.not_appropriate[key]
+    assert key not in calc.errors
 
 
 def test_kozachenko_on_one_tied_process_is_nan_for_its_pairs_only(tmp_path):
@@ -83,10 +83,11 @@ def test_kozachenko_on_one_tied_process_is_nan_for_its_pairs_only(tmp_path):
     np.fill_diagonal(expected, Quality.NAN)
     expected[0, 1] = expected[0, 2] = Quality.NAN
     np.testing.assert_array_equal(q, expected)
-    assert key not in calc.errors
-    reasons = calc.pair_errors[key]
+    assert key not in calc.errors and key not in calc.pair_errors
+    assert key not in calc.not_appropriate
+    reasons = calc.pair_not_appropriate[key]
     assert len(reasons) == 2
-    assert all(msg.startswith("NotAppropriate: Kozachenko entropy is undefined "
+    assert all(msg.startswith("Kozachenko entropy is undefined "
                               "for tied observations") for _, _, msg in reasons)
 
 

@@ -3,7 +3,7 @@
 A band that holds no frequency of the series' grid, or a series too short for
 the tapers, segments, wavelets, bands or VAR orders an SPI needs, raises
 ``pyspi.base.NotAppropriate``. The Calculator stores NaN with ``Quality.NAN``
-and records the reason in ``calc.errors``, prefixed ``"NotAppropriate: "``.
+and records the reason in ``calc.not_appropriate``, not in ``calc.errors``.
 A band that no series could fill is a bad parameter, refused with
 ``ValueError`` at construction instead.
 """
@@ -33,10 +33,10 @@ CASES = [
      "holds only the real-valued bins"),
     ("spectral", "PhaseSlopeIndex", dict(fmin=0.1, fmax=0.12), 100,
      "needs at least two independent frequencies"),
-    ("spectral", "SpectralGrangerCausality", dict(method="parametric"), 3,
-     "still improving at order 0, the largest that 3 observations support"),
-    ("spectral", "SpectralGrangerCausality", dict(method="parametric", order=20), 12,
-     "order 20 needs at least 23 observations, but the series has 12"),
+    ("spectral", "SpectralGrangerCausality", dict(method="parametric"), 19,
+     "needs at least 20 observations, but the series has 19"),
+    ("spectral", "SpectralGrangerCausality", dict(method="parametric", order=20), 60,
+     "order 20 needs at least 61 observations, but the series has 60"),
     ("spectral", "PhaseAlignedCorrelation", dict(nperseg=128), 100,
      "nperseg=128 exceeds the series length T=100"),
     ("spectral", "PhaseAlignedCorrelation", {}, 12,
@@ -86,8 +86,8 @@ def test_the_calculator_records_nan_with_the_reason(case, tmp_path):
         warnings.simplefilter("ignore")
         calc.compute(progress=False)
 
-    assert calc.errors[key].startswith("NotAppropriate: ")
-    assert reason in calc.errors[key]
+    assert reason in calc.not_appropriate[key]
+    assert key not in calc.errors
     q = calc.quality[key].to_numpy()
     assert (q[~np.eye(q.shape[0], dtype=bool)] == Quality.NAN).all()
     assert np.isnan(calc.table[key].to_numpy(dtype=float)).all()
@@ -106,8 +106,8 @@ def test_order_selection_that_does_not_turn_over_is_not_appropriate(tmp_path):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         calc.compute(progress=False)
-    assert calc.errors[key].startswith(
-        "NotAppropriate: Parametric spectral Granger causality: automatic AR "
+    assert calc.not_appropriate[key].startswith(
+        "Parametric spectral Granger causality: automatic AR "
         "order selection did not converge at max_order=3 on 2000 observations")
     q = calc.quality[key].to_numpy()
     assert (q[~np.eye(2, dtype=bool)] == Quality.NAN).all()
@@ -148,8 +148,8 @@ def test_bands_that_longer_series_fill_are_computed_there():
 
 def test_a_long_enough_series_is_still_computed():
     """The length checks refuse only what the estimators cannot compute."""
-    for spi, T in ((spectral.SpectralGrangerCausality(method="parametric"), 10),
-                   (spectral.SpectralGrangerCausality(method="parametric", order=20), 23),
+    for spi, T in ((spectral.SpectralGrangerCausality(method="parametric"), 20),
+                   (spectral.SpectralGrangerCausality(method="parametric", order=20), 61),
                    (spectral.AdaptivePhaseConsistency(), 46),
                    (spectral.PhaseAlignedCorrelation(), 20)):
         with warnings.catch_warnings():

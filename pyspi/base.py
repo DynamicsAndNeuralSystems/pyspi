@@ -158,10 +158,11 @@ def fill_pairwise(identifier, A, pairs, compute, mirror=False):
     appropriate.
 
     Each failed cell is also reported to the collector opened by
-    :func:`collect_pair_failures`, if one is open, and the Calculator keeps
-    its message in ``Calculator.pair_errors``. It labels the cell
-    ``Quality.NAN`` when the pair raised :class:`NotAppropriate` (the message
-    then starts ``"NotAppropriate: "``) and ``Quality.ERROR`` otherwise.
+    :func:`collect_pair_failures`, if one is open. For a pair that raised
+    :class:`NotAppropriate` the Calculator labels the cell ``Quality.NAN`` and
+    keeps the reason in ``Calculator.pair_not_appropriate``; for any other
+    exception it labels the cell ``Quality.ERROR`` and keeps the message in
+    ``Calculator.pair_errors``.
 
     With ``mirror=True`` each value is also written to ``A[j, i]``, and a
     failure is reported for both cells but counted once, as one pair.
