@@ -20,7 +20,7 @@ import yaml
 from . import _parallel
 from ._compat import resolve_config_arg, resolve_zscore, translate_calculator_kwargs
 from ._logging import configure as _configure_logging, get_logger
-from .base import DIRECTEDNESS_TRAITS, ONE_VALUE_PER_PAIR
+from .base import DIRECTEDNESS_TRAITS, ONE_VALUE_PER_PAIR, VALUE_KINDS
 from .data import Data
 from .quality import Quality
 from .utils import convert_mdf_to_ddf, inspect_calc_results, require_int
@@ -54,7 +54,15 @@ _CONTRADICTORY_LABELS = (
 
 
 def _merge_spi_labels(spi, family_labels=None, config_labels=None):
-    """Set ``spi.labels`` to its own labels plus the config's, without contradictions."""
+    """
+    Set ``spi.labels`` to its own labels plus the config's, without contradictions.
+
+    The class's directedness, linearity and sign win over the config's, and
+    the result carries exactly one of ``VALUE_KINDS``: ``strength`` unless
+    the class, or else the config, declares another. A ``ValueError`` is
+    raised for a contradictory pair, for two kinds, and for ``inverted`` on
+    anything but a ``strength`` that is not ``signed``.
+    """
     labels = list(getattr(spi, "labels", []))
     family_labels = _as_label_list(family_labels)
     config_labels = _as_label_list(config_labels)
@@ -100,6 +108,30 @@ def _merge_spi_labels(spi, family_labels=None, config_labels=None):
         merged = [label for label in merged if label != "signed"]
         if issigned():
             merged.append("signed")
+
+    # Exactly one of VALUE_KINDS says what the value is: the class's own
+    # `timing` or `profile`, or else the kind the config declares, or else
+    # `strength`, the kind of an SPI for which neither declares another.
+    declared = [kind for kind in VALUE_KINDS
+                if kind in family_labels + config_labels]
+    own = [kind for kind in VALUE_KINDS[1:] if kind in labels]
+    for source, kinds in (("its config", declared), ("its class", own)):
+        if len(kinds) > 1:
+            raise ValueError(
+                f"{type(spi).__name__} is labelled by {source} with more than "
+                f"one of {', '.join(map(repr, VALUE_KINDS))}: {kinds}. An "
+                f"SPI's value is one of them.")
+    kind = (own or declared or ["strength"])[0]
+    merged = [label for label in merged if label not in VALUE_KINDS] + [kind]
+    # `inverted` reads a one-ended strength from the other end.
+    conflicts = [label for label in ("signed", "timing", "profile")
+                 if label in merged]
+    if "inverted" in merged and conflicts:
+        raise ValueError(
+            f"{type(spi).__name__} is labelled 'inverted' and "
+            f"{' and '.join(map(repr, conflicts))}: 'inverted' marks a "
+            f"one-ended strength for which lower means stronger, so it goes "
+            f"only with 'strength' and never with 'signed'.")
 
     # Whatever the class did not settle must not be left contradictory.
     for pair in _CONTRADICTORY_LABELS:
