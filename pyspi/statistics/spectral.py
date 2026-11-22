@@ -1690,8 +1690,11 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         return self._fs * slope / (2 * np.pi), slope, r_value
 
 
-# The lower band edge spectral GC uses for fmin = 0, where it is undefined.
-_SGC_FMIN = 1e-5
+# Spectral GC is undefined at 0 Hz, so a band given from fmin = 0 starts at
+# fs / _SGC_EDGE_DIVISOR, 1e-5 cycles per sample: above 0 Hz and below the
+# first positive frequency of either method's grid on up to 1e5 samples. A
+# division, so that the edge is the double nearest fs / 1e5 (1e-05 at fs = 1).
+_SGC_EDGE_DIVISOR = 100_000
 
 # nitime.GrangerAnalyzer's grid size: granger_causality_xy evaluates the model at
 # n_freqs // 2 + 1 points on [0, fs/2) (scipy.signal.freqz, endpoint excluded).
@@ -1801,8 +1804,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     holding none of its frequencies raises ``ValueError`` at construction;
     the nonparametric grid does, and a band holding none of it raises
     ``NotAppropriate`` when the SPI is computed. Spectral GC is undefined at
-    0 Hz, so ``fmin = 0`` means the lowest positive frequency, 1e-5, which
-    the identifier names (``_fmin-1e-05``).
+    0 Hz, so ``fmin = 0`` sets the lower edge to ``fs / 1e5``, which the
+    identifier names (``_fmin-1e-05`` at ``fs = 1``). The edge is a fixed
+    fraction of ``fs``, so rescaling ``fs`` with the band gives the same
+    value; it leaves out 0 Hz and, on a series of at most 1e5 samples, no
+    other frequency of either method's grid.
     A cell with more than ``nan_threshold`` of its in-band frequencies NaN is
     set to NaN, with a warning. With ``method='nonparametric'``, where
     Wilson's factorisation of a pair reaches its iteration cap, the value
@@ -1832,8 +1838,8 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band, in [0, ``fs / 2``]; 0 becomes 1e-5.
-        Default: 1e-5.
+        Lower edge of the band, in [0, ``fs / 2``]; 0 becomes ``fs / 1e5``,
+        just above 0 Hz. Default: 0.
     fmax : float or None, optional
         Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
         Nyquist frequency ``fs / 2``. Default: None.
@@ -1872,7 +1878,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     def __init__(
         self,
         fs=1,
-        fmin=1e-5,
+        fmin=0,
         fmax=None,
         method="nonparametric",
         order=None,
@@ -1895,14 +1901,16 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             raise ValueError(
                 "time_halfbandwidth_product sets the multitaper estimate, which "
                 "method='parametric' does not use.")
-        # Spectral GC is undefined at 0 Hz, so a band from 0 starts at the
-        # lowest positive frequency, 1e-5, which the identifier names.
-        self._fmin = _SGC_FMIN if fmin == 0 else fmin
+        # Spectral GC is undefined at 0 Hz, so a band from 0 starts at
+        # fs / 1e5, which the identifier names: the band is the same fraction
+        # of the spectrum whatever the units of fs.
+        self._fmin = fs / _SGC_EDGE_DIVISOR if fmin == 0 else fmin
         self._fmax = fmax
         if self._fmin > fmax:
             raise ValueError(
-                f"fmax must be >= {_SGC_FMIN} (spectral GC is undefined at 0 "
-                f"Hz), got {fmax!r}.")
+                f"With fmin=0 the band starts at fs / 1e5 = "
+                f"{fmt_param(self._fmin)} (spectral GC is undefined at 0 Hz), "
+                f"so fmax must be at least that, got {fmax!r}.")
         if method == "parametric" and not _closed_band(
                 _parametric_gc_frequencies(fs), self._fmin, fmax).any():
             raise ValueError(

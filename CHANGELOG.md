@@ -194,7 +194,9 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `statistic="max"` is refused, since a maximum of wrapped angles depends on the branch cut.
   **The three `phase_multitaper_mean_*` values change.**
 - **Spectral Granger causality ignored `fs`** in its parametric branch and mis-oriented its NaN mask, so an estimable cell could be blanked; no value changes at the shipped `fs=1`.
-  Eleven `sgc_*` identifiers named `fmin=0`, which is overridden to 1e-5 because spectral GC is undefined at zero frequency: **`sgc_*_fmin-0_*` is renamed `sgc_*_fmin-1e-05_*`** (values unchanged).
+  Spectral GC is undefined at zero frequency, so a band given from `fmin=0` starts at `fs / 1e5`, and the identifier names that edge: at the shipped `fs=1` it is 1e-5, so eleven **`sgc_*_fmin-0_*` are renamed `sgc_*_fmin-1e-05_*`** (values unchanged).
+  2.0.2 used 1e-5 in the units of `fs` whatever `fs` was, which at a small `fs` cut off part of the band; with the edge a fixed fraction of `fs`, rescaling `fs` and the band together leaves every value unchanged.
+  The default `fmin` is 0 (2.0.2: 1e-5), the same band at `fs=1`.
   Its default `fmax` was 0.5 whatever `fs` was, so at `fs=100` the default band was 0 to 0.5 Hz; it is now `fs / 2`, as for every other spectral SPI (no change at `fs=1`).
   An unknown `method` raises `ValueError`; any value other than `"nonparametric"` ran the parametric method.
 - **Parametric spectral Granger causality (`sgc_parametric_*`) was fitted on an indefinite autocovariance.**
@@ -217,7 +219,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Multitaper `psi` is refused with fewer than two independent frequencies in its band.
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
-  Neither warns now; for spectral GC `fmin=0` means the lowest positive frequency, 1e-5, as its identifier states.
+  Neither warns now; for spectral GC `fmin=0` means a band from `fs / 1e5`, as its identifier states.
 - **Debiased squared PLI (`dspli_*`) was wrong where the cross-spectrum is real.**
   It is now the mean of taper-pair sign products (Vinck et al. 2011).
 - **Cross-correlation (`CrossCorrelation`) was wrong four ways.**
@@ -597,7 +599,7 @@ In every case a parameter that changes the measure was absent from, or misreport
 
 | Was | Is | Why |
 |:----|:---|:----|
-| `sgc_*_fmin-0_*` (11) | `sgc_*_fmin-1e-05_*` | Spectral GC is undefined at zero frequency, so `fmin=0` is overridden, but the identifier was built from the argument. |
+| `sgc_*_fmin-0_*` (11) | `sgc_*_fmin-1e-05_*` | Spectral GC is undefined at zero frequency, so `fmin=0` starts the band at `fs / 1e5`, 1e-5 at `fs=1`, but the identifier was built from the argument. |
 | `mi_kraskov_NN-4_DCE`, `tlmi_kraskov_NN-4_DCE`, `te_kraskov_NN-4_DCE_k-1_...`, `te_kraskov_NN-4_DCE_k-2_...` (4) | `..._DCE-AUTO...` | The Theiler window's value, not just its presence: 5, 10 and `"AUTO"` shared one name. |
 | `cce_gaussian`, `cce_kozachenko`, `di_gaussian` (3) | `..._n-5` | `n` changes the measure. |
 | `te_kraskov_NN-4_DCE_k-max-10_tau-max-4`, `te_kraskov_NN-4_k-max-10_tau-max-4`, `gc_gaussian_k-max-10_tau-max-2` (3) | `..._MAX-CORR-AIS_k-max-*` (the first also `DCE` to `DCE-AUTO`) | The auto-embedding method changes what is computed. Values are those of 2.0.2's search, which selects the source embedding too. |
