@@ -133,8 +133,8 @@ def test_group_delay_uses_every_independent_frequency_of_a_narrow_band(seed):
     """A 0.016-wide coupled band at T=20000 holds about 50 independent estimates.
 
     Multitaper estimates are approximately independent one bandwidth
-    ``2 NW / T`` apart: six FFT bins at the backend's defaults, the spacing
-    PhaseSlopeIndex uses. GroupDelay thins its significant run to that spacing
+    ``2 NW / T`` apart: six FFT bins at the backend's defaults, the narrowest
+    group PhaseSlopeIndex averages over. GroupDelay thins its significant run to that spacing
     (not to a fixed fraction of the band), so the fit uses all of them and
     recovers a 4-sample delay to within 0.5 samples.
     """
@@ -371,36 +371,53 @@ def test_closed_band_keeps_the_nyquist_bin_at_any_sampling_rate(fs):
     assert np.array_equal(_closed_band(freq1, 0.25, 0.5), (freq1 >= 0.25) & (freq1 <= 0.5))
 
 
-@pytest.mark.parametrize("fmin, fmax", [(0, 0.5), (0, 0.25), (0.25, 0.5)])
-def test_phase_slope_index_uses_the_closed_band_less_the_real_bins(fmin, fmax):
-    """PSI keeps an interior band edge such as 0.25.
+def _psi_reference(Z, fmin, fmax, resolution=0.02):
+    """Nolte's sum over neighbouring groups of frequencies, from scipy DPSS tapers.
 
-    It follows the phase rule: closed band less 0 Hz and fs/2, thinned to one
-    bin per multitaper bandwidth, and equals Nolte's sum computed directly on
-    that grid.
+    The closed band less 0 Hz and fs/2 is split into the largest number of
+    consecutive groups at least ``max(resolution, 2 NW bins)`` wide (and at
+    most half the band); each group's coherency is that of its mean cross-
+    and auto-spectra. ``T`` must be a length the backend transforms without
+    padding.
     """
-    import spectral_connectivity as sc
+    X = _taper_coefficients(Z)
+    S = np.mean(X[..., :, None] * np.conj(X[..., None, :]), axis=0)
+    freq = np.fft.rfftfreq(Z.shape[1])
+    keep = np.flatnonzero((freq >= fmin) & (freq <= fmax) & (freq != 0) & (freq != 0.5))
+    width = max(2 * NW, min(int(np.floor(resolution * Z.shape[1] + 1e-9)), keep.size // 2))
+    groups = np.array_split(keep, keep.size // width)
+    mean = np.array([S[g].mean(axis=0) for g in groups])
+    power = np.real(np.diagonal(mean, axis1=1, axis2=2))
+    C = mean / np.sqrt(power[:, :, None] * power[:, None, :])
+    return np.imag(np.sum(np.conj(C[:-1]) * C[1:], axis=0)), freq[keep], groups
 
-    from pyspi.statistics.spectral import PhaseSlopeIndex, _real_valued_bins
+
+@pytest.mark.parametrize("T", [300, 600, 2000])
+@pytest.mark.parametrize("fmin, fmax", [(0, 0.5), (0, 0.25), (0.25, 0.5)])
+def test_phase_slope_index_is_nolte_sum_over_groups_of_the_closed_band(fmin, fmax, T):
+    """PSI keeps an interior band edge such as 0.25 and leaves out 0 Hz and fs/2.
+
+    It equals Nolte's sum over neighbouring groups of frequencies written out
+    from scipy's DPSS tapers: one bandwidth (six bins) wide at T = 300, and
+    ``0.02 T`` bins wide on longer series.
+    """
+    from pyspi.statistics.spectral import PhaseSlopeIndex
 
     rng = np.random.default_rng(1)
-    x = rng.standard_normal(300)
-    y = np.r_[x[3:], rng.standard_normal(3)] + 0.3 * rng.standard_normal(300)
-    data = Data(np.vstack([x, y]), dim_order="ps")
-    z = np.transpose(data.to_numpy(squeeze=True))[:, None, :]
-    C = sc.Connectivity.from_multitaper(sc.Multitaper(z, sampling_frequency=1))
-    freq = np.asarray(C.frequencies)
-    keep = np.flatnonzero((freq >= fmin) & (freq <= fmax) & ~_real_valued_bins(freq, 1))
-    thinned = keep[::PhaseSlopeIndex()._frequency_step]
-    coh = np.asarray(C.coherency())[0, thinned, 0, 1]
-    want = np.imag(np.sum(np.conj(coh[:-1]) * coh[1:]))
+    x = rng.standard_normal(T)
+    y = np.r_[x[3:], rng.standard_normal(3)] + 0.3 * rng.standard_normal(T)
+    Z = np.vstack([x, y])
+    want, kept, groups = _psi_reference(Z, fmin, fmax)
 
-    got = PhaseSlopeIndex(fmin=fmin, fmax=fmax).multivariate(data)
-    assert got[0, 1] == pytest.approx(want, rel=1e-12)
-    assert got[1, 0] == pytest.approx(-want, rel=1e-12)
-    assert 0.0 not in freq[keep] and 0.5 not in freq[keep]  # real-valued bins never kept
+    got = PhaseSlopeIndex(fmin=fmin, fmax=fmax).multivariate(Data(Z, dim_order="ps"))
+    assert got[0, 1] == pytest.approx(want[0, 1], rel=1e-9)
+    assert got[1, 0] == pytest.approx(-want[0, 1], rel=1e-9)
+    assert got[0, 1] < 0  # process 1 leads by three samples
+    width = max(6, int(0.02 * T))
+    assert all(width <= g.size < 2 * width for g in groups)
+    assert 0.0 not in kept and 0.5 not in kept  # real-valued bins never kept
     if fmin == 0.25:
-        assert 0.25 in freq[keep], "the interior edge the identifier names is kept"
+        assert 0.25 in kept, "the interior edge the identifier names is kept"
 
 
 def test_group_delay_fit_leaves_out_the_real_valued_bins():
@@ -428,7 +445,8 @@ def test_group_delay_fit_leaves_out_the_real_valued_bins():
 
 def test_time_halfbandwidth_product_sets_the_tapers_and_the_phase_slope_step():
     """NW reaches the backend: floor(2 NW) - 1 tapers, so independent series
-    give smaller coherence, and the phase slope index steps 2 NW bins."""
+    give smaller coherence, and the phase slope index's narrowest group of
+    frequencies is 2 NW bins."""
     import spectral_connectivity as sc
 
     from pyspi.statistics.spectral import CoherenceMagnitude, PhaseSlopeIndex
