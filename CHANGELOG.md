@@ -299,7 +299,8 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   Gaussian MI acquires a bias of `ridge·r²/(1−r²)`: 5.6e-9 at ρ=0.6.
 - **The AUTO Theiler window (`dyn_corr_excl="AUTO"`) is capped at `N // 10`** (hctsa's rule), so it can no longer approach the series length.
 - **One undefined pair no longer voids an SPI.**
-  A pair whose estimate raises (e.g., tied values for a Kozachenko-Leonenko entropy) is set to NaN with one warning, and the SPI fails only if every pair does.
+  A pair whose estimate raises is NaN while the other pairs keep their values.
+  Its reason is in `calc.pair_not_appropriate` when the data cannot support the estimate (e.g., tied values for a Kozachenko-Leonenko entropy), and its message is in `calc.pair_errors` otherwise.
 - **Input that cannot support an estimate is NaN, labelled not appropriate, with the reason in `calc.not_appropriate` or `calc.pair_not_appropriate`.**
   This covers refusals driven by the data (a series too short for a lag, order, embedding or window, ties, collinear series, no amplitude in a band) in the information-theoretic SPIs, `lagcorr_*`, `ccm_*`, `lccm_*`, `nli_*`, `liang_*`, `cgc_*`, the conditional spectral SPIs (`cpdc_*`, `cgpdc_*`, `cddtf_*`, `pcohmag_*`), `pac_*` and `edge_*`.
   `ccm_E-None_*` and `lccm_E-None_*` are not appropriate for a series of fewer than 41 observations, too few for their search over E = 1 to 10 (2.0.2 failed inside pyEDM for the shortest of these).
