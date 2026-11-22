@@ -1425,9 +1425,10 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     phase difference between neighbouring groups of frequencies, which grows
     with the lag between two processes. The band's frequencies (less 0 Hz and
     ``fs / 2``) are split into the largest number of consecutive groups that
-    are each at least ``w`` wide, with ``w`` the larger of ``resolution`` and
-    one multitaper bandwidth (``2 NW`` FFT bins, about ``2 NW fs / T``), and
-    at most half the band so that two groups remain. ``C_ij(k)`` is the
+    each hold at least ``w`` of the grid, ``w`` being the larger of
+    ``resolution`` (rounded down to whole FFT bins) and one multitaper
+    bandwidth (``2 NW`` bins, about ``2 NW fs / T``), and at most half the
+    band so that two groups remain. ``C_ij(k)`` is the
     coherency of group ``k``'s average cross- and auto-spectra,
     ``mean S_ij / sqrt(mean S_ii mean S_jj)``.
     Antisymmetric and signed: ``A[i, j] = -A[j, i]``; positive means
