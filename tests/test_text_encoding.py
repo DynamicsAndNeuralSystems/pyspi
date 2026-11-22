@@ -47,9 +47,12 @@ def _run(script, cwd):
             p for p in (str(REPO_ROOT), str(TESTS_DIR), existing) if p
         ),
     )
+    # The script goes in a file, since Python reads source files as UTF-8 while
+    # a ``-c`` argument would be decoded in the ASCII locale encoding.
+    path = Path(cwd) / "check_encoding.py"
+    path.write_text(textwrap.dedent(PRELUDE) + textwrap.dedent(script), encoding="utf-8")
     proc = subprocess.run(
-        [sys.executable, "-X", "warn_default_encoding", "-c",
-         textwrap.dedent(PRELUDE) + textwrap.dedent(script)],
+        [sys.executable, "-X", "warn_default_encoding", str(path)],
         cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8",
         timeout=300,
     )
@@ -79,7 +82,7 @@ def test_config_with_non_ascii_label_loads_intact(tmp_path):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             calc = Calculator(dataset=data, config="custom.yaml")
-        assert {LABEL!r} in calc.spis["cov_EmpiricalCovariance"].labels
+        assert {LABEL!a} in calc.spis["cov_EmpiricalCovariance"].labels
         print("ok")
     """, cwd=tmp_path)
     assert out.splitlines()[-1] == "ok"
@@ -91,10 +94,10 @@ def test_filter_spis_round_trips_a_non_ascii_label(tmp_path):
         import yaml
         from pyspi.utils import filter_spis
 
-        filter_spis([{LABEL!r}], output_name="filtered", configfile="custom.yaml")
+        filter_spis([{LABEL!a}], output_name="filtered", configfile="custom.yaml")
         with open("filtered.yaml", encoding="utf-8") as f:
             written = yaml.safe_load(f)
-        assert {LABEL!r} in written[".statistics.basic"]["Covariance"]["labels"]
+        assert {LABEL!a} in written[".statistics.basic"]["Covariance"]["labels"]
         print("ok")
     """, cwd=tmp_path)
     assert out.splitlines()[-1] == "ok"
@@ -124,7 +127,7 @@ def test_checkpoint_with_a_non_ascii_error_message_resumes_intact(tmp_path):
             return calc
 
         first = run()
-        assert {message!r} in first.errors["always_raises"], first.errors
+        assert {message!a} in first.errors["always_raises"], first.errors
         resumed = run(resume=True, retry_failed=False)
         assert resumed.errors["always_raises"] == first.errors["always_raises"]
         print("ok")
