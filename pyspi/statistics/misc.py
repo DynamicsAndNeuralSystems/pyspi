@@ -21,7 +21,7 @@ from pyspi.base import (
     parse_multivariate,
 )
 from pyspi.lib.ids.dependence import compute_IDS
-from pyspi.utils import fmt_param
+from pyspi.utils import dependent_pair_error, fmt_param
 
 
 class Cointegration(Directed, Unsigned):
@@ -44,6 +44,13 @@ class Cointegration(Directed, Unsigned):
     not symmetric, and each orientation is reported as computed (directed).
     It is unsigned, a strength on an inverted scale: more negative is
     stronger evidence of cointegration.
+
+    Johansen's test inverts the residual covariance of the pair's
+    differences, which does not exist when the differences are collinear
+    (one series an affine copy of the other, with or without a linear
+    trend). Such a pair raises ``NotAppropriate``, which the Calculator
+    records as NaN with the reason: the smallest/largest eigenvalue of the
+    correlation matrix of the differences is at most 1e-12.
 
     References
     ----------
@@ -153,6 +160,18 @@ class Cointegration(Directed, Unsigned):
 
                 ci = {"tstat": stats[0]}
             else:
+                # The VECM regresses the differences on their own lags and
+                # inverts their residual covariance, which is singular when
+                # the differences are collinear: one series is an affine copy
+                # of the other, with or without a linear trend.
+                err = dependent_pair_error(
+                    "Johansen cointegration", i, j,
+                    np.cov(np.diff(z[[i, j]], axis=1)),
+                    "the residual covariance of the differences, which the "
+                    "test inverts, is singular",
+                    of="the correlation matrix of their first differences")
+                if err is not None:
+                    raise err
                 stats = coint_johansen(
                     z[[i, j]].T, det_order=self._det_order, k_ar_diff=self._k_ar_diff
                 )

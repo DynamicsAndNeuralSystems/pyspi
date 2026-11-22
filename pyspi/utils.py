@@ -173,6 +173,65 @@ def empty_band_error(owner, fmin, fmax, detail):
         f"{owner}: the band [{fmin}, {fmax}] holds {detail}; widen it.")
 
 
+# Two series are treated as linearly dependent when the smallest eigenvalue of
+# their correlation matrix is at most this fraction of the largest, which is
+# |r| within about 2e-12 of 1: the tolerance the VAR SPIs apply to a residual
+# covariance.
+DEPENDENT_PAIR_RCOND = 1e-12
+
+
+def dependent_pair_error(owner, i, j, cov, consequence,
+                         of="the correlation matrix of the two series"):
+    """
+    The ``NotAppropriate`` for a pair of linearly dependent series, or None.
+
+    The criterion is the ratio of the smallest to the largest eigenvalue of
+    the correlation matrix implied by the pair's ``2 x 2`` covariance,
+    ``(1 - |r|) / (1 + |r|)``: the pair is refused when it is at most
+    ``DEPENDENT_PAIR_RCOND``. The ratio does not depend on the scale of either
+    series. A series with no variance makes the ratio 0. A covariance that is
+    not finite is not refused here.
+
+    Parameters
+    ----------
+    owner : str
+        Name of the SPI class, or of the method, for the message.
+    i, j : int
+        The processes of the pair, for the message.
+    cov : array_like
+        The pair's ``2 x 2`` covariance matrix.
+    consequence : str
+        What cannot be computed for such a pair, completing the message, e.g.
+        ``"the covariance the VAR fit inverts is singular"``.
+    of : str, optional
+        What ``cov`` is the covariance of, for the message.
+        Default: ``"the correlation matrix of the two series"``.
+
+    Returns
+    -------
+    pyspi.base.NotAppropriate or None
+        The error, for the caller to raise, when the pair is linearly
+        dependent; otherwise None.
+    """
+    cov = np.asarray(cov, dtype=float)
+    a, b, c = cov[0, 0], cov[1, 1], cov[0, 1]
+    if not np.isfinite([a, b, c]).all():
+        return None
+    if a > 0 and b > 0:
+        r = min(abs(c) / np.sqrt(a * b), 1.0)
+        ratio = (1.0 - r) / (1.0 + r)
+    else:
+        ratio = 0.0
+    if ratio > DEPENDENT_PAIR_RCOND:
+        return None
+    # Imported here: pyspi.base imports pyspi.data, which imports this module.
+    from pyspi.base import NotAppropriate
+    return NotAppropriate(
+        f"{owner}: processes {i} and {j} are linearly dependent (smallest/"
+        f"largest eigenvalue of {of} {ratio:.2g}, at most "
+        f"{DEPENDENT_PAIR_RCOND:g}), so {consequence}.")
+
+
 def acf(x, mode='positive'):
     """
     Sample autocorrelation function of a series, computed by FFT.

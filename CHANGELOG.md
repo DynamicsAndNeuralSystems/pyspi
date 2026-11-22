@@ -310,6 +310,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **Input that cannot support an estimate is NaN, labelled not appropriate, with the reason in `calc.not_appropriate` or `calc.pair_not_appropriate`.**
   This covers refusals driven by the data (a series too short for a lag, order, embedding or window, ties, collinear series, no amplitude in a band) in the information-theoretic SPIs, `lagcorr_*`, `ccm_*`, `lccm_*`, `nli_*`, `liang_*`, `cgc_*`, the conditional spectral SPIs (`cpdc_*`, `cgpdc_*`, `cddtf_*`, `pcohmag_*`), `pac_*` and `edge_*`.
   `ccm_E-None_*` and `lccm_E-None_*` are not appropriate for a series of fewer than 41 observations, too few for their search over E = 1 to 10 (2.0.2 failed inside pyEDM for the shortest of these).
+  A pair of linearly dependent series, such as a series and a scaled and shifted copy of it, is not appropriate for `sgc_*`, `dcoh_*` (and the other Wilson-derived `dtf`, `ddtf`, `pdcoh` and `gpdcoh` classes) and `coint_johansen_*`, and the other pairs keep their values.
+  The criterion is that the smallest/largest eigenvalue of the pair's correlation matrix is at most 1e-12 (|r| within about 2e-12 of 1): of the series for parametric `sgc`, of the zero-lag covariance of the multitaper spectrum for nonparametric `sgc` and the Wilson-derived SPIs, and of the first differences for `coint_johansen_*`.
+  Such a pair has no VAR fit, spectral factor or Johansen test; 2.0.2 had no such check, so the pair either failed the whole SPI (parametric `sgc` and `coint_johansen_*`, with `LinAlgError`) or got a value set by rounding error.
 - **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
 - **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.
@@ -322,6 +325,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **No SPI reads the global NumPy RNG.**
   tslearn's subgradient barycenter took its update order from the global stream, and `MinCovDet` and `EllipticEnvelope` search from random subsets of the observations, so their values changed with the caller's seed and with which SPIs ran earlier.
   Each fit now uses its own fixed-seed generator, so a value is a function of the data alone.
+  spectral_connectivity starts Wilson's factorisation from a random matrix drawn from the global stream when its Cholesky start fails, as it can for a pair of nearly identical series; pyspi refuses such a pair as linearly dependent before the backend reaches it, so nonparametric `sgc_*` and `dcoh_*` never take that path.
   **`cov_MinCovDet` changes value**, by about the estimator's own run-to-run spread, as do the `sgddtw` barycenter SPIs, which are not bundled.
 - **scikit-learn >= 1.8 changes some covariance values.**
   scikit-learn 1.8 added the Croux-Haesbroeck consistency correction to `MinCovDet`/`EllipticEnvelope` (scikit-learn #32117), which cannot be switched off, so their covariance, precision and partial-correlation SPIs differ from 2.0.x.

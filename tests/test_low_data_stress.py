@@ -191,12 +191,12 @@ OBSERVED_EMPTY_CASES = {
 }
 
 # (SPI label, fixture, seed, T) -> (exception class, message regex).
-# DirectedCoherence may explicitly fail its spectral factorisation on these
-# singular duplicate-process cases (the backend's random fallback sometimes
-# converges, so success is also accepted). No other refusal is accepted.
+# Every pair of the duplicate-process fixture is linearly dependent, so its
+# spectral matrix has no factor and DirectedCoherence refuses every pair. No
+# other refusal is accepted.
 EXPECTED_REFUSALS = {
     ("dcoh_mean", "duplicate_and_collinear", seed, T):
-        (np.linalg.LinAlgError, r"^Singular matrix$")
+        (NotAppropriate, r"linearly dependent")
     for seed in SEEDS
     for T in (T_SHORT, T_LONG)
 }
