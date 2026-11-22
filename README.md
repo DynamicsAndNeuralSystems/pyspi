@@ -271,7 +271,7 @@ Note that [preprint](https://arxiv.org/abs/2201.11941) and [free-to-read](https:
 	number = {10},
 	journal = {Nature Computational Science},
 	author = {Cliff, Oliver M. and Bryant, Annie G. and Lizier, Joseph T. and Tsuchiya, Naotsugu and Fulcher, Ben D.},
-	month = oct,
+	month = sep,
 	year = {2023},
 	pages = {883--893},
 }

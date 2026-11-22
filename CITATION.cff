@@ -9,10 +9,14 @@ authors:
     family-names: Bryant
   - given-names: Joseph T.
     family-names: Lizier
-  - family-names: Tsuchiya
-    given-names: Naotsugu
+  - given-names: Naotsugu
+    family-names: Tsuchiya
   - given-names: Ben D.
     family-names: Fulcher
+  - given-names: Will R.
+    family-names: Edibam
+  - given-names: Joshua B.
+    family-names: Moore
 identifiers:
   - type: doi
     value: 10.1038/s43588-023-00519-x

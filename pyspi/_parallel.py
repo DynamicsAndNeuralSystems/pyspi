@@ -583,42 +583,10 @@ MANIFEST_NAME = "run.json"
 SCHEMA_VERSION = 1
 # Changed whenever a change alters computed values, so a checkpoint cannot
 # outlive the algorithm that produced it and `Calculator.run_digest` separates
-# results that differ only by implementation. `<release>.r<revision>`; only
-# equality is ever tested. What each revision changed:
-#   r2  -- KSG per-occurrence dither; full MAX_CORR_AIS; group-delay sample
-#          scaling and |r|; cross-correlation threshold gives 0 when no lag
-#          clears it.
-#   r3  -- KSG dither key from the normalised column rounded to 12 decimals
-#          (values move on tied or quantised data only).
-#   r4  -- KSG uses the rounded coordinate in its geometry, canonicalises
-#          reflections, and assigns key collisions by content.
-#   r5  -- KSG refuses tied coordinates and stops rounding or dithering
-#          continuous input.
-#   r6  -- KSG strict marginal counts use the next representable radius below
-#          epsilon.
-#   r7  -- coherence phase uses a circular mean and refuses zero-resultant and
-#          antipodal locations.
-#   r8  -- fixed-seed generators for the sgddtw barycenter and the MinCovDet /
-#          EllipticEnvelope fits; multitaper phase slope index applies its
-#          band.
-#   r9  -- multitaper phase slope index is Nolte's sum over neighbouring
-#          frequencies one bandwidth apart, computed in pyspi; GraphicalLasso
-#          (CV) converges at tol=1e-8; scikit-learn >= 1.8, whose MinCovDet /
-#          EllipticEnvelope carry a consistency correction.
-#   r10 -- constrained LCSS applies its Sakoe-Chiba / Itakura band, computed
-#          in pyspi; tslearn >= 0.10, whose subgradient DBA (the
-#          `bary*_sgddtw_*` SPIs) has a new update and stopping rule.
-#   r11 -- ccm, softdtw constraints, dcorrx/mgcx, hsic, KSG MI with a Theiler
-#          window, phi_Geo, dspli, the bivariate directed spectral measures and
-#          parametric spectral GC.
-#   r12 -- coint_aeg, gd, the phase measures' band, psi_multitaper, gwtau and
-#          gpfit.
-#   r13 -- the AUTO Theiler window is capped at N // 10.
-#   r14 -- kernel MI, TLMI and TE exclude the point itself from its counts.
-#   r15 -- KSG breaks every exact tie.
-#   r16 -- parametric spectral GC needs max(20, 3p + 1) observations for
-#          order p.
-COMPUTATION_VERSION = "3.0.0.r16"
+# results that differ only by implementation. It is the release number at a
+# release, and `<release>.r<revision>` for each later change that alters
+# values, each logged here in one line; only equality is ever tested.
+COMPUTATION_VERSION = "3.0.0"
 
 
 def read_manifest(checkpoint_dir: Path):
