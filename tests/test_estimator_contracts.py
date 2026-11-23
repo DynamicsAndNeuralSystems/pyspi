@@ -919,6 +919,44 @@ def test_itakura_dtw_is_bitwise_tslearns(T):
             assert A[i, j] == A[j, i] == ref
 
 
+def test_sakoe_chiba_rows_are_tslearns_mask():
+    """`_sakoe_chiba_rows` is tslearn's radius-1 mask, square or not."""
+    import tslearn.metrics
+    from pyspi.statistics.distance import _sakoe_chiba_rows
+
+    sizes = [(n, m) for n in range(1, 40) for m in range(1, 40)]
+    sizes += [(1000, 1000), (1001, 1000)]
+    for n, m in sizes:
+        ref = np.asarray(tslearn.metrics.sakoe_chiba_mask(n, m), dtype=bool)
+        lo, hi = _sakoe_chiba_rows(n, m)
+        cols = np.arange(m)
+        assert np.array_equal(ref, (cols >= lo[:, None]) & (cols < hi[:, None])), (n, m)
+
+
+@pytest.mark.parametrize("constraint", ["sakoe_chiba", "itakura"])
+@pytest.mark.parametrize("T", [3, 4, 10, 101, 257])
+def test_constrained_soft_dtw_is_bitwise_tslearns(constraint, T):
+    """`softdtw_constraint-*` equals `tslearn.metrics.soft_dtw` exactly.
+
+    Noise, a persistent AR(1) and a quantised series with many ties.
+    """
+    import tslearn.metrics
+    from pyspi.statistics.distance import SoftDynamicTimeWarping
+
+    rng = np.random.default_rng(T)
+    z = rng.standard_normal((4, T))
+    for t in range(1, T):
+        z[1, t] = 0.95 * z[1, t - 1] + z[1, t]
+    z[2] = np.round(z[2])
+    data = Data(data=z, dim_order="ps")
+    x = data.to_numpy(squeeze=True)
+    spi = SoftDynamicTimeWarping(global_constraint=constraint)
+    for i in range(4):
+        for j in range(i + 1, 4):
+            ref = tslearn.metrics.soft_dtw(x[i], x[j], global_constraint=constraint)
+            assert spi.bivariate(data, i=i, j=j) == ref
+
+
 def _lcss_cell_by_cell(x, y, band, eps=1.0):
     """Textbook constrained LCSS: the band limits matches, not the recursion."""
     A = np.zeros((len(x) + 1, len(y) + 1))

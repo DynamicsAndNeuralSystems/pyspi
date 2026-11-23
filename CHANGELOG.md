@@ -384,6 +384,10 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   pyspi builds tslearn's Itakura mask with NumPy and runs tslearn's recursion over each row's admitted columns only, in a numba kernel cached on disk; values are bit-identical to tslearn's.
   At M=16, T=800 the SPI takes 0.05 s instead of 0.23 s, and 0.14 s instead of 1.8 s in a new process.
   `lcss_constraint-itakura` uses the same mask.
+- **Constrained soft-DTW.**
+  `softdtw_constraint-sakoe-chiba` and `softdtw_constraint-itakura` run tslearn's soft-DTW recursion over each row's admitted columns only, in a numba kernel cached on disk, without tslearn's T x T mask and cost matrix; values are bit-identical to tslearn's.
+  A Sakoe-Chiba pair at T=4000 takes 0.3 ms instead of 9.9 ms, and a new process no longer spends 1.8 s compiling tslearn's kernel.
+  Itakura gains about 10%: its cost is the soft minimum over the band, which tslearn already evaluated only inside the band.
 - **The distance-correlation family centres each series once.**
   `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.

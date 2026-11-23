@@ -169,6 +169,65 @@ def _itakura_dtw(x, y):
 
 
 # ---------------------------------------------------------------------------
+# Banded soft-DTW
+# ---------------------------------------------------------------------------
+@functools.lru_cache(maxsize=8)
+def _sakoe_chiba_rows(n, m, radius=1):
+    """
+    Each row's admitted columns ``lo[i]:hi[i]`` in
+    ``tslearn.metrics.sakoe_chiba_mask(n, m, radius)``.
+
+    tslearn widens the band by ``|n - m|`` on the side of the longer series:
+    along rows when ``n <= m``, along columns when ``n > m``.
+    """
+    i = np.arange(n)
+    if n > m:
+        lo = np.maximum(0, i - (n - m + radius))
+        hi = np.minimum(m, i + radius + 1)
+    else:
+        lo = np.maximum(0, i - radius)
+        hi = np.minimum(m, i + (m - n + radius) + 1)
+    return lo, hi
+
+
+@numba.njit(cache=True, nogil=True)
+def _banded_soft_dtw(x, y, lo, hi, gamma):
+    """
+    tslearn's soft-DTW recursion over row ``i``'s columns ``lo[i]:hi[i]`` only.
+
+    Each cell is ``(x_i - y_j)^2 + softmin(up, left, diagonal)``, with
+    tslearn's max-shifted soft minimum in tslearn's order, so the value is
+    bitwise tslearn's. Cells outside the band are +inf, as in tslearn's
+    masked accumulated-cost matrix. Only the entries a row wrote are reset
+    when its buffer is reused, so a narrow band costs O(band) per row.
+    """
+    m = y.shape[0]
+    prev = np.full(m + 1, np.inf)
+    prev[0] = 0.0
+    cur = np.full(m + 1, np.inf)
+    prev_lo, prev_hi = 0, 1  # entries of `prev` that hold values
+    cur_lo, cur_hi = 0, 0
+    for i in range(x.shape[0]):
+        cur[cur_lo:cur_hi] = np.inf
+        for j in range(lo[i], hi[i]):
+            a = prev[j + 1] / -gamma
+            b = cur[j] / -gamma
+            c = prev[j] / -gamma
+            max_val = max(max(a, b), c)
+            tmp = 0.0
+            tmp += np.exp(a - max_val)
+            tmp += np.exp(b - max_val)
+            tmp += np.exp(c - max_val)
+            d = x[i] - y[j]
+            cur[j + 1] = d * d
+            cur[j + 1] += -gamma * (np.log(tmp) + max_val)
+        cur_lo, cur_hi = prev_lo, prev_hi
+        prev_lo, prev_hi = lo[i] + 1, hi[i] + 1
+        prev, cur = cur, prev
+    return prev[m]
+
+
+# ---------------------------------------------------------------------------
 # Distance correlation from per-series centred distance matrices
 # ---------------------------------------------------------------------------
 # Upper bound on the centred matrices one SPI call holds at a time.
@@ -1032,7 +1091,8 @@ class SoftDynamicTimeWarping(TimeWarping):
     of [2]_.
 
     A ``global_constraint`` uses tslearn's defaults: Sakoe-Chiba radius 1,
-    Itakura maximum slope 2.
+    Itakura maximum slope 2. It is computed with a banded version of
+    tslearn's recursion that gives tslearn's value.
 
     References
     ----------
@@ -1058,8 +1118,14 @@ class SoftDynamicTimeWarping(TimeWarping):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         z =data.to_numpy(squeeze=True)
-        return tslearn.metrics.soft_dtw(
-            z[i], z[j], global_constraint=self._global_constraint)
+        constraint = self._global_constraint
+        if constraint is None:
+            return tslearn.metrics.soft_dtw(z[i], z[j])
+        x = np.ascontiguousarray(z[i], dtype=np.double)
+        y = np.ascontiguousarray(z[j], dtype=np.double)
+        rows = {"itakura": _itakura_rows, "sakoe_chiba": _sakoe_chiba_rows}
+        lo, hi = rows[constraint](len(x), len(y))
+        return _banded_soft_dtw(x, y, lo, hi, 1.0)
 
 
 class Barycenter(Undirected, Signed):
