@@ -1,15 +1,17 @@
 """A pair of linearly dependent series is not appropriate, pair by pair.
 
-Parametric spectral GC fits a VAR that inverts the pair's covariance, the
-Wilson-derived SPIs (nonparametric spectral GC, directed coherence, ...)
-factorise the pair's spectral matrix, and Johansen's test inverts the
-residual covariance of the pair's differences. None exists for a series and
-a scaled and shifted copy of it, so that pair is NaN with ``Quality.NAN`` and
-its reason in ``calc.pair_not_appropriate``, and every other pair keeps the
-value it has without the copy present. The backend's random start for
-Wilson's iteration is never reached, so the values do not depend on NumPy's
-global random state.
+Parametric spectral GC fits a VAR whose Yule-Walker equations and innovation
+covariance it inverts, the Wilson-derived SPIs (nonparametric spectral GC,
+directed coherence, ...) factorise the pair's spectral matrix from its
+zero-lag covariance, and Johansen's test inverts two residual covariances.
+For a series and a scaled and shifted, or nearly exact, copy of it those
+matrices are singular, or singular to the precision they are computed with,
+so that pair is NaN with ``Quality.NAN`` and its reason in
+``calc.pair_not_appropriate``, and every other pair keeps the value it has
+without the copy present. The backend's random start for Wilson's iteration
+is never reached, so the values do not depend on NumPy's global random state.
 """
+import re
 import warnings
 
 import numpy as np
@@ -21,8 +23,17 @@ from pyspi.calculator import Calculator
 from pyspi.data import Data
 from pyspi.quality import Quality
 from pyspi.statistics.misc import Cointegration
-from pyspi.statistics.spectral import DirectedCoherence, SpectralGrangerCausality
-from pyspi.utils import DEPENDENT_PAIR_RCOND, dependent_pair_error
+from pyspi.statistics.spectral import (
+    DirectDirectedTransferFunction,
+    DirectedCoherence,
+    DirectedTransferFunction,
+    GeneralizedPartialDirectedCoherence,
+    PartialDirectedCoherence,
+    SpectralGrangerCausality,
+)
+from pyspi.statistics.var import _SINGULAR_RCOND
+from pyspi.utils import (SINGULAR_RCOND, singular_covariance_error,
+                         unit_diagonal_ratio)
 
 # One config of each affected class, as bundled in `full`.
 CONFIG = {
@@ -95,7 +106,7 @@ def test_only_the_dependent_pair_is_not_appropriate(kind, tmp_path):
         reasons = {(a, b): msg for a, b, msg in calc.pair_not_appropriate[key]}
         assert set(reasons) == {(procs[0], procs[1]), (procs[1], procs[0])}
         for msg in reasons.values():
-            assert "are linearly dependent" in msg and "at most 1e-12" in msg
+            assert "are linearly dependent" in msg and re.search(r"\de[+-]\d\d|\d\.\d", msg)
 
 
 def test_the_other_pairs_keep_the_values_they_have_without_the_copy(tmp_path):
@@ -162,31 +173,176 @@ def test_every_pair_dependent_makes_the_spi_not_appropriate():
                 spi.multivariate(Data(X, dim_order="ps"))
 
 
-def test_johansen_refuses_the_pair_directly():
-    X = _with_copy("exact")
+def _near_copy(s, T=500):
+    """Process 1 is process 0 plus noise of relative size ``s``; 2 is independent."""
+    x = _ar1(5, M=3, T=T)
+    return np.vstack([x[0], x[0] + s * x[1], x[2]])
+
+
+def _lagged_copy(T=500):
+    x = _ar1(6, M=2, T=T + 1)
+    return np.vstack([x[0, 1:], x[0, :-1], x[1, 1:]])
+
+
+@pytest.mark.parametrize("order", [None, 1, 5, 20])
+@pytest.mark.parametrize("s", [1e-6, 2e-6, 3e-6, 1e-5])
+def test_parametric_sgc_refuses_a_near_copy_whose_fit_is_rounding(s, order):
+    """Just above the zero-lag tolerance the fitted innovation covariance is
+    indefinite or below the precision of the Yule-Walker system: refused,
+    never a negative or unexplained value."""
+    spi = SpectralGrangerCausality(method="parametric", order=order)
+    data = Data(_near_copy(s), dim_order="ps")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        A = spi.multivariate(data)
+    assert np.isnan(A[0, 1]) and np.isnan(A[1, 0])
+    assert np.isfinite(A[[0, 2, 1, 2], [2, 0, 2, 1]]).all()
+    with pytest.raises(NotAppropriate, match="linearly dependent"):
+        from pyspi.statistics.spectral import _fit_bivariate_var
+        _fit_bivariate_var(data.to_numpy(squeeze=True)[:2], order)
+
+
+def test_parametric_sgc_keeps_a_near_copy_it_can_resolve(tmp_path):
+    """At s = 1e-2 every order gives a finite, non-negative value."""
+    data = Data(_near_copy(1e-2), dim_order="ps")
+    for order in (None, 1, 5, 20):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            A = SpectralGrangerCausality(method="parametric",
+                                         order=order).multivariate(data)
+        off = ~np.eye(3, dtype=bool)
+        assert np.isfinite(A[off]).all() and (A[off] >= 0).all(), order
+
+
+JOHANSEN = [dict(det_order=d, k_ar_diff=k) for d in (0, 1) for k in (1, 10)]
+
+
+@pytest.mark.parametrize("kwargs", JOHANSEN, ids=str)
+@pytest.mark.parametrize("s", [3e-6, 1e-5])
+def test_johansen_refuses_a_near_copy_in_both_orientations(kwargs, s):
+    data = Data(_near_copy(s), dim_order="ps")
+    for statistic in ("max_eig_stat", "trace_stat"):
+        spi = Cointegration(method="johansen", statistic=statistic, **kwargs)
+        for i, j in ((0, 1), (1, 0)):
+            with pytest.raises(NotAppropriate, match="linearly dependent"):
+                spi.bivariate(data, i=i, j=j)
+        assert spi.bivariate(data, i=0, j=2) == spi.bivariate(data, i=2, j=0) >= 0
+
+
+@pytest.mark.parametrize("kwargs", [dict(det_order=0, k_ar_diff=1),
+                                    dict(det_order=0, k_ar_diff=10),
+                                    dict(det_order=1, k_ar_diff=10)], ids=str)
+def test_johansen_refuses_a_delayed_copy(kwargs, tmp_path):
+    """x1(t) = x0(t - 1): the lagged levels are a lagged difference."""
+    data = Data(_lagged_copy(), dim_order="ps")
+    spi = Cointegration(method="johansen", statistic="max_eig_stat", **kwargs)
+    for i, j in ((0, 1), (1, 0)):
+        with pytest.raises(NotAppropriate, match="linearly dependent"):
+            spi.bivariate(data, i=i, j=j)
+
+
+def test_a_johansen_refusal_is_cached_for_both_orientations():
+    data = Data(_with_copy("exact"), dim_order="ps")
     spi = Cointegration(method="johansen", statistic="trace_stat", det_order=0)
-    with pytest.raises(NotAppropriate, match="first differences"):
-        spi.bivariate(Data(X, dim_order="ps"), i=0, j=1)
-    assert np.isfinite(spi.bivariate(Data(X, dim_order="ps"), i=0, j=2))
+    with pytest.raises(NotAppropriate, match="residual covariance"):
+        spi.bivariate(data, i=0, j=1)
+    assert "refused" in data.coint[spi.key][(1, 0)]
+    assert np.isfinite(spi.bivariate(data, i=0, j=2))
+
+
+@pytest.mark.parametrize("cls", [PartialDirectedCoherence,
+                                 GeneralizedPartialDirectedCoherence,
+                                 DirectedTransferFunction,
+                                 DirectDirectedTransferFunction],
+                         ids=lambda c: c.__name__)
+def test_every_wilson_derived_spi_refuses_the_pair(cls):
+    data = Data(_with_copy("affine"), dim_order="ps")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        A = cls().multivariate(data)
+    assert np.isnan(A[0, 1]) and np.isnan(A[1, 0])
+    off = ~np.eye(4, dtype=bool)
+    off[0, 1] = off[1, 0] = False
+    assert np.isfinite(A[off]).all()
+    with pytest.raises(NotAppropriate, match="linearly dependent"):
+        cls().bivariate(data, i=1, j=0)
+
+
+def test_two_workers_record_the_same_refusals(tmp_path):
+    X = _with_copy("affine")
+    config = tmp_path / "dependent.yaml"
+    config.write_text(yaml.safe_dump(CONFIG))
+    calcs = []
+    for n_jobs in (1, 2):
+        calc = Calculator(dataset=Data(X, dim_order="ps"), config=str(config),
+                          verbose=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            calc.compute(n_jobs=n_jobs, progress=False)
+        calcs.append(calc)
+    one, two = calcs
+    assert not two.errors and not two.pair_errors
+    assert one.pair_not_appropriate == two.pair_not_appropriate
+    for key in one.spis:
+        np.testing.assert_array_equal(one.table[key].to_numpy(),
+                                      two.table[key].to_numpy(), err_msg=key)
+
+
+def test_every_nan_cell_of_parametric_sgc_has_a_reason(tmp_path):
+    config = tmp_path / "sgc.yaml"
+    config.write_text(yaml.safe_dump({".statistics.spectral": {
+        "SpectralGrangerCausality": {"labels": ["directed"], "configs": [
+            {"method": "parametric", "order": o} for o in (None, 1, 5, 20)]}}}))
+    for s in (1e-12, 1e-9, 1e-6, 3e-6, 1e-5, 1e-4, 1e-3, 1e-2):
+        calc = Calculator(dataset=Data(_near_copy(s), dim_order="ps"),
+                          config=str(config), verbose=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            calc.compute(progress=False)
+        assert not calc.errors and not calc.pair_errors
+        procs = list(calc.dataset.procnames)
+        for key in calc.spis:
+            v = calc.table[key].to_numpy()
+            told = {(a, b) for a, b, _ in calc.pair_not_appropriate.get(key, [])}
+            for a, b in zip(*np.nonzero(~np.eye(3, dtype=bool))):
+                if np.isnan(v[a, b]):
+                    assert (procs[a], procs[b]) in told, (s, key, a, b)
+                else:
+                    assert v[a, b] >= 0, (s, key, a, b)
 
 
 @pytest.mark.parametrize("one_minus_r, refused", [
     (0.0, True), (1e-13, True), (1.9e-12, True), (2.1e-12, False),
     (1e-10, False), (0.01, False),
 ])
-def test_the_criterion_is_on_the_correlation(one_minus_r, refused):
+def test_the_floor_is_on_the_unit_diagonal_covariance(one_minus_r, refused):
     """(1 - |r|) / (1 + |r|) <= 1e-12, whatever the scales of the two series."""
     r = 1.0 - one_minus_r
     for scale in (1.0, 1e-6, 1e6):
         cov = np.array([[1.0, r * scale], [r * scale, scale ** 2]])
-        err = dependent_pair_error("X", 0, 1, cov, "Y")
+        err = singular_covariance_error("X", 0, 1, cov, "Y", of="Z")
         assert (err is not None) == refused, (one_minus_r, scale)
         if refused:
             assert isinstance(err, NotAppropriate)
-    assert DEPENDENT_PAIR_RCOND == 1e-12
+    assert SINGULAR_RCOND == _SINGULAR_RCOND == 1e-12
 
 
-def test_a_constant_series_counts_as_dependent():
-    err = dependent_pair_error("X", 0, 1, np.array([[1.0, 0.0], [0.0, 0.0]]), "Y")
-    assert isinstance(err, NotAppropriate)
-    assert dependent_pair_error("X", 0, 1, np.full((2, 2), np.nan), "Y") is None
+def test_the_threshold_rises_with_the_condition_of_the_computation():
+    cov = np.array([[1.0, 1 - 1e-9], [1 - 1e-9, 1.0]])   # ratio 5e-10
+    assert singular_covariance_error("X", 0, 1, cov, "Y", of="Z") is None
+    err = singular_covariance_error("X", 0, 1, cov, "Y", of="Z", condition=1e8)
+    assert err is not None and "condition number 1e+08" in str(err)
+
+
+def test_an_indefinite_or_nonpositive_covariance_is_refused_and_named():
+    indefinite = np.array([[1.0, 1.1], [1.1, 1.0]])
+    assert unit_diagonal_ratio(indefinite) < 0
+    assert "-0.048" in str(singular_covariance_error("X", 0, 1, indefinite,
+                                                     "Y", of="Z"))
+    err = singular_covariance_error("X", 0, 1, np.array([[1.0, 0.0], [0.0, -1.0]]),
+                                    "Y", of="Z")
+    assert "a variance that is not positive" in str(err)
+    assert singular_covariance_error("X", 0, 1, np.full((2, 2), np.nan),
+                                     "Y", of="Z") is None
+    with pytest.raises(TypeError):
+        unit_diagonal_ratio(np.eye(2, dtype=complex))

@@ -27,7 +27,7 @@ def _coupled_pair(T=500, seed=0):
 # The parametric fit does not see fs. fs sets the scale of the multitaper
 # spectrum, and Wilson's iteration, which stops at a tolerance of 1e-8, stops
 # at slightly different factors for different scales.
-RTOL = {"parametric": 1e-12, "nonparametric": 1e-6}
+RTOL = {"parametric": 1e-12, "nonparametric": 1e-8}
 
 
 @pytest.mark.parametrize("method", ["parametric", "nonparametric"])
