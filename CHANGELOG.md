@@ -380,6 +380,10 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **The five directed spectral measures share one spectral factorisation per pair.**
   `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which is now computed once per ordered pair, and the five classes form one scheduling task.
   7.6x faster on those measures (184 s to 24 s at M=40, T=1000), with about 40% less memory held per pair.
+- **`mgc` and `mgcx_*` compute each series' share of the MGC map once.**
+  scipy's MGC, which hyppo calls, ranks and centres both distance matrices and builds three local covariance maps for every pair, of which only one depends on the pair.
+  pyspi keeps each series' ranks, centring and local variances (per lag for `mgcx_*`, at most 256 MB at a time) and calls scipy's own steps for the rest; values are bit-identical to hyppo's.
+  At M=16, `mgc` and `mgcx_*` are 5.3-5.9x faster for T from 500 to 2000.
 - **Itakura-constrained DTW.**
   pyspi builds tslearn's Itakura mask with NumPy and runs tslearn's recursion over each row's admitted columns only, in a numba kernel cached on disk; values are bit-identical to tslearn's.
   At M=16, T=800 the SPI takes 0.05 s instead of 0.23 s, and 0.14 s instead of 1.8 s in a new process.

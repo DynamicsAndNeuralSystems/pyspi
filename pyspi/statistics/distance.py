@@ -29,6 +29,15 @@ from pyspi.base import (
     parse_multivariate,
 )
 from pyspi.utils import fmt_param, require_int, require_positive_float
+try:
+    # The steps of scipy's `multiscale_graphcorr`, which hyppo's MGC calls,
+    # taken separately so that each series' share is computed once
+    # (`_mgc_parts`). Private: if a scipy release moves them, MGC and MGCX
+    # fall back to hyppo for every pair.
+    from scipy.stats._mgc import _smooth_mgc_map, _threshold_mgc_map
+    from scipy.stats._stats import _center_distance_matrix, _local_covariance
+except ImportError:  # pragma: no cover
+    _local_covariance = None
 
 
 # ---------------------------------------------------------------------------
@@ -508,7 +517,9 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     all ``(k, l)``, and reports a smoothed maximum, so it is sensitive to
     nonlinear dependence that the global distance correlation dilutes.
     Undirected. MGC needs at least 5 samples; a shorter series is not
-    appropriate (``NotAppropriate``, NaN in a Calculator table).
+    appropriate (``NotAppropriate``, NaN in a Calculator table). The value is
+    hyppo's, bit for bit; each series' share of the MGC map (its ranks,
+    centring and local variances) is computed once, not once per pair.
 
     References
     ----------
@@ -524,12 +535,65 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        if x.shape[0] < _MGC_MIN_SAMPLES:
-            raise NotAppropriate(
-                f"Multiscale graph correlation needs T >= {_MGC_MIN_SAMPLES} "
-                f"samples; got T = {x.shape[0]}.")
-        stat = MGC().statistic(x, y)
-        return stat
+        _require_mgc_samples(x.shape[0])
+        if _local_covariance is None:
+            return MGC().statistic(x, y)
+        return _mgc_from_parts(_mgc_parts(_euclidean_distance(x)),
+                               _mgc_parts(_euclidean_distance(y)))
+
+    @parse_multivariate
+    def multivariate(self, data):
+        z = data.to_numpy()
+        _require_mgc_samples(z.shape[1])
+        if _local_covariance is None:
+            return super().multivariate(data)
+        return _cached_pairs(
+            self.identifier, z.shape[0],
+            lambda s: _mgc_parts(_euclidean_distance(z[s])), _mgc_from_parts,
+            item_bytes=16 * z.shape[1] ** 2)
+
+
+def _require_mgc_samples(T):
+    if T < _MGC_MIN_SAMPLES:
+        raise NotAppropriate(
+            f"Multiscale graph correlation needs T >= {_MGC_MIN_SAMPLES} "
+            f"samples; got T = {T}.")
+
+
+def _mgc_parts(dist):
+    """
+    The share of scipy's MGC map that depends on one distance matrix.
+
+    Its MGC-centred distances, their column ranks and its local variances
+    (the diagonal of its local covariance with itself), as scipy's
+    ``_local_correlations`` computes them for each of the two inputs.
+    """
+    cent, rank = _center_distance_matrix(dist, "mgc", True)
+    var = _local_covariance(cent, cent.T, rank, rank.T).diagonal()
+    return cent, rank, var
+
+
+def _mgc_from_parts(px, py):
+    """
+    hyppo's ``MGC().statistic`` from the `_mgc_parts` of its two inputs.
+
+    scipy's ``_local_correlations`` (the local covariance of the pair over
+    the local variances, clipped at 1 and zero where a variance is not
+    positive) followed by ``_mgc_stat``'s thresholding and smoothing, with
+    scipy's own functions in the same order, so the value is bit-identical.
+    """
+    (cx, rx, vx), (cy, ry, vy) = px, py
+    cov = _local_covariance(cx, cy.T, rx, ry.T)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        corr = cov / np.sqrt(vx.reshape(-1, 1) @ vy.reshape(-1, 1).T).real
+        corr[corr > 1] = 1
+    corr[vx <= 0, :] = 0
+    corr[:, vy <= 0] = 0
+    n, m = corr.shape
+    if m == 1 or n == 1:
+        return corr[m - 1][n - 1]
+    sig_connect = _threshold_mgc_map(corr, cx.shape[0] - 1)
+    return _smooth_mgc_map(sig_connect, corr)[0]
 
 
 # Fewest samples of one term: with 3 samples the U-centred distance matrices
@@ -670,7 +734,8 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     Row = source, column = target; hyppo's ``MGCX`` implementation is not
     used, for the same reason. MGC needs at least 5 samples, so every lagged
     term does, and the SPI is not appropriate (``NotAppropriate``, NaN in a
-    Calculator table) when ``T < max_lag + 5``.
+    Calculator table) when ``T < max_lag + 5``. Each series' share of each
+    lagged MGC map is computed once per lag, not once per pair.
 
     References
     ----------
@@ -696,11 +761,52 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     def bivariate(self, data, i=None, j=None):
         # As in CrossDistanceCorrelation: source i goes second.
         z = data.to_numpy()
-        _require_lagged_samples(z.shape[1], self._max_lag, _MGC_MIN_SAMPLES,
+        self._require_samples(z.shape[1])
+        if _local_covariance is None:
+            return _lagged_sum(MGC(compute_distance=None), z[j], z[i],
+                               self._max_lag)
+        stats = [_mgc_from_parts(self._prepare(z[j], lag)[0],
+                                 self._prepare(z[i], lag)[1])
+                 for lag in range(self._max_lag + 1)]
+        return CrossDistanceCorrelation._weighted_sum(stats, z.shape[1])
+
+    @parse_multivariate
+    def multivariate(self, data):
+        z = data.to_numpy()
+        M, n = z.shape[0], z.shape[1]
+        self._require_samples(n)
+        if _local_covariance is None:
+            return super().multivariate(data)
+        S = [_cached_pairs(self.identifier, M,
+                           lambda s, lag=lag: self._prepare(z[s], lag),
+                           lambda src, tgt: _mgc_from_parts(tgt[0], src[1]),
+                           item_bytes=32 * (n - lag) ** 2, directed=True)
+             for lag in range(self._max_lag + 1)]
+        A = np.full((M, M), np.nan)
+        for i in range(M):
+            for j in range(M):
+                if i != j:
+                    A[i, j] = CrossDistanceCorrelation._weighted_sum(
+                        [s[i, j] for s in S], n)
+        return A
+
+    def _require_samples(self, T):
+        _require_lagged_samples(T, self._max_lag, _MGC_MIN_SAMPLES,
                                 "The cross-multiscale graph correlation")
-        x = z[j]
-        y = z[i]
-        return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)
+
+    @staticmethod
+    def _prepare(z, lag):
+        """
+        `_mgc_parts` of ``z[lag:]`` (as target) and ``z[:n - lag]`` (as
+        source), the blocks of the distance matrix `_lagged_sum` crops.
+        """
+        d = _euclidean_distance(z)
+        if lag == 0:
+            p = _mgc_parts(d)
+            return p, p
+        m = d.shape[0] - lag
+        return (_mgc_parts(np.ascontiguousarray(d[lag:, lag:])),
+                _mgc_parts(np.ascontiguousarray(d[:m, :m])))
 
 
 class TimeWarping(Undirected, Unsigned):

@@ -162,6 +162,69 @@ def test_cross_distance_statistics_at_lag_zero_are_the_plain_statistic(cross, pl
     np.testing.assert_allclose(a, b, rtol=1e-12, atol=1e-15)
 
 
+def _mgc_test_data():
+    rng = np.random.default_rng(4)
+    z = rng.standard_normal((5, 40))
+    z[1] = np.tanh(2 * z[0]) + 0.3 * z[1]
+    z[2] = np.round(z[2])  # ties
+    z[3] = np.r_[0.0, z[0][:-1] ** 2] + 0.2 * z[3]
+    return Data(z, dim_order="ps")
+
+
+@pytest.mark.parametrize("budget", [None, 1])
+def test_mgc_matrix_with_cached_parts_is_bit_identical_to_hyppo(monkeypatch,
+                                                               budget):
+    """Each series' ranks, centring and local variances are computed once
+    (or once per block, with a one-byte cache budget); every pair still
+    equals hyppo's `MGC().statistic` exactly, from `multivariate` and from
+    `bivariate`."""
+    import warnings
+    import pyspi.statistics.distance as distance
+    from hyppo.independence import MGC
+
+    assert distance._local_covariance is not None, "scipy's MGC steps moved"
+    if budget is not None:
+        monkeypatch.setattr(distance, "_DCORR_CACHE_BYTES", budget)
+    data = _mgc_test_data()
+    x = data.to_numpy()
+    spi = distance.MultiscaleGraphCorrelation()
+    A = spi.multivariate(data)
+    for i in range(5):
+        for j in range(i + 1, 5):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ref = MGC().statistic(x[i], x[j])
+            assert A[i, j] == A[j, i] == ref, (i, j)
+            assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
+
+
+@pytest.mark.parametrize("budget", [None, 1])
+@pytest.mark.parametrize("max_lag", [0, 2])
+def test_mgcx_matrix_with_cached_parts_is_bit_identical_to_hyppo(
+        monkeypatch, budget, max_lag):
+    """As for MGC, per lag: `_lagged_sum` of hyppo's MGC, exactly."""
+    import warnings
+    import pyspi.statistics.distance as distance
+    from hyppo.independence import MGC
+
+    if budget is not None:
+        monkeypatch.setattr(distance, "_DCORR_CACHE_BYTES", budget)
+    data = _mgc_test_data()
+    z = data.to_numpy()
+    spi = distance.CrossMultiscaleGraphCorrelation(max_lag=max_lag)
+    A = spi.multivariate(data)
+    for i in range(5):
+        for j in range(5):
+            if i == j:
+                continue
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ref = distance._lagged_sum(MGC(compute_distance=None), z[j],
+                                           z[i], max_lag)
+            assert A[i, j] == ref, (i, j)
+            assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
+
+
 # --------------------------------------------------------------------------
 # HSIC
 # --------------------------------------------------------------------------
