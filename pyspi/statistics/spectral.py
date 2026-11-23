@@ -1826,9 +1826,9 @@ def _fit_bivariate_var(x, order=None, max_order=50, pair=(0, 1)):
     order contains that of a lower one, so it is no better conditioned, and
     the orders that can be fitted are fitted accurately. It raises when
     order 0 or 1 cannot be fitted, since then no order with lags is left and
-    order 0 gives no causality by construction, not by estimate. (A search that reaches the record-length
-    limit while still improving raises, since a longer series could fit the
-    higher orders.)
+    order 0 gives no causality by construction, not by estimate. A search
+    that reaches the record-length limit while still improving raises, since
+    a longer series could fit the higher orders.
     """
     i, j = pair
     owner = "Parametric spectral Granger causality"
