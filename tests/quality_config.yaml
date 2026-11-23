@@ -29,6 +29,14 @@ failing_spis:
       - bad: [0, 1]
       - bad: [1, 0]
 
+  OnePairRaisesRestNaN:
+    labels: [test]
+    configs:
+
+  OnePairRaisesRestNaNUndirected:
+    labels: [test]
+    configs:
+
 .statistics.basic:
   Covariance:
     labels: [undirected, linear, signed]

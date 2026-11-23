@@ -128,6 +128,34 @@ class OnePairRaises(Directed, Unsigned):
         return float(10 * i + j)
 
 
+class OnePairRaisesRestNaN(Directed, Unsigned):
+    """``bivariate`` raises for the ordered pair (0, 1) and returns NaN for the rest."""
+
+    name = "OnePairRaisesRestNaN"
+    identifier = "one_pair_raises_rest_nan"
+    labels = ["test"]
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        if (i, j) == (0, 1):
+            raise ValueError("pair (0, 1) is undefined")
+        return np.nan
+
+
+class OnePairRaisesRestNaNUndirected(Undirected, Unsigned):
+    """As ``OnePairRaisesRestNaN``, mirrored: the pair (0, 1) fails for both cells."""
+
+    name = "OnePairRaisesRestNaNUndirected"
+    identifier = "one_pair_raises_rest_nan_undirected"
+    labels = ["test"]
+
+    @parse_bivariate
+    def bivariate(self, data, i=None, j=None):
+        if (i, j) == (0, 1):
+            raise ValueError("pair (0, 1) is undefined")
+        return np.nan
+
+
 class OnePairRaisesUndirected(Undirected, Unsigned):
     """``bivariate`` raises for one ordered pair; ``Undirected`` mirrors i < j."""
 

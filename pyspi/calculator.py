@@ -493,7 +493,8 @@ def load_results(path):
     and ``errors``: a cell is GOOD, NaN or +/-Inf by its value, the diagonal
     is NaN, and every non-finite off-diagonal cell of an SPI recorded as
     failed is ERROR. Such a file holds no pair failures, so those cells read
-    as NaN and ``pair_errors`` is ``None``.
+    as NaN and ``pair_errors`` is ``None``; an SPI it lists only for having
+    no finite value is returned in ``not_appropriate``, not ``errors``.
 
     Parameters
     ----------
@@ -520,6 +521,18 @@ def load_results(path):
             quality[n] = _parallel.derive_quality(values, (errors or {}).get(key))
     quality = _frame_from_matrices(quality.astype(np.uint8, copy=False),
                                    parts["spis"], parts["procs"])
+    not_appropriate = as_dict(parts.get("not_appropriate"))
+    if parts["quality"] is None and errors:
+        # A file without codes holds no pair failures, so an SPI it lists for
+        # having no finite value has no cell coded ERROR: it is not
+        # appropriate, as `execute_spi` records it.
+        prefix = len(_parallel.NOT_APPROPRIATE)
+        moved = [k for k, msg in errors.items() if msg == _parallel.NO_FINITE_VALUES]
+        if moved:
+            not_appropriate = dict(not_appropriate or {})
+            for key in moved:
+                not_appropriate[key] = _parallel.RETURNED_NO_VALUE[prefix:]
+            errors = {k: msg for k, msg in errors.items() if k not in moved}
 
     def pairs(name):
         found = as_dict(parts.get(name))
@@ -530,7 +543,7 @@ def load_results(path):
     return Results(table=table, quality=quality, errors=errors,
                    run_spec=as_dict(parts.get("run_spec")),
                    pair_errors=pairs("pair_errors"),
-                   not_appropriate=as_dict(parts.get("not_appropriate")),
+                   not_appropriate=not_appropriate,
                    pair_not_appropriate=pairs("pair_not_appropriate"))
 
 
@@ -959,9 +972,10 @@ class Calculator:
         table: they say why a NaN column is NaN. :attr:`quality` says the
         same per cell.
 
-        Every SPI listed has a cell coded ``Quality.ERROR`` and no value: it
-        raised, or some of its pairs failed and the rest returned no finite
-        value (``"ValueError: SPI returned no finite off-diagonal values"``).
+        Every SPI listed has no value and, where the dataset has a pair of
+        processes, a cell coded ``Quality.ERROR``: it raised, or some of its
+        pairs failed and the rest returned no finite value (``"ValueError:
+        SPI returned no finite off-diagonal values"``).
         Failures of single pairs are in :attr:`pair_errors`, not here. An SPI
         that is not appropriate for the dataset, or that returned no finite
         value without a failure, has not failed: it is in
@@ -982,9 +996,9 @@ class Calculator:
         value is listed too, with the reason ``"the SPI returned no finite
         value and gave no reason"``; its cells keep the codes of what it
         returned (NaN, Inf, ...). Neither is a failure, so the SPI is absent
-        from :attr:`errors`, and none of its cells is ``Quality.ERROR``. Pairs an SPI is not appropriate
-        for, when it has values for others, are in
-        :attr:`pair_not_appropriate`.
+        from :attr:`errors`, and none of its cells is ``Quality.ERROR``.
+        Pairs an SPI is not appropriate for, when it has values for others,
+        are in :attr:`pair_not_appropriate`.
         """
         return dict(self._not_appropriate)
 

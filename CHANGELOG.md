@@ -255,7 +255,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 
 - **An Inf does not fail the whole SPI.**
   The finite cells are kept, the infinite cells are NaN with code `INF` or `NEG_INF`, and a warning gives the count.
-  An SPI with no finite off-diagonal value that raised nothing is listed in `calc.not_appropriate`, as an all-NaN result is.
+  An SPI with no finite off-diagonal value is not appropriate or an error by the rule below.
 - **Complex output is labelled, not truncated.**
   The raw output is classified before it is cast to float, so a cell with a non-zero imaginary part is NaN with code `COMPLEX`.
 - **A failed pair is `ERROR`, not an anonymous NaN.**
@@ -266,7 +266,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - An SPI that raises or returns the wrong shape is `ERROR` in every off-diagonal cell, with its message in `calc.errors`; an SPI that raises `NotAppropriate`, or whose every pair does, is `NAN` in every cell, with its reason in `calc.not_appropriate`.
   Such an SPI has not failed: it is absent from `calc.errors`, counted apart from the failed SPIs by `calc.summary()` (`n_not_appropriate`, `not_appropriate`), and resumed from a checkpoint rather than recomputed.
   An SPI that returns no finite value without raising keeps the codes of what it returned and is listed in `calc.not_appropriate` with the reason "the SPI returned no finite value and gave no reason"; if one of its pairs failed, it is in `calc.errors`.
-  So an SPI is in `calc.errors` only if a cell of it is coded `ERROR`, and in `calc.not_appropriate` only if none is.
+  So, on a dataset of at least two processes, an SPI is in `calc.errors` only if a cell of it is coded `ERROR`, and in `calc.not_appropriate` only if none is.
 - **Files and checkpoints keep the codes.**
   `.npz` files hold a `quality` array (`(n_spis, M, M)`, `uint8`), `pair_errors`, `not_appropriate` and `pair_not_appropriate`.
   `pyspi.load_results(path)` returns `Results(table, quality, errors, run_spec, pair_errors, not_appropriate, pair_not_appropriate)`; `load_table` keeps only its small metadata in `attrs`.

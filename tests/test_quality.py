@@ -162,6 +162,33 @@ def test_the_records_agree_with_the_codes(serial):
     assert seen == {(True, False), (False, True), (False, False)}
 
 
+@pytest.mark.parametrize("key, failed_cells", [
+    ("one_pair_raises_rest_nan", [(0, 1)]),
+    ("one_pair_raises_rest_nan_undirected", [(0, 1), (1, 0)])])
+def test_no_value_with_a_failed_pair_is_an_error_in_a_calculator(serial, key, failed_cells):
+    calc, _ = serial
+    assert np.array_equal(_q(calc, key), _expected(NAN, [(c, ERROR) for c in failed_cells]))
+    assert calc.errors[key] == _parallel.NO_FINITE_VALUES
+    assert key not in calc.not_appropriate
+    assert len(calc.pair_errors[key]) == len(failed_cells)
+
+
+def test_an_old_file_lists_a_no_value_spi_as_not_appropriate(serial, tmp_path):
+    """A file without codes that lists an SPI only for having no finite value."""
+    calc, _ = serial
+    path = tmp_path / "old.npz"
+    _write_schema1(path, calc)
+    with np.load(path) as f:
+        parts = {name: f[name] for name in f.files}
+    errors = json.loads(str(parts["errors"]))
+    errors["all_nan"] = _parallel.NO_FINITE_VALUES
+    parts["errors"] = np.array(json.dumps(errors), dtype="U")
+    np.savez(path, **parts)
+    res = load_results(path)
+    assert "all_nan" not in res.errors
+    assert res.not_appropriate["all_nan"] == calc.not_appropriate["all_nan"]
+
+
 def test_no_value_with_a_failed_pair_is_an_error():
     """Something went wrong for a pair, and no other pair has a value."""
     from pyspi.data import Data
@@ -285,7 +312,7 @@ def test_checkpoint_resume_restores_quality(serial, tmp_path):
 
 
 def test_checkpoint_without_quality_derives_it(tmp_path):
-    """A checkpoint written before quality codes existed: values plus `.error`."""
+    """A checkpoint with no quality sidecars: values plus `.error`."""
     calc = _calc()
     _parallel.write_manifest(tmp_path, calc.run_digest, calc.run_spec)
     good = np.arange(9.0).reshape(3, 3)
@@ -296,15 +323,35 @@ def test_checkpoint_without_quality_derives_it(tmp_path):
     # A pre-quality failure: all NaN, with the message the SPI raised.
     np.save(tmp_path / "always_raises.npy", np.full((3, 3), np.nan))
     (tmp_path / "always_raises.error").write_text("RuntimeError: old failure")
+    # No value and no failed pair, under the message every such SPI once got.
     np.save(tmp_path / "all_nan.npy", np.full((3, 3), np.nan))
-    (tmp_path / "all_nan.error").write_text(_parallel.RETURNED_NO_VALUE)
+    (tmp_path / "all_nan.error").write_text(_parallel.NO_FINITE_VALUES)
+    # No value and one failed pair, which the values alone cannot show.
+    mixed = "one_pair_raises_rest_nan"
+    np.save(tmp_path / f"{mixed}.npy", np.full((3, 3), np.nan))
+    (tmp_path / f"{mixed}.error").write_text(_parallel.NO_FINITE_VALUES)
+    (tmp_path / f"{mixed}.pairs.json").write_text(
+        json.dumps([[0, 1, "ValueError: pair (0, 1) is undefined"]]))
+    # No value and no message: the checkpoint was not finished.
+    unfinished = "one_pair_raises_rest_nan_undirected"
+    np.save(tmp_path / f"{unfinished}.npy", np.full((3, 3), np.nan))
 
     _compute(calc, checkpoint_dir=tmp_path, retry_failed=False)
     assert np.array_equal(_q(calc, "always_raises"), _expected(ERROR))
     assert np.array_equal(_q(calc, "all_nan"), _expected(NAN))
+    assert "all_nan" in calc.not_appropriate and "all_nan" not in calc.errors
+    assert np.array_equal(_q(calc, mixed), _expected(NAN, [((0, 1), ERROR)]))
+    assert calc.errors[mixed] == _parallel.NO_FINITE_VALUES
     assert np.array_equal(_q(calc, "one_pair_raises"),
                           _expected(GOOD, [((0, 2), NAN)]))
-    assert calc.pair_errors == {}
+    procs = list(calc.dataset.procnames)
+    assert calc.pair_errors[mixed] == [
+        (procs[0], procs[1], "ValueError: pair (0, 1) is undefined")]
+    assert set(calc.pair_errors) == {mixed, unfinished}
+    # The unfinished one was recomputed, whatever `retry_failed` says.
+    assert calc.timings[unfinished] > 0
+    assert np.array_equal(_q(calc, unfinished),
+                          _expected(NAN, [((0, 1), ERROR), ((1, 0), ERROR)]))
 
 
 def test_a_stale_quality_sidecar_is_not_trusted(tmp_path):
@@ -390,7 +437,14 @@ def test_an_old_schema_file_loads_with_derived_quality(serial, tmp_path):
     assert np.array_equal(q("one_infinite"),
                           _expected(GOOD, [((0, 1), NAN), ((1, 0), NAN)]))
     assert res.pair_errors is None
-    assert res.errors == calc.errors
+    # It holds no pair failures either, so an SPI listed only for having no
+    # finite value has no ERROR cell and is returned as not appropriate.
+    no_value = {k for k, msg in calc.errors.items()
+                if msg == _parallel.NO_FINITE_VALUES}
+    assert no_value
+    assert res.errors == {k: msg for k, msg in calc.errors.items()
+                          if k not in no_value}
+    assert set(res.not_appropriate) == no_value
 
 
 def test_a_schema0_file_with_only_values_loads(tmp_path):

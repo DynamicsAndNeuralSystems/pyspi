@@ -335,8 +335,8 @@ class SPIResult(NamedTuple):
 
 
 # The prefix of the message of an SPI or pair that is not appropriate for the
-# data (it raised `pyspi.base.NotAppropriate`, or returned no value): its
-# cells are NAN, not ERROR, and the message is the reason.
+# data (it raised `pyspi.base.NotAppropriate`, or returned no value): none of
+# its cells is ERROR, and the message is the reason.
 NOT_APPROPRIATE = "NotAppropriate: "
 # An SPI that raised nothing and has no finite off-diagonal value. Returning
 # NaN is an SPI's way of saying the data cannot support the estimate, so
@@ -349,8 +349,7 @@ NO_FINITE_VALUES = "ValueError: SPI returned no finite off-diagonal values"
 # SPI-level error messages that describe the *values* rather than a
 # computation that raised; any other error means the computation failed, so
 # its cells are labelled ERROR.
-_VALUE_ERRORS = (NO_FINITE_VALUES,
-                 "ValueError: checkpoint contains no finite values")
+_VALUE_ERRORS = (NO_FINITE_VALUES,)
 
 
 def describes_values(msg) -> bool:
@@ -653,7 +652,8 @@ def _read_checkpoint_quality(checkpoint_dir: Path, key, arr, err, M):
 
     A quality sidecar is used only if it has the right shape and agrees with
     the values (GOOD exactly where the value is finite); one that disagrees is
-    stale.
+    stale. Derived codes label the stored pair failures ERROR, which the
+    values alone cannot show.
     """
     path = checkpoint_dir / f"{key}.quality"
     if path.exists():
@@ -664,7 +664,24 @@ def _read_checkpoint_quality(checkpoint_dir: Path, key, arr, err, M):
                 return q
         except Exception:
             pass
-    return derive_quality(arr, err)
+    q = derive_quality(arr, err)
+    for i, j, msg in _stored_pairs(checkpoint_dir, key, M):
+        if not msg.startswith(NOT_APPROPRIATE) and q[i, j] != Quality.GOOD:
+            q[i, j] = Quality.ERROR
+    return q
+
+
+def _stored_pairs(checkpoint_dir: Path, key, M):
+    """The ``(i, j, message)`` pair failures and refusals stored for ``key``."""
+    path = checkpoint_dir / f"{key}.pairs.json"
+    if not path.exists():
+        return []
+    try:
+        pairs = [(int(i), int(j), str(msg))
+                 for i, j, msg in json.loads(path.read_text(encoding="utf-8"))]
+    except Exception:
+        return []
+    return [(i, j, m) for i, j, m in pairs if 0 <= i < M and 0 <= j < M]
 
 
 def _read_checkpoint_pairs(checkpoint_dir: Path, key, quality):
@@ -674,19 +691,10 @@ def _read_checkpoint_pairs(checkpoint_dir: Path, key, quality):
     A failure is kept for a cell labelled ERROR, and a ``NotAppropriate``
     reason for a cell labelled NAN.
     """
-    path = checkpoint_dir / f"{key}.pairs.json"
-    if not path.exists():
-        return []
-    try:
-        pairs = [(int(i), int(j), str(msg))
-                 for i, j, msg in json.loads(path.read_text(encoding="utf-8"))]
-    except Exception:
-        return []
-    M = quality.shape[0]
-    return [(i, j, m) for i, j, m in pairs
-            if 0 <= i < M and 0 <= j < M
-            and quality[i, j] == (Quality.NAN if m.startswith(NOT_APPROPRIATE)
-                                  else Quality.ERROR)]
+    return [(i, j, m)
+            for i, j, m in _stored_pairs(checkpoint_dir, key, quality.shape[0])
+            if quality[i, j] == (Quality.NAN if m.startswith(NOT_APPROPRIATE)
+                                 else Quality.ERROR)]
 
 
 def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool = True):
@@ -699,6 +707,8 @@ def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool 
     checkpoint without one, from the values and the error sidecar (see
     :func:`derive_quality`).
 
+    A checkpoint with no finite value and no ``.error`` sidecar was not
+    finished, and is recomputed.
     A checkpoint carrying an ``.error`` sidecar records an SPI with no value.
     If its message starts ``"NotAppropriate: "`` and the checkpoint holds no
     finite value, the SPI is not appropriate for the dataset: that is not a
@@ -725,20 +735,23 @@ def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool 
             continue
         err_path = checkpoint_dir / f"{key}.error"
         err = err_path.read_text(encoding="utf-8") if err_path.exists() else None
-        # Validate *before* the retry decision, so an invalid matrix is retried
-        # rather than being marked failed and then kept.
-        # As in `execute_spi`: an Inf is a per-cell code, not a failure, and
-        # only a result with no finite off-diagonal value is flagged.
-        off = arr[~np.eye(M, dtype=bool)]
-        if off.size and not np.isfinite(off).any():
-            err = err or "ValueError: checkpoint contains no finite values"
-        not_appropriate = (err is not None and err.startswith(NOT_APPROPRIATE)
-                           and not np.isfinite(off).any())
-        if err is not None and retry_failed and not not_appropriate:
+        off = ~np.eye(M, dtype=bool)
+        no_value = bool(off.any()) and not np.isfinite(arr[off]).any()
+        if no_value and err is None:
+            # `execute_spi` always says why an SPI has no value, so this
+            # checkpoint was not finished.
             remaining.append(key)
             continue
         q = _read_checkpoint_quality(checkpoint_dir, key, arr, err, M)
         pairs = _read_checkpoint_pairs(checkpoint_dir, key, q)
+        if err == NO_FINITE_VALUES and not (q[off] == Quality.ERROR).any():
+            # No pair failed, so the SPI is not appropriate, as in `execute_spi`.
+            err = RETURNED_NO_VALUE
+        not_appropriate = (err is not None and err.startswith(NOT_APPROPRIATE)
+                           and no_value)
+        if err is not None and retry_failed and not not_appropriate:
+            remaining.append(key)
+            continue
         # Values are NaN wherever the code is not GOOD; a checkpoint without
         # codes can hold an Inf, which the codes now label instead.
         arr = np.where(q == Quality.GOOD, arr, np.nan)

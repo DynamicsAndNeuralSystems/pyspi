@@ -96,7 +96,7 @@ Every value in `calc.table` is a real, finite number or NaN.
 `calc.quality` is the record of what happened to each cell, and the other records explain its codes.
 An error means that something went wrong, and its message is in `calc.errors` (or `calc.pair_errors` for a single pair).
 Not appropriate means that the SPI ran as intended and the data cannot support its estimate (too few observations, tied values, a constant series): the reason is in `calc.not_appropriate` (or `calc.pair_not_appropriate`), and the SPI is not counted as failed.
-An SPI that returns no finite value without raising anything is recorded there too.
+An SPI that returns no finite value without raising anything is recorded in `calc.not_appropriate` too.
 
 Results are stored as an `(n_spis, M, M)` array, the data's natural shape, plus the SPI and process names and each SPI's symmetry trait.
 `.csv` is also accepted for eyeballing small results, but it is one-way and impractical for the full SPI set.
