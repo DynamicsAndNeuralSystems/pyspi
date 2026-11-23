@@ -392,6 +392,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **Undirected SPIs evaluate each unordered pair once** and mirror the value and any failure (`phi_*` 1.9x faster).
   For the distance SPIs among them (`hsic*`, `hhg`, `dcorr*`, `mgc`, `lcss*`, `softdtw*`, `gwtau`), a pair that raises is NaN with a warning, as for every other SPI, instead of failing the SPI.
   A direct `bivariate(data, i=i, j=j)` call with `i < j` on a fresh `Data` can differ in the last bit for `xcorr_*`, `je_*` and `ce_*`.
+- **`hhg` ranks each series once.**
+  The row-wise ranks of a series' distance matrix are computed once for all its pairs (at most 256 MB at a time), and the dominance counts run in a numba kernel; values are bit-identical to hyppo's.
+  11x faster at M=16, T=1000 (5.5-15.5x for M from 4 to 32 and T from 500 to 2000).
 
 ### Added
 

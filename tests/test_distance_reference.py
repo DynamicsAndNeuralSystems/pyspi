@@ -286,6 +286,35 @@ def test_hhg_statistic_is_bit_identical_to_hyppo(monkeypatch, chunk_rows):
             assert distance._hhg_statistic(a, b) == ref, (n, name)
 
 
+@pytest.mark.parametrize("budget", [None, 1])
+def test_hhg_matrix_with_cached_ranks_is_bit_identical_to_hyppo(monkeypatch,
+                                                                budget):
+    """`multivariate` ranks each series once (or once per block, with a
+    one-byte cache budget) and still gives hyppo's statistic exactly, as
+    `bivariate` does."""
+    import warnings
+    import pyspi.statistics.distance as distance
+    from hyppo.independence import HHG
+
+    if budget is not None:
+        monkeypatch.setattr(distance, "_DCORR_CACHE_BYTES", budget)
+    rng = np.random.default_rng(4)
+    z = rng.standard_normal((5, 40))
+    z[1] = np.tanh(z[0]) + 0.3 * z[1]
+    z[2] = np.round(z[2])  # ties
+    data = Data(z, dim_order="ps")
+    x = data.to_numpy()
+    spi = distance.HellerHellerGorfine()
+    A = spi.multivariate(data)
+    for i in range(5):
+        for j in range(i + 1, 5):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ref = HHG().statistic(x[i], x[j])
+            assert A[i, j] == A[j, i] == ref, (i, j)
+            assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
+
+
 # --------------------------------------------------------------------------
 # GW_tau: the intrinsic-distance vector includes the trajectory's start
 # --------------------------------------------------------------------------
