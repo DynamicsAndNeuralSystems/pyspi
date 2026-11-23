@@ -1768,14 +1768,14 @@ def test_multitaper_phase_slope_index_uses_its_frequency_band():
     band variants actually take that path rather than the backend's full-band
     method.
 
-    Process 0 drives process 1 at a lag of ten samples through a low-pass
+    Process 0 drives process 1 at a lag of thirty samples through a low-pass
     filter, so their coherence -- and with it any phase slope -- lives in the
     low band. Process 2 is independent and sets the noise level.
     """
     from scipy import signal
 
     rng = np.random.default_rng(7)
-    T, lag = 2000, 10
+    T, lag = 2000, 30
     x, e = rng.standard_normal((2, T + lag))
     low = signal.filtfilt(*signal.butter(4, 0.2), x)
     series = np.stack([x[lag:], low[:-lag] / low.std() + 0.5 * e[lag:],
@@ -1800,14 +1800,15 @@ def _lagged_pair(lag, seed, T=2000):
 
 
 @pytest.mark.parametrize("lag, resolution", [
-    (1, None), (2, None), (5, None), (10, None), (20, None),
-    (40, 0.004), (60, 0.004), (100, 0.004)])
+    (1, None), (2, None), (5, None), (10, None), (20, None), (30, None),
+    (40, None), (45, None), (60, 0.004), (100, 0.004)])
 def test_multitaper_phase_slope_index_sign_follows_the_lag(lag, resolution):
-    """Positive from leader to follower in every band, for lags below fs / (2 w).
+    """Positive from leader to follower in every band, for lags below fs / (2 d).
 
-    ``w`` is the width of the groups of frequencies: about 0.02 at the
-    default resolution, so lags up to 20 samples, and 0.004 with
-    ``resolution=0.004``, so lags up to 100 samples at T = 2000.
+    ``d`` is the spacing of the groups of frequencies. At T = 2000 the
+    default gives ``d`` = 0.0091 (full band) and 0.0093 (half bands), so the
+    sign is right up to 54 samples; ``resolution=0.004`` gives ``d`` = 0.004
+    and lags up to 125 samples.
 
     The backend's sum over all frequency pairs changes sign for lags beyond
     about 50 samples, which is why the index sums neighbouring groups only.
@@ -1822,32 +1823,50 @@ def test_multitaper_phase_slope_index_sign_follows_the_lag(lag, resolution):
             assert S[1, 0] > 0 > S[0, 1]
 
 
+@pytest.mark.parametrize("lag", [65, 80])
+def test_multitaper_phase_slope_index_reverses_between_the_limit_and_twice_it(lag):
+    """Beyond fs / (2 d), 54 samples at T = 2000, the leader reads as the follower.
+
+    The phase step between neighbouring groups, ``2 pi lag d``, passes pi,
+    so every term of the sum changes sign: for lags between the limit and
+    twice it the index is negative in every band and realisation although
+    process 0 leads.
+    """
+    for seed in range(3):
+        for S in _psi_bands(_lagged_pair(lag, seed)):
+            assert S[0, 1] < 0 < S[1, 0]
+
+
 def test_multitaper_phase_slope_index_follows_the_phase_step_between_groups():
     """A pure delay tilts the phase spectrum by 2 pi lag per unit frequency.
 
-    Neighbouring groups, about ``w = 0.02`` apart, then differ in phase by
-    ``2 pi lag w``, and each term of the sum is proportional to its sine:
-    doubling a small lag doubles the index, which peaks near
-    ``1 / (4 w)`` (12 samples) and returns to about zero at ``1 / (2 w)``
-    (25 samples), where the phase step reaches pi.
+    Neighbouring groups, ``d`` = 0.0091 apart at T = 2000, then differ in
+    phase by ``2 pi lag d``, and each term of the sum is proportional to its
+    sine: doubling a small lag doubles the index, which peaks near
+    ``1 / (4 d)`` (27 samples) and is about zero at ``1 / (2 d)``
+    (55 samples), where the phase step reaches pi.
     """
     def full_band(lag):
         return np.mean([_psi_bands(_lagged_pair(lag, seed))[0][0, 1] for seed in range(6)])
 
-    one, two, four, peak, wrapped = (full_band(lag) for lag in (1, 2, 4, 12, 25))
+    one, two, four, peak, wrapped = (full_band(lag) for lag in (1, 2, 4, 27, 55))
     for ratio in (two / one, four / two):
         assert ratio == pytest.approx(2.0, rel=0.12)
-    assert peak > four
+    assert peak > 3 * four
     assert abs(wrapped) < 0.1 * peak
 
 
 def test_multitaper_phase_slope_index_is_the_neighbouring_group_sum(monkeypatch):
     """Nolte's definition, written out pair by pair from the backend's spectra.
 
-    The closed band less the real-valued bins (the rule every phase measure
-    follows) is split into consecutive groups of at least ``0.02 T`` bins
-    (12 at T = 600); each group's coherency is that of its mean cross- and
-    auto-spectra, and the index sums neighbouring groups.
+    At T = 600 the target width is ``w = 0.4 / sqrt(600)`` = 0.0163, so
+    ``x = 0.5 / w`` = 30.6 for the band [0, 0.5] and 15.3 for each half band.
+    The band is cut at fixed frequencies into ``floor(x)`` and
+    ``floor(x) + 1`` equal groups; the grid frequencies less 0 Hz and fs/2
+    (the rule every phase measure follows) join the group they fall in, each
+    group's coherency is that of its mean cross- and auto-spectra, and the
+    two sums over neighbouring groups are weighted by the fractional part of
+    ``x``.
 
     Also: the backend's all-pairs sum, whose temporaries grow with the square
     of the number of frequencies, is never called.
@@ -1868,12 +1887,13 @@ def test_multitaper_phase_slope_index_is_the_neighbouring_group_sum(monkeypatch)
     conn = sc.Connectivity.from_multitaper(multitaper)
     coherency, power, freq = conn.coherency()[0], conn.power()[0], conn.frequencies
 
-    for fmin, fmax in ((0, 0.5), (0, 0.25), (0.25, 0.5)):
-        inside = [k for k, f in enumerate(freq) if fmin <= f <= fmax and f != 0 and f != 0.5]
-        n_groups = len(inside) // 12
-        groups = np.array_split(inside, n_groups)
-        assert min(len(g) for g in groups) >= 12
-        expected = np.zeros((3, 3))
+    def nolte_sum(fmin, fmax, n_groups):
+        width = (fmax - fmin) / n_groups
+        groups = [[] for _ in range(n_groups)]
+        for k, f in enumerate(freq):
+            if fmin <= f <= fmax and f != 0 and f != 0.5:
+                groups[min(n_groups - 1, int((f - fmin) / width + 1e-9))].append(k)
+        total = np.zeros((3, 3))
         for i in range(3):
             for j in range(3):
                 if i == j:
@@ -1883,8 +1903,14 @@ def test_multitaper_phase_slope_index_is_the_neighbouring_group_sum(monkeypatch)
                     cross = np.mean([coherency[k, i, j] * np.sqrt(power[k, i] * power[k, j])
                                      for k in g])
                     grouped.append(cross / np.sqrt(np.mean(power[g, i]) * np.mean(power[g, j])))
-                expected[i, j] = sum((a.conjugate() * b).imag
-                                     for a, b in zip(grouped, grouped[1:]))
+                total[i, j] = sum((a.conjugate() * b).imag
+                                  for a, b in zip(grouped, grouped[1:]))
+        return total
+
+    for fmin, fmax in ((0, 0.5), (0, 0.25), (0.25, 0.5)):
+        x = (fmax - fmin) * np.sqrt(600) / 0.4
+        K = int(x)
+        expected = (1 - (x - K)) * nolte_sum(fmin, fmax, K) + (x - K) * nolte_sum(fmin, fmax, K + 1)
         got = np.asarray(PhaseSlopeIndex(fs=1, fmin=fmin, fmax=fmax).multivariate(
             Data(data=series, dim_order="ps", zscore=False)), float)
         off = ~np.eye(3, dtype=bool)
@@ -1897,7 +1923,7 @@ def test_multitaper_phase_slope_index_refuses_a_band_with_one_frequency():
 
     data = Data(data=np.random.default_rng(0).standard_normal((2, 6)),
                 dim_order="ps", zscore=False)
-    with pytest.raises(ValueError, match="at least two independent frequencies"):
+    with pytest.raises(ValueError, match="at least 48 observations; the series has 6"):
         PhaseSlopeIndex(fs=1, fmin=0.25, fmax=0.5).multivariate(data)
 
 
