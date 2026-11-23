@@ -11,7 +11,7 @@ import pytest
 import yaml
 from scipy import stats
 
-from pyspi.base import Signed, Undirected, Unsigned
+from pyspi.base import NotAppropriate, Signed, Undirected, Unsigned
 from pyspi.calculator import Calculator, load_spis_from_yaml, resolve_config
 from pyspi.data import Data
 from pyspi.statistics.events import (
@@ -440,18 +440,19 @@ def test_invariant_to_increasing_transforms(spi, heavy_data):
 
 
 @pytest.mark.parametrize("spi", ALL_VARIANTS, ids=lambda s: s.identifier)
-def test_constant_series_gives_nan_for_its_pairs_only(spi, heavy_data):
+def test_constant_series_is_not_appropriate_for_its_pairs_only(spi, heavy_data):
     Z = heavy_data[:3].copy()
     Z[1] = 2.0
     A = spi.multivariate(unchecked_data(Z))
     assert np.isnan(A[1]).all() and np.isnan(A[:, 1]).all()
     assert np.isfinite(A[0, 2]) and np.isfinite(A[2, 0])
-    assert np.isnan(spi.bivariate(unchecked_data(Z), i=0, j=1))
+    with pytest.raises(NotAppropriate, match="process 1 is constant"):
+        spi.bivariate(unchecked_data(Z), i=0, j=1)
 
 
 @pytest.mark.parametrize("statistic", ["strength", "asym"])
 def test_es_needs_two_events(statistic, heavy_data):
-    Z = heavy_data[:3].copy()
+    Z = heavy_data[:4].copy()
     Z[1] = 0.0
     Z[1, 400] = 5.0  # the only exceedance of the 0.95 quantile: one event
     Z[2] = 0.0
@@ -460,7 +461,11 @@ def test_es_needs_two_events(statistic, heavy_data):
     spi = EventSynchronisation(statistic)
     A = spi.multivariate(data)
     assert np.isnan(A[0, 1]) and np.isnan(A[1, 2]) and np.isnan(A[0, 2])
-    assert np.isnan(spi.bivariate(data, i=0, j=1))
+    assert np.isfinite(A[0, 3]) and np.isfinite(A[3, 0])
+    with pytest.raises(NotAppropriate, match="process 1 has 1 event"):
+        spi.bivariate(data, i=0, j=1)
+    with pytest.raises(NotAppropriate, match="process 2 has 1 event"):
+        spi.bivariate(data, i=0, j=2)
 
 
 def test_es_cache_is_keyed_on_quantile_only():

@@ -154,9 +154,10 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Without this, tied data give confident nonzero MI on independent series, since every kth-neighbour radius is zero; every process of the bundled `forex` dataset is tied.
   The jitter is deterministic but depends on observation order; NaN, infinite and constant series raise.
   **Every `kraskov` SPI's values can change**: 2.x ran JIDT with its seeded random dither, which 3.0 does not reproduce.
-- **KSG and kernel estimates the input cannot support are NaN, labelled not appropriate, with the cause recorded**: `k` too large for the effective sample, an auto-embedding search with no candidate it can score (candidates it cannot support are skipped), and a kernel Theiler window that leaves no comparison points.
+- **KSG and kernel estimates the input cannot support are NaN, labelled not appropriate, with the cause recorded**: `k` too large for the effective sample, an auto-embedding search with no candidate it can score (candidates it cannot support are skipped), a kernel Theiler window that leaves no comparison points, and a kernel MI, TLMI or TE pair in which no sample has a neighbour within the kernel width (every joint box empty, as in short series).
   Negative Theiler windows raise.
 - **Kozachenko entropy returned `-inf` on tied data** (a nearest neighbour at distance zero); it is now NaN, labelled not appropriate, with the cause recorded.
+  So is a Kozachenko entropy of fewer than two observations, which have no nearest neighbour: `cce_kozachenko_n-5` needs T ≥ 6 and `xme_kozachenko_k<k>` needs T ≥ k + 2.
 - **Gaussian estimates from too few samples returned values set by the ridge.**
   A Gaussian information-theoretic SPI whose aligned samples do not exceed the dimension of its largest covariance block (for example `xme_gaussian_k10` at T ≤ 20 or `di_gaussian_n-5` at T ≤ 15) is now NaN, labelled not appropriate, with the cause recorded.
   The Gaussian auto-embedding search skips candidates with no more aligned samples than dimensions, so auto-embedded Gaussian TE can change on short series.
@@ -310,7 +311,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   A pair whose estimate raises is NaN while the other pairs keep their values.
   Its reason is in `calc.pair_not_appropriate` when the data cannot support the estimate (e.g., tied values for a Kozachenko-Leonenko entropy), and its message is in `calc.pair_errors` otherwise.
 - **Input that cannot support an estimate is NaN, labelled not appropriate, with the reason in `calc.not_appropriate` or `calc.pair_not_appropriate`.**
-  This covers refusals driven by the data (a series too short for a lag, order, embedding or window, ties, collinear series, no amplitude in a band) in the information-theoretic SPIs, `lagcorr_*`, `ccm_*`, `lccm_*`, `nli_*`, `liang_*`, `cgc_*`, the conditional spectral SPIs (`cpdc_*`, `cgpdc_*`, `cddtf_*`, `pcohmag_*`), `pac_*` and `edge_*`.
+  This covers refusals driven by the data (a series too short for a lag, order, embedding or window, ties, collinear series, no amplitude in a band) in the information-theoretic SPIs, `lagcorr_*`, `ccm_*`, `lccm_*`, `nli_*`, `liang_*`, `cgc_*`, the conditional spectral SPIs (`cpdc_*`, `cgpdc_*`, `cddtf_*`, `pcohmag_*`), `pac_*`, `edge_*`, `cds`, `es_*`, `tailasym_*`, `xi_*`, `mgc`, `dcorrx_*`, `mgcx_*`, `coint_*` and the multitaper spectral SPIs.
   `ccm_E-None_*` and `lccm_E-None_*` are not appropriate for a series of fewer than 41 observations, too few for their search over E = 1 to 10 (2.0.2 failed inside pyEDM for the shortest of these).
   A pair of linearly dependent series, such as a series and a scaled and shifted copy of it, is not appropriate for `sgc_*`, `dcoh_*` (and the other Wilson-derived `dtf`, `ddtf`, `pdcoh` and `gpdcoh` classes) and `coint_johansen_*`, and the other pairs keep their values.
   The test is on the covariance each estimator inverts or factorises, scaled to unit diagonal: the pair is refused when its smallest/largest eigenvalue is at most 1e-12, or at most the rounding error of the computation that produced it (`eps` times its condition number), which includes an indefinite matrix.
@@ -318,6 +319,18 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   So a series and a nearly exact copy are refused too where the estimate would be set by rounding error; the check bounds that error from above, so near the boundary it is conservative by a small factor.
   A copy delayed by one sample is not refused by `sgc_*` or `dcoh_*`, whose values for it are finite estimates of an infinite quantity, and is refused by six of the eight bundled `coint_johansen_*` SPIs: with `det_order=1` and `k_ar_diff=1` each series is detrended separately, which leaves a residual between the copy and the lagged original, and the test returns a finite statistic.
   2.0.2 had no such check: parametric `sgc` caught the `LinAlgError` of a dependent pair as a `ValueError` and returned NaN for every pair, or, where rounding let the fit through, values set by rounding error; `coint_johansen_*` raised `LinAlgError`, which set the whole SPI to NaN.
+  Each of these SPIs checks its own requirement before it runs; at the bundled parameters the requirements are as follows.
+  `cds` needs two bins of the cause holding more than 12 samples, so T ≥ 26, and is checked per pair.
+  `es_*` needs two events in each series, so T ≥ 22 at quantile 0.95 and T ≥ 12 at 0.9, and is checked per pair.
+  `tailasym_*` needs `floor((1 - u) T) ≥ 1` samples in each tail, so T ≥ 20 at u = 0.95 and T ≥ 10 at 0.9, and, per pair, a tail that ties do not leave empty.
+  `ccm_E-1_convergence` and `ccm_E-10_convergence` compare two library sizes, so need T ≥ 22 and T ≥ 41.
+  `di_kraskov_NN-4_n-5` needs T ≥ 10, and `te_symbolic_k-3` needs T ≥ 4.
+  `dcorrx_maxlag-<L>` needs T ≥ L + 4 for the unbiased distance covariance, and `mgcx_maxlag-<L>` needs T ≥ L + 5 for MGC.
+  `pac_*` needs T > 27, the band-pass filter's pad length, and `pac_mi_*` also needs `n_bins` retained samples (T ≥ 34 at 18 bins).
+  `coint_johansen_*_ardiff-<k>` needs T ≥ k + 2, and `coint_aeg_*_maxlag-<L>` needs T ≥ 2 (L + 1).
+  `phi_*_t-1_*` needs T ≥ 6, more aligned samples than the 4 dimensions of the pair's past and present, `mgc` needs T ≥ 5, and `xi_tau-<tau>` needs T ≥ tau + 2 and, per pair, a target that is not constant after the lag.
+  The multitaper spectral SPIs need at least as many samples as tapers, `floor(2 NW - 1)`, so T ≥ 5 at the default NW = 3.
+  For `es_*` and `tailasym_*`, ties (as in integer data) that leave too few samples above the quantile or none in a tail have a reason of their own.
 - **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
 - **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.

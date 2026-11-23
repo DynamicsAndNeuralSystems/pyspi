@@ -10,6 +10,7 @@ import pytest
 import yaml
 from scipy import stats
 
+from pyspi.base import NotAppropriate
 from pyspi.calculator import Calculator
 from pyspi.data import Data
 from pyspi.statistics.basic import ChatterjeeXi
@@ -166,7 +167,7 @@ def test_ties_in_source_are_broken_deterministically():
         assert ChatterjeeXi().bivariate(data, i=i, j=j) == A[i, j]
 
 
-def test_constant_target_is_undefined():
+def test_constant_target_is_not_appropriate():
     rng = np.random.default_rng(9)
     z = np.vstack([rng.standard_normal(50), np.ones(50), rng.standard_normal(50)])
     spi = ChatterjeeXi()
@@ -174,7 +175,8 @@ def test_constant_target_is_undefined():
     A = spi.multivariate(data)
     assert np.isnan(A[0, 1]) and np.isnan(A[2, 1])
     assert np.isfinite(A[1, 0]) and np.isfinite(A[0, 2])
-    assert np.isnan(spi.bivariate(data, i=0, j=1))
+    with pytest.raises(NotAppropriate, match="process 1 is constant"):
+        spi.bivariate(data, i=0, j=1)
 
 
 def test_identifier_and_labels():
