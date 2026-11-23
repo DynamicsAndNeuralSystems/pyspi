@@ -389,7 +389,7 @@ def filter_spis(keywords, output_name = None, configfile= None):
     output_file = os.path.join(os.getcwd(), f"{output_name}.yaml")
 
     # write to YAML
-    with open(output_file, "w") as outfile:
+    with open(output_file, "w", encoding="utf-8") as outfile:
         yaml.dump(filtered_subset, outfile, default_flow_style=False, sort_keys=False)
 
     # output relevant information

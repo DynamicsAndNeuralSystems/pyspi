@@ -705,7 +705,7 @@ def load_config_yaml(configfile):
     dict
         ``{module: {class name: entry}}``, each entry a dict.
     """
-    with open(configfile) as f:
+    with open(configfile, encoding="utf-8") as f:
         yf = yaml.load(f, Loader=_ConfigLoader)
     if not isinstance(yf, dict):
         raise ValueError(f"{configfile}: expected a mapping of modules to SPI classes.")
@@ -1920,7 +1920,7 @@ class CalculatorFrame:
         datasets = []
         names = []
         labels = []
-        with open(document) as f:
+        with open(document, encoding="utf-8") as f:
             yf = yaml.load(f, Loader=yaml.FullLoader)
 
             for config in yf:

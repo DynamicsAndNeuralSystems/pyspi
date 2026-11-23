@@ -486,13 +486,13 @@ def write_checkpoint(checkpoint_dir, key, S, err, quality=None, pair_errors=None
     (d / f"{key}.npy").unlink(missing_ok=True)
     err_path = d / f"{key}.error"
     if err is not None:
-        err_path.write_text(err)
+        err_path.write_text(err, encoding="utf-8")
     elif err_path.exists():
         err_path.unlink()
     pairs_path = d / f"{key}.pairs.json"
     if pair_errors:
         tmp = pairs_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps([list(p) for p in pair_errors]))
+        tmp.write_text(json.dumps([list(p) for p in pair_errors]), encoding="utf-8")
         os.replace(tmp, pairs_path)
     elif pairs_path.exists():
         pairs_path.unlink()
@@ -595,7 +595,7 @@ def read_manifest(checkpoint_dir: Path):
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -606,7 +606,8 @@ def write_manifest(checkpoint_dir: Path, digest: str, spec: dict) -> None:
     payload = {"schema": SCHEMA_VERSION, "computation": COMPUTATION_VERSION,
                "digest": digest, "spec": spec}
     tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(payload, indent=1, sort_keys=True, default=str))
+    tmp.write_text(json.dumps(payload, indent=1, sort_keys=True, default=str),
+                   encoding="utf-8")
     os.replace(tmp, path)
 
 
@@ -668,7 +669,8 @@ def _read_checkpoint_pairs(checkpoint_dir: Path, key, quality):
     if not path.exists():
         return []
     try:
-        pairs = [(int(i), int(j), str(msg)) for i, j, msg in json.loads(path.read_text())]
+        pairs = [(int(i), int(j), str(msg))
+                 for i, j, msg in json.loads(path.read_text(encoding="utf-8"))]
     except Exception:
         return []
     M = quality.shape[0]
@@ -713,7 +715,7 @@ def load_checkpoints(checkpoint_dir: Path, spi_keys, M: int, retry_failed: bool 
             remaining.append(key)
             continue
         err_path = checkpoint_dir / f"{key}.error"
-        err = err_path.read_text() if err_path.exists() else None
+        err = err_path.read_text(encoding="utf-8") if err_path.exists() else None
         # Validate *before* the retry decision, so an invalid matrix is retried
         # rather than being marked failed and then kept.
         # As in `execute_spi`: an Inf is a per-cell code, not a failure, and

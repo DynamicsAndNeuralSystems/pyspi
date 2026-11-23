@@ -111,6 +111,9 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Loading and config errors that were silent or late.**
   A `.csv` dataset never loaded (`np.genfromtxt` was given `","` as its dtype); it now does.
   A config entry with an unknown key (for example `config:` for `configs:`) built the class with its default parameters, and a module or class named twice silently lost the first block; both now raise, and a bare `Class:` entry means the defaults.
+- **Config files were read in the locale encoding.**
+  Where that is not UTF-8 (Windows, or a Latin-1 locale), a custom config with a non-ASCII character garbled the text or failed to load.
+  Config files, the configs `filter_spis` writes and the checkpoint files are read and written as UTF-8 on every platform.
 - `pyspi/lib/ids/LICENSE.txt` was not shipped, despite MIT requiring it, and `LICENSE.txt` had been altered by a global find-and-replace ("technological *statistics*"); both are fixed.
 
 **Orientation and sign.**
