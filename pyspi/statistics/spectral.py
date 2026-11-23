@@ -1444,8 +1444,11 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     more estimates, about ``0.4 sqrt(T)`` FFT bins, so the spread of the
     index between independent series falls with ``T`` and the index of a
     given lag approaches the integral of the coherence-weighted phase slope
-    over the band, about ``2 pi lag`` times the band's mean squared
-    coherence.
+    over the band, about ``2 pi lag (fmax - fmin) / fs`` times the band's
+    mean squared coherence. It approaches that integral from below, the
+    more slowly the longer the lag, so values at lags that are not small
+    against the sign limit below compare across datasets only at similar
+    lengths.
 
     Neighbouring groups are ``d = (fmax - fmin) / K`` apart or less, so a lag
     of ``L`` samples turns the phase by at most ``2 pi L d / fs`` between
@@ -1456,7 +1459,11 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     sign there. Between that limit and twice it the index has the opposite
     sign: a process that leads by such a lag reads as following. Beyond
     twice the limit the averaging within each group shrinks the index, and
-    its sign keeps alternating with period ``fs / d`` samples.
+    its sign keeps alternating with period ``fs / d`` samples. On series
+    longer than 225 observations the limit is below the ``T / (4 NW)``
+    samples at which estimates one bandwidth apart wrap, so a lag between
+    the two is reported with the opposite sign; a smaller ``resolution``
+    extends the range of lags at the cost of power.
 
     This is the unnormalised index; Nolte et al. divide it by a jackknife
     standard deviation over epochs, which a single recording does not
@@ -1518,6 +1525,10 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
         self.identifier = "psi"
         super().__init__(**kwargs)
         if resolution is not None:
+            # A lower-precision float (np.float32(0.02)) is read as the
+            # value it prints as, so its identifier is `_res-0-02`.
+            if isinstance(resolution, np.floating):
+                resolution = float(str(resolution))
             resolution = require_positive_float("resolution", resolution)
             if resolution > self._fs / 2:
                 raise ValueError(

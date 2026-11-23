@@ -32,27 +32,32 @@ def _all_bands(series):
     return np.array([PhaseSlopeIndex(fmin=lo, fmax=hi).multivariate(data) for lo, hi in BANDS])
 
 
-def _ratios(T, lag, reps):
-    """Per band: mean A[x, y] over the sd of A[x, z], and that sd."""
-    values = np.array([_all_bands(_system(T, lag, seed))[:, 0, 1:] for seed in range(reps)])
-    null_sd = values[:, :, 1].std(axis=0, ddof=1)
-    return values[:, :, 0].mean(axis=0) / null_sd, null_sd
+def _signal_and_null(T, reps):
+    """Per lag (2, 10), seed and band: A[x, y] and A[x, z]."""
+    return np.array([[_all_bands(_system(T, lag, seed))[:, 0, 1:] for seed in range(reps)]
+                     for lag in (2, 10)])
 
 
-@pytest.mark.parametrize("lag", [2, 10])
-def test_a_longer_series_makes_a_lag_easier_to_detect(lag):
+def test_a_longer_series_makes_a_lag_easier_to_detect():
     """In each bundled band the signal-to-null ratio grows from T = 250 to 8000.
 
     The groups narrow as ``1 / sqrt(T)`` while each averages about
-    ``0.4 sqrt(T)`` bins, so the null spread falls faster than the index of a
-    short lag changes: about twofold for a 2-sample lag and fourfold for a
-    10-sample lag over this range.
+    ``0.4 sqrt(T)`` bins, so the null spread falls (to about 0.55-0.63 of its
+    T = 250 value) faster than the index of a short lag changes: the ratio
+    grows about twofold for a 2-sample lag and fourfold for a 10-sample lag.
+    The null spread is pooled over the 120 independent pairs (x, z) of both
+    lags. With 60 realisations per lag, these bounds fail for about 1 in
+    30,000 choices of seeds.
     """
-    short, null_short = _ratios(250, lag, reps=24)
-    long, null_long = _ratios(8000, lag, reps=24)
-    assert (short > 3).all()
-    assert (long > 1.4 * short).all(), (short, long)
-    assert (null_long < 0.85 * null_short).all()
+    short, long = _signal_and_null(250, reps=60), _signal_and_null(8000, reps=60)
+    null_short = short[..., 1].reshape(-1, 3).std(axis=0, ddof=1)
+    null_long = long[..., 1].reshape(-1, 3).std(axis=0, ddof=1)
+    assert (null_long < 0.9 * null_short).all(), (null_short, null_long)
+    for lag in range(2):
+        ratio_short = short[lag, :, :, 0].mean(axis=0) / null_short
+        ratio_long = long[lag, :, :, 0].mean(axis=0) / null_long
+        assert (ratio_short > 3).all()
+        assert (ratio_long > 1.3 * ratio_short).all(), (ratio_short, ratio_long)
 
 
 def test_independent_series_give_an_index_centred_on_zero():
@@ -150,6 +155,7 @@ def test_identifier_names_an_explicit_resolution_only():
     assert PhaseSlopeIndex(resolution=None).identifier == base
     assert PhaseSlopeIndex(resolution=0.02).identifier == base + "_res-0-02"
     assert PhaseSlopeIndex(resolution=np.float64(0.01)).identifier == base + "_res-0-01"
+    assert PhaseSlopeIndex(resolution=np.float32(0.02)).identifier == base + "_res-0-02"
     assert (PhaseSlopeIndex(time_halfbandwidth_product=4, resolution=0.05).identifier
             == base + "_nw-4_res-0-05")
     hz = PhaseSlopeIndex(fs=250, fmin=8, fmax=12)

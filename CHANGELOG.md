@@ -626,5 +626,5 @@ Values for the directed spectral classes listed under **Fixed** are also transpo
 | `dcoh_*` | 6 | Closed frequency band. |
 | `sgc_parametric_*` | 18 | Yule-Walker VAR fit (autocovariance about the mean and divided by `T`, where 2.0.2 divided by `T - k`), which moves the causality spectrum by up to about 1.5% at `T = 500`, 5-10% at `T = 100` and more on shorter series; and corrected frequency labels. |
 | `phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli` `_multitaper_mean_*`; `plv_multitaper_max_*` | 21 | Real-valued 0 Hz and Nyquist bins left out of the band (`dspli` also: taper-pair sign products). |
-| `psi_multitaper_mean_*` | 3 | Nolte's sum over neighbouring groups of frequencies `0.4 / sqrt(T)` cycles per sample wide (see **Fixed**); the half bands also: closed band less the real-valued bins. |
+| `psi_multitaper_mean_*` | 3 | Nolte's sum over neighbouring groups of frequencies `0.4 / sqrt(T)` cycles per sample wide, or one multitaper bandwidth, `6 / T`, where that is wider (`T <= 225`) (see **Fixed**); the half bands also: closed band less the real-valued bins. |
 | `gpfit_DotProduct`, `gpfit_RBF` | 2 | Leave-one-out MSE. |
