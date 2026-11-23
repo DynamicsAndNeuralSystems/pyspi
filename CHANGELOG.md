@@ -388,6 +388,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
   pyspi applies hyppo's final step itself, with the same values as hyppo 0.5.2.
+  From 800 samples, where it becomes the faster of the two, `dcorr`, `dcorr_biased` and each lagged term of `dcorrx` use hyppo's O(T log T) algorithm for scalar samples (Chaudhuri & Hu 2019) instead of the T x T matrices, with O(T) memory.
+  At M=16, T=4000 that makes `dcorr` 25x faster and `dcorrx_maxlag-1`/`-10` 20x and 23x (`dcorrx_maxlag-10` takes 14 s instead of 5 minutes).
+  Those values equal hyppo's to rounding (about 1e-13), not bit for bit; shorter series are unchanged.
 - `hhg` in O(n^2 log n) (about 9x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 - **Undirected SPIs evaluate each unordered pair once** and mirror the value and any failure (`phi_*` 1.9x faster).
   For the distance SPIs among them (`hsic*`, `hhg`, `dcorr*`, `mgc`, `lcss*`, `softdtw*`, `gwtau`), a pair that raises is NaN with a warning, as for every other SPI, instead of failing the SPI.
