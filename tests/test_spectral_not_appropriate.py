@@ -32,7 +32,7 @@ CASES = [
     ("spectral", "GroupDelay", dict(statistic="delay", fmin=0.495, fmax=0.5), 100,
      "holds only the real-valued bins"),
     ("spectral", "PhaseSlopeIndex", dict(fmin=0.1, fmax=0.12), 100,
-     "needs at least two independent frequencies"),
+     "so at least 600 observations; the series has 100"),
     ("spectral", "SpectralGrangerCausality", dict(method="parametric"), 19,
      "needs at least 20 observations, but the series has 19"),
     ("spectral", "SpectralGrangerCausality", dict(method="parametric", order=20), 60,

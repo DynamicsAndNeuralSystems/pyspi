@@ -190,6 +190,11 @@ def _closed_band(freq, fmin, fmax):
 # identifiers leave unnamed.
 _DEFAULT_NW = 3
 
+# PhaseSlopeIndex's default group width is _PSI_WIDTH * fs / sqrt(T): it
+# narrows with T, so the longest lag whose sign is right grows as sqrt(T),
+# while each group averages about _PSI_WIDTH * sqrt(T) FFT bins.
+_PSI_WIDTH = 0.4
+
 
 def _check_time_halfbandwidth_product(nw):
     """
@@ -220,8 +225,9 @@ class NonparametricSpectral(Unsigned):
     frequency resolution of ``2 NW / T`` cycles per sample. A larger ``NW``
     averages more tapers, which lowers the variance and the upward bias of
     coherence-type measures on independent series, at the cost of frequency
-    resolution. PhaseSlopeIndex and GroupDelay space their independent
-    frequencies one bandwidth, ``2 NW`` FFT bins, apart.
+    resolution. GroupDelay spaces its independent frequencies one bandwidth,
+    ``2 NW`` FFT bins, apart, and PhaseSlopeIndex averages the spectra over
+    groups of frequencies about one bandwidth wide or wider.
 
     Each subclass reduces its spectrum over the
     closed band ``fmin <= f <= fmax``, compared with a relative tolerance of
@@ -1468,37 +1474,59 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     """
     Phase slope index from the multitaper coherency [1]_.
 
-    ``Psi_ij = Im sum_f conj(C_ij(f)) C_ij(f + df)`` over the band, with ``C``
-    the complex coherency and ``df`` the frequency resolution of its estimate:
-    a coherence-weighted phase difference between neighbouring frequencies. It
-    grows with the lag between two processes. Antisymmetric and signed:
+    ``Psi_ij = Im sum_k conj(C_ij(k)) C_ij(k + 1)``, a coherence-weighted
+    phase difference between neighbouring groups of frequencies, which grows
+    with the lag between two processes. ``C_ij(k)`` is the coherency of group
+    ``k``'s mean cross- and auto-spectra over its frequencies and tapers,
+    ``mean S_ij / sqrt(mean S_ii mean S_jj)``. Antisymmetric and signed:
     ``A[i, j] = -A[j, i]``; positive means process ``i`` leads.
 
-    ``df`` is the multitaper bandwidth, ``2 NW`` FFT bins (six at the default
-    ``NW = 3``): closer frequencies share tapers and carry no independent
-    phase. The sign is reliable for lags up to ``T / (4 NW)`` samples, beyond
-    which the phase difference wraps. The band leaves out 0 Hz and ``fs / 2``,
-    must have ``fmin < fmax`` (checked at construction), and must hold at
-    least two frequencies one bandwidth apart, or the class raises
-    ``NotAppropriate`` (NaN with the reason in a Calculator).
+    The groups have a target width ``w``: ``0.4 fs / sqrt(T)`` for a series
+    of length ``T``, never less than one multitaper bandwidth
+    ``2 NW fs / T`` (the two are equal at ``T = 225``), or ``resolution``
+    when given. With ``x = (fmax - fmin) / w`` and ``K = floor(x)`` (at least
+    two), the band is cut at fixed frequencies into ``K`` equal groups and,
+    separately, into ``K + 1``; each frequency of the series' grid in the
+    band, less 0 Hz and ``fs / 2``, joins the group it falls in, and the
+    index is the average of the two sums weighted ``1 - (x - K)`` and
+    ``x - K``. The weighting makes the index change continuously as ``w``
+    changes with ``T``, rather than jumping when a group is added.
 
-    This is the unnormalised index. Nolte et al. divide it by a jackknife
-    standard deviation over epochs, which a single recording does not provide,
-    so the value scales with the number of frequencies in the band. It is
-    computed here rather than by the backend's
+    The default ``w`` narrows as ``T`` grows while each group still averages
+    more estimates, about ``0.4 sqrt(T)`` FFT bins, so the spread of the
+    index between independent series falls with ``T`` and the index of a
+    given lag approaches the integral of the coherence-weighted phase slope
+    over the band, about ``2 pi lag (fmax - fmin) / fs`` times the band's
+    mean squared coherence. It approaches that integral from below, the
+    more slowly the longer the lag, so values at lags that are not small
+    against the sign limit below compare across datasets only at similar
+    lengths.
+
+    Neighbouring groups are ``d = (fmax - fmin) / K`` apart or less, so a lag
+    of ``L`` samples turns the phase by at most ``2 pi L d / fs`` between
+    them. The sign is right for lags below ``fs / (2 d)`` samples, about
+    ``1.25 sqrt(T)`` at the default (19 at ``T = 250``, 39 at 1000, 79 at
+    4000, 158 at 16000) and ``T / (4 NW)`` on series shorter than 225
+    samples. Near the limit the index approaches zero, so noise decides its
+    sign there. Between that limit and twice it the index has the opposite
+    sign: a process that leads by such a lag reads as following. Beyond
+    twice the limit the averaging within each group shrinks the index, and
+    its sign keeps alternating with period ``fs / d`` samples. On series
+    longer than 225 observations the limit is below the ``T / (4 NW)``
+    samples at which estimates one bandwidth apart wrap, so a lag between
+    the two is reported with the opposite sign; a smaller ``resolution``
+    extends the range of lags at the cost of power.
+
+    This is the unnormalised index; Nolte et al. divide it by a jackknife
+    standard deviation over epochs, which a single recording does not
+    provide. It is computed here rather than by the backend's
     ``Connectivity.phase_slope_index``, which in spectral_connectivity 2.0
     sums over all pairs of frequencies rather than neighbouring ones and
-    whose definition differs between releases.
-
-    With a fixed ``time_halfbandwidth_product``, each frequency's estimate
-    averages the same number of tapers at any length ``T`` while ``df``
-    shrinks as ``1 / T``, so the index for a given lag stays about the same
-    as the series lengthens but its spread between independent series grows
-    with the number of frequencies summed: a longer series does not make a
-    lag easier to detect, and a long one makes it harder. For long series,
-    raise ``time_halfbandwidth_product`` in proportion to ``T`` (a fixed
-    bandwidth ``2 NW / T``), or use the wavelet ``PhaseSlopeIndex``, whose
-    time averaging gains from length.
+    whose definition differs between releases. The band must have
+    ``fmin < fmax`` (checked at construction) and be at least two
+    bandwidths wide, ``T >= 4 NW fs / (fmax - fmin)`` (24 observations for
+    [0, 0.5] and 48 for [0, 0.25] at ``fs = 1``, ``NW = 3``), or the class
+    raises ``NotAppropriate`` (NaN with the reason in a Calculator).
 
     References
     ----------
@@ -1524,6 +1552,14 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     time_halfbandwidth_product : float, optional
         Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5
         (see ``NonparametricSpectral``). Default: 3.
+    resolution : float or None, optional
+        Target width ``w`` of the groups of frequencies, in the units of
+        ``fs``, positive and at most ``fs / 2``, used at every length (never
+        below one multitaper bandwidth); the sign is then right for lags
+        below about ``fs / (2 resolution)`` samples. None is
+        ``0.4 fs / sqrt(T)``. A value is appended to the identifier as
+        ``_res-<value>``, with dots written as dashes; None adds nothing.
+        Default: None.
     """
 
     # Antisymmetric in (i, j): slope of the phase spectrum.
@@ -1534,35 +1570,113 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     # identifiers carry.
     _statistics = ("mean",)
     _phase_based = True
-    # Two frequencies one bandwidth apart: a single frequency never has them.
+    # Two groups of frequencies: a single frequency never has them.
     _positive_width = True
 
-    def __init__(self, **kwargs):
+    def __init__(self, resolution=None, **kwargs):
         self.identifier = "psi"
         super().__init__(**kwargs)
+        if resolution is not None:
+            # A lower-precision float (np.float32(0.02)) is read as the
+            # value it prints as, so its identifier is `_res-0-02`.
+            if isinstance(resolution, np.floating):
+                resolution = float(str(resolution))
+            resolution = require_positive_float("resolution", resolution)
+            if resolution > self._fs / 2:
+                raise ValueError(
+                    f"resolution must be at most fs / 2 = {self._fs / 2}, got "
+                    f"{resolution!r}.")
+            self.identifier += f"_res-{fmt_param(resolution)}".replace(".", "-")
+        self._resolution = resolution
         self._measure = "phase_slope_index"
         # Always `_get_statistic`: the backend method of this name is not the
         # published index.
         self._recompute = True
 
     @property
+    def key(self):
+        return super().key + (self._resolution,)
+
+    @property
     def _cache_subkey(self):
-        # (class, fs, NW, fmin, fmax), as in `key`.
-        return (type(self).__name__, self._fs, self._nw, self._fmin, self._fmax)
+        # (class, fs, NW, fmin, fmax, resolution), as in `key`.
+        return (type(self).__name__, self._fs, self._nw, self._fmin, self._fmax,
+                self._resolution)
+
+    def _get_cache(self, data):
+        # The default group width depends on the length of the series.
+        self._n_time = data.n_observations
+        return super()._get_cache(data)
+
+    def _splits(self):
+        """
+        The two group counts and the weight of the second (see the class docstring).
+
+        ``x = (fmax - fmin) / w``; the counts are ``K = floor(x)`` and ``K + 1``
+        and the weight is ``x - K``, so the index changes continuously as ``w``
+        does.
+        """
+        T, span = self._n_time, self._fmax - self._fmin
+        bandwidth = 2 * self._nw * self._fs / T
+        if span < 2 * bandwidth * (1 - 1e-9):
+            shortest = int(np.ceil(4 * self._nw * self._fs / span - 1e-9))
+            raise NotAppropriate(
+                f"Phase slope index needs the band [{self._fmin}, {self._fmax}] to "
+                f"hold two groups one multitaper bandwidth (2 NW fs / T = "
+                f"{bandwidth:.4g}) wide, so at least {shortest} observations; the "
+                f"series has {T}.")
+        target = (_PSI_WIDTH * self._fs / np.sqrt(T) if self._resolution is None
+                  else self._resolution)
+        x = span / max(target, bandwidth)
+        # The offset keeps a width that divides the band exactly (0.5 / 0.01)
+        # from rounding down.
+        K = max(2, int(np.floor(x + 1e-9)))
+        return K, min(max(x - K, 0.0), 1.0)
+
+    def _groups(self, freq, n_groups):
+        """Indices of the grid frequencies in each of ``n_groups`` equal groups."""
+        inside = self._band(freq)
+        span = self._fmax - self._fmin
+        # Fixed edges fmin + k * span / n_groups; a frequency on an inner edge
+        # joins the group above it.
+        position = (freq[inside] - self._fmin) * n_groups / span
+        k = np.minimum(n_groups - 1, np.floor(position + 1e-9).astype(int))
+        groups = [inside[k == g] for g in range(n_groups)]
+        if min(g.size for g in groups) == 0:
+            raise NotAppropriate(
+                f"Phase slope index: a group of [{self._fmin}, {self._fmax}] holds "
+                f"no frequency of the series' grid.")
+        return groups
+
+    @staticmethod
+    def _nolte_sum(coefficients, groups):
+        """Nolte's sum over neighbouring groups, from the tapered coefficients."""
+        # (windows, trials, tapers, frequencies, signals). Each group's mean
+        # cross-spectral matrix over its tapers and frequencies, without the
+        # full per-frequency matrix.
+        n_windows, n_signals = coefficients.shape[0], coefficients.shape[-1]
+        mean = np.empty((n_windows, len(groups), n_signals, n_signals), dtype=complex)
+        for k, g in enumerate(groups):
+            X = coefficients[..., g, :].reshape(n_windows, -1, n_signals)
+            mean[:, k] = np.einsum("wni,wnj->wij", X, X.conj()) / X.shape[1]
+        power = np.real(np.diagonal(mean, axis1=-2, axis2=-1))
+        # The backend's floor on the normalisation, so a constant process
+        # gives 0 rather than 0 / 0.
+        norm = np.maximum(np.sqrt(power[..., :, None] * power[..., None, :]),
+                          np.finfo(float).eps)
+        grouped = mean / norm
+        return np.imag(np.sum(
+            np.conj(grouped[..., :-1, :, :]) * grouped[..., 1:, :, :], axis=-3))
 
     def _get_statistic(self, C):
         freq = np.asarray(C.frequencies)
-        # The closed band less the real-valued bins, thinned to one bin per
-        # multitaper bandwidth.
-        inside = self._band(freq)
-        coherency = C.coherency()[..., inside[::self._frequency_step], :, :]
-        if coherency.shape[-3] < 2:
-            raise NotAppropriate(
-                f"Phase slope index needs at least two independent frequencies "
-                f"in [{self._fmin}, {self._fmax}] besides 0 Hz and fs/2; the "
-                f"series is too short for this band.")
-        return np.imag(np.sum(
-            np.conj(coherency[..., :-1, :, :]) * coherency[..., 1:, :, :], axis=-3))
+        K, weight = self._splits()
+        coefficients = np.asarray(C.fourier_coefficients)
+        value = self._nolte_sum(coefficients, self._groups(freq, K))
+        if weight > 0:
+            value = ((1 - weight) * value
+                     + weight * self._nolte_sum(coefficients, self._groups(freq, K + 1)))
+        return value
 
 
 def _independent_significant_frequencies(p_values, step, alpha=0.05,
