@@ -384,6 +384,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   pyspi builds tslearn's Itakura mask with NumPy and runs tslearn's recursion over each row's admitted columns only, in a numba kernel cached on disk; values are bit-identical to tslearn's.
   At M=16, T=800 the SPI takes 0.05 s instead of 0.23 s, and 0.14 s instead of 1.8 s in a new process.
   `lcss_constraint-itakura` uses the same mask.
+- **Constrained LCSS.**
+  `lcss_constraint-sakoe-chiba` and `lcss_constraint-itakura` run the LCSS recursion over each row's band only, in a numba kernel cached on disk, with O(T) memory instead of a T x T match matrix; values are bit-identical.
+  At M=16 the two SPIs take 0.54 s instead of 18 s at T=4000, and 0.035 s instead of 1.4 s at T=1000.
 - **The distance-correlation family centres each series once.**
   `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
