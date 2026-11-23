@@ -173,6 +173,102 @@ def empty_band_error(owner, fmin, fmax, detail):
         f"{owner}: the band [{fmin}, {fmax}] holds {detail}; widen it.")
 
 
+# A covariance matrix that an estimator inverts or factorises is treated as
+# singular when the smallest eigenvalue of its unit-diagonal form is at most
+# this fraction of the largest: a covariance formed from data carries rounding
+# error of about 1e-16 of its largest eigenvalue, so a smaller ratio cannot be
+# told from 0. It applies to the residual covariances of the VAR SPIs, the
+# innovation covariance of parametric spectral GC's pairwise VAR, the zero-lag
+# covariance that starts Wilson's spectral factorisation, and the residual
+# covariances that Johansen's test inverts.
+SINGULAR_RCOND = 1e-12
+
+
+def unit_diagonal_ratio(cov):
+    """
+    Smallest over largest eigenvalue of ``D^-1/2 C D^-1/2``, ``D = diag(C)``.
+
+    The conditioning of a real symmetric covariance ``C`` with the scale of
+    each variable removed, so that it does not depend on the units of either
+    series. For a ``2 x 2`` matrix it is ``(1 - |r|) / (1 + |r|)`` for the
+    correlation ``r`` that ``C`` implies; negative when ``C`` is indefinite.
+    Returns ``-inf`` when a diagonal entry is not positive and NaN when an
+    entry is not finite. A complex matrix raises ``TypeError``.
+    """
+    cov = np.asarray(cov)
+    if np.iscomplexobj(cov):
+        raise TypeError("unit_diagonal_ratio takes a real covariance matrix.")
+    cov = cov.astype(float)
+    if not np.isfinite(cov).all():
+        return np.nan
+    d = np.diag(cov)
+    if not (d > 0).all():
+        return -np.inf
+    scale = 1.0 / np.sqrt(d)
+    eig = np.linalg.eigvalsh(cov * np.outer(scale, scale))
+    return eig[0] / eig[-1]
+
+
+def singular_covariance_error(owner, i, j, cov, consequence, of, condition=1.0):
+    """
+    The ``NotAppropriate`` for a pair whose covariance ``cov`` is singular, or None.
+
+    ``cov`` is a covariance the estimator inverts or factorises, computed
+    from the pair's data. Its eigenvalues are accurate to about
+    ``eps * condition`` of the largest, where ``condition`` is the condition
+    number of the computation that produced it (1 for a covariance formed
+    directly from the data), so the pair is refused when
+    ``unit_diagonal_ratio(cov) <= max(SINGULAR_RCOND, eps * condition)``.
+    That includes an indefinite matrix and one with a variance that is not
+    positive. Such a covariance arises when the two series are linearly
+    dependent, at zero lag or through lags. A matrix that is not finite is
+    not refused here.
+
+    Parameters
+    ----------
+    owner : str
+        Name of the SPI class, or of the method, for the message.
+    i, j : int
+        The processes of the pair, for the message.
+    cov : array_like
+        The real symmetric covariance matrix that is checked.
+    consequence : str
+        What cannot be computed for such a pair, completing the message, e.g.
+        ``"the VAR fit has no inverse innovation covariance"``.
+    of : str
+        What ``cov`` is, for the message, e.g. ``"their covariance"``.
+    condition : float, optional
+        Condition number of the computation that produced ``cov``, at
+        least 1. Default: 1.
+
+    Returns
+    -------
+    pyspi.base.NotAppropriate or None
+        The error, for the caller to raise, when the covariance is singular;
+        otherwise None.
+    """
+    ratio = unit_diagonal_ratio(cov)
+    if np.isnan(ratio):
+        return None
+    precision = np.finfo(float).eps * max(float(condition), 1.0)
+    threshold = max(SINGULAR_RCOND, precision)
+    if ratio > threshold:
+        return None
+    if np.isneginf(ratio):
+        found = f"{of} has a variance that is not positive"
+    else:
+        found = (f"the smallest/largest eigenvalue of {of}, scaled to unit "
+                 f"diagonal, is {ratio:.2g}, at most {threshold:.2g}")
+        if precision > SINGULAR_RCOND:
+            found += (f" (the rounding error of a matrix computed through a "
+                      f"system with condition number {condition:.2g})")
+    # Imported here: pyspi.base imports pyspi.data, which imports this module.
+    from pyspi.base import NotAppropriate
+    return NotAppropriate(
+        f"{owner}: processes {i} and {j} are linearly dependent: {found}, so "
+        f"{consequence}.")
+
+
 def acf(x, mode='positive'):
     """
     Sample autocorrelation function of a series, computed by FFT.

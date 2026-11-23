@@ -194,9 +194,13 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `statistic="max"` is refused, since a maximum of wrapped angles depends on the branch cut.
   **The three `phase_multitaper_mean_*` values change.**
 - **Spectral Granger causality ignored `fs`** in its parametric branch and mis-oriented its NaN mask, so an estimable cell could be blanked; no value changes at the shipped `fs=1`.
-  Eleven `sgc_*` identifiers named `fmin=0`, which is overridden to 1e-5 because spectral GC is undefined at zero frequency: **`sgc_*_fmin-0_*` is renamed `sgc_*_fmin-1e-05_*`** (values unchanged).
+  Spectral GC is undefined at zero frequency, so a band given from `fmin=0` starts at `fs / 1e5`, and the identifier names that edge: at the shipped `fs=1` it is 1e-5, so eleven **`sgc_*_fmin-0_*` are renamed `sgc_*_fmin-1e-05_*`** (values unchanged).
+  2.0.2's nonparametric method put the edge at 1e-5 in the units of `fs` whatever `fs` was, which at a small `fs` cut off part of the band; with the edge a fixed fraction of `fs`, rescaling `fs` and the band together leaves every value unchanged.
+  On a series longer than 1e5 samples the nonparametric edge also leaves out the positive frequencies below `fs / 1e5` (10 of them at 1e6 samples).
+  The default `fmin` is 0 (2.0.2: 1e-5), the same band at `fs=1`.
   Its default `fmax` was 0.5 whatever `fs` was, so at `fs=100` the default band was 0 to 0.5 Hz; it is now `fs / 2`, as for every other spectral SPI (no change at `fs=1`).
   An unknown `method` raises `ValueError`; any value other than `"nonparametric"` ran the parametric method.
+  A cell with more than `nan_threshold` of its in-band frequencies NaN (or any, with `ignore_nan=False`) is not appropriate, with that fraction as the reason; 2.0.2 set it to NaN with a warning.
 - **Parametric spectral Granger causality (`sgc_parametric_*`) was fitted on an indefinite autocovariance.**
   The VAR is now fitted on the Yule-Walker autocovariance, which is positive semidefinite, the band uses the frequencies the model is evaluated at, and the automatic order search terminates.
 - **Directed spectral measures used an open frequency band.**
@@ -217,7 +221,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Multitaper `psi` is refused with fewer than two independent frequencies in its band.
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
-  Neither warns now; for spectral GC `fmin=0` means the lowest positive frequency, 1e-5, as its identifier states.
+  Neither warns now; for spectral GC `fmin=0` means a band from `fs / 1e5`, as its identifier states.
 - **Debiased squared PLI (`dspli_*`) was wrong where the cross-spectrum is real.**
   It is now the mean of taper-pair sign products (Vinck et al. 2011).
 - **Cross-correlation (`CrossCorrelation`) was wrong four ways.**
@@ -308,6 +312,12 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **Input that cannot support an estimate is NaN, labelled not appropriate, with the reason in `calc.not_appropriate` or `calc.pair_not_appropriate`.**
   This covers refusals driven by the data (a series too short for a lag, order, embedding or window, ties, collinear series, no amplitude in a band) in the information-theoretic SPIs, `lagcorr_*`, `ccm_*`, `lccm_*`, `nli_*`, `liang_*`, `cgc_*`, the conditional spectral SPIs (`cpdc_*`, `cgpdc_*`, `cddtf_*`, `pcohmag_*`), `pac_*` and `edge_*`.
   `ccm_E-None_*` and `lccm_E-None_*` are not appropriate for a series of fewer than 41 observations, too few for their search over E = 1 to 10 (2.0.2 failed inside pyEDM for the shortest of these).
+  A pair of linearly dependent series, such as a series and a scaled and shifted copy of it, is not appropriate for `sgc_*`, `dcoh_*` (and the other Wilson-derived `dtf`, `ddtf`, `pdcoh` and `gpdcoh` classes) and `coint_johansen_*`, and the other pairs keep their values.
+  The test is on the covariance each estimator inverts or factorises, scaled to unit diagonal: the pair is refused when its smallest/largest eigenvalue is at most 1e-12, or at most the rounding error of the computation that produced it (`eps` times its condition number), which includes an indefinite matrix.
+  That covariance is the zero-lag covariance of the multitaper spectrum for nonparametric `sgc` and the Wilson-derived SPIs, the Yule-Walker equations and the fitted innovation covariance for parametric `sgc` (its BIC search selects among the orders below the first that cannot be fitted, and refuses only when order 1 cannot), and the two residual covariances the test inverts for `coint_johansen_*`, which also refuses a pair for which statsmodels finds one singular or whose test eigenvalues are not all in [0, 1) (a negative or non-finite statistic).
+  So a series and a nearly exact copy are refused too where the estimate would be set by rounding error; the check bounds that error from above, so near the boundary it is conservative by a small factor.
+  A copy delayed by one sample is not refused by `sgc_*` or `dcoh_*`, whose values for it are finite estimates of an infinite quantity, and is refused by six of the eight bundled `coint_johansen_*` SPIs: with `det_order=1` and `k_ar_diff=1` each series is detrended separately, which leaves a residual between the copy and the lagged original, and the test returns a finite statistic.
+  2.0.2 had no such check: parametric `sgc` caught the `LinAlgError` of a dependent pair as a `ValueError` and returned NaN for every pair, or, where rounding let the fit through, values set by rounding error; `coint_johansen_*` raised `LinAlgError`, which set the whole SPI to NaN.
 - **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
 - **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.
@@ -320,6 +330,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **No SPI reads the global NumPy RNG.**
   tslearn's subgradient barycenter took its update order from the global stream, and `MinCovDet` and `EllipticEnvelope` search from random subsets of the observations, so their values changed with the caller's seed and with which SPIs ran earlier.
   Each fit now uses its own fixed-seed generator, so a value is a function of the data alone.
+  spectral_connectivity starts Wilson's factorisation from a random matrix drawn from the global stream when its Cholesky start fails, as it can for a pair of nearly identical series; pyspi refuses such a pair as linearly dependent before the backend reaches it, so nonparametric `sgc_*` and `dcoh_*` never take that path.
   **`cov_MinCovDet` changes value**, by about the estimator's own run-to-run spread, as do the `sgddtw` barycenter SPIs, which are not bundled.
 - **scikit-learn >= 1.8 changes some covariance values.**
   scikit-learn 1.8 added the Croux-Haesbroeck consistency correction to `MinCovDet`/`EllipticEnvelope` (scikit-learn #32117), which cannot be switched off, so their covariance, precision and partial-correlation SPIs differ from 2.0.x.
@@ -597,7 +608,7 @@ In every case a parameter that changes the measure was absent from, or misreport
 
 | Was | Is | Why |
 |:----|:---|:----|
-| `sgc_*_fmin-0_*` (11) | `sgc_*_fmin-1e-05_*` | Spectral GC is undefined at zero frequency, so `fmin=0` is overridden, but the identifier was built from the argument. |
+| `sgc_*_fmin-0_*` (11) | `sgc_*_fmin-1e-05_*` | Spectral GC is undefined at zero frequency, so `fmin=0` starts the band at `fs / 1e5`, 1e-5 at `fs=1`, but the identifier was built from the argument. |
 | `mi_kraskov_NN-4_DCE`, `tlmi_kraskov_NN-4_DCE`, `te_kraskov_NN-4_DCE_k-1_...`, `te_kraskov_NN-4_DCE_k-2_...` (4) | `..._DCE-AUTO...` | The Theiler window's value, not just its presence: 5, 10 and `"AUTO"` shared one name. |
 | `cce_gaussian`, `cce_kozachenko`, `di_gaussian` (3) | `..._n-5` | `n` changes the measure. |
 | `te_kraskov_NN-4_DCE_k-max-10_tau-max-4`, `te_kraskov_NN-4_k-max-10_tau-max-4`, `gc_gaussian_k-max-10_tau-max-2` (3) | `..._MAX-CORR-AIS_k-max-*` (the first also `DCE` to `DCE-AUTO`) | The auto-embedding method changes what is computed. Values are those of 2.0.2's search, which selects the source embedding too. |

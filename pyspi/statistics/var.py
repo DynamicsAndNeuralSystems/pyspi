@@ -29,7 +29,7 @@ import numpy as np
 from pyspi.base import (Directed, NotAppropriate, Undirected, Unsigned,
                         parse_bivariate, parse_multivariate)
 from pyspi.statistics.spectral import _closed_band
-from pyspi.utils import fmt_param, require_int
+from pyspi.utils import SINGULAR_RCOND, fmt_param, require_int
 
 DEFAULT_MAX_ORDER = 10
 
@@ -39,8 +39,9 @@ _PARTITIONED_MAX_COND = 1e6
 
 # BIC needs ln det Sigma. A residual covariance whose smallest eigenvalue is
 # below this fraction of its largest is treated as singular: the processes are
-# linearly dependent and the criterion is rounding noise.
-_SINGULAR_RCOND = 1e-12
+# linearly dependent and the criterion is rounding noise (see
+# `pyspi.utils.SINGULAR_RCOND`).
+_SINGULAR_RCOND = SINGULAR_RCOND
 
 
 def max_feasible_order(n_processes, n_observations):
