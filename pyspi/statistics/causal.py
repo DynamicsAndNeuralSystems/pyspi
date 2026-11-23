@@ -678,11 +678,11 @@ class ConvergentCrossMapping(Directed, Unsigned):
     a fixed ``E`` they are not appropriate (``NotAppropriate``, NaN in a
     Calculator table) unless ``N >= ceil(2E/10)*10 + E + 11`` (``N >= 22``
     for ``E = 1``, ``N >= 41`` for ``E = 10``), and they are NaN for a pair
-    with fewer than two finite skills. A link strong enough to synchronise the pair saturates the skill
-    from the smallest library on and so barely converges, and when both
-    directions are causal the stronger one can converge less. With a delay
-    of one sample, a weakly autocorrelated source acting at a longer lag can
-    leave the skill near zero.
+    with fewer than two finite skills. A link strong enough to synchronise
+    the pair saturates the skill from the smallest library on and so barely
+    converges, and when both directions are causal the stronger one can
+    converge less. With a delay of one sample, a weakly autocorrelated
+    source acting at a longer lag can leave the skill near zero.
 
     The "i drives j" reading holds for deterministic dynamics. Under
     stochastic lagged coupling it can reverse: if ``x_i`` drives ``x_j``

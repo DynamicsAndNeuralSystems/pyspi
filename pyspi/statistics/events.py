@@ -370,9 +370,10 @@ class TailDependenceAsymmetry(Undirected):
     The SPI is not appropriate (``NotAppropriate``, NaN in a Calculator
     table) when ``k < 1``: ``T < 20`` at level 0.95 and ``T < 10`` at 0.9.
     A pair is not appropriate when a tail the statistic uses is empty for
-    either series, which happens when ties put the average rank of every
-    sample at the top (or bottom) of the range outside the tail, as in
-    integer data, or when either series is constant or not finite.
+    either series, which happens when its largest (or smallest) value is
+    tied across so many samples that their average rank falls outside the
+    tail, as in integer data, or when either series is constant or not
+    finite.
     Being rank-based, the statistic is unchanged by any strictly
     increasing transform of either series. It ignores time order
     (contemporaneous).
