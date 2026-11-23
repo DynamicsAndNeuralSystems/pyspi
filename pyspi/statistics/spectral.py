@@ -1,4 +1,5 @@
 import functools
+import itertools
 import logging
 import numbers
 import warnings
@@ -10,6 +11,8 @@ import nitime.utils as nt_utils
 import numpy as np
 import spectral_connectivity as sc
 from scipy import signal
+from scipy.fft import ifft
+from spectral_connectivity.connectivity import _estimate_spectral_granger_prediction
 from spectral_connectivity.transforms import prepare_time_series
 
 from pyspi.base import (
@@ -27,6 +30,8 @@ from pyspi.utils import (
     require_band,
     require_int,
     require_positive_float,
+    singular_covariance_error,
+    unit_diagonal_ratio,
 )
 
 
@@ -97,6 +102,28 @@ def _warn_factorisation_log(records, n_pairs, unit):
     for message in dict.fromkeys(m for _, m in records
                                  if not m.startswith(_WILSON_ITERATION_CAP)):
         warnings.warn(f"spectral_connectivity: {message}", RuntimeWarning)
+
+
+def _dependent_spectrum_error(csm, i, j):
+    """
+    The ``NotAppropriate`` for a pair whose spectrum cannot be factorised, or None.
+
+    ``csm`` is the pair's ``2 x 2`` cross-spectral matrix at every frequency.
+    The backend starts Wilson's iteration from the Cholesky factor of the
+    zero-lag covariance, the real part of the inverse FFT of ``csm`` at lag 0,
+    and draws a random start from NumPy's global stream when that Cholesky
+    fails. That covariance is formed directly from the spectrum, and the pair
+    is refused when it is singular by ``pyspi.utils.SINGULAR_RCOND``
+    (``singular_covariance_error``). At that tolerance the Cholesky of every
+    pair that is kept succeeds, so the random start is never reached. The
+    real part is the backend's: the inverse FFT of a Hermitian spectrum is
+    real up to rounding.
+    """
+    lag0 = ifft(csm, axis=-3)[..., 0, :, :].real.reshape(2, 2)
+    return singular_covariance_error(
+        "Wilson's spectral factorisation", i, j, lag0,
+        "their cross-spectral matrix is singular and has no spectral factor",
+        of="their zero-lag covariance")
 
 
 def _ensure_time_series_3d(z):
@@ -493,10 +520,16 @@ class _FactoredConnectivity(sc.Connectivity):
     the same spectrum, so no value changes. The Fourier coefficients and the
     factor are then released, since one object is held per ordered pair.
     What the backend logged while factorising (an iteration cap reached, say)
-    is kept as ``factorisation_log``.
+    is kept as ``factorisation_log``. A pair of linearly dependent series
+    (``_dependent_spectrum_error``) is not factorised: every quantity read
+    from the factor raises ``NotAppropriate`` with the reason, which is kept
+    as ``refusal``. ``pair`` holds the processes ``(i, j)`` of the dataset,
+    for the message; by default those of the Connectivity itself.
     """
 
     factorisation_log = ()
+    pair = (0, 1)
+    refusal = None
 
     @functools.cached_property
     def _minimum_phase_factor(self):
@@ -504,7 +537,15 @@ class _FactoredConnectivity(sc.Connectivity):
 
     def _factorise(self):
         held = vars(self)
+        if self.refusal is not None:
+            raise NotAppropriate(self.refusal)
         if "_noise_covariance" not in held:
+            err = _dependent_spectrum_error(
+                self._expectation_cross_spectral_matrix(), *self.pair)
+            if err is not None:
+                self.refusal = str(err)
+                self.fourier_coefficients = None
+                raise err
             # The parent's properties read the factor through `self`, so it is
             # computed by the cached property above exactly once for the two.
             with _collect_backend_log() as log:
@@ -555,7 +596,14 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
     shared by every subclass. The measures are evaluated pair by pair, so they
     are bivariate, not conditioned on the other processes. Where Wilson's
     algorithm reaches its iteration cap, the values come from the unconverged
-    factor, and every SPI that reads it warns, naming the ordered pairs.
+    factor, and every SPI that reads it warns, naming the ordered pairs. A
+    pair of linearly dependent series, whose zero-lag covariance scaled to
+    unit diagonal has a smallest/largest eigenvalue of at most 1e-12
+    (``pyspi.utils.SINGULAR_RCOND``), has a singular spectral matrix and no
+    factor: it raises ``NotAppropriate``, which the Calculator records as NaN
+    for that pair with the reason, and the other pairs keep their values. A
+    copy delayed by a lag is not refused: its measures are finite estimates
+    of an infinite quantity.
     """
 
     _cache_namespace = "spectral_bv"
@@ -597,6 +645,7 @@ class NonparametricSpectralBivariate(NonparametricSpectral):
                 time_halfbandwidth_product=self._nw,
                 tapers=_whole_record_tapers(z.shape[0], self._fs, self._nw))
             conn = _FactoredConnectivity.from_multitaper(m)
+            conn.pair = (i, j)
             conns[conn_key] = conn
 
         # `_recompute` replaces a backend measure outright, not only when the
@@ -1155,6 +1204,9 @@ class DirectedCoherence(NonparametricSpectralBivariate, Directed):
     ``DC_ij^2`` is not then the fraction of process ``i``'s power arriving
     from ``j``. A whitened (triangular-factor) variant would restore that
     reading but would depend on the order of the two processes.
+
+    A pair of linearly dependent series has no spectral factor and is NaN,
+    labelled not appropriate (see ``NonparametricSpectralBivariate``).
 
     References
     ----------
@@ -1804,8 +1856,11 @@ class GroupDelay(NonparametricSpectralMultivariate, Directed):
         return self._fs * slope / (2 * np.pi), slope, r_value
 
 
-# The lower band edge spectral GC uses for fmin = 0, where it is undefined.
-_SGC_FMIN = 1e-5
+# Spectral GC is undefined at 0 Hz, so a band given from fmin = 0 starts at
+# fs / _SGC_EDGE_DIVISOR, 1e-5 cycles per sample: above 0 Hz and below the
+# first positive frequency of either method's grid on up to 1e5 samples. A
+# division, so that the edge is the double nearest fs / 1e5 (1e-05 at fs = 1).
+_SGC_EDGE_DIVISOR = 100_000
 
 # nitime.GrangerAnalyzer's grid size: granger_causality_xy evaluates the model at
 # n_freqs // 2 + 1 points on [0, fs/2) (scipy.signal.freqz, endpoint excluded).
@@ -1827,7 +1882,25 @@ def _parametric_gc_frequencies(fs):
     return w * fs / (2 * np.pi)
 
 
-def _fit_bivariate_var(x, order=None, max_order=50):
+class _SingularPairFit(NotAppropriate):
+    """The VAR of one pair cannot be fitted: that pair alone is refused."""
+
+
+def _yule_walker_condition(Rn, p):
+    """
+    Condition number of the order ``p`` Yule-Walker system of a pair.
+
+    ``Rn`` holds the autocovariances scaled to unit variance; the system's
+    matrix is the ``2p x 2p`` block Toeplitz matrix of ``Rn[0]`` to
+    ``Rn[p - 1]``. Infinite when it is singular.
+    """
+    blocks = [[Rn[b - a] if b >= a else Rn[a - b].T for b in range(p)]
+              for a in range(p)]
+    sv = np.linalg.svd(np.block(blocks), compute_uv=False)
+    return np.inf if sv[-1] == 0 else sv[0] / sv[-1]
+
+
+def _fit_bivariate_var(x, order=None, max_order=50, pair=(0, 1)):
     """
     Yule-Walker fit of the two-process VAR behind parametric spectral GC.
 
@@ -1849,7 +1922,30 @@ def _fit_bivariate_var(x, order=None, max_order=50):
     ``NotAppropriate`` if BIC is still improving at the last of them.
     Returns ``(coef, ecov)`` in nitime's convention,
     ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
+
+    Every order fitted is checked. The order ``p`` system, with condition
+    number ``kappa`` (``_yule_walker_condition``), determines the innovation
+    covariance ``ecov`` only to about ``eps * kappa`` of its largest
+    eigenvalue. An order whose system is singular to working precision
+    (``eps * kappa >= 1``), or whose ``ecov`` is singular by
+    ``singular_covariance_error`` with that ``kappa``, cannot be fitted: the
+    two series are linearly dependent, or so nearly that Geweke's ratio of
+    the fit would be set by rounding error. ``eps * kappa`` bounds the error
+    from above, so near the boundary the check is conservative by a small
+    factor (a pair whose fit is accurate to about 1% can be refused). A
+    fixed ``order`` that cannot be fitted raises ``_SingularPairFit``, a
+    ``NotAppropriate`` that names the numbers. The BIC search stops at the
+    first order that cannot be fitted and selects the best order below it,
+    even if BIC was still improving: the Yule-Walker system of a higher
+    order contains that of a lower one, so it is no better conditioned, and
+    the orders that can be fitted are fitted accurately. It raises when
+    order 0 or 1 cannot be fitted, since then no order with lags is left and
+    order 0 gives no causality by construction, not by estimate. A search
+    that reaches the record-length limit while still improving raises, since
+    a longer series could fit the higher orders.
     """
+    i, j = pair
+    owner = "Parametric spectral Granger causality"
     x = x - x.mean(axis=-1, keepdims=True)
     n_obs = x.shape[-1]
     if order is not None and n_obs < _var_min_observations(order):
@@ -1866,12 +1962,43 @@ def _fit_bivariate_var(x, order=None, max_order=50):
     # R[k] = (1/T) sum_t x(t+k) x(t)^T: nitime's lag orientation.
     R = np.stack([x[:, k:] @ x[:, :n_obs - k].T
                   for k in range(largest + 1)]) / n_obs
+    d = np.diag(R[0])
+    Rn = R / np.sqrt(np.outer(d, d)) if (d > 0).all() else None
+
+    def fit(p):
+        kappa = 1.0
+        if p > 0:
+            kappa = np.inf if Rn is None else _yule_walker_condition(Rn, p)
+            if np.finfo(float).eps * kappa >= 1:
+                raise _SingularPairFit(
+                    f"{owner}: processes {i} and {j} are linearly dependent: "
+                    f"the order {p} Yule-Walker equations are singular to "
+                    f"working precision (condition number {kappa:.2g}), so "
+                    f"the VAR cannot be fitted.")
+        coef, ecov = nt_alg.lwr_recursion(R[: p + 1])
+        err = singular_covariance_error(
+            owner, i, j, ecov,
+            "Geweke's ratio of the fitted VAR is not defined",
+            of=f"the VAR({p}) innovation covariance", condition=kappa)
+        if err is not None:
+            raise _SingularPairFit(str(err))
+        return coef, ecov
+
     if order is not None:
-        return nt_alg.lwr_recursion(R)
+        return fit(order)
 
     best = None
     for p in range(largest + 1):
-        coef, ecov = nt_alg.lwr_recursion(R[: p + 1])
+        try:
+            coef, ecov = fit(p)
+        except _SingularPairFit:
+            # An order that cannot be fitted to working precision is not a
+            # candidate, nor is any higher one: the search selects among the
+            # orders below it. If order 0 or 1 cannot be fitted no order with
+            # lags is left, and order 0 would give GC = 0 by construction.
+            if p <= 1:
+                raise
+            return best[1:]
         # nitime's criterion and arguments: (ecov, n_process, order, n_process * T).
         crit = nt_utils.bayesian_information_criterion(ecov, 2, p, 2 * n_obs)
         if best is not None and crit > best[0]:
@@ -1915,10 +2042,29 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     holding none of its frequencies raises ``ValueError`` at construction;
     the nonparametric grid does, and a band holding none of it raises
     ``NotAppropriate`` when the SPI is computed. Spectral GC is undefined at
-    0 Hz, so ``fmin = 0`` means the lowest positive frequency, 1e-5, which
-    the identifier names (``_fmin-1e-05``).
-    A cell with more than ``nan_threshold`` of its in-band frequencies NaN is
-    set to NaN, with a warning. With ``method='nonparametric'``, where
+    0 Hz, so ``fmin = 0`` sets the lower edge to ``fs / 1e5``, which the
+    identifier names (``_fmin-1e-05`` at ``fs = 1``). The edge is a fixed
+    fraction of ``fs``, so rescaling ``fs`` with the band gives the same
+    value; it leaves out 0 Hz and, on a series of at most 1e5 samples, no
+    other frequency of either method's grid. On a longer series of the
+    nonparametric method it also leaves out the positive frequencies below
+    ``fs / 1e5`` (10 of them at 1e6 samples).
+
+    A pair of linearly dependent series has no spectral factor or no VAR
+    fit and raises ``NotAppropriate``, which the Calculator records as NaN
+    for that pair with the reason; the other pairs keep their values. The
+    nonparametric method refuses a pair whose zero-lag covariance is
+    singular (``pyspi.utils.SINGULAR_RCOND``); the parametric method one
+    whose Yule-Walker equations or fitted innovation covariance are singular
+    to the precision their conditioning allows (``_fit_bivariate_var``). A
+    copy of a series delayed by a lag is refused by neither: its spectral GC
+    is infinite in theory, and both methods return a large finite value set
+    by the estimator. Every other NaN cell is also not appropriate,
+    with the fraction of its in-band frequencies that are NaN: a cell is
+    NaN when more than ``nan_threshold`` of them are, or when any is and
+    ``ignore_nan`` is False.
+
+    With ``method='nonparametric'``, where
     Wilson's factorisation of a pair reaches its iteration cap, the value
     comes from the unconverged factor and the SPI warns. The parametric
     method fits an order ``p`` model only to a series of at least
@@ -1946,8 +2092,8 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         in its units; at the default 1 they are in cycles per sample.
         Default: 1.
     fmin : float, optional
-        Lower edge of the band, in [0, ``fs / 2``]; 0 becomes 1e-5.
-        Default: 1e-5.
+        Lower edge of the band, in [0, ``fs / 2``]; 0 becomes ``fs / 1e5``,
+        just above 0 Hz. Default: 0.
     fmax : float or None, optional
         Upper edge of the band, in [``fmin``, ``fs / 2``]; None is the
         Nyquist frequency ``fs / 2``. Default: None.
@@ -1986,7 +2132,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     def __init__(
         self,
         fs=1,
-        fmin=1e-5,
+        fmin=0,
         fmax=None,
         method="nonparametric",
         order=None,
@@ -2009,14 +2155,16 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             raise ValueError(
                 "time_halfbandwidth_product sets the multitaper estimate, which "
                 "method='parametric' does not use.")
-        # Spectral GC is undefined at 0 Hz, so a band from 0 starts at the
-        # lowest positive frequency, 1e-5, which the identifier names.
-        self._fmin = _SGC_FMIN if fmin == 0 else fmin
+        # Spectral GC is undefined at 0 Hz, so a band from 0 starts at
+        # fs / 1e5, which the identifier names: the band is the same fraction
+        # of the spectrum whatever the units of fs.
+        self._fmin = fs / _SGC_EDGE_DIVISOR if fmin == 0 else fmin
         self._fmax = fmax
         if self._fmin > fmax:
             raise ValueError(
-                f"fmax must be >= {_SGC_FMIN} (spectral GC is undefined at 0 "
-                f"Hz), got {fmax!r}.")
+                f"With fmin=0 the band starts at fs / 1e5 = "
+                f"{fmt_param(self._fmin)} (spectral GC is undefined at 0 Hz), "
+                f"so fmax must be at least that, got {fmax!r}.")
         if method == "parametric" and not _closed_band(
                 _parametric_gc_frequencies(fs), self._fmin, fmax).any():
             raise ValueError(
@@ -2077,97 +2225,162 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         else:
             return (self._method, self._fs, None, self._order, self._max_order)
 
-    def _get_cache(self, data):
-        key = self._getkey()
+    def _nonparametric_gc(self, data):
+        """
+        ``(F, freq, refused, log)`` of the nonparametric method.
 
-        try:
-            F = data.spectral_gc[key]["F"]
-            freq = data.spectral_gc[key]["freq"]
-        except (AttributeError, KeyError):
-
-            if self._method == "nonparametric":
-                F, freq = super()._get_cache(data)
+        The backend's pairwise spectral GC (``Connectivity.
+        pairwise_spectral_granger_prediction``) factorises each pair's
+        sub-matrix of one cross-spectral matrix in turn. The same computation
+        is run here on the pairs that can be factorised: a pair of linearly
+        dependent series is left out and named in ``refused``, with the
+        reason, before the backend reaches it (``_dependent_spectrum_error``).
+        ``log`` holds what the backend logged while factorising.
+        """
+        z = _ensure_time_series_3d(np.transpose(data.to_numpy(squeeze=True)))
+        m = sc.Multitaper(z, sampling_frequency=self._fs,
+                          time_halfbandwidth_product=self._nw)
+        conn = sc.Connectivity.from_multitaper(m)
+        csm = conn._expectation_cross_spectral_matrix()
+        pairs, refused = [], {}
+        for i, j in itertools.combinations(range(data.n_processes), 2):
+            err = _dependent_spectrum_error(csm[..., [i, j], :][..., [i, j]], i, j)
+            if err is None:
+                pairs.append((i, j))
             else:
-                z = data.to_numpy(squeeze=True)
-                n_proc = data.n_processes
-                # F[source, target, f]. nitime's `granger_causality_xy(...)`
-                # returns (w, f_x_on_y, f_y_on_x, ...) for the pair (x, y) =
-                # (z[i], z[j]), i.e. i -> j and then j -> i.
-                F = np.full((n_proc, n_proc, _GC_N_FREQS // 2 + 1), np.nan)
-                # freqz's grid, which granger_causality_xy returns as `w`.
-                w = np.linspace(0, np.pi, _GC_N_FREQS // 2 + 1, endpoint=False)
-                try:
-                    for i in range(n_proc):
-                        for j in range(i + 1, n_proc):
-                            coef, ecov = _fit_bivariate_var(
-                                z[[i, j]], self._order, self._max_order)
-                            w, F[i, j], F[j, i], _, _ = nt_alg.granger_causality_xy(
-                                coef, ecov, n_freqs=_GC_N_FREQS)
-                except NotAppropriate as err:
-                    # BIC still improving at `max_order` signals over-fitting
-                    # at this record length; say so rather than relay the
-                    # bare message.
-                    if "did not converge" not in str(err):
-                        raise
-                    raise NotAppropriate(
-                        f"Parametric spectral Granger causality: automatic AR "
-                        f"order selection did not converge at "
-                        f"max_order={self._max_order} on "
-                        f"{data.n_observations} observations -- the "
-                        f"information criterion improved all the way to the "
-                        f"cap, which at this length means the model is "
-                        f"over-fitting rather than that the true order is "
-                        f"high. Set an explicit `order`, reduce `max_order`, "
-                        f"or use a longer series."
-                    ) from err
+                refused[(i, j)] = refused[(j, i)] = str(err)
+        with _collect_backend_log() as log:
+            F = _estimate_spectral_granger_prediction(conn._power, csm, pairs)
+        return np.asarray(F), conn.frequencies, refused, tuple(log)
 
-                F = np.transpose(np.expand_dims(F, axis=3), axes=[3, 2, 1, 0])
-                # The frequencies the model was evaluated at, in Hz (`w` is
-                # scipy.signal.freqz's grid, k*pi/513 rad on [0, pi)).
-                freq = w * self._fs / (2 * np.pi)
-            log = (self._backend_log(data) if self._method == "nonparametric"
-                   else ())
-            try:
-                data.spectral_gc[key] = {"freq": freq, "F": F, "log": log}
-            except AttributeError:
-                data.spectral_gc = {key: {"freq": freq, "F": F, "log": log}}
+    def _parametric_gc(self, data):
+        """
+        ``(F, freq, refused)`` of the parametric method.
 
+        A pair whose VAR cannot be fitted (``_fit_bivariate_var``) is named in
+        ``refused``, with the reason.
+        """
+        z = data.to_numpy(squeeze=True)
+        n_proc = data.n_processes
+        # F[source, target, f]. nitime's `granger_causality_xy(...)` returns
+        # (w, f_x_on_y, f_y_on_x, ...) for the pair (x, y) = (z[i], z[j]),
+        # i.e. i -> j and then j -> i.
+        F = np.full((n_proc, n_proc, _GC_N_FREQS // 2 + 1), np.nan)
+        # freqz's grid, which granger_causality_xy returns as `w`.
+        w = np.linspace(0, np.pi, _GC_N_FREQS // 2 + 1, endpoint=False)
+        refused = {}
+        try:
+            for i in range(n_proc):
+                for j in range(i + 1, n_proc):
+                    try:
+                        coef, ecov = _fit_bivariate_var(
+                            z[[i, j]], self._order, self._max_order, (i, j))
+                    except _SingularPairFit as err:
+                        refused[(i, j)] = refused[(j, i)] = str(err)
+                        continue
+                    w, F[i, j], F[j, i], _, _ = nt_alg.granger_causality_xy(
+                        coef, ecov, n_freqs=_GC_N_FREQS)
+        except NotAppropriate as err:
+            # BIC still improving at `max_order` signals over-fitting at this
+            # record length; say so rather than relay the bare message.
+            if "did not converge" not in str(err):
+                raise
+            raise NotAppropriate(
+                f"Parametric spectral Granger causality: automatic AR "
+                f"order selection did not converge at "
+                f"max_order={self._max_order} on "
+                f"{data.n_observations} observations -- the "
+                f"information criterion improved all the way to the "
+                f"cap, which at this length means the model is "
+                f"over-fitting rather than that the true order is "
+                f"high. Set an explicit `order`, reduce `max_order`, "
+                f"or use a longer series."
+            ) from err
+
+        F = np.transpose(np.expand_dims(F, axis=3), axes=[3, 2, 1, 0])
+        # The frequencies the model was evaluated at, in Hz (`w` is
+        # scipy.signal.freqz's grid, k*pi/513 rad on [0, pi)).
+        freq = w * self._fs / (2 * np.pi)
+        return F, freq, refused
+
+    def _get_cache(self, data):
+        """
+        ``(F, freq)``: ``F[0, f, target, source]``, NaN for a refused pair.
+
+        Cached on the dataset with ``refused``, which maps each refused
+        ordered pair to its reason, and ``log``, what the backend logged.
+        """
+        key = self._getkey()
+        cached = getattr(data, "spectral_gc", {}).get(key)
+        if cached is not None:
+            return cached["F"], cached["freq"]
+        if self._method == "nonparametric":
+            F, freq, refused, log = self._nonparametric_gc(data)
+        else:
+            F, freq, refused = self._parametric_gc(data)
+            log = ()
+        cached = {"freq": freq, "F": F, "refused": refused, "log": log}
+        try:
+            data.spectral_gc[key] = cached
+        except AttributeError:
+            data.spectral_gc = {key: cached}
         return F, freq
 
     @parse_multivariate
     def multivariate(self, data):
-        try:
-            cache, freq = self._get_cache(data)
-            freq_id = self._band(freq)
+        F, freq = self._get_cache(data)
+        cached = getattr(data, "spectral_gc", {}).get(self._getkey(), {})
+        refused = cached.get("refused", {})
+        freq_id = self._band(freq)
+        spectra = F[0, freq_id, :, :]
+        M = data.n_processes
+        dependent = np.zeros((M, M), dtype=bool)
+        for i, j in refused:
+            dependent[i, j] = True
+        if dependent.any():
+            # A refused pair has no spectrum; 0 in its place keeps it out of
+            # the NaN-fraction test, and `fill_pairwise` then sets it NaN.
+            # `dependent` is symmetric, so either orientation masks it.
+            spectra = np.where(dependent, 0.0, spectra)
 
-            result = _to_source_target(self, self._band_statistic(cache[0, freq_id, :, :]))
+        result = _to_source_target(self, self._band_statistic(spectra))
 
-            # Oriented as the values it masks, so it blanks the cell and not
-            # its mirror.
-            nan_pct = _to_source_target(
-                self, np.isnan(cache[0, freq_id, :, :]).mean(axis=0))
-            np.fill_diagonal(nan_pct, 0.0)
+        # Oriented as the values it masks, so it blanks the cell and not
+        # its mirror.
+        nan_pct = _to_source_target(self, np.isnan(spectra).mean(axis=0))
+        np.fill_diagonal(nan_pct, 0.0)
 
-            isna = nan_pct > self.nan_threshold
-            if isna.any():
-                warnings.warn(
-                    f"Spectral GC: the following processes have >{self.nan_threshold*100:.1f}% "
-                    f"NaN values:\n{np.transpose(np.where(isna))}\nThese indices will be set to NaN. "
-                    "Set ignore_nan to False or modify nan_threshold parameter if required."
-                )
-                result[isna] = np.nan
+        # A cell that is NaN and not refused for its pair takes its reason
+        # from the NaN frequencies of its spectrum.
+        reasons = dict(refused)
+        n_band = spectra.shape[0]
+        result[nan_pct > self.nan_threshold] = np.nan
+        for i, j in zip(*np.nonzero(np.isnan(result))):
+            if i == j or (i, j) in reasons:
+                continue
+            why = (f"more than nan_threshold = {self.nan_threshold}"
+                   if nan_pct[i, j] > self.nan_threshold
+                   else "and ignore_nan is False" if not self.ignore_nan
+                   else "so the band statistic is undefined")
+            reasons[(i, j)] = (
+                f"Spectral GC: {nan_pct[i, j]:.0%} of the {n_band} in-band "
+                f"frequencies of ({i}, {j}) give NaN values, {why}; the "
+                f"measure is undefined at those frequencies.")
 
-            M = data.n_processes
-            cached = getattr(data, "spectral_gc", {}).get(self._getkey(), {})
-            _warn_factorisation_log(
-                [(None, m) for m in cached.get("log", ())],
-                M * (M - 1) // 2, "pairs")
-            return result
-        except ValueError as err:
-            # The model could not be fitted: the cause reaches
-            # `Calculator.errors`, or `Calculator.not_appropriate` when the
-            # data cannot support the fit, not an all-NaN table.
-            raise
+        if reasons:
+            # Each such cell is NaN, labelled not appropriate with its reason;
+            # every other cell keeps its value.
+            def value(i, j):
+                if (i, j) in reasons:
+                    raise NotAppropriate(reasons[(i, j)])
+                return result[i, j]
+
+            pairs = [(i, j) for j in range(M) for i in range(M) if i != j]
+            result = fill_pairwise(self.identifier, result, pairs, value)
+
+        _warn_factorisation_log([(None, m) for m in cached.get("log", ())],
+                                M * (M - 1) // 2, "pairs")
+        return result
 
 
 def _welch_cross_spectra(z, nperseg):

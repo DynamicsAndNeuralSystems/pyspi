@@ -15,6 +15,8 @@ transpose barely moves the numbers. These tests use a deliberately asymmetric
 process instead.
 """
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -444,10 +446,18 @@ def test_spectral_gc_nan_mask_is_in_the_same_orientation_as_the_values():
     spi = SpectralGrangerCausality(fmin=0, fmax=0.5, nan_threshold=0.5)
     spi._get_cache = lambda data: (F, freq)
 
-    with pytest.warns(UserWarning, match="NaN values"):
-        result = spi.multivariate(unchecked_data(np.zeros((M, 8))))
+    from pyspi.base import collect_pair_failures
 
-    # Backend [0, 2] is pyspi [2, 0].
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with collect_pair_failures() as failures:
+            result = spi.multivariate(unchecked_data(np.zeros((M, 8))))
+
+    # Backend [0, 2] is pyspi [2, 0], and only that cell is recorded, as not
+    # appropriate with the fraction of NaN frequencies.
+    assert [(i, j) for i, j, _ in failures] == [(2, 0)]
+    assert failures[0][2].startswith("NotAppropriate: ")
+    assert "100% of the" in failures[0][2] and "nan_threshold = 0.5" in failures[0][2]
     assert np.isnan(result[2, 0])
     assert np.isfinite(result[0, 2]), "the mirror cell was blanked instead"
 

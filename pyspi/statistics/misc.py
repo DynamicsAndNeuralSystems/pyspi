@@ -9,6 +9,7 @@ from sklearn import linear_model
 from sklearn.gaussian_process import GaussianProcessRegressor, kernels
 from sklearn.metrics import mean_squared_error
 from statsmodels.tsa import stattools
+from statsmodels.tsa.tsatools import lagmat
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 
 from pyspi.base import (
@@ -21,7 +22,94 @@ from pyspi.base import (
     parse_multivariate,
 )
 from pyspi.lib.ids.dependence import compute_IDS
-from pyspi.utils import fmt_param
+from pyspi.utils import fmt_param, singular_covariance_error, unit_diagonal_ratio
+
+
+# Johansen's eigenvalues are squared canonical correlations, dimensionless
+# and in [0, 1), so they are compared with an absolute bound: an imaginary
+# part, or a value below 0, within this bound is rounding error.
+_JOHANSEN_EIG_ATOL = 1e-12
+
+
+def _lagged_difference_condition(endog, det_order, k_ar_diff):
+    """
+    Condition number of the lagged differences the test regresses on.
+
+    The ``k_ar_diff`` lags of the pair's first differences, demeaned when
+    the test has deterministic terms, with unit-norm columns; 1 when there
+    are none. The residuals of that regression, and so their covariances,
+    are accurate to about ``eps`` times this number.
+    """
+    if k_ar_diff == 0:
+        return 1.0
+    dx = np.diff(endog, axis=0)
+    z = lagmat(dx, k_ar_diff)[k_ar_diff:]
+    if det_order > -1:
+        z = z - z.mean(axis=0)
+    norms = np.linalg.norm(z, axis=0)
+    if not (norms > 0).all():
+        return np.inf
+    z = z / norms
+    # The Gram matrix gives the condition number cheaply, and accurately
+    # while its square is well within 1 / eps; beyond that, the SVD.
+    eig = np.linalg.eigvalsh(z.T @ z)
+    if eig[0] > 0 and eig[-1] / eig[0] <= 1e12:
+        return float(np.sqrt(eig[-1] / eig[0]))
+    return np.linalg.cond(z)
+
+
+def _johansen(endog, det_order, k_ar_diff, pair):
+    """
+    ``{"max_eig_stat", "trace_stat"}`` of the pair, or ``{"refused": reason}``.
+
+    The statistics are statsmodels' ``coint_johansen``. The pair is refused
+    when the test inverts a singular residual covariance: when
+    ``coint_johansen`` itself finds one singular (``LinAlgError``), or when
+    either residual covariance it returns, of the differences (``r0t``) or
+    of the lagged levels (``rkt``), is singular to the precision of the
+    regression on the lagged differences (``singular_covariance_error``). It
+    is also refused when the test's eigenvalues are not all real and in
+    [0, 1), up to ``_JOHANSEN_EIG_ATOL``, which ``-T log(1 - lambda)`` needs.
+    """
+    i, j = pair
+    owner = "Johansen cointegration"
+    try:
+        stats = coint_johansen(endog, det_order=det_order, k_ar_diff=k_ar_diff)
+    except np.linalg.LinAlgError as err:
+        # Raised by the inversions or the Cholesky factorisation of the
+        # residual covariances inside the test. The residuals are not
+        # returned, so the reason quotes the differences' conditioning.
+        ratio = unit_diagonal_ratio(np.cov(np.diff(endog, axis=0).T))
+        return {"refused": (
+            f"{owner}: processes {i} and {j} are linearly dependent: a "
+            f"residual covariance the test inverts is singular (statsmodels: "
+            f"{err}; the smallest/largest eigenvalue of the correlation "
+            f"matrix of their first differences is {ratio:.2g}).")}
+    kappa = _lagged_difference_condition(endog, det_order, k_ar_diff)
+    for name, r in (("differences", stats.r0t), ("lagged levels", stats.rkt)):
+        err = singular_covariance_error(
+            owner, i, j, r.T @ r / r.shape[0],
+            "the test, which inverts it, is not defined",
+            of=f"the residual covariance of the {name}", condition=kappa)
+        if err is not None:
+            return {"refused": str(err)}
+    # numpy's `eig` returns a complex array whenever it finds a complex
+    # pair, and on some builds for real eigenvalues too; statsmodels keeps
+    # the real part.
+    eig = np.asarray(stats.eig)
+    real = np.real(eig)
+    if not (np.isfinite(eig).all()
+            and (np.abs(np.imag(eig)) <= _JOHANSEN_EIG_ATOL).all()
+            and (real >= -_JOHANSEN_EIG_ATOL).all() and (real < 1).all()):
+        shown = [complex(round(e.real, 6), round(e.imag, 6))
+                 if np.iscomplexobj(eig) and e.imag else round(float(e.real), 6)
+                 for e in eig]
+        return {"refused": (
+            f"{owner}: processes {i} and {j} are linearly dependent: the "
+            f"test's eigenvalues {shown} are not all real and in [0, 1), so "
+            f"-T log(1 - lambda) is not a valid statistic.")}
+    return {"max_eig_stat": stats.max_eig_stat[0],
+            "trace_stat": stats.trace_stat[0]}
 
 
 class Cointegration(Directed, Unsigned):
@@ -44,6 +132,20 @@ class Cointegration(Directed, Unsigned):
     not symmetric, and each orientation is reported as computed (directed).
     It is unsigned, a strength on an inverted scale: more negative is
     stronger evidence of cointegration.
+
+    Johansen's test inverts two residual covariances: of the differences and
+    of the lagged levels, each regressed on the lagged differences. Neither
+    exists when the two series are linearly dependent at zero lag (an affine
+    copy, with or without a linear trend). A pair whose residual covariances
+    are singular to the precision the regression allows, or whose
+    eigenproblem gives an eigenvalue outside [0, 1) (a statistic that would
+    be negative or not finite), raises ``NotAppropriate``, which the
+    Calculator records as NaN for that pair, in both orientations, with the
+    reason. A copy delayed by one sample is refused by some settings and not
+    others: with ``det_order=1`` each series is detrended separately before
+    the test, which leaves a residual between the copy and the lagged
+    original, so with ``k_ar_diff=1`` the residual covariances stay well
+    conditioned and the test returns a finite statistic for it.
 
     References
     ----------
@@ -153,14 +255,8 @@ class Cointegration(Directed, Unsigned):
 
                 ci = {"tstat": stats[0]}
             else:
-                stats = coint_johansen(
-                    z[[i, j]].T, det_order=self._det_order, k_ar_diff=self._k_ar_diff
-                )
-
-                ci = {
-                    "max_eig_stat": stats.max_eig_stat[0],
-                    "trace_stat": stats.trace_stat[0],
-                }
+                ci = _johansen(z[[i, j]].T, self._det_order,
+                               self._k_ar_diff, (i, j))
 
             try:
                 data.coint[self.key][idx] = ci
@@ -178,6 +274,8 @@ class Cointegration(Directed, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None, verbose=False):
         ci = self._from_cache(data, i, j)
+        if "refused" in ci:
+            raise NotAppropriate(ci["refused"])
         return ci[self._statistic]
 
 
