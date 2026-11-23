@@ -1452,7 +1452,8 @@ class PhaseSlopeIndex(NonparametricSpectralMultivariate, Undirected):
     them. The sign is right for lags below ``fs / (2 d)`` samples, about
     ``1.25 sqrt(T)`` at the default (19 at ``T = 250``, 39 at 1000, 79 at
     4000, 158 at 16000) and ``T / (4 NW)`` on series shorter than 225
-    samples. Between that limit and twice it the index has the opposite
+    samples. Near the limit the index approaches zero, so noise decides its
+    sign there. Between that limit and twice it the index has the opposite
     sign: a process that leads by such a lag reads as following. Beyond
     twice the limit the averaging within each group shrinks the index, and
     its sign keeps alternating with period ``fs / d`` samples.
