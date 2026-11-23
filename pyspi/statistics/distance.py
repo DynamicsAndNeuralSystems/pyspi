@@ -532,8 +532,8 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
         return stat
 
 
-# Fewest samples of one term: the unbiased distance covariance divides by
-# n (n - 3), and scipy's MGC refuses fewer than 5 samples.
+# Fewest samples of one term: with 3 samples the U-centred distance matrices
+# vanish, so the unbiased statistic is 0/0; scipy's MGC refuses fewer than 5.
 _UNBIASED_DCOV_MIN_SAMPLES = 4
 _MGC_MIN_SAMPLES = 5
 
@@ -584,8 +584,9 @@ class CrossDistanceCorrelation(Directed, Unsigned):
     matrices as points, so its implementation is not used. Each series'
     centred distance matrices are computed once per lag, not once per pair.
 
-    The unbiased distance covariance divides by ``n (n - 3)``, so every
-    lagged term needs ``n >= 4`` samples: the SPI is not appropriate
+    With 3 samples the U-centred distance matrices are identically zero, so
+    the unbiased statistic is 0/0 and every lagged term needs ``n >= 4``
+    samples: the SPI is not appropriate
     (``NotAppropriate``, NaN in a Calculator table) when
     ``T < max_lag + 4``.
 

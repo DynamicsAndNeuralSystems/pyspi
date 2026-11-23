@@ -785,7 +785,7 @@ class ConvergentCrossMapping(Directed, Unsigned):
             need = int(np.ceil(2 * E / 10) * 10) + E + 11
             raise NotAppropriate(
                 f"CCM {self._statistic} at E={E} compares the skill at two or "
-                f"more library sizes, in steps of 10 from {sizes[0]} up to "
+                f"more library sizes, from ceil(2E/10)*10 = {sizes[0]} up to "
                 f"floor((N - E - 1)/10)*10, so it needs N >= {need}; got "
                 f"N = {N}, which gives the one library size {sizes[0]}.")
 

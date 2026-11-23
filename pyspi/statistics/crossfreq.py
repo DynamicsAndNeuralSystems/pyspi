@@ -92,8 +92,9 @@ def _pad_length(band):
     """
     Samples ``scipy.signal.sosfiltfilt`` pads at each end of the series.
 
-    Its default, ``3 * ntaps`` with ``ntaps = 2 * n_sections + 1`` less the
-    trailing zero coefficients; the series must be longer than this.
+    It is scipy's default, ``3 * ntaps`` with ``ntaps = 2 * n_sections + 1``
+    less the trailing zero coefficients, and the series must be longer than
+    this.
     """
     sos = _bandpass(band)
     ntaps = 2 * sos.shape[0] + 1

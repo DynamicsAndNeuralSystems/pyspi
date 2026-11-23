@@ -72,7 +72,7 @@ def _few_events_reason(x, p, quantile, n_events):
     threshold = np.quantile(x, quantile)
     n_above = int(np.count_nonzero(x > threshold))
     n_max = _max_exceedances(T, quantile)
-    if n_above < n_max:
+    if n_above < 2 <= n_max:
         return (
             f"process {p} has {n_events} event(s): ties at its {quantile:g} "
             f"quantile ({threshold:g}) leave {n_above} of its {T} samples "

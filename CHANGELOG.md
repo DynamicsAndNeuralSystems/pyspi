@@ -319,16 +319,18 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   So a series and a nearly exact copy are refused too where the estimate would be set by rounding error; the check bounds that error from above, so near the boundary it is conservative by a small factor.
   A copy delayed by one sample is not refused by `sgc_*` or `dcoh_*`, whose values for it are finite estimates of an infinite quantity, and is refused by six of the eight bundled `coint_johansen_*` SPIs: with `det_order=1` and `k_ar_diff=1` each series is detrended separately, which leaves a residual between the copy and the lagged original, and the test returns a finite statistic.
   2.0.2 had no such check: parametric `sgc` caught the `LinAlgError` of a dependent pair as a `ValueError` and returned NaN for every pair, or, where rounding let the fit through, values set by rounding error; `coint_johansen_*` raised `LinAlgError`, which set the whole SPI to NaN.
-  Each of these SPIs checks its own requirement before it runs; at the bundled parameters the requirements are as follows.
+  Each SPI in the list above checks its own requirement before it runs; at the bundled parameters the requirements are as follows.
   `cds` needs two bins of the cause holding more than 12 samples, so T ≥ 26, and is checked per pair.
   `es_*` needs two events in each series, so T ≥ 22 at quantile 0.95 and T ≥ 12 at 0.9, and is checked per pair.
   `tailasym_*` needs `floor((1 - u) T) ≥ 1` samples in each tail, so T ≥ 20 at u = 0.95 and T ≥ 10 at 0.9, and, per pair, a tail that ties do not leave empty.
   `ccm_E-1_convergence` and `ccm_E-10_convergence` compare two library sizes, so need T ≥ 22 and T ≥ 41.
   `di_kraskov_NN-4_n-5` needs T ≥ 10, and `te_symbolic_k-3` needs T ≥ 4.
-  `dcorrx_maxlag-<L>` needs T ≥ L + 4 for the unbiased distance covariance, and `mgcx_maxlag-<L>` needs T ≥ L + 5 for MGC.
+  `dcorrx_maxlag-<L>` needs T ≥ L + 4, since with 3 samples the U-centred distance matrices vanish, and `mgcx_maxlag-<L>` needs T ≥ L + 5 for MGC.
   `pac_*` needs T > 27, the band-pass filter's pad length, and `pac_mi_*` also needs `n_bins` retained samples (T ≥ 34 at 18 bins).
   `coint_johansen_*_ardiff-<k>` needs T ≥ k + 2, and `coint_aeg_*_maxlag-<L>` needs T ≥ 2 (L + 1).
-  `phi_*_t-1_*` needs T ≥ 6, more aligned samples than the 4 dimensions of the pair's past and present, `mgc` needs T ≥ 5, and `xi_tau-<tau>` needs T ≥ tau + 2 and, per pair, a target that is not constant after the lag.
+  `phi_*_t-1_*` needs T ≥ 6, more aligned samples than the 4 dimensions of the pair's past and present.
+  `mgc` needs T ≥ 5.
+  `xi_tau-<tau>` needs T ≥ tau + 2 and, per pair, a target that is not constant after the lag.
   The multitaper spectral SPIs need at least as many samples as tapers, `floor(2 NW - 1)`, so T ≥ 5 at the default NW = 3.
   For `es_*` and `tailasym_*`, ties (as in integer data) that leave too few samples above the quantile or none in a tail have a reason of their own.
 - **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
