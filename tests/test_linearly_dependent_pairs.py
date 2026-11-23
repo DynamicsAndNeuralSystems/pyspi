@@ -106,10 +106,11 @@ def test_only_the_dependent_pair_is_not_appropriate(kind, tmp_path):
         reasons = {(a, b): msg for a, b, msg in calc.pair_not_appropriate[key]}
         assert set(reasons) == {(procs[0], procs[1]), (procs[1], procs[0])}
         for msg in reasons.values():
-            assert "are linearly dependent" in msg and re.search(r"\de[+-]\d\d|\d\.\d", msg)
+            assert "are linearly dependent" in msg and re.search(r"\de[+-]\d\d|\d\.\d|\binf\b", msg)
 
 
 def test_the_other_pairs_keep_the_values_they_have_without_the_copy(tmp_path):
+    """The same values up to rounding, and the same NaN pattern."""
     X = _with_copy("affine")
     with_copy = _calculator(X, tmp_path)
     without = _calculator(X[[0, 2, 3]], tmp_path)
@@ -117,7 +118,10 @@ def test_the_other_pairs_keep_the_values_they_have_without_the_copy(tmp_path):
     for key in with_copy.spis:
         got = with_copy.table[key].to_numpy()[np.ix_(keep, keep)]
         want = without.table[key].to_numpy()
-        np.testing.assert_array_equal(got, want, err_msg=key)
+        # Not one computation: nonparametric GC takes one multitaper
+        # estimate of all the processes, whose BLAS calls can round
+        # differently for three and four of them.
+        np.testing.assert_allclose(got, want, rtol=1e-12, atol=0, err_msg=key)
 
 
 def test_a_strongly_correlated_pair_keeps_its_value(tmp_path):
