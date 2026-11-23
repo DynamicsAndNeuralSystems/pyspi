@@ -8,7 +8,6 @@ from scipy.linalg import solve_triangular
 from sklearn import linear_model
 from sklearn.gaussian_process import GaussianProcessRegressor, kernels
 from sklearn.metrics import mean_squared_error
-from statsmodels.regression.linear_model import OLS
 from statsmodels.tsa import stattools
 from statsmodels.tsa.tsatools import lagmat
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
@@ -23,74 +22,85 @@ from pyspi.base import (
     parse_multivariate,
 )
 from pyspi.lib.ids.dependence import compute_IDS
-from pyspi.utils import SINGULAR_RCOND, fmt_param, singular_covariance_error
+from pyspi.utils import fmt_param, singular_covariance_error, unit_diagonal_ratio
 
 
-def _johansen_residuals(endog, det_order, k_ar_diff):
+# Johansen's eigenvalues are squared canonical correlations, dimensionless
+# and in [0, 1), so they are compared with an absolute bound: an imaginary
+# part, or a value below 0, within this bound is rounding error.
+_JOHANSEN_EIG_ATOL = 1e-12
+
+
+def _lagged_difference_condition(endog, det_order, k_ar_diff):
     """
-    ``(r0t, rkt, kappa)``: the residuals statsmodels' ``coint_johansen`` forms.
+    Condition number of the lagged differences the test regresses on.
 
-    The same steps as ``coint_johansen`` (statsmodels 0.14): the differences
-    ``r0t`` and the lagged levels ``rkt``, each detrended and regressed on the
-    lagged differences ``z``. ``kappa`` is the condition number of ``z`` with
-    unit-norm columns (1 when there is none), which bounds how accurately the
-    residuals, and so their covariances, are computed.
+    The ``k_ar_diff`` lags of the pair's first differences, demeaned when
+    the test has deterministic terms, with unit-norm columns; 1 when there
+    are none. The residuals of that regression, and so their covariances,
+    are accurate to about ``eps`` times this number.
     """
-    def detrend(y, order):
-        if order == -1:
-            return y
-        return OLS(y, np.vander(np.linspace(-1, 1, len(y)), order + 1)).fit().resid
-
-    def resid(y, x):
-        if x.size == 0:
-            return y
-        return y - np.dot(x, np.dot(np.linalg.pinv(x), y))
-
-    f = 0 if det_order > -1 else det_order
-    endog = detrend(endog, det_order)
-    dx = np.diff(endog, 1, axis=0)
-    z = detrend(lagmat(dx, k_ar_diff)[k_ar_diff:], f)
-    dx = detrend(dx[k_ar_diff:], f)
-    r0t = resid(dx, z)
-    lx = endog[: (endog.shape[0] - k_ar_diff)][1:]
-    rkt = resid(detrend(lx, f), z)
-    kappa = 1.0
-    if z.size:
-        norms = np.linalg.norm(z, axis=0)
-        kappa = (np.inf if not (norms > 0).all()
-                 else np.linalg.cond(z / norms))
-    return r0t, rkt, kappa
+    if k_ar_diff == 0:
+        return 1.0
+    dx = np.diff(endog, axis=0)
+    z = lagmat(dx, k_ar_diff)[k_ar_diff:]
+    if det_order > -1:
+        z = z - z.mean(axis=0)
+    norms = np.linalg.norm(z, axis=0)
+    if not (norms > 0).all():
+        return np.inf
+    z = z / norms
+    # The Gram matrix gives the condition number cheaply, and accurately
+    # while its square is well within 1 / eps; beyond that, the SVD.
+    eig = np.linalg.eigvalsh(z.T @ z)
+    if eig[0] > 0 and eig[-1] / eig[0] <= 1e12:
+        return float(np.sqrt(eig[-1] / eig[0]))
+    return np.linalg.cond(z)
 
 
 def _johansen(endog, det_order, k_ar_diff, pair):
     """
     ``{"max_eig_stat", "trace_stat"}`` of the pair, or ``{"refused": reason}``.
 
-    The pair is refused when either residual covariance the test inverts
-    (``_johansen_residuals``) is singular to the precision of the regression
-    (``singular_covariance_error`` with its ``kappa``), or when the
-    eigenvalues ``lambda`` of the test are not all real, finite and in
-    [0, 1), which the statistics ``-T log(1 - lambda)`` need.
+    The statistics are statsmodels' ``coint_johansen``. The pair is refused
+    when the test inverts a singular residual covariance: when
+    ``coint_johansen`` itself finds one singular (``LinAlgError``), or when
+    either residual covariance it returns, of the differences (``r0t``) or
+    of the lagged levels (``rkt``), is singular to the precision of the
+    regression on the lagged differences (``singular_covariance_error``). It
+    is also refused when the test's eigenvalues are not all real and in
+    [0, 1), up to ``_JOHANSEN_EIG_ATOL``, which ``-T log(1 - lambda)`` needs.
     """
     i, j = pair
     owner = "Johansen cointegration"
-    r0t, rkt, kappa = _johansen_residuals(endog, det_order, k_ar_diff)
-    for name, r in (("differences", r0t), ("lagged levels", rkt)):
+    try:
+        stats = coint_johansen(endog, det_order=det_order, k_ar_diff=k_ar_diff)
+    except np.linalg.LinAlgError as err:
+        # Raised by the inversions or the Cholesky factorisation of the
+        # residual covariances inside the test. The residuals are not
+        # returned, so the reason quotes the differences' conditioning.
+        ratio = unit_diagonal_ratio(np.cov(np.diff(endog, axis=0).T))
+        return {"refused": (
+            f"{owner}: processes {i} and {j} are linearly dependent: a "
+            f"residual covariance the test inverts is singular (statsmodels: "
+            f"{err}; the smallest/largest eigenvalue of the correlation "
+            f"matrix of their first differences is {ratio:.2g}).")}
+    kappa = _lagged_difference_condition(endog, det_order, k_ar_diff)
+    for name, r in (("differences", stats.r0t), ("lagged levels", stats.rkt)):
         err = singular_covariance_error(
             owner, i, j, r.T @ r / r.shape[0],
             "the test, which inverts it, is not defined",
             of=f"the residual covariance of the {name}", condition=kappa)
         if err is not None:
             return {"refused": str(err)}
-    stats = coint_johansen(endog, det_order=det_order, k_ar_diff=k_ar_diff)
     # numpy's `eig` returns a complex array whenever it finds a complex
     # pair, and on some builds for real eigenvalues too; statsmodels keeps
-    # the real part, so an imaginary part at rounding level is accepted.
+    # the real part.
     eig = np.asarray(stats.eig)
     real = np.real(eig)
     if not (np.isfinite(eig).all()
-            and (np.abs(np.imag(eig)) <= SINGULAR_RCOND).all()
-            and (real >= 0).all() and (real < 1).all()):
+            and (np.abs(np.imag(eig)) <= _JOHANSEN_EIG_ATOL).all()
+            and (real >= -_JOHANSEN_EIG_ATOL).all() and (real < 1).all()):
         shown = [complex(round(e.real, 6), round(e.imag, 6))
                  if np.iscomplexobj(eig) and e.imag else round(float(e.real), 6)
                  for e in eig]
@@ -125,13 +135,17 @@ class Cointegration(Directed, Unsigned):
 
     Johansen's test inverts two residual covariances: of the differences and
     of the lagged levels, each regressed on the lagged differences. Neither
-    exists when the two series are linearly dependent, at zero lag or
-    through lags (an affine copy, with or without a linear trend, or a
-    delayed copy). A pair whose residual covariances are singular to the
-    precision the regression allows, or whose eigenproblem gives an
-    eigenvalue outside [0, 1) (a statistic that would be negative or not
-    finite), raises ``NotAppropriate``, which the Calculator records as NaN
-    for that pair, in both orientations, with the reason.
+    exists when the two series are linearly dependent at zero lag (an affine
+    copy, with or without a linear trend). A pair whose residual covariances
+    are singular to the precision the regression allows, or whose
+    eigenproblem gives an eigenvalue outside [0, 1) (a statistic that would
+    be negative or not finite), raises ``NotAppropriate``, which the
+    Calculator records as NaN for that pair, in both orientations, with the
+    reason. A copy delayed by one sample is refused by some settings and not
+    others: with ``det_order=1`` each series is detrended separately before
+    the test, which leaves a residual between the copy and the lagged
+    original, so with ``k_ar_diff=1`` the residual covariances stay well
+    conditioned and the test returns a finite statistic for it.
 
     References
     ----------

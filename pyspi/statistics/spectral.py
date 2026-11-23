@@ -1809,15 +1809,26 @@ def _fit_bivariate_var(x, order=None, max_order=50, pair=(0, 1)):
     Returns ``(coef, ecov)`` in nitime's convention,
     ``X[t] + sum_k coef[k] X[t-k] = E[t]``.
 
-    Every order fitted is checked, as the VAR SPIs check theirs. The order
-    ``p`` system, with condition number ``kappa`` (``_yule_walker_condition``),
-    determines the innovation covariance ``ecov`` only to about
-    ``eps * kappa`` of its largest eigenvalue. A pair whose system is singular
-    to working precision (``eps * kappa >= 1``), or whose ``ecov`` is
-    singular by ``singular_covariance_error`` with that ``kappa``, raises
-    ``_SingularPairFit``, a ``NotAppropriate`` that names the numbers: the
+    Every order fitted is checked. The order ``p`` system, with condition
+    number ``kappa`` (``_yule_walker_condition``), determines the innovation
+    covariance ``ecov`` only to about ``eps * kappa`` of its largest
+    eigenvalue. An order whose system is singular to working precision
+    (``eps * kappa >= 1``), or whose ``ecov`` is singular by
+    ``singular_covariance_error`` with that ``kappa``, cannot be fitted: the
     two series are linearly dependent, or so nearly that Geweke's ratio of
-    the fit is set by rounding error.
+    the fit would be set by rounding error. ``eps * kappa`` bounds the error
+    from above, so near the boundary the check is conservative by a small
+    factor (a pair whose fit is accurate to about 1% can be refused). A
+    fixed ``order`` that cannot be fitted raises ``_SingularPairFit``, a
+    ``NotAppropriate`` that names the numbers. The BIC search stops at the
+    first order that cannot be fitted and selects the best order below it,
+    even if BIC was still improving: the Yule-Walker system of a higher
+    order contains that of a lower one, so it is no better conditioned, and
+    the orders that can be fitted are fitted accurately. It raises when
+    order 0 or 1 cannot be fitted, since then no order with lags is left and
+    order 0 gives no causality by construction, not by estimate. (A search that reaches the record-length
+    limit while still improving raises, since a longer series could fit the
+    higher orders.)
     """
     i, j = pair
     owner = "Parametric spectral Granger causality"
@@ -1864,7 +1875,16 @@ def _fit_bivariate_var(x, order=None, max_order=50, pair=(0, 1)):
 
     best = None
     for p in range(largest + 1):
-        coef, ecov = fit(p)
+        try:
+            coef, ecov = fit(p)
+        except _SingularPairFit:
+            # An order that cannot be fitted to working precision is not a
+            # candidate, nor is any higher one: the search selects among the
+            # orders below it. If order 0 or 1 cannot be fitted no order with
+            # lags is left, and order 0 would give GC = 0 by construction.
+            if p <= 1:
+                raise
+            return best[1:]
         # nitime's criterion and arguments: (ecov, n_process, order, n_process * T).
         crit = nt_utils.bayesian_information_criterion(ecov, 2, p, 2 * n_obs)
         if best is not None and crit > best[0]:

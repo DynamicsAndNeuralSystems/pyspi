@@ -106,7 +106,7 @@ def test_only_the_dependent_pair_is_not_appropriate(kind, tmp_path):
         reasons = {(a, b): msg for a, b, msg in calc.pair_not_appropriate[key]}
         assert set(reasons) == {(procs[0], procs[1]), (procs[1], procs[0])}
         for msg in reasons.values():
-            assert "are linearly dependent" in msg and re.search(r"\de[+-]\d\d|\d\.\d|\binf\b", msg)
+            assert "are linearly dependent" in msg and re.search(r"(is|number) -?(\d|inf)", msg)
 
 
 def test_the_other_pairs_keep_the_values_they_have_without_the_copy(tmp_path):
@@ -222,7 +222,7 @@ JOHANSEN = [dict(det_order=d, k_ar_diff=k) for d in (0, 1) for k in (1, 10)]
 
 
 @pytest.mark.parametrize("kwargs", JOHANSEN, ids=str)
-@pytest.mark.parametrize("s", [3e-6, 1e-5])
+@pytest.mark.parametrize("s", [1e-6, 3e-6])
 def test_johansen_refuses_a_near_copy_in_both_orientations(kwargs, s):
     data = Data(_near_copy(s), dim_order="ps")
     for statistic in ("max_eig_stat", "trace_stat"):
@@ -350,3 +350,55 @@ def test_an_indefinite_or_nonpositive_covariance_is_refused_and_named():
                                      "Y", of="Z") is None
     with pytest.raises(TypeError):
         unit_diagonal_ratio(np.eye(2, dtype=complex))
+
+
+def test_bic_search_keeps_the_orders_below_the_first_it_cannot_fit():
+    """x and x + 2.4e-4 w: order 2 cannot be fitted to working precision,
+    so the search selects among orders 0 and 1, picks 1, and gives the
+    value the fixed order 1 gives; order 5 cannot be fitted at all."""
+    x = _ar1(1, M=1, T=501)[0]
+    w = _ar1(3, M=1, T=501)[0]
+    data = Data(np.vstack([x[:500], x[:500] + 2.4e-4 * w[:500]]), dim_order="ps")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        selected = SpectralGrangerCausality(method="parametric").multivariate(data)
+        one = SpectralGrangerCausality(method="parametric", order=1).multivariate(data)
+        with pytest.raises(NotAppropriate, match="linearly dependent"):
+            SpectralGrangerCausality(method="parametric", order=5).multivariate(data)
+    np.testing.assert_array_equal(selected, one)
+    assert np.isfinite(selected[0, 1]) and selected[0, 1] > 0
+
+
+def test_bic_search_refuses_when_no_order_with_lags_can_be_fitted():
+    data = Data(_near_copy(1e-5), dim_order="ps")
+    from pyspi.statistics.spectral import _fit_bivariate_var
+    with pytest.raises(NotAppropriate, match=r"order 1|VAR\(1\)"):
+        _fit_bivariate_var(data.to_numpy(squeeze=True)[:2], None)
+
+
+@pytest.mark.parametrize("kwargs", JOHANSEN + [dict(det_order=-1, k_ar_diff=1)],
+                         ids=str)
+def test_johansen_values_are_statsmodels(kwargs):
+    from statsmodels.tsa.vector_ar.vecm import coint_johansen
+    data = Data(_near_copy(1e-2), dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+    want = coint_johansen(z[[0, 2]].T, **kwargs)
+    for statistic in ("max_eig_stat", "trace_stat"):
+        got = Cointegration(method="johansen", statistic=statistic,
+                            **kwargs).bivariate(data, i=0, j=2)
+        assert got == getattr(want, statistic)[0]
+
+
+def test_johansen_accepts_eigenvalues_at_rounding_level_below_zero(monkeypatch):
+    from pyspi.statistics import misc
+    real = misc.coint_johansen
+
+    def shifted(*args, **kwargs):
+        result = real(*args, **kwargs)
+        result._eig = np.array([result._eig[0], -1e-17])
+        return result
+
+    monkeypatch.setattr(misc, "coint_johansen", shifted)
+    data = Data(_near_copy(1e-2), dim_order="ps")
+    value = Cointegration(method="johansen", det_order=0).bivariate(data, i=0, j=2)
+    assert np.isfinite(value)
