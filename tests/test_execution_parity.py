@@ -110,10 +110,11 @@ def test_wrong_shape_is_a_recorded_failure(mode, n_jobs):
 @pytest.mark.parametrize("mode,n_jobs", MODES)
 def test_non_finite_output_is_flagged(mode, n_jobs):
     calc, _ = _run(n_jobs)
-    errors = getattr(calc, "errors", {}) or {}
-    assert "non_finite" in errors, (
+    assert "returned no finite value" in calc.not_appropriate.get("non_finite", ""), (
         f"[{mode}] an SPI returning +inf was not flagged."
     )
+    # It raised nothing, so it is not among the failures.
+    assert "non_finite" not in calc.errors
 
 
 # --------------------------------------------------------------------------

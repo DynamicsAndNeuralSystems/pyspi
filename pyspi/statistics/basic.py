@@ -117,12 +117,11 @@ class Estimators(Undirected, Signed):
             rank = self._pseudo_inverse_rank(mycov)
             if rank is not None:
                 M = mycov.covariance_.shape[0]
-                warnings.warn(
+                raise NotAppropriate(
                     f"The {self._estimator} covariance estimate is singular "
                     f"(rank {rank} < M = {M}: no more samples than processes, or "
-                    f"collinear processes), so {self.identifier} is NaN."
+                    f"collinear processes), so {self.identifier} is undefined."
                 )
-                return np.full((M, M), np.nan)
         matrix = self._matrix(mycov)
         np.fill_diagonal(matrix, np.nan)
         if self._squared:
@@ -170,8 +169,8 @@ class Precision(Estimators):
     correlation of ``x_i`` and ``x_j`` given all other processes, so a
     positive entry means a negative conditional association. Undirected and
     signed. The fit is shared with ``Covariance`` and ``PartialCorrelation``.
-    NaN, with a warning, when the covariance estimate is singular (for
-    example with no more samples than processes).
+    Not appropriate (``NotAppropriate``) when the covariance estimate is
+    singular (for example with no more samples than processes).
 
     Parameters
     ----------
@@ -205,9 +204,9 @@ class PartialCorrelation(Estimators):
 
     Undirected and signed, in ``[-1, 1]``, with the opposite sign and the same
     zero pattern as the off-diagonal of ``prec_<estimator>``. The covariance
-    fit is shared with ``Covariance`` and ``Precision``. NaN, with a warning,
-    when the covariance estimate is singular (for example with no more
-    samples than processes).
+    fit is shared with ``Covariance`` and ``Precision``. Not appropriate
+    (``NotAppropriate``) when the covariance estimate is singular (for
+    example with no more samples than processes).
 
     References
     ----------
