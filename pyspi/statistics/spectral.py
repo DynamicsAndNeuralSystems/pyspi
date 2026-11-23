@@ -259,7 +259,10 @@ class NonparametricSpectral(Unsigned):
     ----------
     time_halfbandwidth_product : float, optional
         Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5 (two
-        or more tapers). Every multitaper class takes it, including
+        or more tapers). The ``floor(2 NW - 1)`` tapers need a series of at
+        least as many samples; a shorter one is not appropriate
+        (``NotAppropriate``, NaN in a Calculator table). Every multitaper
+        class takes it, including
         SpectralGrangerCausality with ``method="nonparametric"``; the
         parametric method refuses a value other than 3. A value other than 3
         is appended to the identifier as ``_nw-<value>``, with dots written as
@@ -449,6 +452,7 @@ class NonparametricSpectralMultivariate(NonparametricSpectral):
 
         z = np.transpose(data.to_numpy(squeeze=True))
         z = _ensure_time_series_3d(z)
+        _require_tapers(z.shape[0], self._nw)
         m = sc.Multitaper(z, sampling_frequency=self._fs,
                           time_halfbandwidth_product=self._nw)
         conn = sc.Connectivity.from_multitaper(m)
@@ -564,6 +568,22 @@ class _FactoredConnectivity(sc.Connectivity):
         return super()._MVAR_Fourier_coefficients
 
 
+def _require_tapers(n_time_samples, nw):
+    """
+    Refuse a record shorter than its number of DPSS tapers.
+
+    spectral_connectivity uses ``floor(2 NW - 1)`` tapers, the leading
+    eigenvectors of a ``T x T`` problem, so ``T`` must be at least that.
+    """
+    n_tapers = int(np.floor(2 * nw - 1))
+    if n_time_samples < n_tapers:
+        raise NotAppropriate(
+            f"The multitaper estimate at time_halfbandwidth_product = {nw} uses "
+            f"floor(2 NW - 1) = {n_tapers} DPSS tapers, the leading "
+            f"eigenvectors of a T x T problem, so it needs T >= {n_tapers}; "
+            f"got T = {n_time_samples}.")
+
+
 @functools.lru_cache(maxsize=8)
 def _whole_record_tapers(n_time_samples, fs, nw):
     """
@@ -573,6 +593,7 @@ def _whole_record_tapers(n_time_samples, fs, nw):
     product only, so they are computed once rather than for every pair's
     Multitaper.
     """
+    _require_tapers(n_time_samples, nw)
     tapers = sc.Multitaper(np.zeros((n_time_samples, 1, 1)),
                            sampling_frequency=fs,
                            time_halfbandwidth_product=nw).tapers

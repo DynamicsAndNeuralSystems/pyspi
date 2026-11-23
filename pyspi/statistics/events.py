@@ -74,10 +74,10 @@ def _few_events_reason(x, p, quantile, n_events):
     n_max = _max_exceedances(T, quantile)
     if n_above < n_max:
         return (
-            f"process {p} has {n_events} event(s): ties at the top of its "
-            f"range leave {n_above} of its {T} samples above its {quantile:g} "
-            f"quantile ({threshold:g}), where distinct values leave {n_max}; "
-            f"event synchronisation needs at least two events per series.")
+            f"process {p} has {n_events} event(s): ties at its {quantile:g} "
+            f"quantile ({threshold:g}) leave {n_above} of its {T} samples "
+            f"above it, where distinct values leave {n_max}; event "
+            f"synchronisation needs at least two events per series.")
     return (
         f"process {p} has {n_events} event(s): its {n_above} samples above "
         f"its {quantile:g} quantile form {n_events} run(s), and event "
@@ -206,8 +206,8 @@ class EventSynchronisation(Directed):
     not appropriate (``NotAppropriate``, NaN in a Calculator table) when
     that is below 2: ``T < 22`` at quantile 0.95 and ``T < 12`` at 0.9. A
     pair is not appropriate when either series has fewer than two events,
-    because its exceedances form a single run or because ties at the top of
-    its range (as in integer data) leave fewer samples above the quantile.
+    because its exceedances form a single run or because ties at its
+    quantile (as in integer data) leave fewer samples above it.
 
     References
     ----------
@@ -372,7 +372,7 @@ class TailDependenceAsymmetry(Undirected):
     A pair is not appropriate when a tail the statistic uses is empty for
     either series, which happens when ties put the average rank of every
     sample at the top (or bottom) of the range outside the tail, as in
-    integer data, and NaN when either series is constant or not finite.
+    integer data, or when either series is constant or not finite.
     Being rank-based, the statistic is unchanged by any strictly
     increasing transform of either series. It ignores time order
     (contemporaneous).
@@ -440,8 +440,8 @@ class TailDependenceAsymmetry(Undirected):
         """
         ``{procs[r]: reason}`` for each row ``r`` of ``Z`` with an empty tail.
 
-        Only the tails the statistic uses count. A constant or non-finite
-        row is left out: its pairs are NaN, as for any constant series.
+        Only the tails the statistic uses count. A constant or non-finite row
+        has no ranks, and so no tails.
         """
         T = Z.shape[1]
         k = self._tail_size(T)
@@ -450,6 +450,7 @@ class TailDependenceAsymmetry(Undirected):
         reasons = {}
         for x, p in zip(Z, procs):
             if not np.all(np.isfinite(x)) or np.ptp(x) == 0:
+                reasons[p] = f"process {p} is constant or not finite, so it has no tails."
                 continue
             R = stats.rankdata(x)
             for tail in tails:

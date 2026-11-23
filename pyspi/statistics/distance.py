@@ -507,7 +507,8 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     sample's ``k`` and ``l`` nearest neighbours in the two variables, over
     all ``(k, l)``, and reports a smoothed maximum, so it is sensitive to
     nonlinear dependence that the global distance correlation dilutes.
-    Undirected.
+    Undirected. MGC needs at least 5 samples; a shorter series is not
+    appropriate (``NotAppropriate``, NaN in a Calculator table).
 
     References
     ----------
@@ -523,6 +524,10 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
+        if x.shape[0] < _MGC_MIN_SAMPLES:
+            raise NotAppropriate(
+                f"Multiscale graph correlation needs T >= {_MGC_MIN_SAMPLES} "
+                f"samples; got T = {x.shape[0]}.")
         stat = MGC().statistic(x, y)
         return stat
 

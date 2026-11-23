@@ -828,9 +828,12 @@ class ChatterjeeXi(Directed, Unsigned):
     measures how nearly the column process is a function of the row process.
 
     Chatterjee breaks ties in ``X`` at random; here they are broken by a fixed
-    seeded permutation, so values are reproducible. The value is NaN when the
-    target is constant, when either series has a non-finite sample, or when
-    fewer than two samples remain after the lag.
+    seeded permutation, so values are reproducible. The value is NaN when
+    either series has a non-finite sample. It is not appropriate
+    (``NotAppropriate``, NaN in a Calculator table) when fewer than two
+    samples remain after the lag (``T < tau + 2``), and for a pair whose
+    target is constant over ``x_j[tau:]``, as ties in a short series can make
+    it.
 
     References
     ----------
@@ -863,16 +866,28 @@ class ChatterjeeXi(Directed, Unsigned):
         steps = np.abs(np.diff(r[order])).sum()
         return float(1.0 - steps / denom)
 
+    def _require_length(self, T):
+        if T - self._tau < 2:
+            raise NotAppropriate(
+                f"Chatterjee's xi at tau = {self._tau} needs two samples after "
+                f"the lag, so T >= {self._tau + 2}; got T = {T}.")
+
+    def _constant_target(self, j, n):
+        target = "x_j" if self._tau == 0 else f"x_j[{self._tau}:]"
+        return (f"process {j} is constant over its {n} target samples "
+                f"({target}), so xi is undefined.")
+
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         z = data.to_numpy(squeeze=True)
-        if z.shape[-1] - self._tau < 2:
-            return np.nan
+        self._require_length(z.shape[-1])
         tau = self._tau
         x, y = (z[i], z[j]) if tau == 0 else (z[i, :-tau], z[j, tau:])
         if not (np.all(np.isfinite(x)) and np.all(np.isfinite(y))):
             return np.nan
         r, denom = _xi_target_terms(y)
+        if not denom > 0:
+            raise NotAppropriate(self._constant_target(j, y.size))
         return self._xi(_xi_source_order(x), r, denom)
 
     @parse_multivariate
@@ -880,9 +895,8 @@ class ChatterjeeXi(Directed, Unsigned):
         """Sort each source once and rank each target once."""
         Z = data.to_numpy(squeeze=True)  # (M, T)
         M, T = Z.shape
+        self._require_length(T)
         A = np.full((M, M), np.nan)
-        if T - self._tau < 2:
-            return A
         tau = self._tau
         X, Y = (Z, Z) if tau == 0 else (Z[:, :-tau], Z[:, tau:])
         finite_x = np.all(np.isfinite(X), axis=1)
@@ -901,7 +915,19 @@ class ChatterjeeXi(Directed, Unsigned):
             steps = np.abs(np.diff(R[:, orders[i]], axis=1)).sum(axis=1)
             A[i, valid_y] = 1.0 - steps[valid_y] / denoms[valid_y]
         np.fill_diagonal(A, np.nan)
-        return A
+        constant = [j for j in range(M) if finite_y[j] and not denoms[j] > 0]
+        if not constant:
+            return A
+
+        # Record a reason for each pair whose target is constant.
+        def compute(i, j):
+            if j in constant:
+                raise NotAppropriate(self._constant_target(j, Y.shape[1]))
+            return A[i, j]
+
+        pairs = [(i, j) for j in range(M) for i in range(M) if i != j]
+        return fill_pairwise(self.identifier, np.full((M, M), np.nan), pairs,
+                             compute)
 
 
 class LaggedCorrelation(Undirected, Signed):

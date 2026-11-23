@@ -2741,8 +2741,11 @@ class IntegratedInformation(Undirected, Unsigned):
     with no coupling between the processes, found by an augmented Lagrangian
     method.
     Undirected. The computation follows the PhiToolbox implementation
-    (``pyspi.lib.phi_native``). NaN when the estimate fails, for example for
-    a singular covariance.
+    (``pyspi.lib.phi_native``). It is not appropriate (``NotAppropriate``,
+    NaN in a Calculator table) when the ``T - delay`` aligned samples do not
+    exceed 4, the dimension of the pair's joint past and present, where the
+    sample covariance is singular (``T < delay + 5``). NaN when the estimate
+    fails otherwise, for example for a singular covariance.
 
     References
     ----------
@@ -2788,6 +2791,10 @@ class IntegratedInformation(Undirected, Unsigned):
 
         P = np.array([1, 2])
         X = data.to_numpy(squeeze=True)[[i, j]]
+        # The joint covariance of the pair's past and present is 4 x 4.
+        _require_gaussian_samples(
+            X.shape[1] - self._delay, 4, "integrated information",
+            f"the pair's past and present at delay = {self._delay}")
 
         params = {"tau": self._delay}
         options = {

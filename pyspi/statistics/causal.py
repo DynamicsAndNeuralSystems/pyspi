@@ -167,6 +167,8 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
                 f"than {self._CDS_MINC} samples each, so T >= {need}; got "
                 f"T = {T}.")
         x = pd.Series(np.asarray(z[i]).reshape(-1))
+        if np.ptp(x) == 0:
+            return np.nan  # a constant cause has no bins (cds_score's own NaN)
         counts = Counter(_discretized_sequence(x, 2, 3)).values()
         usable = sum(c > self._CDS_MINC for c in counts)
         if usable < self._CDS_MIN_BINS:
@@ -1507,7 +1509,7 @@ class LiangInformationFlow(Directed, Signed):
     def multivariate(self, data):
         A = self._matrix(data)
         # Collinear or constant series give NaN pairs; report them as
-        # `fill_pairwise` reports a failed pair.
+        # `fill_pairwise` reports a failed pair, with the reason.
         off = ~np.eye(A.shape[0], dtype=bool)
         bad = off & np.isnan(A)
         if bad.any():
@@ -1515,13 +1517,21 @@ class LiangInformationFlow(Directed, Signed):
                 raise NotAppropriate(
                     f'SPI "{self.identifier}": every pair is undefined '
                     f"(singular pairwise covariances).")
-            i, j = np.argwhere(bad)[0]
-            warnings.warn(
-                f'SPI "{self.identifier}": {int(bad.sum())} of '
-                f"{int(off.sum())} pairs are undefined and set to NaN; first "
-                f"({i}, {j}): singular pairwise covariance (collinear or "
-                f"constant series).")
+
+            def compute(i, j):
+                if bad[i, j]:
+                    raise NotAppropriate(self._undefined_pair(i, j))
+                return A[i, j]
+
+            M = A.shape[0]
+            pairs = [(i, j) for j in range(M) for i in range(M) if i != j]
+            return fill_pairwise(self.identifier, np.full((M, M), np.nan),
+                                 pairs, compute)
         return A
+
+    def _undefined_pair(self, i, j):
+        return (f'SPI "{self.identifier}": pair ({i}, {j}) is undefined '
+                f"(singular covariance: collinear or constant series).")
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
@@ -1536,7 +1546,5 @@ class LiangInformationFlow(Directed, Signed):
             return np.nan
         value = self._matrix(data)[i, j]
         if np.isnan(value):
-            raise NotAppropriate(
-                f'SPI "{self.identifier}": pair ({i}, {j}) is undefined '
-                f"(singular covariance: collinear or constant series).")
+            raise NotAppropriate(self._undefined_pair(i, j))
         return float(value)
