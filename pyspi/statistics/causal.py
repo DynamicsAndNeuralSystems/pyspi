@@ -1,6 +1,7 @@
 import warnings
 from collections import Counter
 
+import numba
 import numpy as np
 import pandas as pd
 import pyEDM
@@ -352,21 +353,28 @@ def _cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=42, tp=0):
     This reproduces pyEDM 2.5's CCM (``pyEDM.CCM._ccm_for_libsize``),
     including its random libraries (every library size starts from
     ``SeedSequence(seed)``), so values equal
-    ``pyEDM.CCM(columns=library, target=...)``. The difference is the
-    organisation of the work: ``pyEDM.CCM`` handles one (library, target)
-    pair per call, whereas here the random libraries, KD-tree neighbours and
-    simplex weights, which depend on the library variable alone, are built
-    once and applied to all of that variable's targets. pyEDM's process pools
-    are not used (they re-import the caller's ``__main__``).
+    ``pyEDM.CCM(columns=library, target=...)`` to rounding (~1e-16). The
+    difference is the organisation of the work. ``pyEDM.CCM`` handles one
+    (library, target) pair per call and builds a KD-tree per random library;
+    here the neighbours and simplex weights, which depend on the library
+    variable alone, are found once for all of its targets, from one table of
+    each point's nearest points (`_ccm_neighbour_table`) or a pass over a
+    small library, in compiled code (`_ccm_library_rhos`). A library in which
+    a point's k-th and (k+1)-th nearest library points tie, where the
+    KD-tree's choice decides the neighbours, is computed with its own
+    KD-tree as pyEDM does. pyEDM's process pools are not used (they re-import
+    the caller's ``__main__``).
 
     Requires finite data (``Data`` guarantees it), so every row from ``E - 1``
     on is a valid embedding point.
     """
     embed, actuals = _shadow_manifold(library, targets, E, tp)
     n_points = embed.shape[0]
+    A = np.ascontiguousarray(np.array(actuals).reshape(len(actuals), n_points))
+    scan, depth = _ccm_scan_plan(n_points, E, lib_sizes)
+    order, sdist = _ccm_neighbour_table(embed, depth)
 
     skill = np.empty((len(targets), len(lib_sizes)))
-    rhos = np.empty((len(targets), sample))
     for l, L in enumerate(lib_sizes):
         rng = np.random.default_rng(np.random.SeedSequence(seed))
         L = min(int(L), n_points)
@@ -374,17 +382,228 @@ def _cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=42, tp=0):
         if k < 1:
             skill[:, l] = np.nan
             continue
-        k_query = min(k + 1, L)
-        for s in range(sample):
-            lib_idx = rng.choice(n_points, size=L, replace=False)
-            lib_idx.sort()
-            dist, local = KDTree(embed[lib_idx]).query(embed, k=k_query)
-            if dist.ndim == 1:
-                dist, local = dist[:, np.newaxis], local[:, np.newaxis]
-            rhos[:, s] = _simplex_rhos(dist, lib_idx[local], k, actuals)
-        for t in range(len(targets)):
-            skill[t, l] = np.nanmean(rhos[t])
+        libs = np.array([rng.choice(n_points, size=L, replace=False)
+                         for _ in range(sample)])
+        skill[:, l] = _mean_library_skill(embed, order, sdist, libs, k, A,
+                                          scan[L])
     return skill
+
+
+# Relative gap below which the k-th and (k+1)-th nearest library points count
+# as tied. Distances equal in exact arithmetic (quantised data) can differ in
+# the last bits depending on how they are summed, so an exact comparison is
+# not enough to know that the KD-tree would have picked the same set.
+_CCM_TIE_RTOL = 1e-12
+# Most memory for one neighbour table: int32 index plus float64 distance per
+# entry, n rows of `depth` entries (12 n depth bytes).
+_CCM_TABLE_BYTES = 2**28
+
+
+@numba.njit(cache=True)
+def _ccm_distance(embed, a, b):
+    s = 0.0
+    for e in range(embed.shape[1]):
+        d = embed[a, e] - embed[b, e]
+        s += d * d
+    return np.sqrt(s)
+
+
+@numba.njit(cache=True)
+def _ccm_neighbour_table(embed, depth):
+    """Each point's ``depth`` nearest points (itself included), nearest first."""
+    n = embed.shape[0]
+    order = np.empty((n, depth), dtype=np.int32)
+    sdist = np.empty((n, depth))
+    if depth == 0:
+        return order, sdist
+    drow = np.empty(n)
+    cand = np.empty(depth, dtype=np.int64)
+    for r in range(n):
+        for j in range(n):
+            drow[j] = _ccm_distance(embed, r, j)
+        if depth < n:
+            cut = np.partition(drow, depth - 1)[depth - 1]
+            c = 0
+            for j in range(n):
+                if drow[j] < cut:
+                    cand[c] = j
+                    c += 1
+            for j in range(n):
+                if c == depth:
+                    break
+                if drow[j] == cut:
+                    cand[c] = j
+                    c += 1
+        else:
+            for j in range(n):
+                cand[j] = j
+        vals = drow[cand]
+        o = np.argsort(vals, kind="mergesort")
+        for q in range(depth):
+            order[r, q] = cand[o[q]]
+            sdist[r, q] = vals[o[q]]
+    return order, sdist
+
+
+@numba.njit(cache=True)
+def _ccm_pearson(p, a):
+    """`_pearson` for finite inputs of at least 3 points."""
+    n = p.shape[0]
+    pm = 0.0
+    am = 0.0
+    for i in range(n):
+        pm += p[i]
+        am += a[i]
+    pm /= n
+    am /= n
+    spp = 0.0
+    saa = 0.0
+    spa = 0.0
+    for i in range(n):
+        dp = p[i] - pm
+        da = a[i] - am
+        spp += dp * dp
+        saa += da * da
+        spa += dp * da
+    den = np.sqrt(spp * saa)
+    if den == 0.0:
+        return 0.0
+    return spa / den
+
+
+@numba.njit(cache=True)
+def _ccm_library_rhos(embed, order, sdist, libs, k, actuals, scan, tie_rtol):
+    """
+    `_simplex_rhos` for each random library (row of ``libs``), ``(P, n_lib)``.
+
+    A point's neighbours are the ``k`` library points nearest to it, itself
+    left out, as the per-library KD-tree of `_cross_map_skill` finds them.
+    With ``scan`` they are the first ``k`` library members in its row of the
+    neighbour table (``order``, ``sdist``); otherwise, or when the row ends
+    first, a pass over the library finds them. The ``(k+1)``-th is found too:
+    a library in which it ties with the ``k``-th for any point (within
+    ``tie_rtol``) is flagged in ``ambiguous`` and its column left NaN, since
+    which of the tied points a KD-tree returns depends on the tree.
+    """
+    n = embed.shape[0]
+    depth = order.shape[1]
+    n_lib, L = libs.shape
+    P = actuals.shape[0]
+    member = np.zeros(n, dtype=np.bool_)
+    nn = np.empty(k + 1, dtype=np.int64)
+    nd = np.empty(k + 1)
+    w = np.empty(k)
+    pred = np.empty((P, n))
+    rhos = np.full((P, n_lib), np.nan)
+    ambiguous = np.zeros(n_lib, dtype=np.bool_)
+    for s in range(n_lib):
+        if scan:
+            member[:] = False
+            for q in range(L):
+                member[libs[s, q]] = True
+        for r in range(n):
+            found = 0
+            done = False
+            if scan:
+                c = 0
+                while c < depth and found <= k:
+                    m = order[r, c]
+                    if m != r and member[m]:
+                        nn[found] = m
+                        nd[found] = sdist[r, c]
+                        found += 1
+                    c += 1
+                # With no (k+1)-th library point at all, the k are certain.
+                done = found == k + 1 or (found == k and depth == n)
+            if not done:
+                # The k + 1 nearest library points, by insertion, nearest
+                # first; equal distances keep library order.
+                found = 0
+                for q in range(L):
+                    m = libs[s, q]
+                    if m == r:
+                        continue
+                    d = _ccm_distance(embed, r, m)
+                    if found == k + 1 and d >= nd[k]:
+                        continue
+                    pos = found if found < k + 1 else k
+                    while pos > 0 and nd[pos - 1] > d:
+                        nd[pos] = nd[pos - 1]
+                        nn[pos] = nn[pos - 1]
+                        pos -= 1
+                    nd[pos] = d
+                    nn[pos] = m
+                    if found < k + 1:
+                        found += 1
+            if found == k + 1 and nd[k] - nd[k - 1] <= tie_rtol * nd[k]:
+                ambiguous[s] = True
+                break
+            # Simplex weights exp(-d / d_min), normalised, as `_simplex_rhos`.
+            dmin = nd[0]
+            wsum = 0.0
+            for q in range(k):
+                if dmin > 0.0:
+                    w[q] = np.exp(-nd[q] / dmin)
+                else:
+                    w[q] = 1.0 if nd[q] == 0.0 else 0.0
+                wsum += w[q]
+            if wsum <= 0.0:
+                wsum = 1.0
+            for t in range(P):
+                v = 0.0
+                for q in range(k):
+                    v += (w[q] / wsum) * actuals[t, nn[q]]
+                pred[t, r] = v
+        if ambiguous[s] or n < 3:
+            continue
+        for t in range(P):
+            rhos[t, s] = _ccm_pearson(pred[t], actuals[t])
+    return rhos, ambiguous
+
+
+def _ccm_scan_plan(n, E, lib_sizes):
+    """
+    Which library sizes find neighbours from the table, and its depth.
+
+    A point's ``k`` nearest of ``L`` random library points lie about
+    ``k n / L`` deep in its row of all points by distance, against ``L``
+    distances for a pass over the library itself, so small libraries are
+    passed over and large ones scanned. The table is four times deeper than
+    the smallest scanned library needs on average (shallower if it would
+    exceed `_CCM_TABLE_BYTES`; a row that ends early falls back to the pass).
+    Neither choice changes the neighbours found.
+    """
+    sizes = {min(int(L), n) for L in lib_sizes}
+    k = E + 1
+    scan = {L: L * (E + 2) > 2 * (k + 1) * n / L for L in sizes}
+    scanned = [L for L in sizes if scan[L]]
+    if not scanned:
+        return scan, 0
+    depth = int(min(n, np.ceil(4 * (k + 1) * n / min(scanned)) + k + 2))
+    most = max(k + 2, _CCM_TABLE_BYTES // (12 * n))
+    if depth > most:
+        depth = int(min(n, most))
+        smallest = 4 * (k + 1) * n / max(depth - k - 2, 1)
+        scan = {L: scan[L] and L >= smallest for L in sizes}
+    return scan, depth
+
+
+def _tree_rhos(embed, lib_idx, k, actuals):
+    """`_simplex_rhos` of one random library from its own KD-tree."""
+    lib_idx = np.sort(lib_idx)
+    dist, local = KDTree(embed[lib_idx]).query(embed, k=min(k + 1, len(lib_idx)))
+    if dist.ndim == 1:
+        dist, local = dist[:, np.newaxis], local[:, np.newaxis]
+    return _simplex_rhos(dist, lib_idx[local], k, actuals)
+
+
+def _mean_library_skill(embed, order, sdist, libs, k, actuals, scan):
+    """Mean over the random libraries ``libs`` of each target's cross-map skill."""
+    rhos, ambiguous = _ccm_library_rhos(embed, order, sdist, libs, k, actuals,
+                                        scan, _CCM_TIE_RTOL)
+    for s in np.flatnonzero(ambiguous):
+        rhos[:, s] = _tree_rhos(embed, libs[s], k, actuals)
+    return np.array([np.nanmean(r) for r in rhos])
 
 
 def _shadow_manifold(library, targets, E, tp):
@@ -467,16 +686,13 @@ def _cross_map_skill_dense(library, targets, E, L, sample=100, seed=42, tp=0):
 
     Returns ``(len(targets),)``, equal to
     ``_cross_map_skill(library, targets, E, [L], sample, seed, tp)[:, 0]``
-    (same random libraries, neighbours and weights). A library of L of the n
-    embedding points omits ``n - L`` of them, so the ``k_query`` nearest
-    library points of a query point are the first ``k_query`` library members
-    among its ``k_query + n - L`` nearest points overall: one query of the
-    whole manifold serves every random library. It is fast when ``n - L`` is
-    small, as at the largest CCM library size.
-
-    With exactly tied distances (quantised data) this falls back to
-    ``_cross_map_skill``, since which tied point a KD-tree returns depends on
-    the tree.
+    to rounding (same random libraries, neighbours and weights). A library of
+    L of the n embedding points omits ``n - L`` of them, so the
+    ``k_query + 1`` nearest library points of a query point are among its
+    ``k_query + n - L + 1`` nearest points overall: one query of the whole
+    manifold serves every random library. It is fast when ``n - L`` is
+    small, as at the largest CCM library size. Libraries with tied
+    neighbours use their own KD-tree, as in `_cross_map_skill`.
     """
     embed, actuals = _shadow_manifold(library, targets, E, tp)
     n_points = embed.shape[0]
@@ -487,27 +703,17 @@ def _cross_map_skill_dense(library, targets, E, L, sample=100, seed=42, tp=0):
         return np.full(len(targets), np.nan)
     k_query = min(k + 1, L)
     K = min(k_query + n_points - L, n_points)
-    # One extra neighbour, to see a tie straddling the end of the list.
+    # One extra neighbour, to see the (k+1)-th library point in every row.
     dist, neighbours = KDTree(embed).query(embed, k=min(K + 1, n_points))
     if dist.ndim == 1:
         dist, neighbours = dist[:, np.newaxis], neighbours[:, np.newaxis]
-    if np.any(dist[:, 1:] == dist[:, :-1]):
-        # Tied distances: defer to the per-library KD-trees.
-        return _cross_map_skill(library, targets, E, [L], sample=sample,
-                                seed=seed, tp=tp)[:, 0]
-    dist, neighbours = dist[:, :K], neighbours[:, :K]
-
-    rhos = np.empty((len(targets), sample))
-    member = np.zeros(n_points, dtype=bool)
-    for s in range(sample):
-        lib_idx = rng.choice(n_points, size=L, replace=False)
-        member[:] = False
-        member[lib_idx] = True
-        in_lib = member[neighbours]
-        # The k_query nearest library points, as the per-library tree finds.
-        candidates = in_lib & (np.cumsum(in_lib, axis=1) <= k_query)
-        rhos[:, s] = _simplex_rhos(dist, neighbours, k, actuals, candidates)
-    return np.array([np.nanmean(rhos[t]) for t in range(len(targets))])
+    libs = np.array([rng.choice(n_points, size=L, replace=False)
+                     for _ in range(sample)])
+    return _mean_library_skill(
+        embed, np.ascontiguousarray(neighbours, dtype=np.int32),
+        np.ascontiguousarray(dist), libs, k,
+        np.ascontiguousarray(np.array(actuals).reshape(len(actuals), n_points)),
+        True)
 
 
 # Library-size steps of the cached CCM skill curve (nlibs + 1 sizes).

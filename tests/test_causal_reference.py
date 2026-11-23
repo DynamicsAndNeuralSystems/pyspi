@@ -140,15 +140,17 @@ def test_igci_slope_estimator_follows_the_documented_sign():
 
 
 @pytest.mark.parametrize("E", [1, 3])
-def test_ccm_cross_map_skill_is_bit_identical_to_pyedm(E):
+def test_ccm_cross_map_skill_equals_pyedm(E):
     """`_cross_map_skill` is pyEDM 2.5's CCM, computed once per library variable.
 
     pyspi computes the simplex neighbours and weights of each variable's
     shadow manifold once and applies them to every target, where
     `pyEDM.CCM(columns=a, target=b)` recomputes them for each pair. That is
-    only a speedup if the numbers are exactly pyEDM's, both directions, for
-    one target or several at once. A pyEDM release that changes its CCM
-    algorithm or its seeding will fail here, which is the point.
+    only a speedup if the numbers are pyEDM's, both directions, for one
+    target or several at once: the same neighbours, weights and random
+    libraries, so they agree to rounding (the sums run in a different
+    order). A pyEDM release that changes its CCM algorithm or its seeding
+    will fail here, which is the point.
     """
     import pandas as pd
     import pyEDM
@@ -176,13 +178,16 @@ def test_ccm_cross_map_skill_is_bit_identical_to_pyedm(E):
             expected = ref[f"{names[i]}:{names[j]}"].to_numpy()
             alone = _cross_map_skill(z[i], [z[j]], E, lib_sizes,
                                      sample=sample, seed=42)[0]
-            assert np.array_equal(row, expected), (names[i], names[j])
-            assert np.array_equal(alone, expected), (names[i], names[j])
+            pair = (names[i], names[j])
+            np.testing.assert_allclose(row, expected, rtol=0, atol=1e-14,
+                                       err_msg=str(pair))
+            np.testing.assert_array_equal(alone, row, err_msg=str(pair))
             # and pyEDM's reverse column is the same computation from j's side
             reverse = _cross_map_skill(z[j], [z[i]], E, lib_sizes,
                                        sample=sample, seed=42)[0]
-            assert np.array_equal(
-                reverse, ref[f"{names[j]}:{names[i]}"].to_numpy())
+            np.testing.assert_allclose(
+                reverse, ref[f"{names[j]}:{names[i]}"].to_numpy(), rtol=0,
+                atol=1e-14)
 
 
 # ---------------------------------------------------------------------------

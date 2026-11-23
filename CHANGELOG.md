@@ -384,6 +384,11 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   pyspi builds tslearn's Itakura mask with NumPy and runs tslearn's recursion over each row's admitted columns only, in a numba kernel cached on disk; values are bit-identical to tslearn's.
   At M=16, T=800 the SPI takes 0.05 s instead of 0.23 s, and 0.14 s instead of 1.8 s in a new process.
   `lcss_constraint-itakura` uses the same mask.
+- **`ccm_*` and `lccm_*` find simplex neighbours without a KD-tree per random library.**
+  Each library variable's nearest points are tabulated once; a random library's k nearest members are read off that table, or found by a pass over a small library, in a numba kernel that also forms the predictions and correlations.
+  A library in which a point's k-th and (k+1)-th nearest members tie uses its own KD-tree, as pyEDM does, so quantised data gain less.
+  Values equal pyEDM's to rounding (at most 1e-15 apart), not bit for bit.
+  For one library variable and 15 targets at T=1000, `E=1` is 8.7x faster and `E=10` 26x (5.9x for `E=1` at T=4000); `ccm_E-None_*` and `lccm_E-None_*` together are 14x faster at M=4, T=600.
 - **The distance-correlation family centres each series once.**
   `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
