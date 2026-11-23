@@ -207,6 +207,10 @@ class KLEntropyCalculator:
     def computeAverageLocalOfObservations(self):
         X = self._obs
         N, d = X.shape
+        if N < 2:
+            raise NotAppropriate(
+                f"Kozachenko entropy needs at least 2 observations, so each "
+                f"has a nearest neighbour; got N = {N}.")
         tree = cKDTree(X)
         dists, _ = tree.query(X, k=2, p=2)  # k=1 NN (index 0 = self)
         eps = dists[:, 1]
@@ -336,6 +340,16 @@ def _kernel_counts(tree, pts, width, dce):
     return _ksg_counts(tree, pts, np.full(len(pts), float(width)), dce - 1)
 
 
+def _empty_kernel_boxes(N, d, width, dce):
+    """The reason a kernel estimate with every joint box empty is refused."""
+    return (
+        f"No sample has a neighbour within the box kernel of half-width "
+        f"{width:g} (in standard deviations) in the {d}-dimensional joint "
+        f"space: among N = {N} points, excluding |j - i| <= {dce - 1}, every "
+        f"joint count is zero, so there is nothing to estimate from. Use a "
+        f"longer series or a wider kernel.")
+
+
 class KernelMICalculator:
     """
     Box-kernel mutual information calculator.
@@ -348,8 +362,9 @@ class KernelMICalculator:
     With ``DYN_CORR_EXCL = dce > 0`` the counts exclude ``|j - i| < dce``
     (see `_kernel_counts`), ``N`` becomes the number of samples each point was
     compared with, and, as in JIDT, a sample with an empty joint box adds 0
-    to the mean over all ``N`` samples. When every joint box is empty the
-    result is NaN (JIDT gives 0).
+    to the mean over all ``N`` samples. When every joint box is empty there
+    is nothing to estimate from (JIDT gives 0), and ``NotAppropriate`` is
+    raised.
     """
 
     def __init__(self):
@@ -413,8 +428,7 @@ class KernelMICalculator:
         # n_xy > 0 implies n_x, n_y > 0; JIDT adds 0 for an empty joint box.
         nz = n_xy > 0
         if not nz.any():
-            # No sample has a neighbour, so there is nothing to estimate from.
-            return float('nan')
+            raise NotAppropriate(_empty_kernel_boxes(N, XY.shape[1], w, dce))
         local = np.zeros(N)
         local[nz] = (np.log(n_xy[nz]) + np.log(n_pool[nz])
                      - np.log(n_x[nz]) - np.log(n_y[nz]))
@@ -430,7 +444,8 @@ class KernelTECalculator:
     as in JIDT's TransferEntropyCalculatorKernel, whose interface it shares.
     The target past has ``k_HISTORY`` samples and the source one sample, at
     lag 1. ``DYN_CORR_EXCL`` excludes neighbours as in `KernelMICalculator`,
-    and the result is NaN when every joint box is empty.
+    and ``NotAppropriate`` is raised when every joint box is empty or the
+    series has no more than ``k_HISTORY`` samples.
     """
 
     def __init__(self):
@@ -464,7 +479,9 @@ class KernelTECalculator:
         w = self._kernel_width
 
         if T <= k:
-            return np.nan
+            raise NotAppropriate(
+                f"Kernel transfer entropy with k_history = {k} needs T > {k} "
+                f"samples for one embedded point; got T = {T}.")
 
         # Build vectors
         n_pts = T - k
@@ -507,8 +524,7 @@ class KernelTECalculator:
         # with an empty joint box adds 0 to the mean over all samples.
         nz = n_yn_yp_x > 0
         if not nz.any():
-            # No sample has a neighbour, so there is nothing to estimate from.
-            return float('nan')
+            raise NotAppropriate(_empty_kernel_boxes(n_pts, yn_yp_x.shape[1], w, dce))
         local = np.zeros(n_pts)
         local[nz] = (np.log(n_yn_yp_x[nz]) + np.log(n_yp[nz])
                      - np.log(n_yp_x[nz]) - np.log(n_yn_yp[nz]))
@@ -607,8 +623,12 @@ class SymbolicTECalculator:
         k = self._k_history
         T = len(src)
 
+        # T - k + 1 patterns give T - k (past, next) pairs.
         if T <= k:
-            return np.nan
+            raise NotAppropriate(
+                f"Symbolic transfer entropy with patterns of length "
+                f"k_history = {k} needs T >= {k + 1} samples for one pair of "
+                f"successive patterns; got T = {T}.")
 
         # Convert to ordinal patterns
         src_symbols = _series_to_ordinal_symbols(src, k)
@@ -617,8 +637,6 @@ class SymbolicTECalculator:
         # targ_next is the target's next symbol; the source symbol is
         # concurrent with targ_past.
         n = min(len(src_symbols), len(targ_symbols)) - 1
-        if n <= 0:
-            return np.nan
 
         targ_next = targ_symbols[1:n + 1]
         targ_past = targ_symbols[:n]
@@ -1714,8 +1732,9 @@ class MutualInfo(InfoTheoryBase, Undirected):
     The ``kernel`` estimate counts neighbours in a box kernel, as in JIDT
     [2]_, excluding the point itself. The ``kraskov`` estimate, and the
     ``kernel`` estimate with a Theiler window, can fall slightly below zero
-    for independent processes; a kernel estimate in which every joint box is
-    empty is NaN.
+    for independent processes. A pair is not appropriate for the ``kernel``
+    estimate when every joint box is empty, as in short series, where no
+    sample has another within the kernel width.
 
     References
     ----------
@@ -1821,8 +1840,9 @@ class TimeLaggedMutualInfo(InfoTheoryBase, Directed):
     deterministic. The ``kernel`` estimate counts neighbours in a box kernel,
     as in JIDT [2]_, excluding the point itself. The ``kraskov`` estimate,
     and the ``kernel`` estimate with a Theiler window, can fall slightly
-    below zero for independent processes; a kernel estimate in which every
-    joint box is empty is NaN.
+    below zero for independent processes. A pair is not appropriate for the
+    ``kernel`` estimate when every joint box is empty, as in short series,
+    where no sample has another within the kernel width.
 
     References
     ----------
@@ -1945,10 +1965,11 @@ class TransferEntropy(InfoTheoryBase, Directed):
     by tiny fixed-seed jitter. The ``kernel`` estimator counts neighbours in
     a box kernel, as in JIDT [6]_, with a target past of ``k_history``
     samples at unit delay and the source at lag one; in short series it is
-    biased upward, and it is NaN when every joint box is empty (JIDT returns
-    0). The ``symbolic`` estimator [7]_ replaces source and target by ordinal
-    patterns of length ``k_history`` at unit delay and computes the transfer
-    entropy between the symbol sequences from their histograms.
+    biased upward, and a pair is not appropriate when every joint box is
+    empty (JIDT returns 0). The ``symbolic`` estimator [7]_ replaces source
+    and target by ordinal patterns of length ``k_history`` at unit delay and
+    computes the transfer entropy between the symbol sequences from their
+    histograms; it needs ``T >= k_history + 1``.
 
     With ``auto_embed_method``, the target embedding (and with
     ``'MAX_CORR_AIS'`` also the source embedding, chosen independently) is
@@ -2293,6 +2314,9 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
     (``NotAppropriate``, NaN in a Calculator table) when the ``T - k``
     aligned samples do not exceed the joint dimension ``max(k, 2)``
     (``T <= 20`` for ``k = 10``), where the sample covariance is singular.
+    The ``kozachenko`` estimate needs ``T >= k + 2`` (two aligned samples,
+    so each has a nearest neighbour) and the ``kernel`` estimate
+    ``T >= k + 1``; shorter series are not appropriate.
     A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
     repeated value, as in quantised data: it averages the logarithms of
     nearest-neighbour distances, which are zero for a repeated value, so a
@@ -2340,6 +2364,16 @@ class CrossmapEntropy(InfoTheoryBase, Directed):
             _require_gaussian_samples(
                 targ.size - k, max(k, 2), "cross-map entropy",
                 f"max(history_length, 2) with history_length = {k}")
+        else:
+            # Kozachenko needs a nearest neighbour for each of the T - k
+            # aligned samples; the box kernel needs one sample.
+            need = 2 if self._estimator == "kozachenko" else 1
+            if targ.size - k < need:
+                raise NotAppropriate(
+                    f"The {self._estimator} cross-map entropy at "
+                    f"history_length = {k} has T - {k} aligned samples and "
+                    f"needs at least {need}, so T >= {k + need}; got "
+                    f"T = {targ.size}.")
         targ_future = targ[k:]
         src_past = np.expand_dims(src[k - 1 : -1], axis=1)
         for idx in range(2, k):
@@ -2387,6 +2421,8 @@ class CausalEntropy(InfoTheoryBase, Directed):
     (``NotAppropriate``, NaN in a Calculator table) when ``T < 3n``: its
     last term has ``2n`` dimensions over ``T - n + 1`` times, and with no
     more samples than dimensions the sample covariance is singular.
+    The ``kozachenko`` estimate is not appropriate when ``T < n + 1``, where
+    the last term has a single time and no nearest neighbour.
     A ``kozachenko`` estimate is not appropriate (NaN) for a pair with any
     repeated value, as in quantised data: it averages the logarithms of
     nearest-neighbour distances, which are zero for a repeated value, so a
@@ -2435,6 +2471,12 @@ class CausalEntropy(InfoTheoryBase, Directed):
             _require_gaussian_samples(
                 targ.size - self._n + 1, 2 * self._n,
                 "causally conditioned entropy", f"2 * n with n = {self._n}")
+        elif self._estimator == "kozachenko" and targ.size - self._n + 1 < 2:
+            # The last term has T - n + 1 times, and each needs a neighbour.
+            raise NotAppropriate(
+                f"The Kozachenko causally conditioned entropy at n = {self._n} "
+                f"needs T - n + 1 >= 2 times in its last term, so "
+                f"T >= {self._n + 1}; got T = {targ.size}.")
 
         causal_entropy = 0
         for i in range(1, self._n + 1):
@@ -2477,9 +2519,11 @@ class DirectedInfo(CausalEntropy, Directed):
     ``x_t``. The ``gaussian`` estimate is not appropriate
     (``NotAppropriate``, NaN in a Calculator table) when ``T <= 3n``, since
     its largest term has ``2n`` dimensions over ``T - n`` times and with no
-    more samples than dimensions the sample covariance is singular; the
-    other estimators give NaN when the series has ``n + 1`` samples or
-    fewer.
+    more samples than dimensions the sample covariance is singular; for the
+    other estimators it is not appropriate when ``T < n + 2``, which leaves
+    fewer than two times, and the ``kraskov`` estimate also when the
+    ``T - n`` times leave fewer than ``prop_k`` neighbours (``T < n + 5``
+    at ``prop_k = 4``, more with a Theiler window).
 
     The ``kraskov`` estimator computes each conditional mutual information
     directly with the Frenzel-Pompe nearest-neighbour estimator [2]_ [3]_,
@@ -2563,8 +2607,11 @@ class DirectedInfo(CausalEntropy, Directed):
             # over the common window of T - n times.
             _require_gaussian_samples(T - n, 2 * n, "directed information",
                                       f"2 * n with n = {n}")
-        if T <= n + 1:
-            return np.nan
+        if T < n + 2:
+            raise NotAppropriate(
+                f"Directed information at n = {n} is estimated over the times "
+                f"t = n, ..., T - 1, and needs at least two of them, so "
+                f"T >= {n + 2}; got T = {T}.")
 
         # One aligned window for every term: rows are t = n .. T-1.
         y_now = targ[n:].reshape(-1, 1)

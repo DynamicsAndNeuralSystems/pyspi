@@ -20,6 +20,7 @@ import tslearn.metrics
 
 from pyspi.base import (
     Directed,
+    NotAppropriate,
     Undirected,
     Unsigned,
     Signed,
@@ -526,6 +527,21 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
         return stat
 
 
+# Fewest samples of one term: the unbiased distance covariance divides by
+# n (n - 3), and scipy's MGC refuses fewer than 5 samples.
+_UNBIASED_DCOV_MIN_SAMPLES = 4
+_MGC_MIN_SAMPLES = 5
+
+
+def _require_lagged_samples(T, max_lag, need, measure):
+    """Refuse unless the shortest lagged segment, ``T - max_lag`` samples, has ``need``."""
+    if T - max_lag < need:
+        raise NotAppropriate(
+            f"{measure} needs at least {need} samples in each lagged term; "
+            f"at max_lag = {max_lag} the shortest has T - max_lag = "
+            f"{T - max_lag}, so it needs T >= {max_lag + need}; got T = {T}.")
+
+
 def _lagged_sum(test, x, y, max_lag):
     """
     ``sum_{l=0}^{L} (n - l)/n * S(x[l:], y[:n - l])``, as in DcorrX and MGCX.
@@ -562,6 +578,11 @@ class CrossDistanceCorrelation(Directed, Unsigned):
     the full one. hyppo 0.5.2's own lagged terms treat rows of the distance
     matrices as points, so its implementation is not used. Each series'
     centred distance matrices are computed once per lag, not once per pair.
+
+    The unbiased distance covariance divides by ``n (n - 3)``, so every
+    lagged term needs ``n >= 4`` samples: the SPI is not appropriate
+    (``NotAppropriate``, NaN in a Calculator table) when
+    ``T < max_lag + 4``.
 
     References
     ----------
@@ -601,10 +622,15 @@ class CrossDistanceCorrelation(Directed, Unsigned):
         return np.sum([stats[0]] + [(n - lag) * stats[lag] / n
                                     for lag in range(1, len(stats))])
 
+    def _require_samples(self, T):
+        _require_lagged_samples(T, self._max_lag, _UNBIASED_DCOV_MIN_SAMPLES,
+                                "The unbiased cross-distance correlation")
+
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         # Source i, target j: the target's present against the source's past.
         z = data.to_numpy()
+        self._require_samples(z.shape[1])
         stats = [_dcorr_centred(self._prepare(z[j], lag)[0],
                                 self._prepare(z[i], lag)[1], False)
                  for lag in range(self._max_lag + 1)]
@@ -614,6 +640,7 @@ class CrossDistanceCorrelation(Directed, Unsigned):
     def multivariate(self, data):
         z = data.to_numpy()
         M, n = z.shape[0], z.shape[1]
+        self._require_samples(n)
         S = [_cached_pairs(self.identifier, M,
                            lambda s, lag=lag: self._prepare(z[s], lag),
                            lambda src, tgt: _dcorr_centred(tgt[0], src[1], False),
@@ -635,7 +662,9 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     `MultiscaleGraphCorrelation`) in place of the distance correlation:
     ``A[i, j] = sum_{l=0}^{max_lag} (T - l)/T * mgc(x_j[l:], x_i[:T - l])``.
     Row = source, column = target; hyppo's ``MGCX`` implementation is not
-    used, for the same reason.
+    used, for the same reason. MGC needs at least 5 samples, so every lagged
+    term does, and the SPI is not appropriate (``NotAppropriate``, NaN in a
+    Calculator table) when ``T < max_lag + 5``.
 
     References
     ----------
@@ -661,6 +690,8 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     def bivariate(self, data, i=None, j=None):
         # As in CrossDistanceCorrelation: source i goes second.
         z = data.to_numpy()
+        _require_lagged_samples(z.shape[1], self._max_lag, _MGC_MIN_SAMPLES,
+                                "The cross-multiscale graph correlation")
         x = z[j]
         y = z[i]
         return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)

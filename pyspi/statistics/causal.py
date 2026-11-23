@@ -1,4 +1,5 @@
 import warnings
+from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -12,7 +13,7 @@ from pyspi.base import (
     parse_multivariate,
 )
 from pyspi.lib.pairwise_causal import (
-    cds_score, igci_score, normalized_hsic, reci_score,
+    _discretized_sequence, cds_score, igci_score, normalized_hsic, reci_score,
 )
 from pyspi.utils import require_int
 
@@ -130,8 +131,10 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
     This is cdt's ``CDS`` [2]_, which is Fonollosa's implementation,
     reimplemented in `pyspi.lib.pairwise_causal`. Directed and unsigned;
     lower is stronger evidence, as for ``anm``. NaN for a pair involving a
-    constant series and when fewer than two bins of ``x_i`` hold more than
-    12 samples, where cdt returns 0.
+    constant series. A pair is not appropriate (``NotAppropriate``, NaN in a
+    Calculator table) when fewer than two bins of ``x_i`` hold more than 12
+    samples, where cdt returns 0; this holds for every pair when
+    ``T < 26``.
 
     References
     ----------
@@ -148,10 +151,30 @@ class ConditionalDistributionSimilarity(Directed, Unsigned):
     identifier = "cds"
     labels = ["causal", "unordered", "nonlinear", "directed", "inverted"]
 
+    # cds_score's defaults: a bin of the cause is used only if it holds more
+    # than _CDS_MINC samples, and the score needs two such bins.
+    _CDS_MINC = 12
+    _CDS_MIN_BINS = 2
+
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         z = data.to_numpy()
-        return cds_score(z[i], z[j], min_conditionals=2)
+        T = z.shape[1]
+        need = self._CDS_MIN_BINS * (self._CDS_MINC + 1)
+        if T < need:
+            raise NotAppropriate(
+                f"CDS needs {self._CDS_MIN_BINS} bins of the cause holding more "
+                f"than {self._CDS_MINC} samples each, so T >= {need}; got "
+                f"T = {T}.")
+        x = pd.Series(np.asarray(z[i]).reshape(-1))
+        counts = Counter(_discretized_sequence(x, 2, 3)).values()
+        usable = sum(c > self._CDS_MINC for c in counts)
+        if usable < self._CDS_MIN_BINS:
+            raise NotAppropriate(
+                f"CDS needs {self._CDS_MIN_BINS} bins of the cause holding more "
+                f"than {self._CDS_MINC} samples each; process {i} has {usable} "
+                f"such bin(s) among its {T} samples.")
+        return cds_score(z[i], z[j], min_conditionals=self._CDS_MIN_BINS)
 
 
 class RegressionErrorCausalInference(Directed, Unsigned):
@@ -649,8 +672,11 @@ class ConvergentCrossMapping(Directed, Unsigned):
     of its two in both directions ([1]_ uses the library variable's own), so
     the two directions are computed on manifolds of the same dimension.
 
-    ``convergence`` and ``slope`` are NaN with fewer than two finite library
-    sizes. A link strong enough to synchronise the pair saturates the skill
+    ``convergence`` and ``slope`` compare at least two library sizes, so at
+    a fixed ``E`` they are not appropriate (``NotAppropriate``, NaN in a
+    Calculator table) unless ``N >= ceil(2E/10)*10 + E + 11`` (``N >= 22``
+    for ``E = 1``, ``N >= 41`` for ``E = 10``), and they are NaN for a pair
+    with fewer than two finite skills. A link strong enough to synchronise the pair saturates the skill
     from the smallest library on and so barely converges, and when both
     directions are causal the stronger one can converge less. With a delay
     of one sample, a weakly autocorrelated source acting at a longer lag can
@@ -747,8 +773,23 @@ class ConvergentCrossMapping(Directed, Unsigned):
         np.fill_diagonal(out, np.nan)
         return out
 
+    def _require_two_library_sizes(self, N):
+        """Refuse ``convergence`` and ``slope`` when a fixed E leaves one library size."""
+        if self._statistic not in ("convergence", "slope") or self._E is None:
+            return
+        E = self._E
+        sizes = _ccm_library_sizes(N, E)
+        if len(sizes) < 2:
+            need = int(np.ceil(2 * E / 10) * 10) + E + 11
+            raise NotAppropriate(
+                f"CCM {self._statistic} at E={E} compares the skill at two or "
+                f"more library sizes, in steps of 10 from {sizes[0]} up to "
+                f"floor((N - E - 1)/10)*10, so it needs N >= {need}; got "
+                f"N = {N}, which gives the one library size {sizes[0]}.")
+
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        self._require_two_library_sizes(data.n_observations)
         pair = [i, j]
         try:
             ccmf = data.ccm[self.key][np.ix_(pair, pair)]
@@ -761,6 +802,7 @@ class ConvergentCrossMapping(Directed, Unsigned):
 
     @parse_multivariate
     def multivariate(self, data):
+        self._require_two_library_sizes(data.n_observations)
         ccmf = self._from_cache(data)
         return self._table(ccmf, lambda: _ccm_embedding(data, self._E),
                            data.n_observations)
