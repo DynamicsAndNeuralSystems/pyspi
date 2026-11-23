@@ -2145,6 +2145,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         ``log`` holds what the backend logged while factorising.
         """
         z = _ensure_time_series_3d(np.transpose(data.to_numpy(squeeze=True)))
+        _require_tapers(z.shape[0], self._nw)
         m = sc.Multitaper(z, sampling_frequency=self._fs,
                           time_halfbandwidth_product=self._nw)
         conn = sc.Connectivity.from_multitaper(m)
