@@ -167,13 +167,17 @@ class Cointegration(Directed, Unsigned):
         Deterministic terms of the Johansen VECM: -1 for none, 0 for a
         constant, 1 for a linear trend. Default: 1.
     k_ar_diff : int, optional
-        Number of lagged differences in the Johansen VECM. Default: 1.
+        Number of lagged differences in the Johansen VECM. A series with
+        ``T < k_ar_diff + 2`` is not appropriate (``NotAppropriate``, NaN in
+        a Calculator table). Default: 1.
     autolag : str or None, optional
         How ``'aeg'`` chooses the lag of its unit-root test: ``'aic'``,
         ``'bic'``, ``'t-stat'``, or None to use ``maxlag`` lags. Default:
         ``'aic'``.
     maxlag : int, optional
-        Largest lag ``'aeg'`` considers. Default: 10.
+        Largest lag ``'aeg'`` considers. Its unit-root regression allows at
+        most ``T // 2 - 1`` lags, so a series with ``T < 2 (maxlag + 1)`` is
+        not appropriate. Default: 10.
     trend : str, optional
         Deterministic terms of the ``'aeg'`` regression: ``'c'`` (constant),
         ``'ct'`` (constant and linear trend), ``'ctt'`` (and quadratic trend)
@@ -244,6 +248,15 @@ class Cointegration(Directed, Unsigned):
             z = data.to_numpy(squeeze=True)
 
             if self._method == "aeg":
+                # The unit-root regression on the T residuals (no trend term)
+                # allows at most T // 2 - 1 lags.
+                T = z.shape[-1]
+                if self._maxlag is not None and self._maxlag > T // 2 - 1:
+                    raise NotAppropriate(
+                        f"The Engle-Granger unit-root regression on T = {T} "
+                        f"residuals allows at most T // 2 - 1 = {T // 2 - 1} "
+                        f"lags, fewer than maxlag = {self._maxlag}, so it "
+                        f"needs T >= {2 * (self._maxlag + 1)}.")
                 # statsmodels regresses its first argument on its second.
                 stats = stattools.coint(
                     z[j],
@@ -255,6 +268,14 @@ class Cointegration(Directed, Unsigned):
 
                 ci = {"tstat": stats[0]}
             else:
+                # The VECM lags the T - 1 differences k_ar_diff times.
+                T = z.shape[-1]
+                if self._k_ar_diff >= T - 1:
+                    raise NotAppropriate(
+                        f"Johansen's test lags the T - 1 = {T - 1} differences "
+                        f"k_ar_diff = {self._k_ar_diff} times and needs more "
+                        f"differences than lags, so T >= {self._k_ar_diff + 2}; "
+                        f"got T = {T}.")
                 ci = _johansen(z[[i, j]].T, self._det_order,
                                self._k_ar_diff, (i, j))
 

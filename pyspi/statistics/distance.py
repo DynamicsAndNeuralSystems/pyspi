@@ -20,6 +20,7 @@ import tslearn.metrics
 
 from pyspi.base import (
     Directed,
+    NotAppropriate,
     Undirected,
     Unsigned,
     Signed,
@@ -506,7 +507,8 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     sample's ``k`` and ``l`` nearest neighbours in the two variables, over
     all ``(k, l)``, and reports a smoothed maximum, so it is sensitive to
     nonlinear dependence that the global distance correlation dilutes.
-    Undirected.
+    Undirected. MGC needs at least 5 samples; a shorter series is not
+    appropriate (``NotAppropriate``, NaN in a Calculator table).
 
     References
     ----------
@@ -522,8 +524,27 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
+        if x.shape[0] < _MGC_MIN_SAMPLES:
+            raise NotAppropriate(
+                f"Multiscale graph correlation needs T >= {_MGC_MIN_SAMPLES} "
+                f"samples; got T = {x.shape[0]}.")
         stat = MGC().statistic(x, y)
         return stat
+
+
+# Fewest samples of one term: with 3 samples the U-centred distance matrices
+# vanish, so the unbiased statistic is 0/0; scipy's MGC refuses fewer than 5.
+_UNBIASED_DCOV_MIN_SAMPLES = 4
+_MGC_MIN_SAMPLES = 5
+
+
+def _require_lagged_samples(T, max_lag, need, measure):
+    """Refuse unless the shortest lagged segment, ``T - max_lag`` samples, has ``need``."""
+    if T - max_lag < need:
+        raise NotAppropriate(
+            f"{measure} needs at least {need} samples in each lagged term; "
+            f"at max_lag = {max_lag} the shortest has T - max_lag = "
+            f"{T - max_lag}, so it needs T >= {max_lag + need}; got T = {T}.")
 
 
 def _lagged_sum(test, x, y, max_lag):
@@ -563,6 +584,12 @@ class CrossDistanceCorrelation(Directed, Unsigned):
     matrices as points, so its implementation is not used. Each series'
     centred distance matrices are computed once per lag, not once per pair.
 
+    With 3 samples the U-centred distance matrices are identically zero, so
+    the unbiased statistic is 0/0 and every lagged term needs ``n >= 4``
+    samples: the SPI is not appropriate
+    (``NotAppropriate``, NaN in a Calculator table) when
+    ``T < max_lag + 4``.
+
     References
     ----------
     .. [1] C. Shen, J. Chung, R. Mehta, T. Xu, J. T. Vogelstein,
@@ -601,10 +628,15 @@ class CrossDistanceCorrelation(Directed, Unsigned):
         return np.sum([stats[0]] + [(n - lag) * stats[lag] / n
                                     for lag in range(1, len(stats))])
 
+    def _require_samples(self, T):
+        _require_lagged_samples(T, self._max_lag, _UNBIASED_DCOV_MIN_SAMPLES,
+                                "The unbiased cross-distance correlation")
+
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         # Source i, target j: the target's present against the source's past.
         z = data.to_numpy()
+        self._require_samples(z.shape[1])
         stats = [_dcorr_centred(self._prepare(z[j], lag)[0],
                                 self._prepare(z[i], lag)[1], False)
                  for lag in range(self._max_lag + 1)]
@@ -614,6 +646,7 @@ class CrossDistanceCorrelation(Directed, Unsigned):
     def multivariate(self, data):
         z = data.to_numpy()
         M, n = z.shape[0], z.shape[1]
+        self._require_samples(n)
         S = [_cached_pairs(self.identifier, M,
                            lambda s, lag=lag: self._prepare(z[s], lag),
                            lambda src, tgt: _dcorr_centred(tgt[0], src[1], False),
@@ -635,7 +668,9 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     `MultiscaleGraphCorrelation`) in place of the distance correlation:
     ``A[i, j] = sum_{l=0}^{max_lag} (T - l)/T * mgc(x_j[l:], x_i[:T - l])``.
     Row = source, column = target; hyppo's ``MGCX`` implementation is not
-    used, for the same reason.
+    used, for the same reason. MGC needs at least 5 samples, so every lagged
+    term does, and the SPI is not appropriate (``NotAppropriate``, NaN in a
+    Calculator table) when ``T < max_lag + 5``.
 
     References
     ----------
@@ -661,6 +696,8 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     def bivariate(self, data, i=None, j=None):
         # As in CrossDistanceCorrelation: source i goes second.
         z = data.to_numpy()
+        _require_lagged_samples(z.shape[1], self._max_lag, _MGC_MIN_SAMPLES,
+                                "The cross-multiscale graph correlation")
         x = z[j]
         y = z[i]
         return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)

@@ -11,7 +11,10 @@ any strictly increasing transform of either series.
 import numpy as np
 from scipy import stats
 
-from pyspi.base import Directed, Undirected, parse_bivariate, parse_multivariate
+from pyspi.base import (
+    Directed, NotAppropriate, Undirected, fill_pairwise, parse_bivariate,
+    parse_multivariate,
+)
 from pyspi.utils import fmt_param, require_int
 
 
@@ -46,6 +49,39 @@ def _event_times(x, quantile):
     onset = above.copy()
     onset[1:] &= ~above[:-1]
     return np.flatnonzero(onset)
+
+
+def _max_exceedances(T, quantile):
+    """
+    Most samples of a length-``T`` series that can exceed its ``quantile``.
+
+    Reached by distinct values; ties at the threshold only lower the count.
+    Evaluated on ``0, ..., T - 1`` so the threshold is computed exactly as
+    `_event_times` computes it.
+    """
+    r = np.arange(T, dtype=float)
+    return int(np.count_nonzero(r > np.quantile(r, quantile)))
+
+
+def _few_events_reason(x, p, quantile, n_events):
+    """Why process ``p`` (series ``x``) has fewer than two events."""
+    x = np.asarray(x, dtype=float).reshape(-1)
+    T = x.size
+    if not np.all(np.isfinite(x)) or np.ptp(x) == 0:
+        return f"process {p} is constant or not finite, so it has no events."
+    threshold = np.quantile(x, quantile)
+    n_above = int(np.count_nonzero(x > threshold))
+    n_max = _max_exceedances(T, quantile)
+    if n_above < 2 <= n_max:
+        return (
+            f"process {p} has {n_events} event(s): ties at its {quantile:g} "
+            f"quantile ({threshold:g}) leave {n_above} of its {T} samples "
+            f"above it, where distinct values leave {n_max}; event "
+            f"synchronisation needs at least two events per series.")
+    return (
+        f"process {p} has {n_events} event(s): its {n_above} samples above "
+        f"its {quantile:g} quantile form {n_events} run(s), and event "
+        f"synchronisation needs at least two separate events per series.")
 
 
 def _half_gaps(t):
@@ -164,8 +200,14 @@ class EventSynchronisation(Directed):
     local gaps, independent series score well above 0. Only upper extremes are
     matched, and a delay registers only when it is shorter than the tolerance.
 
-    A pair is NaN when either series has fewer than two events (no gap, hence
-    no tolerance), which includes a constant series.
+    Each series needs at least two events (one gap, hence a tolerance), so
+    at least two samples above its quantile. A series of ``T`` distinct
+    values has ``T - 1 - floor(quantile (T - 1))`` of them, so the SPI is
+    not appropriate (``NotAppropriate``, NaN in a Calculator table) when
+    that is below 2: ``T < 22`` at quantile 0.95 and ``T < 12`` at 0.9. A
+    pair is not appropriate when either series has fewer than two events,
+    because its exceedances form a single run or because ties at its
+    quantile (as in integer data) leave fewer samples above it.
 
     References
     ----------
@@ -244,34 +286,54 @@ class EventSynchronisation(Directed):
                 data.events = {self._quantile: events}
             return events
 
-    def _pair(self, source, target):
-        """``(Q, q)`` with ``source`` on the row, ``target`` on the column."""
-        (t_x, h_x), (t_y, h_y) = source, target
-        if t_x.size < 2 or t_y.size < 2:
-            return np.nan, np.nan
+    def _require_length(self, T):
+        """Refuse a series too short to hold two samples above the quantile."""
+        n_max = _max_exceedances(T, self._quantile)
+        if n_max < 2:
+            need = T + 1
+            while _max_exceedances(need, self._quantile) < 2:
+                need += 1
+            raise NotAppropriate(
+                f"Event synchronisation needs at least two events per series; "
+                f"at quantile {self._quantile:g} a series of T = {T} samples "
+                f"has at most {n_max} sample(s) above its quantile, so it "
+                f"needs T >= {need}.")
+
+    def _pair(self, data, events, i, j):
+        """``(Q, q)`` with process ``i`` on the row, ``j`` on the column."""
+        z = None
+        for p in (i, j):
+            if events[p][0].size < 2:
+                z = np.atleast_2d(data.to_numpy(squeeze=True)) if z is None else z
+                raise NotAppropriate(_few_events_reason(
+                    z[p], p, self._quantile, events[p][0].size))
+        (t_x, h_x), (t_y, h_y) = events[i], events[j]
         follow, precede = _es_counts(t_x, h_x, t_y, h_y, self._max_delay)
         norm = np.sqrt(float(t_x.size) * float(t_y.size))
         return (follow + precede) / norm, (follow - precede) / norm
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        self._require_length(data.n_observations)
         events = self._events(data)
-        Q, q = self._pair(events[i], events[j])
+        Q, q = self._pair(data, events, i, j)
         return Q if self._statistic == "strength" else q
 
     @parse_multivariate
     def multivariate(self, data):
+        self._require_length(data.n_observations)
         events = self._events(data)
         M = len(events)
         A = np.full((M, M), np.nan)
-        for i in range(M):
-            for j in range(i + 1, M):
-                Q, q = self._pair(events[i], events[j])
-                if self._statistic == "strength":
-                    A[i, j] = A[j, i] = Q
-                else:
-                    # Exact: c(i|j) and c(j|i) swap roles, the norm is shared.
-                    A[i, j], A[j, i] = q, -q
+        strength = self._statistic == "strength"
+        pairs = [(i, j) for i in range(M) for j in range(i + 1, M)]
+        fill_pairwise(self.identifier, A, pairs,
+                      lambda i, j: self._pair(data, events, i, j)[0 if strength else 1],
+                      mirror=True)
+        if not strength:
+            # Exact: c(i|j) and c(j|i) swap roles, the norm is shared.
+            lower = np.tril_indices(M, -1)
+            A[lower] = -A[lower]
         return A
 
 
@@ -305,8 +367,14 @@ class TailDependenceAsymmetry(Undirected):
     copula (lower-tail dependent) gives a negative value, a Gumbel copula a
     positive one.
 
-    A pair is NaN when either series is constant or not finite, or when
-    ``k < 1``. Being rank-based, the statistic is unchanged by any strictly
+    The SPI is not appropriate (``NotAppropriate``, NaN in a Calculator
+    table) when ``k < 1``: ``T < 20`` at level 0.95 and ``T < 10`` at 0.9.
+    A pair is not appropriate when a tail the statistic uses is empty for
+    either series, which happens when its largest (or smallest) value is
+    tied across so many samples that their average rank falls outside the
+    tail, as in integer data, or when either series is constant or not
+    finite.
+    Being rank-based, the statistic is unchanged by any strictly
     increasing transform of either series. It ignores time order
     (contemporaneous).
 
@@ -353,12 +421,64 @@ class TailDependenceAsymmetry(Undirected):
     def issigned(self):
         return self._statistic == "asymmetry"
 
+    def _tail_size(self, T):
+        # floor((1 - u) T), robust to (1 - 0.9) * 1000 = 99.99999999999999.
+        return int(np.floor((1.0 - self._quantile) * T + 1e-9))
+
+    def _require_length(self, T):
+        """Refuse a series too short to hold one sample in each tail."""
+        k = self._tail_size(T)
+        if k < 1:
+            need = T + 1
+            while self._tail_size(need) < 1:
+                need += 1
+            raise NotAppropriate(
+                f"Tail dependence at level u = {self._quantile:g} needs "
+                f"k = floor((1 - u) T) >= 1 samples in each tail, so "
+                f"T >= {need}; got T = {T} (k = {k}).")
+
+    def _empty_tail_reasons(self, Z, procs):
+        """
+        ``{procs[r]: reason}`` for each row ``r`` of ``Z`` with an empty tail.
+
+        Only the tails the statistic uses count. A constant or non-finite row
+        has no ranks, and so no tails.
+        """
+        T = Z.shape[1]
+        k = self._tail_size(T)
+        tails = {"asymmetry": ("upper", "lower"), "upper": ("upper",),
+                 "lower": ("lower",)}[self._statistic]
+        reasons = {}
+        for x, p in zip(Z, procs):
+            if not np.all(np.isfinite(x)) or np.ptp(x) == 0:
+                reasons[p] = f"process {p} is constant or not finite, so it has no tails."
+                continue
+            R = stats.rankdata(x)
+            for tail in tails:
+                upper = tail == "upper"
+                if np.count_nonzero(R > T - k if upper else R <= k) == 0:
+                    edge = x.max() if upper else x.min()
+                    rank = f"above T - k = {T - k}" if upper else f"at most k = {k}"
+                    reasons[p] = (
+                        f"process {p} has no sample in its {tail} tail: its "
+                        f"{'largest' if upper else 'smallest'} value ({edge:g}) "
+                        f"is tied across {np.count_nonzero(x == edge)} of its "
+                        f"{T} samples, so with average ranks none has rank "
+                        f"{rank} (k = {k} at level {self._quantile:g}).")
+                    break
+        return reasons
+
+    @staticmethod
+    def _require_tails(reasons, pair):
+        for p in pair:
+            if p in reasons:
+                raise NotAppropriate(reasons[p])
+
     def _coefficients(self, Z):
         """``(lambda_U, lambda_L)`` as ``M x M`` matrices for the rows of ``Z``."""
         Z = np.atleast_2d(np.asarray(Z, dtype=float))
         M, T = Z.shape
-        # floor((1 - u) T), robust to (1 - 0.9) * 1000 = 99.99999999999999.
-        k = int(np.floor((1.0 - self._quantile) * T + 1e-9))
+        k = self._tail_size(T)
         valid = np.all(np.isfinite(Z), axis=1) & (np.ptp(Z, axis=1) > 0)
         if k < 1:
             valid[:] = False
@@ -387,13 +507,26 @@ class TailDependenceAsymmetry(Undirected):
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
+        self._require_length(data.n_observations)
         z = data.to_numpy(squeeze=True)
-        upper, lower = self._coefficients(np.vstack([z[i], z[j]]))
+        Z = np.vstack([z[i], z[j]])
+        self._require_tails(self._empty_tail_reasons(Z, (i, j)), (i, j))
+        upper, lower = self._coefficients(Z)
         return float(self._select(upper, lower)[0, 1])
 
     @parse_multivariate
     def multivariate(self, data):
-        upper, lower = self._coefficients(data.to_numpy(squeeze=True))
-        A = self._select(upper, lower)
-        np.fill_diagonal(A, np.nan)
-        return A
+        self._require_length(data.n_observations)
+        Z = np.atleast_2d(data.to_numpy(squeeze=True))
+        upper, lower = self._coefficients(Z)
+        S = self._select(upper, lower)
+        M = S.shape[0]
+        A = np.full((M, M), np.nan)
+        reasons = self._empty_tail_reasons(Z, range(M))
+
+        def compute(i, j):
+            self._require_tails(reasons, (i, j))
+            return S[i, j]
+
+        pairs = [(i, j) for i in range(M) for j in range(M) if i != j]
+        return fill_pairwise(self.identifier, A, pairs, compute)

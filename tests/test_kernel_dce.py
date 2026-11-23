@@ -191,13 +191,14 @@ def test_auto_window_of_zero_is_no_window(cls, kw):
 
 @pytest.mark.parametrize("w", [None, 1])
 @pytest.mark.parametrize("cls, kw", KERNEL_CLASSES)
-def test_no_neighbours_anywhere_is_nan(cls, kw, w):
+def test_no_neighbours_anywhere_is_not_appropriate(cls, kw, w):
     """Every joint box is empty once the point itself is excluded, with or
     without a window, so there is no estimate; 0 would read as independence."""
     x = np.vstack([np.arange(12.0), np.arange(12.0)[::-1] ** 2])
     data = Data(x, dim_order="ps", zscore=False)
     spi = cls(estimator="kernel", kernel_width=0.01, dyn_corr_excl=w, **kw)
-    assert np.isnan(spi.bivariate(data, i=0, j=1))
+    with pytest.raises(NotAppropriate, match="every joint count is zero"):
+        spi.bivariate(data, i=0, j=1)
 
 
 @pytest.mark.parametrize("cls, kw", KERNEL_CLASSES)

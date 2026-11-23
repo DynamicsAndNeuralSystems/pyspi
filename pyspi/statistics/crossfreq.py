@@ -88,6 +88,21 @@ def _bandpass(band):
 
 
 @functools.lru_cache(maxsize=None)
+def _pad_length(band):
+    """
+    Samples ``scipy.signal.sosfiltfilt`` pads at each end of the series.
+
+    It is scipy's default, ``3 * ntaps`` with ``ntaps = 2 * n_sections + 1``
+    less the trailing zero coefficients, and the series must be longer than
+    this.
+    """
+    sos = _bandpass(band)
+    ntaps = 2 * sos.shape[0] + 1
+    ntaps -= min(int((sos[:, 2] == 0).sum()), int((sos[:, 5] == 0).sum()))
+    return 3 * ntaps
+
+
+@functools.lru_cache(maxsize=None)
 def _filter_length(band):
     """
     Samples holding 99% of the energy of the one-pass impulse response.
@@ -156,7 +171,10 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     holding 99% of the impulse response's energy): 200 samples for the default
     bands. On a record shorter than ``8 L`` the edge is capped at ``T // 4``
     samples, with a warning. ``edge_samples(T)`` returns the number discarded
-    at each end.
+    at each end. The forward-backward filter pads each end of the series by
+    ``3 * (2 * n_sections + 1)`` samples, 27 for an order-4 band-pass, so a
+    series of ``T <= 27`` is not appropriate (``NotAppropriate``, NaN in a
+    Calculator table).
 
     With ``n`` retained samples, the raw statistics are:
 
@@ -165,8 +183,9 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
       in bin ``k``, ``P_k = m_k / sum_l m_l``, and
       ``MI = (log N - H(P)) / log N`` with ``H(P) = -sum_k P_k log P_k`` and
       ``N = n_bins``: the Kullback-Leibler divergence of ``P`` from uniform,
-      normalised by its maximum. NaN when the source phase leaves a bin
-      empty (a record too short for the phase band).
+      normalised by its maximum. Not appropriate when the source phase
+      leaves a bin empty (a record too short for the phase band), and for
+      every pair when fewer than ``n_bins`` samples are retained.
     - ``'mvl'``, the normalised mean vector length (direct PAC estimate) [2]_:
       ``|sum_t A_t exp(i phi_t)| / (sqrt(n) sqrt(sum_t A_t^2))``, at most 1.
       Unlike the raw mean vector length [3]_, it does not scale with the
@@ -311,6 +330,13 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
     def _window(self, data):
         """Source phase and target amplitude, ``(M, n)`` each, edges discarded."""
         T = data.n_observations
+        pad = max(_pad_length(self._phase_band), _pad_length(self._amp_band))
+        if T <= pad:
+            raise NotAppropriate(
+                f"The zero-phase band-pass filters pad {pad} samples at each "
+                f"end of the series (scipy's sosfiltfilt default for an "
+                f"order-{_ORDER} Butterworth band-pass), so they need "
+                f"T > {pad}; got T = {T}.")
         edge = self.edge_samples(T)
         if edge < self.edge:
             warnings.warn(
@@ -413,15 +439,26 @@ class PhaseAmplitudeCoupling(Directed, Unsigned):
 
         return compute
 
+    def _require_bins_fillable(self, data, n):
+        """Refuse the modulation index when the window cannot fill every phase bin."""
+        if self._statistic == "mi" and n < self._n_bins:
+            T = data.n_observations
+            raise NotAppropriate(
+                f"The modulation index needs at least n_bins = {self._n_bins} "
+                f"retained samples to occupy every phase bin; T = {T} retains "
+                f"{n} after discarding {self.edge_samples(T)} at each end.")
+
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         phase, amp = self._window(data)
+        self._require_bins_fillable(data, phase.shape[1])
         return self._pair_function(phase[[i]], amp[[j]])(0, 0)
 
     @parse_multivariate
     def multivariate(self, data):
         # A pair with an empty phase bin is NaN.
         phase, amp = self._window(data)
+        self._require_bins_fillable(data, phase.shape[1])
         M = phase.shape[0]
         A = np.full((M, M), np.nan)
         pairs = [(i, j) for i in range(M) for j in range(M) if i != j]

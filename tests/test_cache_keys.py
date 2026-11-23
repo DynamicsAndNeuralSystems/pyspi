@@ -16,6 +16,7 @@ predecessor.
 import numpy as np
 import pytest
 
+from pyspi.base import NotAppropriate
 from pyspi.data import Data
 from pyspi.statistics.spectral import CoherenceMagnitude
 
@@ -124,9 +125,13 @@ def test_cache_sharing_never_changes_a_value():
         if getattr(type(spi), "_cache_namespace", None) is None:
             continue
         np.random.seed(42)
-        isolated = np.asarray(spi.multivariate(Data(data=fixture, dim_order="sp")),
-                              dtype=float)
         got = shared.table[identifier].to_numpy(dtype=float)
+        try:
+            isolated = np.asarray(
+                spi.multivariate(Data(data=fixture, dim_order="sp")), dtype=float)
+        except NotAppropriate:
+            # Not appropriate for every pair: the Calculator stores NaN.
+            isolated = np.full(got.shape, np.nan)
         # Off-diagonal only: `_parallel.execute_spi` NaNs the diagonal on the way
         # into the table, and several `multivariate` implementations do not.
         off = ~np.eye(got.shape[0], dtype=bool)
