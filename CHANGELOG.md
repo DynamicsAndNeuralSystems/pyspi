@@ -214,7 +214,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Parametric `sgc` fits an order `p` model only to a series of at least `max(20, 3p + 1)` observations: more observations than each equation has coefficients, and at least 20, below which the estimate does not separate coupled from uncoupled simulated pairs.
   So `sgc_parametric_*_order-None` and `sgc_parametric_*_order-1` are not appropriate below 20 observations and `sgc_parametric_*_order-20` below 61.
   Automatic order selection searches orders up to `min(max_order, (T - 1) // 3)` on `T` observations, and is not appropriate when BIC is still improving at the last of them.
-  Multitaper `psi` is refused unless its band holds two groups of frequencies one multitaper bandwidth wide (12 FFT bins at the default `NW`).
+  Multitaper `psi` needs a band at least two multitaper bandwidths wide, `T >= 4 NW fs / (fmax - fmin)`: at least 24 observations for `psi_multitaper_mean_fs-1_fmin-0_fmax-0-5` and 48 for the two half bands.
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
   Neither warns now; for spectral GC `fmin=0` means the lowest positive frequency, 1e-5, as its identifier states.
@@ -313,12 +313,13 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.
 - **Multitaper phase slope index follows Nolte et al. (2008), applies its band, and gains power with the length of the series.**
   `psi_multitaper_mean_*` is `Im sum_k conj(C_k) C_{k+1}` over neighbouring groups of in-band frequencies, where `C_k` is the coherency of group `k`'s mean cross- and auto-spectra.
-  The groups are at least `resolution` wide (a new parameter, default `fs / 50`, 0.02 cycles per sample in the bundled SPIs) and never narrower than one multitaper bandwidth, so each averages more spectral estimates as the series lengthens.
-  On a lagged pair the index stays about the same as `T` grows while its spread between independent series falls about as `1 / T`.
-  Its sign is reliable for lags below about `fs / (2 resolution)` samples (25 in the bundled SPIs; `T / 12` on series shorter than 300 samples), and it is largest near half that lag.
+  The groups have a target width of `0.4 fs / sqrt(T)` for a series of `T` observations, never less than one multitaper bandwidth `2 NW fs / T`; the band is cut at fixed frequencies into `K` and `K + 1` equal groups, `K = floor(band width / target)`, and the two sums are weighted by the fractional part, so the value changes continuously with `T`.
+  Each group averages about `0.4 sqrt(T)` frequency bins, so the spread of the index between independent series falls as `T` grows, and the index of a short lag approaches the band integral of the coherence-weighted phase slope.
+  The sign is right for lags below about `1.25 sqrt(T)` samples (19 at `T = 250`, 39 at 1000, 79 at 4000, 158 at 16000; `T / 12` below 225 observations).
+  **Between that limit and twice it the index has the opposite sign**, so a process that leads by such a lag reads as following; beyond twice the limit the index is small and its sign alternates.
+  The new `resolution` parameter fixes the target width in the units of `fs` (the sign is then right below about `fs / (2 resolution)` samples) and is appended to the identifier as `_res-<value>`, with dots written as dashes; the default, `None`, adds nothing.
   2.x took spectral-connectivity's sum over all pairs of thinned frequencies, which is not the published index, and its band variants all returned the full-band value.
   It stays unnormalised (the published jackknife needs epochs).
-  A `resolution` other than `fs / 50` is appended to the identifier as `_res-<value>`, with dots written as dashes.
   **The three `psi_multitaper_mean_*` values change.**
 - **No SPI reads the global NumPy RNG.**
   tslearn's subgradient barycenter took its update order from the global stream, and `MinCovDet` and `EllipticEnvelope` search from random subsets of the observations, so their values changed with the caller's seed and with which SPIs ran earlier.
@@ -625,5 +626,5 @@ Values for the directed spectral classes listed under **Fixed** are also transpo
 | `dcoh_*` | 6 | Closed frequency band. |
 | `sgc_parametric_*` | 18 | Yule-Walker VAR fit (autocovariance about the mean and divided by `T`, where 2.0.2 divided by `T - k`), which moves the causality spectrum by up to about 1.5% at `T = 500`, 5-10% at `T = 100` and more on shorter series; and corrected frequency labels. |
 | `phase`, `icoh`, `plv`, `pli`, `wpli`, `dspli` `_multitaper_mean_*`; `plv_multitaper_max_*` | 21 | Real-valued 0 Hz and Nyquist bins left out of the band (`dspli` also: taper-pair sign products). |
-| `psi_multitaper_mean_*` | 3 | Nolte's sum over neighbouring groups of frequencies at least 0.02 cycles per sample wide (see **Fixed**); the half bands also: closed band less the real-valued bins. |
+| `psi_multitaper_mean_*` | 3 | Nolte's sum over neighbouring groups of frequencies `0.4 / sqrt(T)` cycles per sample wide (see **Fixed**); the half bands also: closed band less the real-valued bins. |
 | `gpfit_DotProduct`, `gpfit_RBF` | 2 | Leave-one-out MSE. |
