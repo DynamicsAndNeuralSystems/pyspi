@@ -23,7 +23,7 @@ from pyspi.base import (
     parse_multivariate,
 )
 from pyspi.lib.ids.dependence import compute_IDS
-from pyspi.utils import fmt_param, singular_covariance_error
+from pyspi.utils import SINGULAR_RCOND, fmt_param, singular_covariance_error
 
 
 def _johansen_residuals(endog, det_order, k_ar_diff):
@@ -83,13 +83,21 @@ def _johansen(endog, det_order, k_ar_diff, pair):
         if err is not None:
             return {"refused": str(err)}
     stats = coint_johansen(endog, det_order=det_order, k_ar_diff=k_ar_diff)
+    # numpy's `eig` returns a complex array whenever it finds a complex
+    # pair, and on some builds for real eigenvalues too; statsmodels keeps
+    # the real part, so an imaginary part at rounding level is accepted.
     eig = np.asarray(stats.eig)
-    if not (np.isrealobj(eig) and np.isfinite(eig).all()
-            and (eig >= 0).all() and (eig < 1).all()):
+    real = np.real(eig)
+    if not (np.isfinite(eig).all()
+            and (np.abs(np.imag(eig)) <= SINGULAR_RCOND).all()
+            and (real >= 0).all() and (real < 1).all()):
+        shown = [complex(round(e.real, 6), round(e.imag, 6))
+                 if np.iscomplexobj(eig) and e.imag else round(float(e.real), 6)
+                 for e in eig]
         return {"refused": (
             f"{owner}: processes {i} and {j} are linearly dependent: the "
-            f"test's eigenvalues {np.round(eig, 6).tolist()} are not all in "
-            f"[0, 1), so -T log(1 - lambda) is not a valid statistic.")}
+            f"test's eigenvalues {shown} are not all real and in [0, 1), so "
+            f"-T log(1 - lambda) is not a valid statistic.")}
     return {"max_eig_stat": stats.max_eig_stat[0],
             "trace_stat": stats.trace_stat[0]}
 
