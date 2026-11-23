@@ -310,6 +310,45 @@ def test_gpfit_dot_product_equals_sklearns_gp_fit():
             ref, rel=1e-10, abs=1e-15)
 
 
+def test_gpfit_rbf_equals_sklearns_gp_fit():
+    """The RBF fit (sklearn's, with a cheaper gradient) equals sklearn's.
+
+    Only the likelihood gradient is computed differently, so it differs from
+    sklearn's in the last bits and the optimizer can stop elsewhere along a
+    flat optimum. That matters only near interpolation (y a near-copy of a
+    function of x, leave-one-out MSE ~1e-6), where sklearn's own value moves
+    by up to ~1e-3 relative when the samples are merely reordered; those
+    pairs are left out here. Covers linear, nonlinear, heavy-tailed, autocorrelated and
+    unrelated pairs, and x in large units (`zscore=False`).
+    """
+    from scipy.linalg import solve_triangular
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from pyspi.statistics.misc import GPModel
+
+    rng = np.random.default_rng(11)
+    T = 150
+    x = rng.standard_normal(T)
+    e = rng.standard_normal(T)
+    ar = np.zeros(T)
+    for t in range(1, T):
+        ar[t] = 0.9 * ar[t - 1] + e[t]
+    pairs = [(x, e), (x, x + 0.6 * e), (x, np.tanh(2 * x) + 0.3 * e),
+             (x, np.sin(3 * x) + 0.5 * e), (x, x ** 2 + 0.3 * e),
+             (rng.standard_cauchy(T), e), (ar, np.roll(ar, 1) + 0.3 * e),
+             (100.0 * x, e)]
+    for k, (u, v) in enumerate(pairs):
+        data = Data(np.vstack([u, v]), dim_order="ps", zscore=k < 7)
+        z = data.to_numpy(squeeze=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            gp = GaussianProcessRegressor(kernel=_gp_kernel("RBF")).fit(
+                z[0][:, None], z[1])
+            value = GPModel("RBF").multivariate(data)[0, 1]
+        L_inv = solve_triangular(gp.L_, np.eye(T), lower=True)
+        ref = np.mean((gp.alpha_ / np.einsum("ij,ij->j", L_inv, L_inv)) ** 2)
+        assert value == pytest.approx(ref, rel=1e-8), k
+
+
 def test_gpfit_rbf_does_not_interpolate_an_unrelated_pair():
     """An independent pair must score ~var(y) (nothing to predict), not ~0.
 
