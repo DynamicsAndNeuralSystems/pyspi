@@ -341,6 +341,64 @@ class LinearModel(Directed, Unsigned):
         return mean_squared_error(y_predict, np.ravel(z[j]))
 
 
+def _dot_product_gp_loo_mse(kernel, X, y, alpha=1e-10):
+    """
+    ``GPModel`` with ``C() + W() + DotProduct()``, without forming the T x T kernel.
+
+    The fit is ``GaussianProcessRegressor(kernel).fit(X, y)`` (jitter
+    ``alpha``, L-BFGS-B from ``kernel.theta`` within ``kernel.bounds``, no
+    restarts): the same objective, gradient, start, bounds and
+    ``scipy.optimize.minimize`` call. With ``s = noise + alpha`` and
+    ``a = c + sigma_0^2``, the kernel matrix is ``K = s I + U U'``,
+    ``U = [sqrt(a) 1, X]``, a low-rank update of a multiple of the identity.
+    With ``[1, X] = Q R`` (thin QR, once) and the SVD ``R diag(sqrt(a), 1, ..)
+    = W S V'``, ``K^-1 = (I - QQ')/s + QW (S^2 + s)^-1 W'Q'``, so the log
+    marginal likelihood and its gradient cost O(r^3), r = 1 + X's columns,
+    per evaluation instead of sklearn's O(T^3), and the leave-one-out
+    residuals ``[K^-1 y]_t / [K^-1]_tt`` cost O(T r^2).
+    """
+    T = y.shape[0]
+    Q, R0 = np.linalg.qr(np.column_stack([np.ones(T), X]))
+    r = Q.shape[1]
+    V = np.column_stack([y, np.ones(T)])
+    B = Q.T @ V                      # components in span(Q)
+    P = V - Q @ B                    # and orthogonal to it
+    G = P.T @ P
+
+    def parts(theta):
+        c, noise, sigma_0 = np.exp(theta)
+        s = noise + alpha
+        R = R0.copy()
+        R[:, 0] *= np.sqrt(c + sigma_0 ** 2)
+        W, S, _ = np.linalg.svd(R)
+        return c, noise, sigma_0, s, W, S ** 2
+
+    def neg_lml(theta):
+        c, noise, sigma_0, s, W, lam = parts(theta)
+        inv = 1.0 / (lam + s)
+        Bw = W.T @ B
+        quad = G / s + (Bw * inv[:, None]).T @ Bw     # V' K^-1 V
+        y_k_y, one_k_y, one_k_one = quad[0, 0], quad[1, 0], quad[1, 1]
+        a_a = G[0, 0] / s ** 2 + np.sum((Bw[:, 0] * inv) ** 2)   # y' K^-2 y
+        tr_k_inv = (T - r) / s + inv.sum()
+        logdet = (T - r) * np.log(s) + np.log(lam + s).sum()
+        lml = -0.5 * y_k_y - 0.5 * logdet - 0.5 * T * np.log(2 * np.pi)
+        # 0.5 tr((K^-1 y y' K^-1 - K^-1) dK/dtheta) for the log-parameters.
+        ones = one_k_y ** 2 - one_k_one
+        grad = 0.5 * np.array([c * ones, noise * (a_a - tr_k_inv),
+                               2 * sigma_0 ** 2 * ones])
+        return -lml, -grad
+
+    res = optimize.minimize(neg_lml, kernel.theta, method="L-BFGS-B",
+                            jac=True, bounds=kernel.bounds)
+    _, _, _, s, W, lam = parts(res.x)
+    QW = Q @ W
+    inv = 1.0 / (lam + s)
+    k_inv_y = P[:, 0] / s + QW @ (inv * (W.T @ B[:, 0]))
+    k_inv_diag = (1.0 - np.sum(Q ** 2, axis=1)) / s + (QW ** 2) @ inv
+    return float(np.mean((k_inv_y / k_inv_diag) ** 2))
+
+
 class GPModel(Directed, Unsigned):
     """
     Gaussian process regression of the column on the row [1]_.
@@ -354,6 +412,11 @@ class GPModel(Directed, Unsigned):
     leave-one-out at the fitted hyperparameters ([1]_, eq. 5.12), because the
     RBF fit can interpolate the data and drive the in-sample error to zero on
     unrelated pairs. Directed and unsigned.
+
+    With ``DotProduct`` the kernel matrix is a multiple of the identity plus
+    a rank-2 term, so the same fit (objective, start, bounds and optimizer
+    as sklearn's) is done in O(T) rather than O(T^3); it equals sklearn's to
+    rounding (`_dot_product_gp_loo_mse`).
 
     References
     ----------
@@ -379,10 +442,13 @@ class GPModel(Directed, Unsigned):
             self.labels = [l for l in self.labels if l != "nonlinear"] + ["linear"]
         self._kernel = kernels.ConstantKernel() + kernels.WhiteKernel()
         self._kernel += getattr(kernels, kernel)()
+        self._dot_product = kernel == "DotProduct"
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         z = data.to_numpy()
+        if self._dot_product:
+            return _dot_product_gp_loo_mse(self._kernel, z[i], np.ravel(z[j]))
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")

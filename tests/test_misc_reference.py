@@ -281,6 +281,35 @@ def test_gpfit_is_the_leave_one_out_mse_of_the_fitted_gp(kernel):
         np.mean(np.square(resid)), rel=1e-8)
 
 
+def test_gpfit_dot_product_equals_sklearns_gp_fit():
+    """The O(T) DotProduct fit equals `GaussianProcessRegressor`'s, to rounding.
+
+    Reference: sklearn's fit of the same kernel and its leave-one-out
+    residuals from the Cholesky factor, as `GPModel` computes them for
+    other kernels. Covers linear, nonlinear, heavy-tailed, near-deterministic
+    and unrelated pairs.
+    """
+    from scipy.linalg import solve_triangular
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from pyspi.statistics.misc import GPModel
+
+    rng = np.random.default_rng(7)
+    x = rng.standard_normal(200)
+    e = rng.standard_normal(200)
+    for y in (e, x + 0.6 * e, np.tanh(2 * x) + 0.3 * e, x ** 2,
+              rng.standard_cauchy(200), x + 1e-3 * e):
+        data = Data(np.vstack([x, y]), dim_order="ps")
+        z = data.to_numpy(squeeze=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            gp = GaussianProcessRegressor(kernel=_gp_kernel("DotProduct")).fit(
+                z[0][:, None], z[1])
+        L_inv = solve_triangular(gp.L_, np.eye(200), lower=True)
+        ref = np.mean((gp.alpha_ / np.einsum("ij,ij->j", L_inv, L_inv)) ** 2)
+        assert GPModel("DotProduct").multivariate(data)[0, 1] == pytest.approx(
+            ref, rel=1e-10, abs=1e-15)
+
+
 def test_gpfit_rbf_does_not_interpolate_an_unrelated_pair():
     """An independent pair must score ~var(y) (nothing to predict), not ~0.
 

@@ -374,6 +374,9 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 
 **Faster, with identical values.**
 
+- **`gpfit_DotProduct` in O(T).**
+  Its kernel matrix is a multiple of the identity plus a rank-2 term, so pyspi maximises the same marginal likelihood as scikit-learn's `GaussianProcessRegressor` (same start, bounds and L-BFGS-B call) from a thin QR of the predictor, without forming the T x T matrix.
+  About 400x faster at T=1000 (0.43 s to 1 ms per pair), growing with T; values equal scikit-learn's to rounding (at most 4e-14 apart).
 - **Distance correlation and the Kraskov estimators.**
   `dcorr` and `dcorr_biased` evaluate only the retained order of each pair (2.0x at M=8, T=5000).
   Kraskov MI, time-lagged MI and transfer entropy count marginal neighbours with one batched tree query, less the temporally excluded neighbours, in O(N) memory (3-10x at T=5000, more with `dyn_corr_excl`).
