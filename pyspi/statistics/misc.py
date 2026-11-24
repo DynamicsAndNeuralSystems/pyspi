@@ -487,12 +487,17 @@ class GPModel(Directed, Unsigned):
 
     With ``DotProduct`` the kernel matrix is a multiple of the identity plus
     a rank-2 term, so the same fit (objective, start, bounds and optimizer
-    as sklearn's) is done in O(T) rather than O(T^3); it equals sklearn's to
-    rounding (`_dot_product_gp_loo_mse`). With ``RBF`` the fit is sklearn's
-    with a cheaper gradient (`_rbf_gp_loo_mse`), about 2.5 times faster; it
-    agrees with sklearn to rounding except on near-interpolating pairs,
-    where it differs by about as much as sklearn's own value does when the
-    samples are reordered.
+    as sklearn's) is done in O(T) rather than O(T^3)
+    (`_dot_product_gp_loo_mse`). On z-scored data its value agrees with
+    sklearn's to about 1e-12 relative on most pairs, and to about 1e-6 on
+    pairs it fits almost exactly, whose values are near zero. Without
+    z-scoring, on badly scaled data, it differs from sklearn's by up to about
+    10% and has a value where sklearn's Cholesky factorisation fails; there
+    the closed form is the more accurate, since it never forms the
+    ill-conditioned T x T matrix. With ``RBF`` the fit is sklearn's with a
+    cheaper gradient (`_rbf_gp_loo_mse`); its value agrees with sklearn's to
+    about 1e-12 relative on most pairs, and to about 5e-5 on
+    near-interpolating pairs, where the likelihood is flat near its optimum.
 
     References
     ----------
