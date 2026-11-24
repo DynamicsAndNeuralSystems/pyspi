@@ -171,8 +171,8 @@ def _itakura_dtw(x, y):
 # ---------------------------------------------------------------------------
 # Distance correlation from per-series centred distance matrices
 # ---------------------------------------------------------------------------
-# Upper bound on the centred matrices one SPI call holds at a time; 2 GB
-# holds every series at M=16, T=4000. PYSPI_DCORR_CACHE_BYTES overrides it.
+# Cap on the centred matrices one `_cached_pairs` call holds (2 GiB), per SPI,
+# per worker process: n_jobs workers can hold n_jobs times it in total.
 _DCORR_CACHE_BYTES = int(os.getenv("PYSPI_DCORR_CACHE_BYTES", str(2**31)))
 
 
@@ -291,6 +291,15 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
     estimate of the squared statistic and can be slightly negative under
     independence; with ``biased=True`` it is the square root of the
     V-statistic ratio, in ``[0, 1]``. The two are on different scales.
+
+    Each series' centred ``T x T`` matrix (``8 T^2`` bytes) is computed once
+    and shared across its pairs while all ``M`` fit in 2 GiB; beyond that,
+    some series are centred more than once so that at most 2 GiB is held.
+    The 2 GiB applies per SPI, per worker process, and is released when the
+    SPI returns, so ``n_jobs`` workers running such SPIs at once can hold up
+    to ``n_jobs`` times it. The environment variable
+    ``PYSPI_DCORR_CACHE_BYTES`` (a whole number of bytes, read once per
+    process) changes the 2 GiB.
 
     References
     ----------
@@ -464,6 +473,15 @@ class DistanceCorrelation(Undirected, Unsigned):
     on different scales. Values match hyppo's ``Dcorr`` (0.5.2) statistic.
     Undirected and unsigned.
 
+    Each series' centred ``T x T`` matrix (``8 T^2`` bytes) is computed once
+    and shared across its pairs while all ``M`` fit in 2 GiB; beyond that,
+    some series are centred more than once so that at most 2 GiB is held.
+    The 2 GiB applies per SPI, per worker process, and is released when the
+    SPI returns, so ``n_jobs`` workers running such SPIs at once can hold up
+    to ``n_jobs`` times it. The environment variable
+    ``PYSPI_DCORR_CACHE_BYTES`` (a whole number of bytes, read once per
+    process) changes the 2 GiB.
+
     References
     ----------
     .. [1] G. J. Székely, M. L. Rizzo, N. K. Bakirov, "Measuring and testing
@@ -593,6 +611,14 @@ class CrossDistanceCorrelation(Directed, Unsigned):
     samples: the SPI is not appropriate
     (``NotAppropriate``, NaN in a Calculator table) when
     ``T < max_lag + 4``.
+
+    The centred matrices of one lag (``16 (T - l)^2`` bytes per series) are
+    held while all ``M`` fit in 2 GiB; beyond that, some series are centred
+    more than once so that at most 2 GiB is held. The 2 GiB applies per SPI
+    and lag, per worker process, and is released when the lag is done, so
+    ``n_jobs`` workers running such SPIs at once can hold up to ``n_jobs``
+    times it. The environment variable ``PYSPI_DCORR_CACHE_BYTES`` (a whole
+    number of bytes, read once per process) changes the 2 GiB.
 
     References
     ----------

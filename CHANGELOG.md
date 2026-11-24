@@ -385,8 +385,12 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   At M=16, T=800 the SPI takes 0.05 s instead of 0.23 s, and 0.14 s instead of 1.8 s in a new process.
   `lcss_constraint-itakura` uses the same mask.
 - **The distance-correlation family centres each series once.**
-  `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 2 GB of matrices at a time (`PYSPI_DCORR_CACHE_BYTES` changes this).
-  2 GB holds every series at M=16, T=4000, so each is centred once; a larger dataset centres some series more than once rather than holding more.
+  `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 2 GiB of matrices at a time.
+  The cap applies per SPI, per worker process (for `dcorrx`, per lag), and the memory is released when the SPI returns.
+  With `n_jobs` workers running these SPIs at once, the total can reach `n_jobs` times the cap: `dcorr`, `dcorr_biased`, `hsic`, `hsic_biased`, `dcorrx_maxlag-1` and `dcorrx_maxlag-10` at M=16, T=4000 with 6 workers peak at 11.7 GB in total, against 4.9 GB with a 256 MiB cap.
+  The environment variable `PYSPI_DCORR_CACHE_BYTES` (a whole number of bytes) changes the cap.
+  2 GiB holds every series of `dcorr` and `hsic` at M=16, T=4000, so each is centred once; a larger dataset centres some series more than once rather than holding more.
+  Against a 256 MiB cap, in one process at M=16, T=4000, `hsic_biased` takes 32.8 s instead of 200.6 s, `dcorr` 19.0 s instead of 90.1 s and `hsic` 132 s instead of 537 s; `dcorrx_maxlag-1` at M=8, T=4000 takes 23.6 s instead of 73.2 s.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
   pyspi applies hyppo's final step itself, with the same values as hyppo 0.5.2.
 - `hhg` in O(n^2 log n) (about 9x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
