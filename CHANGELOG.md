@@ -231,7 +231,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   It mixed normalisations (a series against itself gave 1.11 at T = 10), correlated the raw series while dividing by demeaned ones, centred its lag window on lag +1, and set a significance band twice too wide that scaled with the lag window.
   It now uses the biased normalisation (zero lag is Pearson's r), demeaned series, a symmetric window and the amplitude cut `|r(l)| > 1.96/sqrt(T)`, which `sigonly` applies; this is not a significance test.
   `LagResolvedCorrelation` reads the same profile.
-- **`softdtw_constraint-*` ignored its constraint** and equalled plain `softdtw`; the band is now passed to tslearn.
+- **`softdtw_constraint-*` ignored its constraint** and equalled plain `softdtw`; the soft-DTW recursion is now restricted to its band.
 - **`lcss_constraint-sakoe-chiba` and `lcss_constraint-itakura` were plain `lcss`**, because tslearn before 0.10 ignored `global_constraint` in `lcss` (tslearn #526).
   pyspi now computes constrained LCSS itself, with tslearn's band masks restricting which pairs may match but not where the recursion may pass (Vlachos et al. 2002); plain `lcss` still calls tslearn.
   **Both constrained values change**, by up to 0.4 for Sakoe-Chiba and 0.09 for Itakura.
@@ -428,6 +428,11 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `lcss_constraint-sakoe-chiba` and `lcss_constraint-itakura` run the LCSS recursion over each row's band only, in a numba kernel cached on disk, with O(T) memory instead of a T x T match matrix; values are bit-identical.
   At M=16, `lcss_constraint-sakoe-chiba` takes 0.003 s instead of 1.4-2.4 s at T=1000, and 0.008 s instead of about 15 s at T=4000.
   `lcss_constraint-itakura` takes 0.12 s instead of 1.7-2.6 s at T=1000, and 1.9 s instead of about 18 s at T=4000.
+- **Constrained soft-DTW.**
+  `softdtw_constraint-sakoe-chiba` and `softdtw_constraint-itakura` run tslearn's soft-DTW recursion over each row's admitted columns only, in a numba kernel cached on disk, without tslearn's T x T mask and cost matrix; values are bit-identical to tslearn's.
+  A series with several replications is passed to tslearn.
+  At M=16, Sakoe-Chiba takes 0.015 s instead of 0.47 s at T=1000, and 0.058 s instead of 2.9-8.5 s at T=4000.
+  Itakura takes 2.00 s instead of 2.64 s at T=1000, and 31.8 s instead of about 36-42 s at T=4000: its cost is the soft minimum over the band, which tslearn already evaluated only inside the band.
 - **The distance-correlation family centres each series once.**
   `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
