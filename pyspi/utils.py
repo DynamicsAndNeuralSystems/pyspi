@@ -595,17 +595,29 @@ def inspect_calc_results(calc):
         print(single_line_60 + "\n")
 
 
+# Significant digits of a float in an SPI identifier: enough to keep any two
+# parameter values a person would choose apart, few enough to drop the
+# rounding error of floating-point arithmetic (about 1e-16 relative).
+_IDENTIFIER_DIGITS = 12
+
+
 def fmt_param(x):
     """
-    Format a parameter value for an SPI identifier, losslessly.
+    Format a parameter value for an SPI identifier.
 
-    Identifiers name table columns and checkpoint files, so two different
-    values must never format alike, and two equal ones must always format
-    alike. A numpy scalar is formatted as the equal Python number, so
-    ``np.float64(0.25)`` gives ``0.25`` and ``np.True_`` gives ``True``. An
-    integral float is formatted as the integer, so ``1.0`` gives ``1``, as
-    ``1`` does. Any other float is formatted with ``repr``, the shortest
-    string that round-trips; anything else with ``str``.
+    Identifiers name table columns and checkpoint files, so two equal values
+    must always format alike, and two values that differ must format apart.
+    A numpy scalar is formatted as the equal Python number, so
+    ``np.float64(0.25)`` gives ``0.25`` and ``np.True_`` gives ``True``. A
+    float is first rounded to 12 significant digits, so that a value
+    computed in Python carries no rounding error into the identifier:
+    ``np.arange(0.1, 0.31, 0.1)[2]`` (0.30000000000000004) gives ``0.3``, as
+    ``0.3`` written in a config does. Two floats that agree to 12
+    significant digits therefore share an identifier, and a config holding
+    both is refused as a duplicate when it is loaded. A float that is then
+    integral is formatted as the integer, so ``1.0`` gives ``1``, as ``1``
+    does; any other float with ``repr`` of the rounded value, and anything
+    else with ``str``.
 
     Parameters
     ----------
@@ -626,6 +638,7 @@ def fmt_param(x):
     if isinstance(x, float):
         if x != x or x in (float("inf"), float("-inf")):
             return str(x)
+        x = float(f"{x:.{_IDENTIFIER_DIGITS}g}")
         if x.is_integer():
             return str(int(x))
         return repr(x)

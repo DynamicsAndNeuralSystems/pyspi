@@ -90,6 +90,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Spectral caches ignored `fs`**, so two SPIs differing only in sampling rate could share a cached spectrum.
 - **Equal parameters give equal SPI identifiers.**
   A numpy scalar names the same SPI as the equal Python number (`fmax=np.float64(0.25)` and `fmax=0.25` both give `_fmax-0-25`), and an integral float the same as the integer (`fs=1.0` and `fs=1` both give `_fs-1`), so a config built in Python and the same config in YAML share table columns and checkpoints.
+  A float is rounded to 12 significant digits in the identifier, so a value computed in Python names the same SPI as the number written in YAML (`fmax=np.arange(0.1, 0.31, 0.1)[2]`, which is 0.30000000000000004, gives `_fmax-0-3`), and a float's identifier has a bounded length.
+  Two values that agree to 12 significant digits name one SPI, so a config that holds both is refused as a duplicate when it is loaded.
   No bundled identifier changes.
 - **Importing pyspi reseeded NumPy's global RNG** (`pyspi.lib.ids` called `np.random.seed(1717)` at import), overriding the caller's seed.
 - **Process names** are coerced to `str` and must be unique; `Data(procnames=...)` was validated and then discarded, so custom names never reached the results table.
