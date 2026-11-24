@@ -957,6 +957,39 @@ def test_constrained_soft_dtw_is_bitwise_tslearns(constraint, T):
             assert spi.bivariate(data, i=i, j=j) == ref
 
 
+def test_constrained_soft_dtw_with_replications_is_tslearns(tmp_path):
+    """With several replications each series is multivariate: tslearn's value.
+
+    Through a Calculator, both constraints give exactly
+    `tslearn.metrics.soft_dtw` on the (T, R) series, with no SPI error.
+    """
+    import tslearn.metrics
+    from pyspi.calculator import Calculator
+
+    config = tmp_path / "softdtw.yaml"
+    config.write_text(
+        ".statistics.distance:\n"
+        "  SoftDynamicTimeWarping:\n"
+        "    labels: [distance]\n"
+        "    configs:\n"
+        "      - global_constraint: sakoe_chiba\n"
+        "      - global_constraint: itakura\n"
+    )
+    rng = np.random.default_rng(3)
+    data = Data(data=rng.standard_normal((3, 50, 2)), dim_order="psr")
+    calc = Calculator(dataset=data, config=str(config))
+    calc.compute(n_jobs=1)
+
+    assert not calc.errors
+    x = data.to_numpy(squeeze=True)
+    for constraint in ("sakoe_chiba", "itakura"):
+        A = calc.table[f"softdtw_constraint-{constraint.replace('_', '-')}"].to_numpy()
+        for i in range(3):
+            for j in range(i + 1, 3):
+                ref = tslearn.metrics.soft_dtw(x[i], x[j], global_constraint=constraint)
+                assert A[i, j] == A[j, i] == ref
+
+
 def _lcss_cell_by_cell(x, y, band, eps=1.0):
     """Textbook constrained LCSS: the band limits matches, not the recursion."""
     A = np.zeros((len(x) + 1, len(y) + 1))

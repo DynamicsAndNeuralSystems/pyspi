@@ -1091,8 +1091,9 @@ class SoftDynamicTimeWarping(TimeWarping):
     of [2]_.
 
     A ``global_constraint`` uses tslearn's defaults: Sakoe-Chiba radius 1,
-    Itakura maximum slope 2. It is computed with a banded version of
-    tslearn's recursion that gives tslearn's value.
+    Itakura maximum slope 2. For a series with one replication it is
+    computed with a banded version of tslearn's recursion that gives
+    tslearn's value; with several replications tslearn computes it.
 
     References
     ----------
@@ -1121,6 +1122,10 @@ class SoftDynamicTimeWarping(TimeWarping):
         constraint = self._global_constraint
         if constraint is None:
             return tslearn.metrics.soft_dtw(z[i], z[j])
+        if z[i].ndim > 1:
+            # Several replications: a multivariate series, left to tslearn.
+            return tslearn.metrics.soft_dtw(
+                z[i], z[j], global_constraint=constraint)
         x = np.ascontiguousarray(z[i], dtype=np.double)
         y = np.ascontiguousarray(z[j], dtype=np.double)
         rows = {"itakura": _itakura_rows, "sakoe_chiba": _sakoe_chiba_rows}
