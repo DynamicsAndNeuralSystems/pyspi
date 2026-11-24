@@ -1622,6 +1622,13 @@ class JointEntropy(InfoTheoryBase, Undirected):
     name = "Joint entropy"
     identifier = "je"
     labels = ["infotheory", "unordered", "undirected", "inverted"]
+    # Shares data.joint_entropy with ConditionalEntropy of the same estimator,
+    # so the two run on one parallel worker and the joint entropy is built once.
+    _cache_namespace = "joint_entropy"
+
+    @property
+    def _cache_subkey(self):
+        return self._getkey()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1689,6 +1696,12 @@ class ConditionalEntropy(InfoTheoryBase, Directed):
     # Directed because H(X|Y) != H(Y|X) in general, even though the Gaussian
     # form is symmetric for z-scored data.
     labels = ["infotheory", "unordered", "directed", "inverted"]
+    # See JointEntropy.
+    _cache_namespace = "joint_entropy"
+
+    @property
+    def _cache_subkey(self):
+        return self._getkey()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
