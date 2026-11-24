@@ -2096,6 +2096,23 @@ def test_distance_correlation_centres_each_series_once(monkeypatch):
     assert len(calls) == 6
 
 
+@pytest.mark.parametrize("budget, centrings", [(6, 6), (5, 10)])
+def test_distance_correlation_centres_once_when_all_series_fit(budget, centrings,
+                                                               monkeypatch):
+    """A budget of exactly M items holds them all. One item less falls back
+    to blocks of half the budget: blocks {0,1}, {2,3}, {4,5}, where series
+    2-5 are centred again after an eviction (6 + 4)."""
+    from pyspi.statistics import distance as D
+
+    calls = []
+    inner = D._centred
+    monkeypatch.setattr(D, "_centred",
+                        lambda dist, bias: calls.append(1) or inner(dist, bias))
+    monkeypatch.setattr(D, "_DCORR_CACHE_BYTES", budget * 8 * 40 * 40)
+    D.DistanceCorrelation().multivariate(_data(m=6, t=40))
+    assert len(calls) == centrings
+
+
 @pytest.mark.parametrize("biased", [False, True])
 def test_distance_correlation_matches_the_double_centring_definition(biased):
     """Szekely's sample statistic written out from distance matrices.

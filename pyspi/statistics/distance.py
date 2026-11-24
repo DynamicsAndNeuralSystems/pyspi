@@ -171,8 +171,9 @@ def _itakura_dtw(x, y):
 # ---------------------------------------------------------------------------
 # Distance correlation from per-series centred distance matrices
 # ---------------------------------------------------------------------------
-# Upper bound on the centred matrices one SPI call holds at a time.
-_DCORR_CACHE_BYTES = 2**28
+# Upper bound on the centred matrices one SPI call holds at a time; 2 GB
+# holds every series at M=16, T=4000. PYSPI_DCORR_CACHE_BYTES overrides it.
+_DCORR_CACHE_BYTES = int(os.getenv("PYSPI_DCORR_CACHE_BYTES", str(2**31)))
 
 
 def _centred(dist, bias):
@@ -203,13 +204,16 @@ def _cached_pairs(identifier, M, prepare, combine, item_bytes, directed=False):
     """
     `fill_pairwise` of ``combine(prepare(i), prepare(j))`` over every pair.
 
-    Each series is prepared once per block of series it is paired within,
-    and at most two blocks (about `_DCORR_CACHE_BYTES`) are held at a time.
-    When every series fits in one block, each is prepared once and the
-    pairs are visited in `Undirected.multivariate`'s order. Undirected:
-    ``i < j``, mirrored.
+    When all ``M`` items fit in `_DCORR_CACHE_BYTES`, each series is
+    prepared once and the pairs are visited in `Undirected.multivariate`'s
+    order. Otherwise each series is prepared once per block of series it is
+    paired within, and at most two blocks (about `_DCORR_CACHE_BYTES`) are
+    held at a time. Undirected: ``i < j``, mirrored.
     """
-    b = int(max(1, _DCORR_CACHE_BYTES // (2 * item_bytes)))
+    if M * item_bytes <= _DCORR_CACHE_BYTES:
+        b = M
+    else:
+        b = int(max(1, _DCORR_CACHE_BYTES // (2 * item_bytes)))
     blocks = [range(s, min(s + b, M)) for s in range(0, M, b)]
     pairs = []
     for p, P in enumerate(blocks):
