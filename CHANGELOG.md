@@ -349,6 +349,12 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   **Values change slightly**, since the gradient differs from scikit-learn's in the last bits.
   Most pairs agree with scikit-learn's fit to about 1e-12 relative, and near-interpolating pairs (such as a series and its copy), whose likelihood is flat near its optimum, by up to about 5e-5 relative.
   The drift baselines of `gpfit_DotProduct` and `gpfit_RBF` are regenerated.
+- **`dcorr`, `dcorr_biased` and `dcorrx_*` use an O(T log T) algorithm from 800 samples.**
+  From 800 samples, where it becomes the faster of the two, `dcorr`, `dcorr_biased` and each lagged term of `dcorrx` use hyppo's O(T log T) algorithm for scalar samples (Chaudhuri & Hu 2019) instead of the T x T matrices, with O(T) memory.
+  At M=16, `dcorr` takes 0.17 s instead of 0.52 s at T=1000 and 0.81 s instead of 40.1 s at T=4000, and `dcorrx_maxlag-10` takes 3.7 s instead of 9.2 s at T=1000 and 17.8 s instead of 760 s at T=4000.
+  Each series is first shifted to a median of zero, which leaves distance correlation unchanged and keeps the algorithm accurate on data far from zero.
+  On z-scored data the values differ from those of the T x T matrices by rounding only, not bit for bit: in tests by at most 2.3e-12 for `dcorr` and `dcorrx`, and 1.3e-10 for `dcorr_biased` on sparse binary series, where the square root enlarges the rounding error of a value near zero.
+  Shorter series are unchanged.
 - **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.
 - **Multitaper phase slope index follows Nolte et al. (2008), applies its band, and gains power with the length of the series.**
@@ -422,11 +428,6 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
   pyspi applies hyppo's final step itself, with the same values as hyppo 0.5.2.
-  From 800 samples, where it becomes the faster of the two, `dcorr`, `dcorr_biased` and each lagged term of `dcorrx` use hyppo's O(T log T) algorithm for scalar samples (Chaudhuri & Hu 2019) instead of the T x T matrices, with O(T) memory.
-  At M=16, `dcorr` takes 0.17 s instead of 0.52 s at T=1000 and 0.81 s instead of 40.1 s at T=4000, and `dcorrx_maxlag-10` takes 3.7 s instead of 9.2 s at T=1000 and 17.8 s instead of 760 s at T=4000.
-  Each series is first shifted to a median of zero, which leaves distance correlation unchanged and keeps the algorithm accurate on data far from zero.
-  On z-scored data the values differ from those of the T x T matrices by rounding only, not bit for bit: in tests by at most 2.3e-12 for `dcorr` and `dcorrx`, and 1.3e-10 for `dcorr_biased` on sparse binary series, where the square root enlarges the rounding error of a value near zero.
-  Shorter series are unchanged.
 - `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 - **Undirected SPIs evaluate each unordered pair once** and mirror the value and any failure (`phi_*` 1.9x faster).
   For the distance SPIs among them (`hsic*`, `hhg`, `dcorr*`, `mgc`, `lcss*`, `softdtw*`, `gwtau`), a pair that raises is NaN with a warning, as for every other SPI, instead of failing the SPI.
