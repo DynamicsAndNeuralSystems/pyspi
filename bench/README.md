@@ -94,7 +94,7 @@ They rank all 231 SPIs of `full` by amortized cost on one core of a Xeon 8274 at
 Each set `benchmarked_p<N>` is then cut at round(N/100 × 231) SPIs (185, 208, 219 and 229), cache groups completed as `cut_config` does, and the hand placements below are applied.
 The timing cells are not in the repository; `bench/results/analysis/tiers_3_0.csv` lists each SPI's set, rank, costs at T=1000 and T=4000, and the reason for any hand placement.
 A p90 or p95 SPI whose cost grows from T=1000 to T=4000 by 12x or more (about T^1.8) moves to the next set: `softdtw_constraint-itakura` to p95, and `softdtw` and `bary_dtw_corr` to p99.
-`anm` (15x) and `hsic` (24x) stay in p90, since no other SPI tracks them closely (`dcorr` falls below rho 0.90 against `hsic` on 137 of 498 benchmark datasets, mostly nonlinear-coupling ones).
+`anm` (15x) and `hsic` (24x) stay in p90, since no other SPI tracks them closely (`dcorr`, the nearest to `hsic`, departs from it on many processes with nonlinear coupling).
 An SPI that a cheaper SPI tracks (Spearman |rho| of the off-diagonal entries >= 0.95 on most datasets) goes to p99: `lcss` (tracked by `lcss_constraint-itakura`) and `hsic_biased` (by `hsic`).
 `lccm_E-None_k-5_{skill,tp}` are in p99 only, since `ccm_*` covers the method.
 `cds` and `te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1` are in p90 for coverage, although they cost more than its cutoff.
