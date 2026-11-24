@@ -416,21 +416,22 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   7.6x faster on those measures (184 s to 24 s at M=40, T=1000), with about 40% less memory held per pair.
 - **`mgc` and `mgcx_*` compute each series' share of the MGC map once.**
   scipy's MGC, which hyppo calls, ranks and centres both distance matrices and builds three local covariance maps for every pair, of which only one depends on the pair.
-  pyspi keeps each series' ranks, centring and local variances (per lag for `mgcx_*`, at most 256 MB at a time) and calls scipy's own steps for the rest; values are bit-identical to hyppo's.
+  pyspi keeps each series' ranks, centring and local variances (per lag for `mgcx_*`, within the 2 GiB cache of the distance-correlation family below) and calls scipy's own steps for the rest; values are bit-identical to hyppo's.
   At M=16, `mgc` is 6.1x faster at T=500, 5.4x at T=1000 and 2.6x at T=2000 (94.9 s to 36.7 s).
-  The speedup is smaller on long series, where the 256 MB cap limits how many series are held at once.
+  These figures were measured with a 256 MiB cache; the speedup is smaller on long series, where the cache cap limits how many series are held at once.
   `mgcx_maxlag-10` is 3.7x faster at M=16, T=1000 (470 s to 127 s).
 - **Itakura-constrained DTW.**
   pyspi builds tslearn's Itakura mask with NumPy and runs tslearn's recursion over each row's admitted columns only, in a numba kernel cached on disk; values are bit-identical to tslearn's.
   At M=16, T=800 the SPI takes 0.05 s instead of 0.23 s, and 0.14 s instead of 1.8 s in a new process.
   `lcss_constraint-itakura` uses the same mask.
 - **The distance-correlation family centres each series once.**
-  `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 2 GiB of matrices at a time.
-  The cap applies per SPI, per worker process (for `dcorrx`, per lag), and the memory is released when the SPI returns.
-  With `n_jobs` workers running these SPIs at once, the total can reach `n_jobs` times the cap: `dcorr`, `dcorr_biased`, `hsic`, `hsic_biased`, `dcorrx_maxlag-1` and `dcorrx_maxlag-10` at M=16, T=4000 with 6 workers peak at 11.7 GB in total, against 4.9 GB with a 256 MiB cap.
+  `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, and `hhg`, `mgc` and `mgcx_*` share their per-series parts in the same cache.
+  From 800 samples `dcorr`, `dcorr_biased` and `dcorrx_*` build no T x T matrices, so the cache matters for them only on shorter series.
+  The cache holds at most 2 GiB per SPI, per worker process (for `dcorrx_*` and `mgcx_*`, per lag), and the memory is released when the SPI returns.
+  With `n_jobs` workers running these SPIs at once, the total can reach `n_jobs` times the cap: `hsic`, `hsic_biased`, `hhg`, `mgc` and `mgcx_maxlag-1` at M=16, T=4000 with 5 workers peak at 11.6 GB in total, against 6.1 GB with a 256 MiB cap.
   The environment variable `PYSPI_DCORR_CACHE_BYTES` (a whole number of bytes) changes the cap.
-  2 GiB holds every series of `dcorr` and `hsic` at M=16, T=4000, so each is centred once; a larger dataset centres some series more than once rather than holding more.
-  Against a 256 MiB cap, in one process at M=16, T=4000, `hsic_biased` takes 32.8 s instead of 200.6 s, `dcorr` 19.0 s instead of 90.1 s and `hsic` 132 s instead of 537 s; `dcorrx_maxlag-1` at M=8, T=4000 takes 23.6 s instead of 73.2 s.
+  2 GiB holds every series of `hsic` and `hhg` at M=16, T=4000, so each is prepared once; a larger dataset prepares some series more than once rather than holding more.
+  Against a 256 MiB cap, in one process on one core, `hsic` takes 14.3 s instead of 319.6 s, `hsic_biased` 20.7 s instead of 212.3 s and `hhg` 163.3 s instead of 408.6 s at M=16, T=4000, and `mgc` 18.7 s instead of 34.1 s at M=16, T=2000.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
   pyspi applies hyppo's final step itself, with the same values as hyppo 0.5.2.
 - `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
@@ -440,7 +441,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`hhg` in O(T^2 log T), ranking each series once.**
   The statistic is computed from row-wise ranks and 2-D dominance counts instead of hyppo's O(T^3) loop (about 9x), with values bit-identical to hyppo's.
   The ranks of each series' distance matrix are computed once for all its pairs and the dominance counts run in a numba kernel, a further 5.8x, 7.9x and 7.8x in CPU time at M=16 and T=500, 1000 and 2000 (72.8 s to 9.2 s at T=1000), and 3.8x, 4.1x and 3.2x at M=4.
-  The cached ranks take at most 256 MB, or two series' ranks (16 T^2 bytes) when T is above 4096.
+  The cached ranks share the 2 GiB cache of the distance-correlation family above, or hold two series' ranks (16 T^2 bytes) when that is more.
 
 ### Added
 
