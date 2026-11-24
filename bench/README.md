@@ -36,7 +36,7 @@ as they do for `Calculator(config=...)`.
 | preset      | grid                                          | purpose |
 |-------------|-----------------------------------------------|---------|
 | `headline`  | (M=10,T=500), (M=20,T=1000), n_jobs=1         | quick reference points |
-| `scaling`   | M={4,8,16,32} x T={200,400,800,1600}, n_jobs=1| per-SPI walltime for cutting `benchmarked_p*.yaml` |
+| `scaling`   | M={4,8,16,32} x T={200,400,800,1600}, n_jobs=1| per-SPI walltime for the cost-scaling fits (`scaling.csv`, `report.md`); the shipped sets are cut from timings at M=16, T=1000 (see below) |
 | `parallel`  | M=16, T=800, n_jobs={1,2,4,8,16}              | parallel speedup curve |
 | `amortized` | M={8,16}, T=800, n_jobs=1                     | per-SPI walltime, minimal grid |
 
@@ -90,7 +90,8 @@ Pass `--preserve-dropped` to keep them as commented-out blocks instead.
 SPIs of the source config that the JSON did not time are left out.
 
 **The shipped cuts (3.0.0) carry hand edits.**
-They rank all 231 SPIs of `full` by amortized cost on one Gadi core (Xeon 8274) at M=16, T=1000 on white noise, taking the fastest of the seeds, with cache groups kept whole.
+They rank all 231 SPIs of `full` by amortized cost on one core of a Xeon 8274 at M=16, T=1000 on white noise, taking the fastest of the seeds, with cache groups kept whole.
+Each set `benchmarked_p<N>` is then cut at round(N/100 × 231) SPIs (185, 208, 219 and 229), cache groups completed as `cut_config` does, and the hand placements below are applied.
 The timing cells are not in the repository; `bench/results/analysis/tiers_3_0.csv` lists each SPI's set, rank, costs at T=1000 and T=4000, and the reason for any hand placement.
 A p90 or p95 SPI whose cost grows from T=1000 to T=4000 by 12x or more (about T^1.8) moves to the next set: `softdtw_constraint-itakura` to p95, and `softdtw` and `bary_dtw_corr` to p99.
 `anm` (15x) and `hsic` (24x) stay in p90, since no other SPI tracks them closely (`dcorr` falls below rho 0.90 against `hsic` on 137 of 498 benchmark datasets, mostly nonlinear-coupling ones).
