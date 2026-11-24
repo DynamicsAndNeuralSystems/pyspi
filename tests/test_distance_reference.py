@@ -185,6 +185,9 @@ def test_mgc_matrix_with_cached_parts_is_bit_identical_to_hyppo(monkeypatch,
     import pyspi.statistics.distance as distance
     from hyppo.independence import MGC
 
+    import scipy
+    if tuple(int(v) for v in scipy.__version__.split(".")[:2]) < (1, 14):
+        pytest.skip("the per-series path needs scipy 1.14 or later")
     assert distance._local_covariance is not None, "scipy's MGC steps moved"
     if budget is not None:
         monkeypatch.setattr(distance, "_DCORR_CACHE_BYTES", budget)
