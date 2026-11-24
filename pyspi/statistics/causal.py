@@ -348,7 +348,8 @@ def _cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=42, tp=0):
     ``tp`` is the prediction horizon, Ye et al.'s (2015) cross-map lag: the
     embedding point at time t estimates ``target[t + tp]``. Rows whose shifted
     target falls outside the series are dropped first, as pyEDM's ``Tp`` does,
-    so the result equals ``pyEDM.CCM(..., Tp=tp)``.
+    so the result agrees with ``pyEDM.CCM(..., Tp=tp)`` to rounding where no
+    distances are tied.
 
     This follows pyEDM 2.5's CCM (``pyEDM.CCM._ccm_for_libsize``),
     including its random libraries (every library size starts from
@@ -820,9 +821,10 @@ class ConvergentCrossMapping(Directed, Unsigned):
     ``ceil(2E/10)*10`` to ``floor((N-E-1)/10)*10``, each the mean Pearson
     correlation over 100 random libraries (seed 42) of simplex cross-map
     estimates (``E + 1`` neighbours, embedding delay of one sample), and
-    cached on ``data.ccm[E]``. Each skill equals pyEDM 2.5's ``CCM`` at the
-    same ``E`` unless distances tie: points tied with the last neighbour then
-    share its place equally, where pyEDM takes whichever its KD-tree returns.
+    cached on ``data.ccm[E]``. Each skill agrees with pyEDM 2.5's ``CCM`` at
+    the same ``E`` to rounding where no distances are tied; points tied with
+    the last neighbour share the remaining places equally, where pyEDM takes
+    whichever its KD-tree returns.
     pyEDM's process pools are not used. Every ``statistic`` is
     read off that curve.
 
