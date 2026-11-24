@@ -224,6 +224,36 @@ def test_benchmarked_config_header_states_its_spi_count(name):
     n_spis = Calculator(config=name).n_spis
     assert stated[0] == n_spis, f"'{name}' header says {stated[0]} SPIs; the config builds {n_spis}."
 
+BENCHMARKED = ["benchmarked_p80", "benchmarked_p90", "benchmarked_p95", "benchmarked_p99"]
+
+def _config_blocks(name):
+    """{(module, class): (class entry without its configs, list of its config variants)}."""
+    blocks = {}
+    for module, classes in load_config_yaml(resolve_config(name)).items():
+        for cls, entry in classes.items():
+            entry = dict(entry)
+            blocks[(module, cls)] = (entry, entry.pop("configs", None) or [None])
+    return blocks
+
+def test_benchmarked_sets_are_nested():
+    """benchmarked_p80 within p90 within p95 within p99 within full."""
+    chain = BENCHMARKED + ["full"]
+    spis = {name: set(load_spis_from_yaml(resolve_config(name), quiet=True)) for name in chain}
+    for smaller, larger in zip(chain, chain[1:]):
+        extra = spis[smaller] - spis[larger]
+        assert not extra, f"'{smaller}' has SPIs that '{larger}' lacks: {sorted(extra)}"
+
+@pytest.mark.parametrize("name", BENCHMARKED)
+def test_benchmarked_set_blocks_match_full(name):
+    """Each SPI's block (class labels, dependencies and config variant) is the one in `full`."""
+    full = _config_blocks("full")
+    for key, (entry, variants) in _config_blocks(name).items():
+        assert key in full, f"'{name}' has a class that 'full' lacks: {key}"
+        full_entry, full_variants = full[key]
+        assert entry == full_entry, f"'{name}' {key}: labels or dependencies differ from 'full'"
+        foreign = [v for v in variants if v not in full_variants]
+        assert not foreign, f"'{name}' {key}: variants that 'full' lacks: {foreign}"
+
 def test_unknown_config_name_raises():
     with pytest.raises(ValueError, match="Unknown config"):
         Calculator(config="does_not_exist")
