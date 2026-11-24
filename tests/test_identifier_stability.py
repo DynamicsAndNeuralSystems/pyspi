@@ -2,7 +2,8 @@
 
 An identifier names a table column, a checkpoint file and a drift baseline,
 so a numpy scalar must name the same SPI as the equal Python number, an
-integral float the same SPI as the integer, and no bundled identifier may
+integral float the same SPI as the integer, a float computed in Python the
+same SPI as the number written in YAML, and no bundled identifier may
 change. ``tests/data/bundled_identifiers.json`` lists every bundled
 identifier, config by config, in config order.
 """
@@ -56,6 +57,48 @@ def test_fmt_param_formats_equal_values_alike(value, expected):
 def test_fmt_param_keeps_unequal_values_apart():
     assert fmt_param(0.1) != fmt_param(np.float32(0.1))
     assert fmt_param(1.5) != fmt_param(15)
+    assert fmt_param(0.3) != fmt_param(0.300000000001)
+
+
+@pytest.mark.parametrize("computed, written", [
+    (0.1 + 0.2, 0.3),
+    (np.arange(0.1, 0.31, 0.1)[2], 0.3),
+    (np.linspace(0, 0.5, 6)[3], 0.3),
+    (0.1 * 3, 0.3),
+    (1 - 0.9, 0.1),
+    (3 * 0.1 / 0.3, 1),
+])
+def test_fmt_param_drops_floating_point_rounding_error(computed, written):
+    assert computed != written
+    assert fmt_param(computed) == fmt_param(written)
+
+
+def test_fmt_param_bounds_the_length_of_a_float():
+    assert fmt_param(1 / 3) == "0.333333333333"
+    assert fmt_param(1 / 86400) == "1.15740740741e-05"
+
+
+def test_values_that_agree_to_12_digits_are_one_spi_in_a_config(tmp_path):
+    path = tmp_path / "near_duplicates.yaml"
+    path.write_text(
+        ".statistics.spectral:\n"
+        "  CoherenceMagnitude:\n"
+        "    labels: [undirected]\n"
+        "    configs:\n"
+        "      - fmin: 0.1\n"
+        "        fmax: 0.3\n"
+        "      - fmin: 0.1\n"
+        "        fmax: 0.30000000000000004\n")
+    with pytest.raises(ValueError, match="Duplicate SPI identifier"):
+        load_spis_from_yaml(str(path), quiet=True)
+
+
+def test_a_band_edge_computed_in_python_names_the_spi_written_in_yaml():
+    edges = np.arange(0.1, 0.31, 0.1)
+    computed = spectral.CoherenceMagnitude(fmin=edges[0], fmax=edges[2])
+    written = spectral.CoherenceMagnitude(fmin=0.1, fmax=0.3)
+    assert computed.identifier == written.identifier
+    assert computed.identifier.endswith("_fmin-0-1_fmax-0-3")
 
 
 # (class, Python-number kwargs, equal kwargs spelled with numpy scalars or

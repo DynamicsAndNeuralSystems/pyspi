@@ -281,6 +281,159 @@ def test_gpfit_is_the_leave_one_out_mse_of_the_fitted_gp(kernel):
         np.mean(np.square(resid)), rel=1e-8)
 
 
+def test_gpfit_dot_product_equals_sklearns_gp_fit():
+    """The O(T) DotProduct fit equals `GaussianProcessRegressor`'s, to rounding.
+
+    Reference: sklearn's fit of the same kernel and its leave-one-out
+    residuals from the Cholesky factor, as `GPModel` computes them for
+    other kernels. Covers linear, nonlinear, heavy-tailed, near-deterministic
+    and unrelated pairs.
+    """
+    from scipy.linalg import solve_triangular
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from pyspi.statistics.misc import GPModel
+
+    rng = np.random.default_rng(7)
+    x = rng.standard_normal(200)
+    e = rng.standard_normal(200)
+    for y in (e, x + 0.6 * e, np.tanh(2 * x) + 0.3 * e, x ** 2,
+              rng.standard_cauchy(200), x + 1e-3 * e):
+        data = Data(np.vstack([x, y]), dim_order="ps")
+        z = data.to_numpy(squeeze=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            gp = GaussianProcessRegressor(kernel=_gp_kernel("DotProduct")).fit(
+                z[0][:, None], z[1])
+        L_inv = solve_triangular(gp.L_, np.eye(200), lower=True)
+        ref = np.mean((gp.alpha_ / np.einsum("ij,ij->j", L_inv, L_inv)) ** 2)
+        assert GPModel("DotProduct").multivariate(data)[0, 1] == pytest.approx(
+            ref, rel=1e-10, abs=1e-15)
+
+
+def _exact_dot_product_gp(theta, x, y, alpha=1e-10):
+    """Log marginal likelihood and leave-one-out MSE in exact arithmetic.
+
+    ``K = c + sigma_0^2 + x x' + (noise + alpha) I`` at ``theta = log(c,
+    noise, sigma_0)``, inverted by Gauss-Jordan elimination on `Fraction`s,
+    so the only rounding is in the final conversion to float.
+    """
+    import math
+    from fractions import Fraction
+
+    c, noise, sigma_0 = (Fraction(float(v)) for v in np.exp(theta))
+    xs = [Fraction(float(v)) for v in x]
+    ys = [Fraction(float(v)) for v in y]
+    T = len(ys)
+    rows = [[c + sigma_0 ** 2 + xs[i] * xs[j]
+             + (noise + Fraction(alpha) if i == j else 0) for j in range(T)]
+            + [Fraction(int(i == j)) for j in range(T)] for i in range(T)]
+    det = Fraction(1)
+    for col in range(T):
+        pivot = rows[col][col]
+        det *= pivot
+        rows[col] = [v / pivot for v in rows[col]]
+        for r in range(T):
+            if r != col and rows[r][col]:
+                f = rows[r][col]
+                rows[r] = [a - f * b for a, b in zip(rows[r], rows[col])]
+    k_inv = [row[T:] for row in rows]
+    a = [sum(k_inv[i][j] * ys[j] for j in range(T)) for i in range(T)]
+    log_det = math.log(det.numerator) - math.log(det.denominator)
+    lml = (-0.5 * float(sum(yi * ai for yi, ai in zip(ys, a)))
+           - 0.5 * log_det - 0.5 * T * math.log(2 * math.pi))
+    loo = float(sum((a[t] / k_inv[t][t]) ** 2 for t in range(T)) / T)
+    return lml, loo
+
+
+def test_gpfit_dot_product_is_exact_on_badly_scaled_data(monkeypatch):
+    """Without z-scoring, the DotProduct fit is exact where sklearn's is not.
+
+    With the predictor in units of 1e6 or 1e8, the T x T kernel matrix that
+    sklearn factorises has entries of order 1e12 or more beside a noise term
+    of order 1, so its Cholesky factor loses the noise term (or fails).
+    Reference: exact rational arithmetic at the hyperparameters the fit
+    returns. The value must be the exact leave-one-out MSE there, and those
+    hyperparameters must reach an exact log marginal likelihood at least as
+    high as that at sklearn's, wherever sklearn's fit succeeds.
+    """
+    from scipy import optimize
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from pyspi.statistics.misc import GPModel
+
+    fitted = []
+    minimize = optimize.minimize
+
+    def recording_minimize(*args, **kwargs):
+        res = minimize(*args, **kwargs)
+        fitted.append(res.x.copy())
+        return res
+
+    monkeypatch.setattr(optimize, "minimize", recording_minimize)
+
+    T = 12
+    pairs = []
+    for seed in range(3):
+        rng = np.random.default_rng(seed)
+        x, e = rng.standard_normal(T), rng.standard_normal(T)
+        pairs.append((1e6 * (x + 0.5 * e), x))
+    pairs.append((1e8 * x, 1e8 * (x + 0.5 * e)))
+    for k, (u, v) in enumerate(pairs):
+        data = Data(np.vstack([u, v]), dim_order="ps", zscore=False)
+        z = data.to_numpy(squeeze=True)
+        fitted.clear()
+        value = GPModel("DotProduct").bivariate(data, i=0, j=1)
+        lml, loo = _exact_dot_product_gp(fitted[0], z[0], z[1])
+        assert value == pytest.approx(loo, rel=1e-10), k
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                gp = GaussianProcessRegressor(
+                    kernel=_gp_kernel("DotProduct")).fit(z[0][:, None], z[1])
+        except np.linalg.LinAlgError:
+            continue
+        lml_sklearn, _ = _exact_dot_product_gp(gp.kernel_.theta, z[0], z[1])
+        assert lml >= lml_sklearn - 1e-9 * abs(lml_sklearn), k
+
+
+def test_gpfit_rbf_equals_sklearns_gp_fit():
+    """The RBF fit (sklearn's, with a cheaper gradient) equals sklearn's.
+
+    Only the likelihood gradient is computed differently, so it differs from
+    sklearn's in the last bits and the optimizer can stop elsewhere along a
+    flat optimum. That matters only near interpolation (y a near-copy of a
+    function of x, leave-one-out MSE ~1e-6), where sklearn's own value moves
+    by up to ~1e-3 relative when the samples are merely reordered; those
+    pairs are left out here. Covers linear, nonlinear, heavy-tailed,
+    autocorrelated and unrelated pairs, and x in large units (`zscore=False`).
+    """
+    from scipy.linalg import solve_triangular
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from pyspi.statistics.misc import GPModel
+
+    rng = np.random.default_rng(11)
+    T = 150
+    x = rng.standard_normal(T)
+    e = rng.standard_normal(T)
+    ar = np.zeros(T)
+    for t in range(1, T):
+        ar[t] = 0.9 * ar[t - 1] + e[t]
+    pairs = [(x, e), (x, x + 0.6 * e), (x, np.tanh(2 * x) + 0.3 * e),
+             (x, np.sin(3 * x) + 0.5 * e), (x, x ** 2 + 0.3 * e),
+             (rng.standard_cauchy(T), e), (ar, np.roll(ar, 1) + 0.3 * e),
+             (100.0 * x, e)]
+    for k, (u, v) in enumerate(pairs):
+        data = Data(np.vstack([u, v]), dim_order="ps", zscore=k < 7)
+        z = data.to_numpy(squeeze=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            gp = GaussianProcessRegressor(kernel=_gp_kernel("RBF")).fit(
+                z[0][:, None], z[1])
+            value = GPModel("RBF").multivariate(data)[0, 1]
+        L_inv = solve_triangular(gp.L_, np.eye(T), lower=True)
+        ref = np.mean((gp.alpha_ / np.einsum("ij,ij->j", L_inv, L_inv)) ** 2)
+        assert value == pytest.approx(ref, rel=1e-8), k
+
+
 def test_gpfit_rbf_does_not_interpolate_an_unrelated_pair():
     """An independent pair must score ~var(y) (nothing to predict), not ~0.
 
