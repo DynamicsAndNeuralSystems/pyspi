@@ -418,7 +418,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   scipy's MGC, which hyppo calls, ranks and centres both distance matrices and builds three local covariance maps for every pair, of which only one depends on the pair.
   pyspi keeps each series' ranks, centring and local variances (per lag for `mgcx_*`, within the 2 GiB cache of the distance-correlation family below) and calls scipy's own steps for the rest; values are bit-identical to hyppo's.
   At M=16, `mgc` is 6.1x faster at T=500, 5.4x at T=1000 and 2.6x at T=2000 (94.9 s to 36.7 s).
-  These figures were measured with a 256 MiB cache; the speedup is smaller on long series, where the cache cap limits how many series are held at once.
+  These figures are with a 256 MiB cache; the default 2 GiB cache is faster again on long series, as given below.
   `mgcx_maxlag-10` is 3.7x faster at M=16, T=1000 (470 s to 127 s).
 - **Itakura-constrained DTW.**
   pyspi builds tslearn's Itakura mask with NumPy and runs tslearn's recursion over each row's admitted columns only, in a numba kernel cached on disk; values are bit-identical to tslearn's.
@@ -441,7 +441,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The environment variable `PYSPI_DCORR_CACHE_BYTES` (a whole number of bytes) changes the cap.
   2 GiB holds every series of `hsic` and `hhg` at M=16, T=4000, so each is prepared once; a larger dataset prepares some series more than once rather than holding more.
   Against a 256 MiB cap, in one process on one core, `hsic` takes 14.3 s instead of 319.6 s, `hsic_biased` 20.7 s instead of 212.3 s and `hhg` 163.3 s instead of 408.6 s at M=16, T=4000, and `mgc` 18.7 s instead of 34.1 s at M=16, T=2000.
-  At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
+  At T=800, `hsic` is 11x faster.
   pyspi applies hyppo's final step itself, with the same values as hyppo 0.5.2.
 - `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 - **Undirected SPIs evaluate each unordered pair once** and mirror the value and any failure (`phi_*` 1.9x faster).
