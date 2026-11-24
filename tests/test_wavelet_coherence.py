@@ -154,15 +154,15 @@ def test_short_series_and_empty_bands_are_not_appropriate():
         WaveletCoherence(fmin=0, fmax=0.01).multivariate(d)
 
 
-def test_wavelet_coherence_is_bundled_in_full_only():
+def test_wavelet_coherence_is_bundled_in_full_and_every_benchmarked_set():
     from pyspi.calculator import bundled_configs, load_spis_from_yaml, resolve_config
 
     for name in bundled_configs():
         wtc = sorted(k for k in load_spis_from_yaml(resolve_config(name), quiet=True)
                      if k.startswith("wtc_"))
-        if name == "full":
+        if name == "full" or name.startswith("benchmarked_"):
             assert wtc == ["wtc_wavelet_mean_fs-1_fmin-0-25_fmax-0-5",
                            "wtc_wavelet_mean_fs-1_fmin-0_fmax-0-25",
-                           "wtc_wavelet_mean_fs-1_fmin-0_fmax-0-5"]
+                           "wtc_wavelet_mean_fs-1_fmin-0_fmax-0-5"], name
         else:
             assert not wtc, name
