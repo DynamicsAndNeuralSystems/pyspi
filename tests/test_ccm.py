@@ -260,12 +260,12 @@ def _unshifted_cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=
 @pytest.mark.parametrize("N", [40, 133])
 def test_cross_map_skill_at_tp0_matches_unshifted_reference(E, N):
     """At ``tp=0`` (default or explicit) the skill equals the unshifted
-    reference cross-map (a KD-tree per library) to rounding, with and
-    without tied distances."""
+    reference cross-map (a KD-tree per library) to rounding, including a
+    quantised target (ties in the target do not touch the neighbours)."""
     rng = np.random.default_rng(E * 1000 + N)
     z = rng.standard_normal((3, N))
     z[1] += 0.5 * np.roll(z[0], 1)
-    z[2] = np.round(z[2] * 2) / 2            # quantised: tied distances too
+    z[2] = np.round(z[2] * 2) / 2
     lib_sizes = _ccm_library_sizes(N, E)
     ref = _unshifted_cross_map_skill(z[0], [z[1], z[2]], E, lib_sizes,
                                      sample=12, seed=7)
@@ -273,10 +273,60 @@ def test_cross_map_skill_at_tp0_matches_unshifted_reference(E, N):
         got = _cross_map_skill(z[0], [z[1], z[2]], E, lib_sizes,
                                sample=12, seed=7, **kwargs)
         np.testing.assert_allclose(got, ref, rtol=0, atol=_ROUNDING)
-    quantised = _unshifted_cross_map_skill(z[2], [z[0]], E, lib_sizes, sample=12)
-    np.testing.assert_allclose(
-        _cross_map_skill(z[2], [z[0]], E, lib_sizes, sample=12), quantised,
-        rtol=0, atol=_ROUNDING)
+
+
+def _tie_averaged_skill(library, target, E, L, sample, seed=42):
+    """Cross-map skill at library size L, each prediction averaged over every
+    way of filling the k neighbour places from points tied at the k-th distance.
+
+    Brute force: all distances, then itertools over the tied points. Needs
+    exact ties (values on a binary grid) and small libraries.
+    """
+    from itertools import combinations
+
+    embed = np.column_stack([library[E - 1 - lag:len(library) - lag]
+                             for lag in range(E)])
+    actual = target[E - 1:]
+    n = len(embed)
+    k = min(E + 1, L - 1)
+    rng = np.random.default_rng(np.random.SeedSequence(seed))
+    rhos = []
+    for _ in range(sample):
+        lib = rng.choice(n, size=L, replace=False)
+        pred = np.empty(n)
+        for r in range(n):
+            cand = lib[lib != r]
+            d = np.sqrt(((embed[cand] - embed[r]) ** 2).sum(axis=1))
+            dk = np.sort(d)[k - 1]
+            nearer, tied = cand[d < dk], cand[d == dk]
+            preds = []
+            for chosen in combinations(tied, k - len(nearer)):
+                nn = np.concatenate([nearer, chosen]).astype(int)
+                dn = np.sqrt(((embed[nn] - embed[r]) ** 2).sum(axis=1))
+                w = (np.exp(-dn / dn.min()) if dn.min() > 0
+                     else (dn == 0).astype(float))
+                preds.append(np.dot(w / w.sum(), actual[nn]))
+            pred[r] = np.mean(preds)
+        rhos.append(_pearson(pred, actual))
+    return np.nanmean(rhos)
+
+
+@pytest.mark.parametrize("E", [1, 2, 4])
+def test_tied_neighbours_share_the_remaining_places(E):
+    """With ties at the k-th distance the skill is that of the prediction
+    averaged over every choice of tied neighbours, so it does not depend on
+    how a search tree breaks ties."""
+    rng = np.random.default_rng(E)
+    N = 48
+    z = rng.standard_normal((2, N))
+    z[1] += np.roll(z[0], 1)
+    z[0] = np.round(z[0] * 2) / 2
+    for L in _ccm_library_sizes(N, E)[::7]:
+        got = _cross_map_skill(z[0], [z[1]], E, [L], sample=4)[0, 0]
+        dense = _cross_map_skill_dense(z[0], [z[1]], E, L, sample=4)[0]
+        ref = _tie_averaged_skill(z[0], z[1], E, L, sample=4)
+        np.testing.assert_allclose(got, ref, rtol=0, atol=1e-12, err_msg=str(L))
+        np.testing.assert_allclose(dense, ref, rtol=0, atol=1e-12, err_msg=str(L))
 
 
 @pytest.mark.parametrize("E", [1, 3])
@@ -316,11 +366,8 @@ def test_cross_map_skill_rejects_a_non_integer_horizon():
 @pytest.mark.parametrize("E", [1, 2, 5, 10])
 @pytest.mark.parametrize("quantised", [False, True])
 def test_dense_top_library_equals_the_per_library_tree(E, quantised):
-    """One whole-manifold query reproduces a KD-tree per random library.
-
-    Libraries with tied neighbours (quantised data) use their own tree in
-    both, so the two agree to rounding in both cases.
-    """
+    """One whole-manifold query reproduces a KD-tree per random library,
+    with tied neighbours (quantised data) shared alike in both."""
     rng = np.random.default_rng(E)
     N = 160
     z = rng.standard_normal((3, N))
