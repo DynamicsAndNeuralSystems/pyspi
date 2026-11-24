@@ -1,11 +1,13 @@
-# benchmarked_p90: the fastest 90% of the SPIs timed in pyspi's compute-cost
-# benchmark, ranked by amortized cost (SPIs that share a cache split its cost)
-# at M = 16, T = 800 on one core.
-# Current set: 161 SPIs (of the 231 in `full`).
-# te_kraskov_NN-4_DCE-AUTO_k-{1,2}_kt-1_l-1_lt-1 are included for coverage,
-# although they cost more than the cutoff.
-# SPIs of `full` that the benchmark did not time are in no benchmarked_p* set,
-# whatever their cost; use `full` for them.
+# benchmarked_p90: about the cheapest 90% of the 231 SPIs in `full`, ranked by
+# amortized cost (SPIs that share a cache split its cost) at M = 16, T = 1000
+# on one core, with cache groups kept whole.
+# Current set: 207 SPIs (of the 231 in `full`).
+# Placed by hand (see bench/README.md):
+#   in, above the cutoff: te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1 and cds (coverage; cost
+#     grows slowly with T).
+#   out, below the cutoff: softdtw_constraint-itakura (p95; cost grows about as T^2 or
+#     faster); lcss and hsic_biased (p99; lcss_constraint-itakura and hsic track them).
+#   kept although their cost grows about as T^2: anm and hsic (no other SPI tracks them closely).
 #
 .statistics.basic:
   Covariance:
@@ -21,7 +23,6 @@
     - estimator: EmpiricalCovariance
     - estimator: MinCovDet
 
-  # Partial correlation
   PartialCorrelation:
     labels:
       - undirected
@@ -51,7 +52,6 @@
     configs:
     - squared: false
 
-  # Chatterjee's rank correlation xi
   ChatterjeeXi:
     labels:
       - directed
@@ -67,7 +67,6 @@
       labels:
       - time-dependent
 
-  # Lag-resolved cross-correlation
   LagResolvedCorrelation:
     labels:
       - linear
@@ -76,68 +75,69 @@
       - M14
     dependencies:
     configs:
-      - statistic: lag
-        labels:
-          - antisymmetric
-          - signed
-          - timing
-      - statistic: peak
-        labels:
-          - undirected
-          - signed
-      - statistic: asym
-        labels:
-          - antisymmetric
-          - signed
-      - statistic: onesided
-        tau: 1
-        labels:
-          - directed
-          - signed
-      - statistic: onesided
-        tau: 2
-        labels:
-          - directed
-          - signed
-      - statistic: onesided
-        tau: 3
-        labels:
-          - directed
-          - signed
-      - statistic: onesided
-        tau: 5
-        labels:
-          - directed
-          - signed
-      - statistic: onesided
-        tau: 10
-        labels:
-          - directed
-          - signed
-      - statistic: onesided
-        tau: "1e"
-        labels:
-          - directed
-          - signed
-      - statistic: onesidedpeak
-        labels:
-          - directed
-      - statistic: lag
-        max_lag: 10
-        labels:
-          - antisymmetric
-          - signed
-          - timing
-      - statistic: peak
-        max_lag: 10
-        labels:
-          - undirected
-          - signed
-      - statistic: asym
-        max_lag: 10
-        labels:
-          - antisymmetric
-          - signed
+    - statistic: lag
+      labels:
+      - antisymmetric
+      - signed
+      - timing
+    - statistic: peak
+      labels:
+      - undirected
+      - signed
+    - statistic: asym
+      labels:
+      - antisymmetric
+      - signed
+    - statistic: onesided
+      tau: 1
+      labels:
+      - directed
+      - signed
+    - statistic: onesided
+      tau: 2
+      labels:
+      - directed
+      - signed
+    - statistic: onesided
+      tau: 3
+      labels:
+      - directed
+      - signed
+    - statistic: onesided
+      tau: 5
+      labels:
+      - directed
+      - signed
+    - statistic: onesided
+      tau: 10
+      labels:
+      - directed
+      - signed
+    - statistic: onesided
+      tau: 1e
+      labels:
+      - directed
+      - signed
+    - statistic: onesidedpeak
+      labels:
+      - directed
+    - statistic: lag
+      max_lag: 10
+      labels:
+      - antisymmetric
+      - signed
+      - timing
+    - statistic: peak
+      max_lag: 10
+      labels:
+      - undirected
+      - signed
+    - statistic: asym
+      max_lag: 10
+      labels:
+      - antisymmetric
+      - signed
+
 
 .statistics.distance:
   PairwiseDistance:
@@ -167,6 +167,28 @@
     configs:
     - biased: false
     - biased: true
+
+  HilbertSchmidtIndependenceCriterion:
+    labels:
+      - undirected
+      - nonlinear
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+    - biased: false
+
+  CrossDistanceCorrelation:
+    labels:
+      - directed
+      - nonlinear
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+    - max_lag: 1
 
   DynamicTimeWarping:
     labels:
@@ -199,6 +221,18 @@
       tau: 1
       statistic: mean
 
+  SoftDynamicTimeWarping:
+    labels:
+      - undirected
+      - nonlinear
+      - bivariate
+      - time-dependent
+      - inverted
+      - M10
+    dependencies:
+    configs:
+    - global_constraint: sakoe_chiba
+
   LongestCommonSubsequence:
     labels:
       - undirected
@@ -208,25 +242,22 @@
       - M10
     dependencies:
     configs:
-    - global_constraint: null
     - global_constraint: itakura
     - global_constraint: sakoe_chiba
 
-  Barycenter:
-    labels:
-      - undirected
-      - nonlinear
-      - signed
-      - bivariate
-      - time-dependent
-    dependencies:
-    configs:
-    - mode: dtw
-      statistic: corr
-      labels:
-      - M09
 
 .statistics.causal:
+  AdditiveNoiseModel:
+    labels:
+      - directed
+      - nonlinear
+      - bivariate
+      - contemporaneous
+      - inverted
+      - M02
+    dependencies:
+    configs:
+
   ConditionalDistributionSimilarity:
     labels:
       - directed
@@ -248,6 +279,78 @@
       - M14
     dependencies:
     configs:
+
+  ConvergentCrossMapping:
+    labels:
+      - directed
+      - nonlinear
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+    - statistic: mean
+      embedding_dimension: 1
+    - statistic: max
+      embedding_dimension: 1
+    - statistic: convergence
+      embedding_dimension: 1
+
+  NonlinearInterdependence:
+    labels:
+      - directed
+      - nonlinear
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+    - statistic: L
+      m: 5
+      tau: 1
+      k: 5
+    - statistic: N
+      m: 5
+      tau: 1
+      k: 5
+    - statistic: H
+      m: 5
+      tau: 1
+      k: 5
+    - statistic: L
+      m: 3
+      tau: 1
+      k: 5
+
+  LiangInformationFlow:
+    labels:
+      - directed
+      - linear
+      - signed
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+    - k: 1
+      conditional: false
+      statistic: rate
+      labels:
+      - bivariate
+    - k: 1
+      conditional: false
+      statistic: normalised
+      labels:
+      - bivariate
+    - k: 1
+      conditional: true
+      statistic: rate
+      labels:
+      - multivariate
+    - k: 1
+      conditional: true
+      statistic: normalised
+      labels:
+      - multivariate
 
 
 .statistics.infotheory:
@@ -284,7 +387,7 @@
       - M03
     configs:
     - estimator: gaussian
-    - estimator: kozachenko
+
   CrossmapEntropy:
     labels:
       - directed
@@ -307,7 +410,6 @@
   DirectedInfo:
     labels:
       - directed
-      - linear
       - bivariate
       - time-dependent
       - M03
@@ -374,6 +476,16 @@
     configs:
     - estimator: kraskov
       prop_k: 4
+      k_history: 2
+      l_history: 1
+      dyn_corr_excl: AUTO
+    - estimator: kraskov
+      prop_k: 4
+      k_history: 1
+      l_history: 1
+      dyn_corr_excl: AUTO
+    - estimator: kraskov
+      prop_k: 4
       k_history: 1
       l_history: 1
     - estimator: kernel
@@ -398,16 +510,6 @@
       l_history: 1
       labels:
       - M05
-    - estimator: kraskov
-      prop_k: 4
-      k_history: 2
-      l_history: 1
-      dyn_corr_excl: AUTO
-    - estimator: kraskov
-      prop_k: 4
-      k_history: 1
-      l_history: 1
-      dyn_corr_excl: AUTO
     - estimator: symbolic
       k_history: 3
       labels:
@@ -444,6 +546,7 @@
       fmax: 0.25
     - fmin: 0.25
       fmax: 0.5
+
   CoherenceMagnitude:
     labels:
       - undirected
@@ -466,6 +569,17 @@
     - fmin: 0.25
       fmax: 0.5
       statistic: max
+
+  PhaseAlignedCorrelation:
+    labels:
+      - undirected
+      - linear
+      - bivariate
+      - frequency-dependent
+      - MXX
+    dependencies:
+    configs:
+    - nperseg: null
 
   ImaginaryCoherence:
     labels:
@@ -533,6 +647,16 @@
     - fmin: 0.25
       fmax: 0.5
       statistic: max
+
+  AdaptivePhaseConsistency:
+    labels:
+      - undirected
+      - linear
+      - bivariate
+      - frequency-dependent
+      - MXX
+    dependencies:
+    configs:
 
   PhaseLagIndex:
     labels:
@@ -788,11 +912,66 @@
       - M08
     dependencies:
     configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
+    - fmin: 0.25
+      fmax: 0.5
+
+  WaveletCoherence:
+    labels:
+      - undirected
+      - linear
+      - bivariate
+      - frequency-dependent
+      - MXX
+    dependencies:
+    configs:
+    - fs: 1
+    - fmin: 0
+      fmax: 0.25
     - fmin: 0.25
       fmax: 0.5
 
 
+.statistics.crossfreq:
+  PhaseAmplitudeCoupling:
+    labels:
+      - directed
+      - nonlinear
+      - bivariate
+      - frequency-dependent
+      - M11
+    dependencies:
+    configs:
+    - phase_band:
+      - 0.01
+      - 0.05
+      amp_band:
+      - 0.15
+      - 0.4
+      statistic: mi_excess
+    - phase_band:
+      - 0.05
+      - 0.1
+      amp_band:
+      - 0.2
+      - 0.45
+      statistic: mi_excess
+
+
 .statistics.misc:
+  GPModel:
+    labels:
+      - directed
+      - bivariate
+      - contemporaneous
+      - inverted
+      - M14
+    dependencies:
+    configs:
+    - kernel: DotProduct
+
   Cointegration:
     labels:
       - linear
@@ -806,73 +985,73 @@
       det_order: 0
       k_ar_diff: 10
       labels:
-        - undirected
+      - undirected
     - method: johansen
       statistic: trace_stat
       det_order: 0
       k_ar_diff: 10
       labels:
-        - undirected
+      - undirected
     - method: johansen
       statistic: max_eig_stat
       det_order: 0
       k_ar_diff: 1
       labels:
-        - undirected
+      - undirected
     - method: johansen
       statistic: trace_stat
       det_order: 0
       k_ar_diff: 1
       labels:
-        - undirected
+      - undirected
     - method: johansen
       statistic: max_eig_stat
       det_order: 1
       k_ar_diff: 10
       labels:
-        - undirected
+      - undirected
     - method: johansen
       statistic: trace_stat
       det_order: 1
       k_ar_diff: 10
       labels:
-        - undirected
+      - undirected
     - method: johansen
       statistic: max_eig_stat
       det_order: 1
       k_ar_diff: 1
       labels:
-        - undirected
+      - undirected
     - method: johansen
       statistic: trace_stat
       det_order: 1
       k_ar_diff: 1
       labels:
-        - undirected
+      - undirected
     - method: aeg
       statistic: tstat
       autolag: aic
       maxlag: 10
       trend: c
       labels:
-        - directed
-        - inverted
+      - directed
+      - inverted
     - method: aeg
       statistic: tstat
       autolag: aic
       maxlag: 10
       trend: ct
       labels:
-        - directed
-        - inverted
+      - directed
+      - inverted
     - method: aeg
       statistic: tstat
       autolag: bic
       maxlag: 10
       trend: ct
       labels:
-        - directed
-        - inverted
+      - directed
+      - inverted
 
   PowerEnvelopeCorrelation:
     labels:
@@ -887,28 +1066,44 @@
       log: false
       absolute: false
       labels:
-        - signed
+      - signed
     - orth: true
       log: false
       absolute: false
       labels:
-        - signed
+      - signed
     - orth: false
       log: true
       absolute: false
       labels:
-        - signed
+      - signed
     - orth: true
       log: true
       absolute: false
       labels:
-        - signed
+      - signed
     - orth: true
       log: false
       absolute: true
     - orth: true
       log: true
       absolute: true
+
+  EdgeTimeSeries:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - profile
+      - bivariate
+      - time-dependent
+      - M11
+    dependencies:
+    configs:
+    - statistic: excessvar
+    - statistic: topshare
+      frac: 0.05
+    - statistic: acf1
 
   InterDependenceScore:
     labels:
@@ -922,3 +1117,130 @@
     - terms: 6
       pnorm: max
       bandwidth: 0.5
+
+
+.statistics.var:
+  ConditionalGrangerCausality:
+    labels:
+      - directed
+      - linear
+      - multivariate
+      - time-dependent
+      - M05
+    dependencies:
+    configs:
+    - order: 1
+    - order: 2
+    - order: bic
+
+  ConditionalPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+    - order: bic
+    - order: bic
+      fmin: 0
+      fmax: 0.25
+    - order: bic
+      fmin: 0.25
+      fmax: 0.5
+
+  ConditionalGeneralizedPartialDirectedCoherence:
+    labels:
+      - directed
+      - linear
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+    - order: bic
+    - order: bic
+      fmin: 0
+      fmax: 0.25
+    - order: bic
+      fmin: 0.25
+      fmax: 0.5
+
+  ConditionalDirectDirectedTransferFunction:
+    labels:
+      - directed
+      - linear
+      - multivariate
+      - frequency-dependent
+      - M06
+    dependencies:
+    configs:
+    - order: bic
+    - order: bic
+      fmin: 0
+      fmax: 0.25
+    - order: bic
+      fmin: 0.25
+      fmax: 0.5
+
+  PartialCoherence:
+    labels:
+      - undirected
+      - linear
+      - multivariate
+      - frequency-dependent
+      - M12
+    dependencies:
+    configs:
+    - order: bic
+    - order: bic
+      fmin: 0
+      fmax: 0.25
+    - order: bic
+      fmin: 0.25
+      fmax: 0.5
+
+
+.statistics.events:
+  EventSynchronisation:
+    labels:
+      - nonlinear
+      - bivariate
+      - time-dependent
+      - M14
+    dependencies:
+    configs:
+    - statistic: strength
+      quantile: 0.95
+      labels:
+      - undirected
+    - statistic: asym
+      quantile: 0.95
+      labels:
+      - antisymmetric
+      - signed
+    - statistic: strength
+      quantile: 0.9
+      labels:
+      - undirected
+    - statistic: asym
+      quantile: 0.9
+      labels:
+      - antisymmetric
+      - signed
+
+  TailDependenceAsymmetry:
+    labels:
+      - undirected
+      - nonlinear
+      - signed
+      - profile
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+    - quantile: 0.95
+    - quantile: 0.9
+

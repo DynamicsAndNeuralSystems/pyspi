@@ -144,16 +144,18 @@ name or a path to your own YAML:
 |:----------|-----:|:---------|
 | `"full"` (default) | 231 | You want everything and can afford it. |
 | `"fast"` | 138 | General use; drops the slowest SPIs. |
-| `"benchmarked_p99"` | 183 | The benchmarked SPIs without the three slowest (`hhg`, `gpfit_RBF`, `mgcx_maxlag-10`). |
-| `"benchmarked_p95"` | 173 | A coverage/cost trade-off among the benchmarked SPIs. |
-| `"benchmarked_p90"` | 161 | Large batches, when the families listed below are not needed. |
-| `"benchmarked_p80"` | 145 | Cost-constrained sweeps. |
+| `"benchmarked_p99"` | 229 | Everything except `bary_softdtw_corr` and `gpfit_RBF`, which cost more than the other 229 together. |
+| `"benchmarked_p95"` | 213 | p90 plus costlier settings of its methods (`ccm_E-10`, `dcorrx_maxlag-10`, `cce_kozachenko`, Itakura soft-DTW). |
+| `"benchmarked_p90"` | 207 | Large batches. |
+| `"benchmarked_p80"` | 185 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14); M07 has no bundled SPI, so M14 has two. |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |
 
-Each `benchmarked_p<N>` set keeps the fastest *N*% of the SPIs timed in pyspi's compute-cost benchmark, ranked by amortized cost (SPIs that share a cache split its cost) at *M* = 16, *T* = 800.
-SPIs added to `full` after that benchmark are in none of these sets, whatever they cost: the conditional Granger and conditional spectral measures (`cgc`, `cpdc`, `cgpdc`, `cddtf`, `pcohmag`), `liang`, `edge`, `es`, `tailasym`, `nli`, `wtc`, `pac`, `lccm`, the three `ccm_*_convergence` SPIs, `di_kraskov`, `phasealigned` and `ppc_hilbert_adaptive`.
-Use `full` when you want those families; `fast` has one SPI from each of `cgc`, `cpdc`, `pcohmag`, `liang`, `edge`, `es`, `tailasym` and `nli`.
+Each `benchmarked_p<N>` set holds about the cheapest *N*% of the 231 SPIs in `full`, ranked by amortized cost (SPIs that share a cache split its cost) on one core at *M* = 16, *T* = 1000, with cache groups kept whole.
+A few SPIs are placed by hand, and each config's header lists them.
+An SPI that the ranking puts in `benchmarked_p90` or `benchmarked_p95` (but not `benchmarked_p80`) and whose cost grows about as *T*² or faster moves to the next larger set, except `anm` and `hsic`, which stay in `benchmarked_p90` since no other SPI tracks them closely.
+The rule does not reach `benchmarked_p80`, which keeps `dtw`, `dtw_constraint-itakura` and `lcss_constraint-itakura` although their cost grows as fast.
+An SPI that a cheaper SPI tracks closely goes to `benchmarked_p99`, and `cds` and `te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1` are in `benchmarked_p90` for coverage although they cost more than its cutoff.
 See [`bench/README.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/bench/README.md) for the benchmark's methodology, and [`bench/results/analysis/report.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/bench/results/analysis/report.md) for how cost scales across a grid of *M* ∈ {4..64} and *T* ∈ {200..3200}.
 
 To build your own subset by keyword:

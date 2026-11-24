@@ -1,3 +1,15 @@
+import os
+
+# One BLAS thread for the whole session, as in compute(n_jobs>1) workers.
+# Multithreaded BLAS is not bit-reproducible (OpenBLAS results depend on the
+# thread count; Accelerate can differ between calls), and the ill-conditioned
+# SPIs (the VAR-model spectral family, gpfit_*, anm) amplify a last-bit change
+# to 1e-15..1e-5, which the bit-identity tests would report. Set before any
+# test module imports numpy.
+for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+             "VECLIB_MAXIMUM_THREADS"):
+    os.environ[_var] = "1"
+
 import pytest
 
 

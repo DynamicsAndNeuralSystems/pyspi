@@ -12,6 +12,7 @@ from pyspi.base import NotAppropriate
 from pyspi.data import Data
 from pyspi.statistics import infotheory as it
 
+from table_differences import table_differences
 from unchecked_data import unchecked_data
 
 # Classes whose kraskov variant must be genuine or rejected.
@@ -2054,10 +2055,8 @@ def test_no_p90_spi_depends_on_the_global_rng():
         return calc.table
 
     first, second = table(1), table(2)
-    changed = [key for key in first.columns.get_level_values(0).unique()
-               if not np.array_equal(first[key].to_numpy(float),
-                                     second[key].to_numpy(float), equal_nan=True)]
-    assert not changed
+    changed = table_differences(second, first)
+    assert not changed, "\n".join(changed)
 
 
 # --------------------------------------------------------------------------

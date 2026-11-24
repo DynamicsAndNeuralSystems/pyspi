@@ -18,6 +18,8 @@ import pytest
 
 from pyspi.calculator import Calculator
 
+from table_differences import table_differences
+
 CONFIG = Path(__file__).parent / "parallel_test_config.yaml"
 
 # fork is the Linux production default; spawn is the only safe method elsewhere.
@@ -349,8 +351,8 @@ def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):
 
     def assert_same(calc, label):
         assert list(calc.table.columns) == list(ref.table.columns), label
-        assert np.array_equal(calc.table.to_numpy(float), ref.table.to_numpy(float),
-                              equal_nan=True), label
+        changed = table_differences(calc.table, ref.table)
+        assert not changed, "\n".join([label] + changed)
         assert list(calc.errors.items()) == list(ref.errors.items()), label
 
     ref = run(1, seed=0)
@@ -365,8 +367,8 @@ def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):
         (cp_dir / f"{key}.npy").unlink()
     resumed = run(2, seed=4, checkpoint_dir=cp_dir)
     assert list(resumed.table.columns) == list(ref.table.columns)
-    assert np.array_equal(resumed.table.to_numpy(float), ref.table.to_numpy(float),
-                          equal_nan=True)
+    changed = table_differences(resumed.table, ref.table)
+    assert not changed, "\n".join(["resumed"] + changed)
     assert resumed.errors == ref.errors
 
 

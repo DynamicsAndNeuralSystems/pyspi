@@ -36,7 +36,7 @@ as they do for `Calculator(config=...)`.
 | preset      | grid                                          | purpose |
 |-------------|-----------------------------------------------|---------|
 | `headline`  | (M=10,T=500), (M=20,T=1000), n_jobs=1         | quick reference points |
-| `scaling`   | M={4,8,16,32} x T={200,400,800,1600}, n_jobs=1| per-SPI walltime for cutting `benchmarked_p*.yaml` |
+| `scaling`   | M={4,8,16,32} x T={200,400,800,1600}, n_jobs=1| per-SPI walltime for the cost-scaling fits (`scaling.csv`, `report.md`); the shipped sets are cut from timings at M=16, T=1000 (see below) |
 | `parallel`  | M=16, T=800, n_jobs={1,2,4,8,16}              | parallel speedup curve |
 | `amortized` | M={8,16}, T=800, n_jobs=1                     | per-SPI walltime, minimal grid |
 
@@ -89,14 +89,18 @@ Dropped SPIs are left out of the YAML and listed with their cost on stderr.
 Pass `--preserve-dropped` to keep them as commented-out blocks instead.
 SPIs of the source config that the JSON did not time are left out.
 
-**The shipped cuts carry hand edits.**
-`xi_tau-{0,1}`, the six `pcorr_<estimator>`, `te_symbolic_k-3` and the three kernel `_DCE-AUTO` SPIs were timed separately on the same protocol (M=16, T=800, one core) and placed in each set by that cost.
-`te_kraskov_NN-4_DCE-AUTO_k-{1,2}_kt-1_l-1_lt-1` are in `benchmarked_p90` for coverage, although they cost more than its cutoff.
-Re-running `cut_config` drops these edits, so re-apply them by hand afterwards.
-
-**SPIs added to `full` after the benchmark are in no `benchmarked_p*` set**, whatever their cost.
-These are the 45 SPIs of the `cgc`, `cpdc`, `cgpdc`, `cddtf`, `pcohmag`, `liang`, `edge`, `es`, `tailasym`, `nli`, `wtc`, `pac`, `lccm`, `ccm_*_convergence`, `di_kraskov`, `phasealigned` and `ppc_hilbert_adaptive` families.
-Placing one in the sets needs its cost on the same protocol.
+**The shipped cuts (3.0.0) carry hand edits.**
+They rank all 231 SPIs of `full` by amortized cost on one core of a Xeon 8274 at M=16, T=1000 on white noise, taking the fastest of the seeds, with cache groups kept whole.
+Each set `benchmarked_p<N>` is then cut at round(N/100 × 231) SPIs (185, 208, 219 and 229), cache groups completed as `cut_config` does, and the hand placements below are applied.
+The timing cells are not in the repository; `bench/results/analysis/tiers_3_0.csv` lists each SPI's set, rank, costs at T=1000 and T=4000, and the reason for any hand placement.
+A p90 or p95 SPI whose cost grows from T=1000 to T=4000 by 12x or more (about T^1.8) moves to the next set: `softdtw_constraint-itakura` to p95, and `softdtw` and `bary_dtw_corr` to p99.
+`anm` (15x) and `hsic` (24x) stay in p90, since no other SPI tracks them closely (`dcorr` falls below rho 0.90 against `hsic` on 137 of 498 benchmark datasets, mostly nonlinear-coupling ones).
+An SPI that a cheaper SPI tracks (Spearman |rho| of the off-diagonal entries >= 0.95 on most datasets) goes to p99: `lcss` (tracked by `lcss_constraint-itakura`) and `hsic_biased` (by `hsic`).
+`lccm_E-None_k-5_{skill,tp}` are in p99 only, since `ccm_*` covers the method.
+`cds` and `te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1` are in p90 for coverage, although they cost more than its cutoff.
+In all, 11 SPIs are placed by hand: `te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1`, `cds`, `anm` and `hsic` in p90 and up; `softdtw_constraint-itakura` in p95 and up; `softdtw`, `bary_dtw_corr`, `lcss`, `hsic_biased` and `lccm_E-None_k-5_{skill,tp}` in p99 only.
+`cut_config` does not apply them: fed the T=1000 costs of `tiers_3_0.csv` as a per-cell JSON, it writes `benchmarked_p80` as shipped and the other three without these placements and without the header notes on them, so re-apply both by hand after a re-cut.
+A new SPI goes into the set its cost on the same protocol places it in.
 
 ## Analyse
 
