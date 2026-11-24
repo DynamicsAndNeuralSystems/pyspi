@@ -152,7 +152,10 @@ name or a path to your own YAML:
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |
 
 Each `benchmarked_p<N>` set holds about the cheapest *N*% of the 231 SPIs in `full`, ranked by amortized cost (SPIs that share a cache split its cost) on one core at *M* = 16, *T* = 1000, with cache groups kept whole.
-A few SPIs are placed by hand, and each config's header lists them: an SPI whose cost grows about as *T*² or faster moves to a larger set, one that a cheaper SPI tracks closely goes to `benchmarked_p99`, and `cds` and `te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1` are in `benchmarked_p90` for coverage although they cost more than its cutoff.
+A few SPIs are placed by hand, and each config's header lists them.
+An SPI that the ranking puts in `benchmarked_p90` or `benchmarked_p95` (but not `benchmarked_p80`) and whose cost grows about as *T*² or faster moves to the next larger set, except `anm` and `hsic`, which stay in `benchmarked_p90` since no other SPI tracks them closely.
+The rule does not reach `benchmarked_p80`, which keeps `dtw`, `dtw_constraint-itakura` and `lcss_constraint-itakura` although their cost grows as fast.
+An SPI that a cheaper SPI tracks closely goes to `benchmarked_p99`, and `cds` and `te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1` are in `benchmarked_p90` for coverage although they cost more than its cutoff.
 See [`bench/README.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/bench/README.md) for the benchmark's methodology, and [`bench/results/analysis/report.md`](https://github.com/DynamicsAndNeuralSystems/pyspi/blob/main/bench/results/analysis/report.md) for how cost scales across a grid of *M* ∈ {4..64} and *T* ∈ {200..3200}.
 
 To build your own subset by keyword:
