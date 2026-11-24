@@ -318,8 +318,8 @@ def test_gpfit_rbf_equals_sklearns_gp_fit():
     flat optimum. That matters only near interpolation (y a near-copy of a
     function of x, leave-one-out MSE ~1e-6), where sklearn's own value moves
     by up to ~1e-3 relative when the samples are merely reordered; those
-    pairs are left out here. Covers linear, nonlinear, heavy-tailed, autocorrelated and
-    unrelated pairs, and x in large units (`zscore=False`).
+    pairs are left out here. Covers linear, nonlinear, heavy-tailed,
+    autocorrelated and unrelated pairs, and x in large units (`zscore=False`).
     """
     from scipy.linalg import solve_triangular
     from sklearn.gaussian_process import GaussianProcessRegressor

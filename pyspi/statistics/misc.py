@@ -344,7 +344,8 @@ class LinearModel(Directed, Unsigned):
 
 def _dot_product_gp_loo_mse(kernel, X, y, alpha=1e-10):
     """
-    ``GPModel`` with ``C() + W() + DotProduct()``, without forming the T x T kernel.
+    ``GPModel`` with ``C() + W() + DotProduct()``, without forming the T x T
+    kernel.
 
     The fit is ``GaussianProcessRegressor(kernel).fit(X, y)`` (jitter
     ``alpha``, L-BFGS-B from ``kernel.theta`` within ``kernel.bounds``, no
@@ -425,7 +426,8 @@ def _rbf_gp_loo_mse(kernel, X, y, alpha=1e-10):
         dists = pdist(X / length_scale, metric="sqeuclidean")
         R = squareform(np.exp(-0.5 * dists))
         np.fill_diagonal(R, 1)
-        # (ConstantKernel + WhiteKernel) + RBF, then the jitter, in sklearn's order.
+        # (ConstantKernel + WhiteKernel) + RBF, then the jitter, in sklearn's
+        # order.
         K = np.full((T, T), c) + noise * np.eye(T)
         K += R
         K[np.diag_indices_from(K)] += alpha
@@ -462,8 +464,9 @@ def _rbf_gp_loo_mse(kernel, X, y, alpha=1e-10):
 
 def _loo_mse(L, k_inv_y):
     """
-    Mean squared leave-one-out residual ``[K^-1 y]_t / [K^-1]_tt`` ([1]_ of
-    ``GPModel``, eq. 5.12), from the lower Cholesky factor ``L`` of ``K``.
+    Mean squared leave-one-out residual ``[K^-1 y]_t / [K^-1]_tt`` (eq. 5.12
+    of the reference in ``GPModel``), from the lower Cholesky factor ``L`` of
+    ``K``.
     """
     L_inv = solve_triangular(L, np.eye(len(k_inv_y)), lower=True,
                              check_finite=False)
