@@ -381,8 +381,17 @@ def _hhg_ranks(x):
     themselves), and the order that sorts each row of them.
     """
     d = pairwise_distances(x, metric="euclidean")
-    ranks = rankdata(d, method="max", axis=1).astype(np.int32)
-    return ranks, np.argsort(ranks, axis=1, kind="stable").astype(np.int32)
+    n = d.shape[0]
+    ranks = np.empty((n, n), dtype=np.int32)
+    order = np.empty((n, n), dtype=np.int32)
+    # Rows are independent; bound the float64 and int64 temporaries' size.
+    step = max(1, _HHG_CHUNK_ENTRIES // n)
+    for start in range(0, n, step):
+        stop = min(n, start + step)
+        ranks[start:stop] = rankdata(d[start:stop], method="max", axis=1)
+        order[start:stop] = np.argsort(ranks[start:stop], axis=1,
+                                       kind="stable")
+    return ranks, order
 
 
 def _hhg_from_ranks(rank_x, rank_y):
@@ -461,7 +470,9 @@ class HellerHellerGorfine(Undirected, Unsigned):
 
     @parse_multivariate
     def multivariate(self, data):
-        # Each series' ranks are computed once, not once per pair.
+        # Each series' ranks (8 T^2 bytes) are computed once, not once per
+        # pair. The cache holds at most 256 MB of them, or two series'
+        # (16 T^2 bytes) when T > 4096.
         z = data.to_numpy()
         T = z.shape[1]
         return _cached_pairs(self.identifier, z.shape[0],
