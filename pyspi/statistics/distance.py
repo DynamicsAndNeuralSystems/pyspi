@@ -151,6 +151,25 @@ def _itakura_rows(n, m):
     return lo, hi
 
 
+@functools.lru_cache(maxsize=8)
+def _sakoe_chiba_rows(n, m, radius=1):
+    """
+    Each row's admitted columns ``lo[i]:hi[i]`` in
+    ``tslearn.metrics.sakoe_chiba_mask(n, m, radius)``.
+
+    tslearn widens the band by ``|n - m|`` on the side of the longer series:
+    along rows when ``n <= m``, along columns when ``n > m``.
+    """
+    i = np.arange(n)
+    if n > m:
+        lo = np.maximum(0, i - (n - m + radius))
+        hi = np.minimum(m, i + radius + 1)
+    else:
+        lo = np.maximum(0, i - radius)
+        hi = np.minimum(m, i + (m - n + radius) + 1)
+    return lo, hi
+
+
 @numba.njit(cache=True, nogil=True)
 def _banded_dtw(x, y, lo, hi):
     """
@@ -177,6 +196,46 @@ def _itakura_dtw(x, y):
     """``tslearn.metrics.dtw(x, y, global_constraint="itakura")`` for 1-D series."""
     lo, hi = _itakura_rows(len(x), len(y))
     return _banded_dtw(x, y, lo, hi)
+
+
+# ---------------------------------------------------------------------------
+# Banded soft-DTW
+# ---------------------------------------------------------------------------
+@numba.njit(cache=True, nogil=True)
+def _banded_soft_dtw(x, y, lo, hi, gamma):
+    """
+    tslearn's soft-DTW recursion over row ``i``'s columns ``lo[i]:hi[i]`` only.
+
+    Each cell is ``(x_i - y_j)^2 + softmin(up, left, diagonal)``, with
+    tslearn's max-shifted soft minimum in tslearn's order, so the value is
+    bitwise tslearn's. Cells outside the band are +inf, as in tslearn's
+    masked accumulated-cost matrix. Only the entries a row wrote are reset
+    when its buffer is reused, so a narrow band costs O(band) per row.
+    """
+    m = y.shape[0]
+    prev = np.full(m + 1, np.inf)
+    prev[0] = 0.0
+    cur = np.full(m + 1, np.inf)
+    prev_lo, prev_hi = 0, 1  # entries of `prev` that hold values
+    cur_lo, cur_hi = 0, 0
+    for i in range(x.shape[0]):
+        cur[cur_lo:cur_hi] = np.inf
+        for j in range(lo[i], hi[i]):
+            a = prev[j + 1] / -gamma
+            b = cur[j] / -gamma
+            c = prev[j] / -gamma
+            max_val = max(max(a, b), c)
+            tmp = 0.0
+            tmp += np.exp(a - max_val)
+            tmp += np.exp(b - max_val)
+            tmp += np.exp(c - max_val)
+            d = x[i] - y[j]
+            cur[j + 1] = d * d
+            cur[j + 1] += -gamma * (np.log(tmp) + max_val)
+        cur_lo, cur_hi = prev_lo, prev_hi
+        prev_lo, prev_hi = lo[i] + 1, hi[i] + 1
+        prev, cur = cur, prev
+    return prev[m]
 
 
 # ---------------------------------------------------------------------------
@@ -1197,6 +1256,38 @@ class DynamicTimeWarping(TimeWarping):
             return A
 
 
+@numba.njit(cache=True, nogil=True)
+def _banded_lcss_count(x, y, lo, hi, eps):
+    """
+    Length of the LCSS when only row ``i``'s columns ``lo[i]:hi[i]`` may match.
+
+    ``a`` holds one row of the LCSS table and is updated in place inside the
+    band only. Left of the band a row equals the row above (no matches, and
+    the table is non-decreasing along rows and columns), so those entries are
+    already right. Right of the band a row is constant at its last in-band
+    value (no row so far has a match there), so only the columns the next row
+    reads, up to ``hi[i + 1]``, are filled with it. This needs ``hi``
+    non-decreasing, as it is for both bands.
+    """
+    n = x.shape[0]
+    a = np.zeros(y.shape[0] + 1, dtype=np.int64)
+    for i in range(n):
+        diag = a[lo[i]]
+        left = diag
+        for j in range(lo[i], hi[i]):
+            up = a[j + 1]
+            if abs(x[i] - y[j]) <= eps:
+                v = diag + 1
+            else:
+                v = max(up, left)
+            diag = up
+            a[j + 1] = v
+            left = v
+        if i + 1 < n:
+            a[hi[i] + 1:hi[i + 1] + 1] = left
+    return a[hi[n - 1]]
+
+
 def _banded_lcss(x, y, global_constraint=None, eps=1.0):
     """
     LCSS similarity in which only pairs inside the global band may match.
@@ -1208,27 +1299,22 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
     which for the Itakura parallelogram (a single cell at each end) scores
     any pair whose last samples differ by more than `eps` as exactly 0.
 
-    A row of the LCSS table is non-decreasing, and a match cell's
-    `A[i-1, j-1] + 1` is never below its left or upper neighbour, so each row
-    is the running maximum of its candidates, computed in one vectorised pass.
+    Outside the band the table is determined by its in-band cells, so the
+    recursion runs over each row's admitted columns only, in O(T * band) time
+    and O(T) memory (`_banded_lcss_count`). The count is an exact integer.
     """
     if global_constraint is None:
         return tslearn.metrics.lcss(x, y, eps=eps)
-    x = np.asarray(x, dtype=float).ravel()
-    y = np.asarray(y, dtype=float).ravel()
+    x = np.ascontiguousarray(x, dtype=float).ravel()
+    y = np.ascontiguousarray(y, dtype=float).ravel()
     n, m = len(x), len(y)
     if global_constraint == "sakoe_chiba":
-        band = tslearn.metrics.sakoe_chiba_mask(n, m)
+        lo, hi = _sakoe_chiba_rows(n, m)
     elif global_constraint == "itakura":
-        band = _itakura_mask(n, m)
+        lo, hi = _itakura_rows(n, m)
     else:
         raise ValueError(f"Unknown LCSS global constraint: {global_constraint}")
-    match = np.asarray(band, dtype=bool) & (np.abs(x[:, None] - y[None, :]) <= eps)
-    prev = np.zeros(m + 1)
-    for i in range(n):
-        cand = np.where(match[i], prev[:-1] + 1, prev[1:])
-        prev = np.concatenate(([0.0], np.maximum.accumulate(cand)))
-    return prev[-1] / min(n, m)
+    return np.float64(_banded_lcss_count(x, y, lo, hi, float(eps))) / min(n, m)
 
 
 class LongestCommonSubsequence(TimeWarping):
@@ -1284,7 +1370,9 @@ class SoftDynamicTimeWarping(TimeWarping):
     of [2]_.
 
     A ``global_constraint`` uses tslearn's defaults: Sakoe-Chiba radius 1,
-    Itakura maximum slope 2.
+    Itakura maximum slope 2. For a series with one replication it is
+    computed with a banded version of tslearn's recursion that gives
+    tslearn's value; with several replications tslearn computes it.
 
     References
     ----------
@@ -1310,8 +1398,18 @@ class SoftDynamicTimeWarping(TimeWarping):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         z =data.to_numpy(squeeze=True)
-        return tslearn.metrics.soft_dtw(
-            z[i], z[j], global_constraint=self._global_constraint)
+        constraint = self._global_constraint
+        if constraint is None:
+            return tslearn.metrics.soft_dtw(z[i], z[j])
+        if z[i].ndim > 1:
+            # Several replications: a multivariate series, left to tslearn.
+            return tslearn.metrics.soft_dtw(
+                z[i], z[j], global_constraint=constraint)
+        x = np.ascontiguousarray(z[i], dtype=np.double)
+        y = np.ascontiguousarray(z[j], dtype=np.double)
+        rows = {"itakura": _itakura_rows, "sakoe_chiba": _sakoe_chiba_rows}
+        lo, hi = rows[constraint](len(x), len(y))
+        return _banded_soft_dtw(x, y, lo, hi, 1.0)
 
 
 class Barycenter(Undirected, Signed):
