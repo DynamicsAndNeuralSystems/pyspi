@@ -1,6 +1,7 @@
 # Derived artefacts of `python -m bench.analyse_cells` — regenerate in seconds
 # from the committed per-cell JSONs, so they are not tracked. The small,
-# human-readable summaries (report.md, scaling.csv, cell_summary.csv) are.
+# human-readable summaries (report.md, scaling.csv, cell_summary.csv) are, as is
+# tiers_3_0.csv, the per-SPI costs behind the 3.0 benchmarked_p* sets.
 long_costs.csv
 jaccard_p*.csv
 plot_*.png

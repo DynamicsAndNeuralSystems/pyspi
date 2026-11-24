@@ -91,7 +91,7 @@ SPIs of the source config that the JSON did not time are left out.
 
 **The shipped cuts (3.0.0) carry hand edits.**
 They rank all 231 SPIs of `full` by amortized cost on one Gadi core (Xeon 8274) at M=16, T=1000 on white noise, taking the fastest of the seeds, with cache groups kept whole.
-The timing cells are not in the repository.
+The timing cells are not in the repository; `bench/results/analysis/tiers_3_0.csv` lists each SPI's set, rank, costs at T=1000 and T=4000, and the reason for any hand placement.
 A p90 or p95 SPI whose cost grows from T=1000 to T=4000 by 12x or more (about T^1.8) moves to the next set: `softdtw_constraint-itakura` to p95, and `softdtw` and `bary_dtw_corr` to p99.
 `anm` (15x) and `hsic` (24x) stay in p90, since no other SPI tracks them closely (`dcorr` falls below rho 0.90 against `hsic` on 137 of 498 benchmark datasets, mostly nonlinear-coupling ones).
 An SPI that a cheaper SPI tracks (Spearman |rho| of the off-diagonal entries >= 0.95 on most datasets) goes to p99: `lcss` (tracked by `lcss_constraint-itakura`) and `hsic_biased` (by `hsic`).
