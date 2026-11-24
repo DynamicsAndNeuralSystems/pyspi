@@ -346,6 +346,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   A pair takes 9.2 ms instead of 20.4 ms at T = 100, 1.57 s instead of 3.12 s at T = 1000, and 8.6 s instead of 18.6 s at T = 2000.
   **Values change slightly**, since the gradient differs from scikit-learn's in the last bits.
   Most pairs agree with scikit-learn's fit to about 1e-12 relative, and near-interpolating pairs (such as a series and its copy), whose likelihood is flat near its optimum, by up to about 5e-5 relative.
+  The drift baselines of `gpfit_DotProduct` and `gpfit_RBF` are regenerated.
 - **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.
 - **Multitaper phase slope index follows Nolte et al. (2008), applies its band, and gains power with the length of the series.**
