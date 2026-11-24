@@ -171,9 +171,24 @@ def _itakura_dtw(x, y):
 # ---------------------------------------------------------------------------
 # Distance correlation from per-series centred distance matrices
 # ---------------------------------------------------------------------------
+def _dcorr_cache_bytes():
+    """``PYSPI_DCORR_CACHE_BYTES`` as a whole number of bytes; 2 GiB unset."""
+    raw = os.getenv("PYSPI_DCORR_CACHE_BYTES", str(2**31))
+    try:
+        value = int(raw)
+    except ValueError:
+        value = -1
+    if value < 0:
+        raise ValueError(
+            "PYSPI_DCORR_CACHE_BYTES must be a whole number of bytes "
+            f"(such as 2147483648 for 2 GiB), got {raw!r}."
+        )
+    return value
+
+
 # Cap on the centred matrices one `_cached_pairs` call holds (2 GiB), per SPI,
 # per worker process: n_jobs workers can hold n_jobs times it in total.
-_DCORR_CACHE_BYTES = int(os.getenv("PYSPI_DCORR_CACHE_BYTES", str(2**31)))
+_DCORR_CACHE_BYTES = _dcorr_cache_bytes()
 
 
 def _centred(dist, bias):

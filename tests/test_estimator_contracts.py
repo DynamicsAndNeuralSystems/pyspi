@@ -2096,6 +2096,37 @@ def test_distance_correlation_centres_each_series_once(monkeypatch):
     assert len(calls) == 6
 
 
+@pytest.mark.parametrize("value, expected", [(None, 2**31), ("0", 0),
+                                             ("268435456", 2**28)])
+def test_dcorr_cache_bytes_reads_a_whole_number_of_bytes(value, expected,
+                                                         monkeypatch):
+    from pyspi.statistics import distance as D
+
+    if value is None:
+        monkeypatch.delenv("PYSPI_DCORR_CACHE_BYTES", raising=False)
+    else:
+        monkeypatch.setenv("PYSPI_DCORR_CACHE_BYTES", value)
+    assert D._dcorr_cache_bytes() == expected
+
+
+@pytest.mark.parametrize("value", ["2GB", "1e9", "-1", ""])
+def test_bad_dcorr_cache_bytes_names_the_variable_on_import(value):
+    """The module reads the variable on import, so a bad value stops any
+    config with a distance SPI from loading; the error says why."""
+    import os
+    import subprocess
+    import sys
+
+    env = dict(os.environ, PYSPI_DCORR_CACHE_BYTES=value)
+    run = subprocess.run(
+        [sys.executable, "-c", "import pyspi.statistics.distance"],
+        env=env, capture_output=True, text=True)
+    assert run.returncode != 0
+    last = run.stderr.strip().splitlines()[-1]
+    assert last.startswith("ValueError: PYSPI_DCORR_CACHE_BYTES")
+    assert "whole number of bytes" in last and repr(value) in last
+
+
 @pytest.mark.parametrize("budget, centrings", [(6, 6), (5, 10)])
 def test_distance_correlation_centres_once_when_all_series_fit(budget, centrings,
                                                                monkeypatch):
