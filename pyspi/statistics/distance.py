@@ -558,6 +558,7 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
 
 
 def _require_mgc_samples(T):
+    """Refuse unless ``T`` reaches MGC's minimum, ``_MGC_MIN_SAMPLES`` samples."""
     if T < _MGC_MIN_SAMPLES:
         raise NotAppropriate(
             f"Multiscale graph correlation needs T >= {_MGC_MIN_SAMPLES} "
