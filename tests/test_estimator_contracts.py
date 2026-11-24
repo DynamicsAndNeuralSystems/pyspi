@@ -920,17 +920,20 @@ def test_itakura_dtw_is_bitwise_tslearns(T):
 
 
 def test_sakoe_chiba_rows_are_tslearns_mask():
-    """`_sakoe_chiba_rows` is tslearn's radius-1 mask, square or not."""
+    """`_sakoe_chiba_rows` is tslearn's mask, square or not, radius 1 or 3."""
     import tslearn.metrics
     from pyspi.statistics.distance import _sakoe_chiba_rows
 
     sizes = [(n, m) for n in range(1, 40) for m in range(1, 40)]
     sizes += [(1000, 1000), (1001, 1000)]
     for n, m in sizes:
-        ref = np.asarray(tslearn.metrics.sakoe_chiba_mask(n, m), dtype=bool)
-        lo, hi = _sakoe_chiba_rows(n, m)
-        cols = np.arange(m)
-        assert np.array_equal(ref, (cols >= lo[:, None]) & (cols < hi[:, None])), (n, m)
+        for radius in (1, 3):
+            ref = np.asarray(tslearn.metrics.sakoe_chiba_mask(n, m, radius),
+                             dtype=bool)
+            lo, hi = _sakoe_chiba_rows(n, m, radius)
+            cols = np.arange(m)
+            assert np.array_equal(
+                ref, (cols >= lo[:, None]) & (cols < hi[:, None])), (n, m, radius)
 
 
 @pytest.mark.parametrize("constraint", ["sakoe_chiba", "itakura"])
