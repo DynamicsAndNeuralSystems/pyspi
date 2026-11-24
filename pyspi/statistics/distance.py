@@ -204,7 +204,8 @@ def _dcorr_centred(cx, cy, bias):
 
 
 # hyppo's O(n log n) dCov of two scalar samples (Chaudhuri & Hu 2019). Below
-# about 800 samples the cached O(n^2) matrices are faster, and bit-identical.
+# about 800 samples the cached O(n^2) matrices are faster; their values equal
+# hyppo 0.5.2's ``Dcorr`` statistic bit for bit, the fast route's to rounding.
 _FAST_DCOV_MIN_SAMPLES = 800
 
 
@@ -508,9 +509,10 @@ class DistanceCorrelation(Undirected, Unsigned):
     algorithm of [3]_, as implemented in hyppo, without forming the distance
     matrices. Shorter series, where that is slower, and series with several
     values per sample use each series' ``T x T`` centred distance matrix.
-    The value is 0 when a distance variance is not positive. For heavily
-    tied short series the unbiased variance can be exactly zero, and
-    rounding then decides between 0 and an arbitrary value.
+    The value is 0 when a distance variance is not positive. The unbiased
+    variance is exactly zero for a series whose samples are all equal but
+    one, at any length, and rounding then decides between 0 and an
+    arbitrary value.
 
     References
     ----------
@@ -690,7 +692,8 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
     @staticmethod
     def _weighted_sum(stats, n):
-        # `_lagged_sum`'s terms and summation, so the value is bit-identical.
+        # `_lagged_sum`'s weights and summation, so from the same lagged terms
+        # the sum equals `_lagged_sum`'s bit for bit.
         return np.sum([stats[0]] + [(n - lag) * stats[lag] / n
                                     for lag in range(1, len(stats))])
 
