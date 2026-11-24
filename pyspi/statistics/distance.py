@@ -30,6 +30,17 @@ from pyspi.base import (
 )
 from pyspi.utils import fmt_param, require_int, require_positive_float
 
+# A guarded import (absent before scipy 1.14), so it follows the sorted groups.
+try:
+    # The steps of scipy's `multiscale_graphcorr`, which hyppo's MGC calls,
+    # taken separately so that each series' share is computed once
+    # (`_mgc_parts`). Private: if a scipy release moves them, MGC and MGCX
+    # fall back to hyppo for every pair.
+    from scipy.stats._mgc import _smooth_mgc_map, _threshold_mgc_map
+    from scipy.stats._stats import _center_distance_matrix, _local_covariance
+except ImportError:  # pragma: no cover
+    _local_covariance = None
+
 
 # ---------------------------------------------------------------------------
 # DTW Sakoe-Chiba auto-radius configuration (env-var tunable)
@@ -375,71 +386,83 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
         return _dcorr_spi_matrix(self, data, _median_gaussian_distance)
 
 
-def _row_dominance_counts(rx, ry):
+@numba.njit(cache=True, nogil=True)
+def _row_dominance_counts(rx, order, ry):
     """
     ``c[i, j] = #{k : rx[i, k] <= rx[i, j] and ry[i, k] <= ry[i, j]}``.
 
-    ``rx`` and ``ry`` are row-wise max-ranks (1..n). Offline 2-D dominance
-    counting with one Fenwick tree per row, all rows at once: because ranks
-    are max-ranks, the ``k`` with ``rx[i, k] <= rx[i, j]`` are exactly the first
-    ``rx[i, j]`` entries of row ``i`` in ``rx`` order, so ``j``'s query is
-    answered once that many entries have been inserted. O(n log n) per row.
+    ``rx`` and ``ry`` are row-wise max-ranks (1..n) and ``order[i]`` sorts
+    row ``i`` of ``rx``. Offline 2-D dominance counting with a Fenwick tree
+    per row: because ranks are max-ranks, the ``k`` with
+    ``rx[i, k] <= rx[i, j]`` are exactly the entries of row ``i`` up to and
+    including ``j``'s tie group in ``rx`` order, so ``j``'s query is answered
+    once that group has been inserted. O(n log n) per row.
     """
     n_rows, n = rx.shape
-    n_bits = n.bit_length()
-    rows = np.arange(n_rows)
-    ry_in_rx_order = np.take_along_axis(
-        ry, np.argsort(rx, axis=1, kind="stable"), axis=1)
-    # Queries grouped by the prefix length p = rx at which they are answered.
-    q_order = np.argsort(rx, axis=None, kind="stable")
-    bounds = np.searchsorted(rx.ravel()[q_order], np.arange(1, n + 2))
-    q_rows = q_order // n
-    q_vals = ry.ravel()[q_order]
-    # Column n + 1 absorbs updates that run past the end of the tree.
-    tree = np.zeros((n_rows, n + 2), dtype=np.int64)
-    out = np.zeros(n_rows * n, dtype=np.int64)
-    for p in range(1, n + 1):
-        idx = ry_in_rx_order[:, p - 1].copy()
-        for _ in range(n_bits):
-            tree[rows, idx] += 1
-            idx += idx & -idx
-            np.minimum(idx, n + 1, out=idx)
-        lo, hi = bounds[p - 1], bounds[p]
-        if hi > lo:
-            q_r = q_rows[lo:hi]
-            idx = q_vals[lo:hi].copy()
-            acc = np.zeros(hi - lo, dtype=np.int64)
-            for _ in range(n_bits):
-                acc += tree[q_r, idx]  # tree[:, 0] stays 0
-                idx -= idx & -idx
-            out[q_order[lo:hi]] = acc
-    return out.reshape(n_rows, n)
+    out = np.empty((n_rows, n), dtype=np.int64)
+    tree = np.zeros(n + 1, dtype=np.int64)
+    for i in range(n_rows):
+        tree[:] = 0
+        p = 0
+        while p < n:
+            q = p
+            v = rx[i, order[i, p]]
+            while q < n and rx[i, order[i, q]] == v:
+                idx = ry[i, order[i, q]]
+                while idx <= n:
+                    tree[idx] += 1
+                    idx += idx & -idx
+                q += 1
+            for t in range(p, q):
+                j = order[i, t]
+                idx = ry[i, j]
+                acc = 0
+                while idx > 0:
+                    acc += tree[idx]
+                    idx -= idx & -idx
+                out[i, j] = acc
+            p = q
+    return out
 
 
 _HHG_CHUNK_ENTRIES = 2**22
 
 
-def _hhg_statistic(x, y):
+def _hhg_ranks(x):
     """
-    hyppo's ``HHG().statistic(x, y)`` in O(n^2 log n) rather than O(n^3).
+    The part of `_hhg_statistic` that depends on one series alone.
 
-    The sum over ``i != j`` of Pearson's chi-square for the 2x2 table that
-    splits the other samples by ``d_x(i, .) <= d_x(i, j)`` and
-    ``d_y(i, .) <= d_y(i, j)`` (Heller, Heller & Gorfine 2013). The table
-    counts are row-wise ranks and 2-D dominance counts.
+    Row-wise max-ranks of its Euclidean distance matrix,
+    ``#{k : d[i, k] <= d[i, j]}`` (counting ``k = i`` and ``k = j``
+    themselves), and the order that sorts each row of them.
     """
-    distx = pairwise_distances(x, metric="euclidean")
-    disty = pairwise_distances(y, metric="euclidean")
-    n = distx.shape[0]
+    d = pairwise_distances(x, metric="euclidean")
+    n = d.shape[0]
+    ranks = np.empty((n, n), dtype=np.int32)
+    order = np.empty((n, n), dtype=np.int32)
+    # Rows are independent; bound the float64 and int64 temporaries' size.
+    step = max(1, _HHG_CHUNK_ENTRIES // n)
+    for start in range(0, n, step):
+        stop = min(n, start + step)
+        ranks[start:stop] = rankdata(d[start:stop], method="max", axis=1)
+        order[start:stop] = np.argsort(ranks[start:stop], axis=1,
+                                       kind="stable")
+    return ranks, order
+
+
+def _hhg_from_ranks(rank_x, rank_y):
+    """`_hhg_statistic` from the two series' `_hhg_ranks`."""
+    (rx, order), (ry, _) = rank_x, rank_y
+    n = rx.shape[0]
     S = np.zeros((n, n))
     # Rows are independent; bound the int64 work arrays' size.
     step = max(1, _HHG_CHUNK_ENTRIES // n)
     for start in range(0, n, step):
         stop = min(n, start + step)
-        # #{k : d[i, k] <= d[i, j]}, which counts k = i and k = j themselves.
-        na = rankdata(distx[start:stop], method="max", axis=1).astype(np.int64)
-        nb = rankdata(disty[start:stop], method="max", axis=1).astype(np.int64)
-        nab = _row_dominance_counts(na, nb)
+        na = rx[start:stop].astype(np.int64)
+        nb = ry[start:stop].astype(np.int64)
+        nab = _row_dominance_counts(rx[start:stop], order[start:stop],
+                                    ry[start:stop])
         t11 = nab - 2
         t12 = na - nab
         t21 = nb - nab
@@ -456,6 +479,19 @@ def _hhg_statistic(x, y):
     return np.sum(S[mask])
 
 
+def _hhg_statistic(x, y):
+    """
+    hyppo's ``HHG().statistic(x, y)`` in O(n^2 log n) rather than O(n^3).
+
+    The sum over ``i != j`` of Pearson's chi-square for the 2x2 table that
+    splits the other samples by ``d_x(i, .) <= d_x(i, j)`` and
+    ``d_y(i, .) <= d_y(i, j)`` (Heller, Heller & Gorfine 2013). The table
+    counts are row-wise ranks (`_hhg_ranks`, one series at a time) and 2-D
+    dominance counts.
+    """
+    return _hhg_from_ranks(_hhg_ranks(x), _hhg_ranks(y))
+
+
 class HellerHellerGorfine(Undirected, Unsigned):
     """
     Heller-Heller-Gorfine independence statistic [1]_.
@@ -467,6 +503,7 @@ class HellerHellerGorfine(Undirected, Unsigned):
     sample of ``T`` scalar observations, so time order is ignored. The value
     equals hyppo's ``HHG().statistic``, computed in ``O(T^2 log T)`` from
     row-wise ranks and dominance counts instead of hyppo's ``O(T^3)`` loop.
+    Each series' ranks are computed once for all its pairs.
 
     Undirected and unsigned (``hhg(x, y) == hhg(y, x)`` exactly). The sum is
     not normalised, so it grows with ``T``.
@@ -486,6 +523,17 @@ class HellerHellerGorfine(Undirected, Unsigned):
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
         return _hhg_statistic(x, y)
+
+    @parse_multivariate
+    def multivariate(self, data):
+        # Each series' ranks (8 T^2 bytes) are computed once, not once per
+        # pair. The cache holds at most 256 MB of them, or two series'
+        # (16 T^2 bytes) when T > 4096.
+        z = data.to_numpy()
+        T = z.shape[1]
+        return _cached_pairs(self.identifier, z.shape[0],
+                             lambda s: _hhg_ranks(z[s]), _hhg_from_ranks,
+                             item_bytes=8 * T * T)
 
 
 class DistanceCorrelation(Undirected, Unsigned):
@@ -569,7 +617,11 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     all ``(k, l)``, and reports a smoothed maximum, so it is sensitive to
     nonlinear dependence that the global distance correlation dilutes.
     Undirected. MGC needs at least 5 samples; a shorter series is not
-    appropriate (``NotAppropriate``, NaN in a Calculator table).
+    appropriate (``NotAppropriate``, NaN in a Calculator table). The value is
+    hyppo's, bit for bit; each series' share of the MGC map (its ranks,
+    centring and local variances) is computed once, not once per pair. This
+    needs scipy 1.14 or later; with an older scipy the SPI calls hyppo's
+    ``MGC`` for every pair, with the same values.
 
     References
     ----------
@@ -585,12 +637,66 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        if x.shape[0] < _MGC_MIN_SAMPLES:
-            raise NotAppropriate(
-                f"Multiscale graph correlation needs T >= {_MGC_MIN_SAMPLES} "
-                f"samples; got T = {x.shape[0]}.")
-        stat = MGC().statistic(x, y)
-        return stat
+        _require_mgc_samples(x.shape[0])
+        if _local_covariance is None:
+            return MGC().statistic(x, y)
+        return _mgc_from_parts(_mgc_parts(_euclidean_distance(x)),
+                               _mgc_parts(_euclidean_distance(y)))
+
+    @parse_multivariate
+    def multivariate(self, data):
+        z = data.to_numpy()
+        _require_mgc_samples(z.shape[1])
+        if _local_covariance is None:
+            return super().multivariate(data)
+        return _cached_pairs(
+            self.identifier, z.shape[0],
+            lambda s: _mgc_parts(_euclidean_distance(z[s])), _mgc_from_parts,
+            item_bytes=16 * z.shape[1] ** 2)
+
+
+def _require_mgc_samples(T):
+    """Refuse unless ``T`` reaches MGC's minimum, ``_MGC_MIN_SAMPLES`` samples."""
+    if T < _MGC_MIN_SAMPLES:
+        raise NotAppropriate(
+            f"Multiscale graph correlation needs T >= {_MGC_MIN_SAMPLES} "
+            f"samples; got T = {T}.")
+
+
+def _mgc_parts(dist):
+    """
+    The share of scipy's MGC map that depends on one distance matrix.
+
+    Its MGC-centred distances, their column ranks and its local variances
+    (the diagonal of its local covariance with itself), as scipy's
+    ``_local_correlations`` computes them for each of the two inputs.
+    """
+    cent, rank = _center_distance_matrix(dist, "mgc", True)
+    var = _local_covariance(cent, cent.T, rank, rank.T).diagonal()
+    return cent, rank, var
+
+
+def _mgc_from_parts(px, py):
+    """
+    hyppo's ``MGC().statistic`` from the `_mgc_parts` of its two inputs.
+
+    scipy's ``_local_correlations`` (the local covariance of the pair over
+    the local variances, clipped at 1 and zero where a variance is not
+    positive) followed by ``_mgc_stat``'s thresholding and smoothing, with
+    scipy's own functions in the same order, so the value is bit-identical.
+    """
+    (cx, rx, vx), (cy, ry, vy) = px, py
+    cov = _local_covariance(cx, cy.T, rx, ry.T)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        corr = cov / np.sqrt(vx.reshape(-1, 1) @ vy.reshape(-1, 1).T).real
+        corr[corr > 1] = 1
+    corr[vx <= 0, :] = 0
+    corr[:, vy <= 0] = 0
+    n, m = corr.shape
+    if m == 1 or n == 1:
+        return corr[m - 1][n - 1]
+    sig_connect = _threshold_mgc_map(corr, cx.shape[0] - 1)
+    return _smooth_mgc_map(sig_connect, corr)[0]
 
 
 # Fewest samples of one term: with 3 samples the U-centred distance matrices
@@ -740,7 +846,10 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     Row = source, column = target; hyppo's ``MGCX`` implementation is not
     used, for the same reason. MGC needs at least 5 samples, so every lagged
     term does, and the SPI is not appropriate (``NotAppropriate``, NaN in a
-    Calculator table) when ``T < max_lag + 5``.
+    Calculator table) when ``T < max_lag + 5``. Each series' share of each
+    lagged MGC map is computed once per lag, not once per pair. This needs
+    scipy 1.14 or later; with an older scipy the SPI calls hyppo's ``MGC``
+    for every pair and lag, with the same values.
 
     References
     ----------
@@ -766,11 +875,52 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     def bivariate(self, data, i=None, j=None):
         # As in CrossDistanceCorrelation: source i goes second.
         z = data.to_numpy()
-        _require_lagged_samples(z.shape[1], self._max_lag, _MGC_MIN_SAMPLES,
+        self._require_samples(z.shape[1])
+        if _local_covariance is None:
+            return _lagged_sum(MGC(compute_distance=None), z[j], z[i],
+                               self._max_lag)
+        stats = [_mgc_from_parts(self._prepare(z[j], lag)[0],
+                                 self._prepare(z[i], lag)[1])
+                 for lag in range(self._max_lag + 1)]
+        return CrossDistanceCorrelation._weighted_sum(stats, z.shape[1])
+
+    @parse_multivariate
+    def multivariate(self, data):
+        z = data.to_numpy()
+        M, n = z.shape[0], z.shape[1]
+        self._require_samples(n)
+        if _local_covariance is None:
+            return super().multivariate(data)
+        S = [_cached_pairs(self.identifier, M,
+                           lambda s, lag=lag: self._prepare(z[s], lag),
+                           lambda src, tgt: _mgc_from_parts(tgt[0], src[1]),
+                           item_bytes=32 * (n - lag) ** 2, directed=True)
+             for lag in range(self._max_lag + 1)]
+        A = np.full((M, M), np.nan)
+        for i in range(M):
+            for j in range(M):
+                if i != j:
+                    A[i, j] = CrossDistanceCorrelation._weighted_sum(
+                        [s[i, j] for s in S], n)
+        return A
+
+    def _require_samples(self, T):
+        _require_lagged_samples(T, self._max_lag, _MGC_MIN_SAMPLES,
                                 "The cross-multiscale graph correlation")
-        x = z[j]
-        y = z[i]
-        return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)
+
+    @staticmethod
+    def _prepare(z, lag):
+        """
+        `_mgc_parts` of ``z[lag:]`` (as target) and ``z[:n - lag]`` (as
+        source), the blocks of the distance matrix `_lagged_sum` crops.
+        """
+        d = _euclidean_distance(z)
+        if lag == 0:
+            p = _mgc_parts(d)
+            return p, p
+        m = d.shape[0] - lag
+        return (_mgc_parts(np.ascontiguousarray(d[lag:, lag:])),
+                _mgc_parts(np.ascontiguousarray(d[:m, :m])))
 
 
 class TimeWarping(Undirected, Unsigned):

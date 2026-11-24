@@ -4,7 +4,8 @@ import warnings
 from mne_connectivity import envelope_correlation
 import numpy as np
 from scipy import optimize, special
-from scipy.linalg import solve_triangular
+from scipy.linalg import cho_solve, cholesky, lapack, solve_triangular
+from scipy.spatial.distance import pdist, squareform
 from sklearn import linear_model
 from sklearn.gaussian_process import GaussianProcessRegressor, kernels
 from sklearn.metrics import mean_squared_error
@@ -341,6 +342,138 @@ class LinearModel(Directed, Unsigned):
         return mean_squared_error(y_predict, np.ravel(z[j]))
 
 
+def _dot_product_gp_loo_mse(kernel, X, y, alpha=1e-10):
+    """
+    ``GPModel`` with ``C() + W() + DotProduct()``, without forming the T x T
+    kernel.
+
+    The fit is ``GaussianProcessRegressor(kernel).fit(X, y)`` (jitter
+    ``alpha``, L-BFGS-B from ``kernel.theta`` within ``kernel.bounds``, no
+    restarts): the same objective, gradient, start, bounds and
+    ``scipy.optimize.minimize`` call. With ``s = noise + alpha`` and
+    ``a = c + sigma_0^2``, the kernel matrix is ``K = s I + U U'``,
+    ``U = [sqrt(a) 1, X]``, a low-rank update of a multiple of the identity.
+    With ``[1, X] = Q R`` (thin QR, once) and the SVD ``R diag(sqrt(a), 1, ..)
+    = W S V'``, ``K^-1 = (I - QQ')/s + QW (S^2 + s)^-1 W'Q'``, so the log
+    marginal likelihood and its gradient cost O(r^3), r = 1 + X's columns,
+    per evaluation instead of sklearn's O(T^3), and the leave-one-out
+    residuals ``[K^-1 y]_t / [K^-1]_tt`` cost O(T r^2).
+    """
+    T = y.shape[0]
+    Q, R0 = np.linalg.qr(np.column_stack([np.ones(T), X]))
+    r = Q.shape[1]
+    V = np.column_stack([y, np.ones(T)])
+    B = Q.T @ V                      # components in span(Q)
+    P = V - Q @ B                    # and orthogonal to it
+    G = P.T @ P
+
+    def parts(theta):
+        c, noise, sigma_0 = np.exp(theta)
+        s = noise + alpha
+        R = R0.copy()
+        R[:, 0] *= np.sqrt(c + sigma_0 ** 2)
+        W, S, _ = np.linalg.svd(R)
+        return c, noise, sigma_0, s, W, S ** 2
+
+    def neg_lml(theta):
+        c, noise, sigma_0, s, W, lam = parts(theta)
+        inv = 1.0 / (lam + s)
+        Bw = W.T @ B
+        quad = G / s + (Bw * inv[:, None]).T @ Bw     # V' K^-1 V
+        y_k_y, one_k_y, one_k_one = quad[0, 0], quad[1, 0], quad[1, 1]
+        a_a = G[0, 0] / s ** 2 + np.sum((Bw[:, 0] * inv) ** 2)   # y' K^-2 y
+        tr_k_inv = (T - r) / s + inv.sum()
+        logdet = (T - r) * np.log(s) + np.log(lam + s).sum()
+        lml = -0.5 * y_k_y - 0.5 * logdet - 0.5 * T * np.log(2 * np.pi)
+        # 0.5 tr((K^-1 y y' K^-1 - K^-1) dK/dtheta) for the log-parameters.
+        ones = one_k_y ** 2 - one_k_one
+        grad = 0.5 * np.array([c * ones, noise * (a_a - tr_k_inv),
+                               2 * sigma_0 ** 2 * ones])
+        return -lml, -grad
+
+    res = optimize.minimize(neg_lml, kernel.theta, method="L-BFGS-B",
+                            jac=True, bounds=kernel.bounds)
+    _, _, _, s, W, lam = parts(res.x)
+    QW = Q @ W
+    inv = 1.0 / (lam + s)
+    k_inv_y = P[:, 0] / s + QW @ (inv * (W.T @ B[:, 0]))
+    k_inv_diag = (1.0 - np.sum(Q ** 2, axis=1)) / s + (QW ** 2) @ inv
+    return float(np.mean((k_inv_y / k_inv_diag) ** 2))
+
+
+def _rbf_gp_loo_mse(kernel, X, y, alpha=1e-10):
+    """
+    ``GPModel`` with ``C() + W() + RBF()``, with a cheaper likelihood gradient.
+
+    The fit is ``GaussianProcessRegressor(kernel).fit(X, y)``: the same
+    kernel matrix (built as sklearn builds it), Cholesky factor and log
+    marginal likelihood, and the same start, bounds and
+    ``scipy.optimize.minimize`` call. Only the gradient
+    ``0.5 tr((a a' - K^-1) dK/dtheta)``, ``a = K^-1 y``, is computed
+    differently: sklearn forms ``K^-1`` by ``cho_solve(L, I)`` (two
+    triangular solves against the identity) and contracts a (T, T, 3)
+    gradient tensor; here ``K^-1`` comes from LAPACK ``potri`` (lower
+    triangle only, a third of the flops) and each term is a sum over that
+    triangle. The gradient agrees to rounding, so the optimizer takes the
+    same path except where the likelihood is flat near the optimum.
+    """
+    T = y.shape[0]
+    Y = y[:, np.newaxis]
+    log_2pi = np.log(2 * np.pi)
+
+    def parts(theta):
+        c, noise, length_scale = np.exp(theta)
+        dists = pdist(X / length_scale, metric="sqeuclidean")
+        R = squareform(np.exp(-0.5 * dists))
+        np.fill_diagonal(R, 1)
+        # (ConstantKernel + WhiteKernel) + RBF, then the jitter, in sklearn's
+        # order.
+        K = np.full((T, T), c) + noise * np.eye(T)
+        K += R
+        K[np.diag_indices_from(K)] += alpha
+        return K, R, dists, c, noise
+
+    def neg_lml(theta):
+        K, R, dists, c, noise = parts(theta)
+        try:
+            L = cholesky(K, lower=True, check_finite=False)
+        except np.linalg.LinAlgError:
+            return np.inf, np.zeros_like(theta)
+        a = cho_solve((L, True), Y, check_finite=False)
+        lml = -0.5 * np.einsum("ik,ik->k", Y, a)
+        lml -= np.log(np.diag(L)).sum()
+        lml -= T / 2 * log_2pi
+        lml = lml.sum(axis=-1)
+        # Lower triangle of K^-1; the strict upper triangle stays zero.
+        k_inv, _ = lapack.dpotri(L, lower=1)
+        tr_k_inv = np.trace(k_inv)
+        a = a[:, 0]
+        dK_dlength = R * squareform(dists)        # zero diagonal
+        grad = 0.5 * np.array([
+            c * (a.sum() ** 2 - (2 * k_inv.sum() - tr_k_inv)),
+            noise * (a @ a - tr_k_inv),
+            a @ dK_dlength @ a - 2 * np.sum(k_inv * dK_dlength),
+        ])
+        return -lml, -grad
+
+    res = optimize.minimize(neg_lml, kernel.theta, method="L-BFGS-B",
+                            jac=True, bounds=kernel.bounds)
+    L = cholesky(parts(res.x)[0], lower=True, check_finite=False)
+    return _loo_mse(L, cho_solve((L, True), y, check_finite=False))
+
+
+def _loo_mse(L, k_inv_y):
+    """
+    Mean squared leave-one-out residual ``[K^-1 y]_t / [K^-1]_tt`` (eq. 5.12
+    of the reference in ``GPModel``), from the lower Cholesky factor ``L`` of
+    ``K``.
+    """
+    L_inv = solve_triangular(L, np.eye(len(k_inv_y)), lower=True,
+                             check_finite=False)
+    resid = k_inv_y / np.einsum("ij,ij->j", L_inv, L_inv)
+    return float(np.mean(resid ** 2))
+
+
 class GPModel(Directed, Unsigned):
     """
     Gaussian process regression of the column on the row [1]_.
@@ -354,6 +487,20 @@ class GPModel(Directed, Unsigned):
     leave-one-out at the fitted hyperparameters ([1]_, eq. 5.12), because the
     RBF fit can interpolate the data and drive the in-sample error to zero on
     unrelated pairs. Directed and unsigned.
+
+    With ``DotProduct`` the kernel matrix is a multiple of the identity plus
+    a rank-2 term, so the same fit (objective, start, bounds and optimizer
+    as sklearn's) is done in O(T) rather than O(T^3)
+    (`_dot_product_gp_loo_mse`). On z-scored data its value agrees with
+    sklearn's to about 1e-12 relative on most pairs, and to about 1e-6 on
+    pairs it fits almost exactly, whose values are near zero. Without
+    z-scoring, on badly scaled data, it differs from sklearn's by up to about
+    10% and has a value where sklearn's Cholesky factorisation fails; there
+    the closed form is the more accurate, since it never forms the
+    ill-conditioned T x T matrix. With ``RBF`` the fit is sklearn's with a
+    cheaper gradient (`_rbf_gp_loo_mse`); its value agrees with sklearn's to
+    about 1e-12 relative on most pairs, and to about 5e-5 on
+    near-interpolating pairs, where the likelihood is flat near its optimum.
 
     References
     ----------
@@ -379,20 +526,21 @@ class GPModel(Directed, Unsigned):
             self.labels = [l for l in self.labels if l != "nonlinear"] + ["linear"]
         self._kernel = kernels.ConstantKernel() + kernels.WhiteKernel()
         self._kernel += getattr(kernels, kernel)()
+        self._fast_fit = {"DotProduct": _dot_product_gp_loo_mse,
+                          "RBF": _rbf_gp_loo_mse}.get(kernel)
 
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         z = data.to_numpy()
+        if self._fast_fit is not None:
+            return self._fast_fit(self._kernel, z[i], np.ravel(z[j]))
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             gp = GaussianProcessRegressor(kernel=self._kernel).fit(z[i], np.ravel(z[j]))
         # Leave-one-out residuals y_t - mu_{-t} = [K^-1 y]_t / [K^-1]_tt, from
         # the lower Cholesky factor of K (noise included) the fit already holds.
-        L_inv = solve_triangular(gp.L_, np.eye(len(gp.alpha_)), lower=True,
-                                 check_finite=False)
-        resid = gp.alpha_ / np.einsum("ij,ij->j", L_inv, L_inv)
-        return float(np.mean(resid ** 2))
+        return _loo_mse(gp.L_, gp.alpha_)
 
 
 class PowerEnvelopeCorrelation(Undirected, Unsigned):
