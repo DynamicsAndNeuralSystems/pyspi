@@ -123,7 +123,8 @@ def _mgc(a, b):
     ("CrossMultiscaleGraphCorrelation", _mgc),
 ])
 @pytest.mark.parametrize("max_lag", [1, 3])
-def test_cross_distance_statistics_sum_the_lagged_statistic(cls_name, stat, max_lag):
+def test_cross_distance_statistics_sum_the_lagged_statistic(cls_name, stat, max_lag,
+                                                            dcorr_route):
     """Mehta et al. (2020), as hyppo's own docstring states it:
     sum_{l=0}^{L} (n - l)/n * S(target[l:], source[:n - l]).
 
@@ -289,6 +290,184 @@ def test_mgc_and_mgcx_without_scipys_mgc_steps_call_hyppo_with_the_same_values(
         np.testing.assert_array_equal(A, A0)
         assert b == b0
         assert msg == msg0
+
+
+# --------------------------------------------------------------------------
+# Distance correlation
+# --------------------------------------------------------------------------
+
+def _dcorr_from_matrices(a, b, biased):
+    """dcorr from the T x T distance matrices (Szekely et al. 2007; 2014)."""
+    if not biased:
+        return _unbiased_dcorr(a, b)
+
+    def centred(v):
+        d = np.abs(v[:, None] - v[None, :])
+        return d - d.mean(0) - d.mean(1)[:, None] + d.mean()
+    A, B = centred(a), centred(b)
+    return np.sqrt((A * B).sum() / np.sqrt((A * A).sum() * (B * B).sum()))
+
+
+def _dcorr_cases():
+    rng = np.random.default_rng(8)
+    for T in (4, 5, 9, 200):
+        x = rng.standard_normal(T)
+        yield f"T{T}-normal", np.stack([x, x ** 2 + 0.3 * rng.standard_normal(T),
+                                        rng.standard_normal(T)])
+    x = rng.standard_normal(150)
+    # Ties in both series, so the sort in the fast algorithm meets equal keys.
+    yield "ties", np.stack([np.round(x), np.round(2 * x + rng.standard_normal(150)),
+                            rng.integers(0, 4, 150).astype(float)])
+
+
+@pytest.fixture(params=["fast", "matrix"])
+def dcorr_route(request, monkeypatch):
+    """Force the O(T log T) route at any length, or the matrices at all."""
+    from pyspi.statistics import distance
+    monkeypatch.setattr(distance, "_FAST_DCOV_MIN_SAMPLES",
+                        4 if request.param == "fast" else 10**9)
+    return request.param
+
+
+@pytest.mark.parametrize("biased", [False, True])
+@pytest.mark.parametrize("name,series", list(_dcorr_cases()))
+def test_dcorr_matches_the_distance_matrix_definition(name, series, biased,
+                                                       dcorr_route):
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    data = Data(series, dim_order="ps", zscore=False)
+    z = data.to_numpy(squeeze=True)
+    spi = DistanceCorrelation(biased=biased)
+    A = spi.multivariate(data)
+    for i, j in [(0, 1), (0, 2), (1, 2)]:
+        ref = _dcorr_from_matrices(z[i], z[j], biased)
+        assert A[i, j] == pytest.approx(ref, abs=1e-12), (i, j)
+        assert A[j, i] == A[i, j]
+        assert spi.bivariate(data, i=i, j=j) == pytest.approx(A[i, j], abs=1e-12)
+
+
+@pytest.mark.parametrize("biased", [False, True])
+def test_dcorr_of_an_affine_copy_is_one(biased, dcorr_route):
+    """dcorr is invariant to shifting and rescaling, including sign flips."""
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    x = np.random.default_rng(9).standard_normal(300)
+    data = Data(np.stack([x, 3 * x + 7, -0.5 * x]), dim_order="ps", zscore=False)
+    A = DistanceCorrelation(biased=biased).multivariate(data)
+    np.testing.assert_allclose(A[~np.eye(3, dtype=bool)], 1.0, atol=1e-12)
+
+
+def test_dcorr_separates_dependent_from_independent_series(dcorr_route):
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    rng = np.random.default_rng(10)
+    x = rng.standard_normal(500)
+    data = Data(np.stack([x, np.cos(2 * x) + 0.2 * rng.standard_normal(500),
+                          rng.standard_normal(500)]), dim_order="ps")
+    A = DistanceCorrelation().multivariate(data)
+    assert A[0, 1] > 0.2
+    assert abs(A[0, 2]) < 0.02 and abs(A[1, 2]) < 0.02
+
+
+def test_dcorr_with_several_values_per_sample_uses_euclidean_distances(dcorr_route):
+    """With realisations, each sample is a point in R^R: the matrix route."""
+    from pyspi.statistics.distance import DistanceCorrelation, _euclidean_distance
+
+    rng = np.random.default_rng(12)
+    series = rng.standard_normal((3, 40, 2))
+    series[1] += 0.8 * series[0]
+    data = Data(series, dim_order="psr", zscore=False)
+    z = data.to_numpy()
+    A = DistanceCorrelation().multivariate(data)
+
+    def u_centred(p):
+        d = _euclidean_distance(p)
+        n = d.shape[0]
+        u = (d - d.sum(0) / (n - 2) - d.sum(1)[:, None] / (n - 2)
+             + d.sum() / ((n - 1) * (n - 2)))
+        np.fill_diagonal(u, 0)
+        return u
+    U, V = u_centred(z[0]), u_centred(z[1])
+    ref = (U * V).sum() / np.sqrt((U * U).sum() * (V * V).sum())
+    assert A[0, 1] == pytest.approx(ref, abs=1e-12)
+
+
+def _fast_route_lengths(monkeypatch):
+    """Record the length of every series hyppo's fast routine receives."""
+    from pyspi.statistics import distance
+
+    lengths = set()
+    fast = distance._fast_1d_dcov
+
+    def spy(x, y, bias):
+        lengths.add(x.shape[0])
+        return fast(x, y, bias)
+    monkeypatch.setattr(distance, "_fast_1d_dcov", spy)
+    return lengths
+
+
+@pytest.mark.parametrize("T,fast", [(799, False), (800, True)])
+def test_dcorr_takes_the_fast_route_from_800_samples(T, fast, monkeypatch):
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    lengths = _fast_route_lengths(monkeypatch)
+    data = Data(np.random.default_rng(13).standard_normal((2, T)), dim_order="ps")
+    spi = DistanceCorrelation()
+    spi.multivariate(data)
+    spi.bivariate(data, i=0, j=1)
+    assert lengths == ({T} if fast else set())
+
+
+def test_dcorrx_with_lags_on_both_routes_sums_the_lagged_statistic(monkeypatch):
+    """At T = 805, lags 0-5 leave at least 800 samples (fast route) and lags
+    6-10 fewer (matrix route); the sum is the same either way."""
+    from pyspi.statistics import distance
+    from pyspi.statistics.distance import CrossDistanceCorrelation
+
+    rng = np.random.default_rng(14)
+    n, max_lag = 805, 10
+    src = rng.standard_normal(n)
+    tgt = np.r_[0.0, np.tanh(2 * src[:-1])] + 0.5 * rng.standard_normal(n)
+    data = Data(np.vstack([src, tgt]), dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+
+    lengths = _fast_route_lengths(monkeypatch)
+    spi = CrossDistanceCorrelation(max_lag=max_lag)
+    A = spi.multivariate(data)
+    assert lengths == set(range(800, 806))
+    assert spi.bivariate(data, i=0, j=1) == pytest.approx(A[0, 1], abs=1e-12)
+    for i, j in [(0, 1), (1, 0)]:
+        x, y = z[j], z[i]  # target, source
+        ref = sum((n - l) / n * _unbiased_dcorr(x[l:], y[:n - l])
+                  for l in range(max_lag + 1))
+        assert A[i, j] == pytest.approx(ref, abs=1e-12), (i, j)
+
+    monkeypatch.setattr(distance, "_FAST_DCOV_MIN_SAMPLES", 10**9)
+    np.testing.assert_allclose(spi.multivariate(data), A, rtol=0, atol=1e-12)
+
+
+@pytest.mark.parametrize("offset", [1e6, 1e7])
+@pytest.mark.parametrize("spi_name", ["dcorr", "dcorr_biased", "dcorrx_maxlag-1",
+                                      "dcorrx_maxlag-10"])
+def test_dcorr_on_the_fast_route_ignores_a_large_offset(spi_name, offset):
+    """Distance correlation is translation invariant, so a series far from
+    zero (not z-scored) gives the value of the same series around zero."""
+    from pyspi.statistics.distance import (CrossDistanceCorrelation,
+                                           DistanceCorrelation)
+
+    spi = {"dcorr": DistanceCorrelation(biased=False),
+           "dcorr_biased": DistanceCorrelation(biased=True),
+           "dcorrx_maxlag-1": CrossDistanceCorrelation(max_lag=1),
+           "dcorrx_maxlag-10": CrossDistanceCorrelation(max_lag=10)}[spi_name]
+    rng = np.random.default_rng(15)
+    x = rng.standard_normal(1000)
+    series = np.stack([x, x + rng.standard_normal(1000),
+                       rng.standard_normal(1000)])
+    ref = spi.multivariate(Data(series, dim_order="ps", zscore=False))
+    A = spi.multivariate(Data(series + offset, dim_order="ps", zscore=False))
+    off_diagonal = ~np.eye(3, dtype=bool)
+    np.testing.assert_allclose(A[off_diagonal], ref[off_diagonal],
+                               rtol=0, atol=1e-8)
 
 
 # --------------------------------------------------------------------------

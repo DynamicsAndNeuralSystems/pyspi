@@ -3,9 +3,9 @@ import os
 import warnings
 
 from hyppo.independence import MGC
-# hyppo's compiled centring and sum; pyspi applies the final step itself
-# (`_dcorr_centred`), so the value does not depend on the hyppo version.
-from hyppo.independence.dcorr import _center_distmat, _dcov
+# hyppo's compiled centring, sums and fast one-dimensional dCov; pyspi applies
+# the final step itself (`_dcorr_final`), independent of the hyppo version.
+from hyppo.independence.dcorr import _center_distmat, _dcov, _fast_1d_dcov
 import numba
 import numpy as np
 from scipy.stats import rankdata
@@ -192,9 +192,9 @@ def _centred(dist, bias):
     return C, _dcov(C, C, bias, False)
 
 
-def _dcorr_centred(cx, cy, bias):
+def _dcorr_final(covar, vx, vy, bias):
     """
-    hyppo 0.5.2's ``_dcorr`` on two `_centred` results, bit for bit.
+    hyppo 0.5.2's final step of ``_dcorr``, bit for bit.
 
     0 when a variance is not positive, or (biased only) the covariance is
     not; the biased ratio is square-rooted (dCor), the unbiased one is the
@@ -202,12 +202,57 @@ def _dcorr_centred(cx, cy, bias):
     differ in this final step, so it is applied here rather than taken from
     the installed hyppo.
     """
-    (x, vx), (y, vy) = cx, cy
-    covar = _dcov(x, y, bias, False)
     if vx <= 0 or vy <= 0 or (covar <= 0 and bias):
         return 0.0
     stat = covar / np.sqrt(np.real(vx * vy))
     return np.sqrt(stat) if bias else stat
+
+
+def _dcorr_centred(cx, cy, bias):
+    """hyppo 0.5.2's ``_dcorr`` on two `_centred` results, bit for bit."""
+    (x, vx), (y, vy) = cx, cy
+    return _dcorr_final(_dcov(x, y, bias, False), vx, vy, bias)
+
+
+# hyppo's O(n log n) dCov of two scalar samples (Chaudhuri & Hu 2019). Below
+# about 800 samples the cached O(n^2) matrices are faster; their values equal
+# hyppo 0.5.2's ``Dcorr`` statistic bit for bit, the fast route's to rounding.
+_FAST_DCOV_MIN_SAMPLES = 800
+
+
+def _is_fast_dcov(v):
+    """Whether a series of shape ``(T,)`` or ``(T, R)`` takes the fast route."""
+    return (v.shape[0] >= _FAST_DCOV_MIN_SAMPLES
+            and (v.ndim == 1 or v.shape[1] == 1))
+
+
+def _dcov_prepared(v, bias):
+    """
+    One series for `_dcorr_prepared`: ``(column, variance)`` on the fast
+    route, else the `_centred` Euclidean distance matrix.
+    """
+    if not _is_fast_dcov(v):
+        return _centred(_euclidean_distance(v.reshape(v.shape[0], -1)), bias)
+    c = np.ascontiguousarray(v, dtype=np.float64).reshape(-1, 1)
+    # dcorr is translation invariant; centring keeps the fast sums accurate.
+    c = c - np.median(c)
+    return c, _fast_1d_dcov(c, c, bias)
+
+
+def _dcov_prepared_bytes(v):
+    """Memory of one `_dcov_prepared` result, for `_cached_pairs`."""
+    T = v.shape[0]
+    return 8 * T if _is_fast_dcov(v) else 8 * T * T
+
+
+def _dcorr_prepared(cx, cy, bias):
+    """Distance correlation of two `_dcov_prepared` series of equal shape."""
+    (x, vx), (y, vy) = cx, cy
+    if x.shape[1] == 1 and x.shape[0] > 1:  # columns, not matrices
+        covar = _fast_1d_dcov(x, y, bias)
+    else:
+        covar = _dcov(x, y, bias, False)
+    return _dcorr_final(covar, vx, vy, bias)
 
 
 def _cached_pairs(identifier, M, prepare, combine, item_bytes, directed=False):
@@ -496,17 +541,26 @@ class DistanceCorrelation(Undirected, Unsigned):
     Distance correlation [1]_.
 
     The distance correlation of two series, each treated as one sample of
-    ``T`` scalar observations (time order is ignored), from their ``T x T``
-    Euclidean distance matrices. It is zero in the population if and only if
-    the two are independent, so it detects nonlinear as well as linear
-    dependence.
+    ``T`` scalar observations (time order is ignored), with Euclidean
+    distances. It is zero in the population if and only if the two are
+    independent, so it detects nonlinear as well as linear dependence.
 
     With ``biased=False`` the value is the unbiased (U-centred) estimate of
     the squared distance correlation [2]_, which can be slightly negative
     under independence. With ``biased=True`` it is the square root of the
     double-centred (V-statistic) ratio of [1]_, in ``[0, 1]``. The two are
-    on different scales. Values match hyppo's ``Dcorr`` (0.5.2) statistic.
-    Undirected and unsigned.
+    on different scales. Values match hyppo's ``Dcorr`` (0.5.2) statistic up
+    to rounding. Undirected and unsigned.
+
+    For scalar observations and ``T >= 800`` the distance covariances are
+    computed in ``O(T log T)`` time and ``O(T)`` memory by the sorting
+    algorithm of [3]_, as implemented in hyppo, without forming the distance
+    matrices. Shorter series, where that is slower, and series with several
+    values per sample use each series' ``T x T`` centred distance matrix.
+    The value is 0 when a distance variance is not positive. The unbiased
+    variance is exactly zero for a series whose samples are all equal but
+    one, at any length, and rounding then decides between 0 and an
+    arbitrary value.
 
     References
     ----------
@@ -516,6 +570,9 @@ class DistanceCorrelation(Undirected, Unsigned):
     .. [2] G. J. Székely, M. L. Rizzo, "Partial distance correlation with
            methods for dissimilarities", Annals of Statistics 42(6),
            2382-2412 (2014).
+    .. [3] A. Chaudhuri, W. Hu, "A fast algorithm for computing distance
+           correlation", Computational Statistics & Data Analysis 135,
+           15-24 (2019).
 
     Parameters
     ----------
@@ -536,13 +593,17 @@ class DistanceCorrelation(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        return _dcorr_centred(_centred(_euclidean_distance(x), self._biased),
-                              _centred(_euclidean_distance(y), self._biased),
-                              self._biased)
+        return _dcorr_prepared(_dcov_prepared(x, self._biased),
+                               _dcov_prepared(y, self._biased), self._biased)
 
     @parse_multivariate
     def multivariate(self, data):
-        return _dcorr_spi_matrix(self, data, _euclidean_distance)
+        z = data.to_numpy()
+        return _cached_pairs(
+            self.identifier, z.shape[0],
+            lambda s: _dcov_prepared(z[s], self._biased),
+            lambda a, b: _dcorr_prepared(a, b, self._biased),
+            item_bytes=_dcov_prepared_bytes(z[0]))
 
 
 class MultiscaleGraphCorrelation(Undirected, Unsigned):
@@ -687,8 +748,10 @@ class CrossDistanceCorrelation(Directed, Unsigned):
     This is the statistic as hyppo's ``DcorrX`` docstring defines it, with
     the distance matrix of ``x_j[l:]`` taken as the block ``D[l:, l:]`` of
     the full one. hyppo 0.5.2's own lagged terms treat rows of the distance
-    matrices as points, so its implementation is not used. Each series'
-    centred distance matrices are computed once per lag, not once per pair.
+    matrices as points, so its implementation is not used. Each lagged term
+    is computed as in `DistanceCorrelation` (by the ``O(T log T)`` algorithm
+    for at least 800 samples), and each series' distance variances once per
+    lag, not once per pair.
 
     With 3 samples the U-centred distance matrices are identically zero, so
     the unbiased statistic is 0/0 and every lagged term needs ``n >= 4``
@@ -718,19 +781,25 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
     def _prepare(self, z, lag):
         """
-        Centred distances of ``z[lag:]`` (as target) and ``z[:n - lag]``
-        (as source), the blocks `_lagged_sum` crops.
+        `_dcov_prepared` ``z[lag:]`` (as target) and ``z[:n - lag]`` (as
+        source), whose distance matrices are the blocks `_lagged_sum` crops.
         """
-        d = _euclidean_distance(z)
+        m = z.shape[0] - lag
+        if _is_fast_dcov(z[:m]):
+            if lag == 0:
+                c = _dcov_prepared(z, False)
+                return c, c
+            return _dcov_prepared(z[lag:], False), _dcov_prepared(z[:m], False)
+        d = _euclidean_distance(z)  # one matrix, cropped for both
         if lag == 0:
             c = _centred(d, False)
             return c, c
-        m = d.shape[0] - lag
         return _centred(d[lag:, lag:], False), _centred(d[:m, :m], False)
 
     @staticmethod
     def _weighted_sum(stats, n):
-        # `_lagged_sum`'s terms and summation, so the value is bit-identical.
+        # `_lagged_sum`'s weights and summation, so from the same lagged terms
+        # the sum equals `_lagged_sum`'s bit for bit.
         return np.sum([stats[0]] + [(n - lag) * stats[lag] / n
                                     for lag in range(1, len(stats))])
 
@@ -743,8 +812,8 @@ class CrossDistanceCorrelation(Directed, Unsigned):
         # Source i, target j: the target's present against the source's past.
         z = data.to_numpy()
         self._require_samples(z.shape[1])
-        stats = [_dcorr_centred(self._prepare(z[j], lag)[0],
-                                self._prepare(z[i], lag)[1], False)
+        stats = [_dcorr_prepared(self._prepare(z[j], lag)[0],
+                                 self._prepare(z[i], lag)[1], False)
                  for lag in range(self._max_lag + 1)]
         return self._weighted_sum(stats, z.shape[1])
 
@@ -755,8 +824,9 @@ class CrossDistanceCorrelation(Directed, Unsigned):
         self._require_samples(n)
         S = [_cached_pairs(self.identifier, M,
                            lambda s, lag=lag: self._prepare(z[s], lag),
-                           lambda src, tgt: _dcorr_centred(tgt[0], src[1], False),
-                           item_bytes=16 * (n - lag) ** 2, directed=True)
+                           lambda src, tgt: _dcorr_prepared(tgt[0], src[1], False),
+                           item_bytes=2 * _dcov_prepared_bytes(z[0, lag:]),
+                           directed=True)
              for lag in range(self._max_lag + 1)]
         A = np.full((M, M), np.nan)
         for i in range(M):
