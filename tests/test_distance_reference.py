@@ -263,6 +263,60 @@ def test_dcorr_with_several_values_per_sample_uses_euclidean_distances(dcorr_rou
     assert A[0, 1] == pytest.approx(ref, abs=1e-12)
 
 
+def _fast_route_lengths(monkeypatch):
+    """Record the length of every series hyppo's fast routine receives."""
+    from pyspi.statistics import distance
+
+    lengths = set()
+    fast = distance._fast_1d_dcov
+
+    def spy(x, y, bias):
+        lengths.add(x.shape[0])
+        return fast(x, y, bias)
+    monkeypatch.setattr(distance, "_fast_1d_dcov", spy)
+    return lengths
+
+
+@pytest.mark.parametrize("T,fast", [(799, False), (800, True)])
+def test_dcorr_takes_the_fast_route_from_800_samples(T, fast, monkeypatch):
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    lengths = _fast_route_lengths(monkeypatch)
+    data = Data(np.random.default_rng(13).standard_normal((2, T)), dim_order="ps")
+    spi = DistanceCorrelation()
+    spi.multivariate(data)
+    spi.bivariate(data, i=0, j=1)
+    assert lengths == ({T} if fast else set())
+
+
+def test_dcorrx_with_lags_on_both_routes_sums_the_lagged_statistic(monkeypatch):
+    """At T = 805, lags 0-5 leave at least 800 samples (fast route) and lags
+    6-10 fewer (matrix route); the sum is the same either way."""
+    from pyspi.statistics import distance
+    from pyspi.statistics.distance import CrossDistanceCorrelation
+
+    rng = np.random.default_rng(14)
+    n, max_lag = 805, 10
+    src = rng.standard_normal(n)
+    tgt = np.r_[0.0, np.tanh(2 * src[:-1])] + 0.5 * rng.standard_normal(n)
+    data = Data(np.vstack([src, tgt]), dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+
+    lengths = _fast_route_lengths(monkeypatch)
+    spi = CrossDistanceCorrelation(max_lag=max_lag)
+    A = spi.multivariate(data)
+    assert lengths == set(range(800, 806))
+    assert spi.bivariate(data, i=0, j=1) == pytest.approx(A[0, 1], abs=1e-12)
+    for i, j in [(0, 1), (1, 0)]:
+        x, y = z[j], z[i]  # target, source
+        ref = sum((n - l) / n * _unbiased_dcorr(x[l:], y[:n - l])
+                  for l in range(max_lag + 1))
+        assert A[i, j] == pytest.approx(ref, abs=1e-12), (i, j)
+
+    monkeypatch.setattr(distance, "_FAST_DCOV_MIN_SAMPLES", 10**9)
+    np.testing.assert_allclose(spi.multivariate(data), A, rtol=0, atol=1e-12)
+
+
 @pytest.mark.parametrize("offset", [1e6, 1e7])
 @pytest.mark.parametrize("spi_name", ["dcorr", "dcorr_biased", "dcorrx_maxlag-1",
                                       "dcorrx_maxlag-10"])
