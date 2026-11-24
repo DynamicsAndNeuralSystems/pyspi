@@ -963,6 +963,45 @@ def test_constrained_lcss_applies_its_band_and_only_its_band(constraint):
     assert n_below > 0
 
 
+def test_sakoe_chiba_rows_are_tslearns_mask():
+    """The row ranges reproduce tslearn's mask, including `n != m`."""
+    import tslearn.metrics
+    from pyspi.statistics.distance import _sakoe_chiba_rows
+
+    for n in range(1, 25):
+        for m in range(1, 25):
+            for radius in (1, 3):
+                ref = np.asarray(tslearn.metrics.sakoe_chiba_mask(n, m, radius),
+                                 dtype=bool)
+                lo, hi = _sakoe_chiba_rows(n, m, radius)
+                cols = np.arange(m)
+                assert np.array_equal(
+                    ref, (cols >= lo[:, None]) & (cols < hi[:, None])), (n, m)
+
+
+@pytest.mark.parametrize("constraint", ["sakoe_chiba", "itakura"])
+def test_banded_lcss_equals_the_full_table_on_edge_cases(constraint):
+    """Computing only the band gives the full table's count exactly.
+
+    Ties (rounded data, differences of exactly eps), identical series,
+    lengths down to 2 and unequal lengths, against `_lcss_cell_by_cell`.
+    """
+    import tslearn.metrics
+    from pyspi.statistics.distance import _banded_lcss
+
+    mask_fn = {"sakoe_chiba": tslearn.metrics.sakoe_chiba_mask,
+               "itakura": tslearn.metrics.itakura_mask}[constraint]
+    rng = np.random.default_rng(1)
+    sizes = [(T, T) for T in (2, 3, 10, 41)] + [(17, 11), (11, 17), (30, 20)]
+    for n, m in sizes:
+        band = np.asarray(mask_fn(n, m), dtype=bool)
+        a, b = rng.standard_normal(n), rng.standard_normal(m)
+        cases = [(a, b), (np.round(a), np.round(b)),
+                 (np.zeros(n), np.ones(m)), (a, np.resize(a, m))]
+        for x, y in cases:
+            assert _banded_lcss(x, y, constraint) == _lcss_cell_by_cell(x, y, band)
+
+
 @pytest.mark.parametrize("kwargs,exc", [
     ({"i": 0}, ValueError),          # j omitted
     ({"j": 1}, ValueError),          # i omitted

@@ -1165,6 +1165,56 @@ class DynamicTimeWarping(TimeWarping):
             return A
 
 
+def _sakoe_chiba_rows(n, m, radius=1):
+    """
+    Each row's admitted columns ``lo[i]:hi[i]`` in
+    ``tslearn.metrics.sakoe_chiba_mask(n, m, radius)``.
+
+    tslearn widens the band by ``|n - m|`` on the side of the longer series:
+    along rows when ``n <= m``, along columns when ``n > m``.
+    """
+    i = np.arange(n)
+    if n > m:
+        lo = np.maximum(0, i - (n - m + radius))
+        hi = np.minimum(m, i + radius + 1)
+    else:
+        lo = np.maximum(0, i - radius)
+        hi = np.minimum(m, i + (m - n + radius) + 1)
+    return lo, hi
+
+
+@numba.njit(cache=True, nogil=True)
+def _banded_lcss_count(x, y, lo, hi, eps):
+    """
+    Length of the LCSS when only row ``i``'s columns ``lo[i]:hi[i]`` may match.
+
+    ``a`` holds one row of the LCSS table and is updated in place inside the
+    band only. Left of the band a row equals the row above (no matches, and
+    the table is non-decreasing along rows and columns), so those entries are
+    already right. Right of the band a row is constant at its last in-band
+    value (no row so far has a match there), so only the columns the next row
+    reads, up to ``hi[i + 1]``, are filled with it. This needs ``hi``
+    non-decreasing, as it is for both bands.
+    """
+    n = x.shape[0]
+    a = np.zeros(y.shape[0] + 1, dtype=np.int64)
+    for i in range(n):
+        diag = a[lo[i]]
+        left = diag
+        for j in range(lo[i], hi[i]):
+            up = a[j + 1]
+            if abs(x[i] - y[j]) <= eps:
+                v = diag + 1
+            else:
+                v = max(up, left)
+            diag = up
+            a[j + 1] = v
+            left = v
+        if i + 1 < n:
+            a[hi[i] + 1:hi[i + 1] + 1] = left
+    return a[hi[n - 1]]
+
+
 def _banded_lcss(x, y, global_constraint=None, eps=1.0):
     """
     LCSS similarity in which only pairs inside the global band may match.
@@ -1176,27 +1226,22 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
     which for the Itakura parallelogram (a single cell at each end) scores
     any pair whose last samples differ by more than `eps` as exactly 0.
 
-    A row of the LCSS table is non-decreasing, and a match cell's
-    `A[i-1, j-1] + 1` is never below its left or upper neighbour, so each row
-    is the running maximum of its candidates, computed in one vectorised pass.
+    Outside the band the table is determined by its in-band cells, so the
+    recursion runs over each row's admitted columns only, in O(T * band) time
+    and O(T) memory (`_banded_lcss_count`). The count is an exact integer.
     """
     if global_constraint is None:
         return tslearn.metrics.lcss(x, y, eps=eps)
-    x = np.asarray(x, dtype=float).ravel()
-    y = np.asarray(y, dtype=float).ravel()
+    x = np.ascontiguousarray(x, dtype=float).ravel()
+    y = np.ascontiguousarray(y, dtype=float).ravel()
     n, m = len(x), len(y)
     if global_constraint == "sakoe_chiba":
-        band = tslearn.metrics.sakoe_chiba_mask(n, m)
+        lo, hi = _sakoe_chiba_rows(n, m)
     elif global_constraint == "itakura":
-        band = _itakura_mask(n, m)
+        lo, hi = _itakura_rows(n, m)
     else:
         raise ValueError(f"Unknown LCSS global constraint: {global_constraint}")
-    match = np.asarray(band, dtype=bool) & (np.abs(x[:, None] - y[None, :]) <= eps)
-    prev = np.zeros(m + 1)
-    for i in range(n):
-        cand = np.where(match[i], prev[:-1] + 1, prev[1:])
-        prev = np.concatenate(([0.0], np.maximum.accumulate(cand)))
-    return prev[-1] / min(n, m)
+    return np.float64(_banded_lcss_count(x, y, lo, hi, float(eps))) / min(n, m)
 
 
 class LongestCommonSubsequence(TimeWarping):
