@@ -90,6 +90,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Spectral caches ignored `fs`**, so two SPIs differing only in sampling rate could share a cached spectrum.
 - **Equal parameters give equal SPI identifiers.**
   A numpy scalar names the same SPI as the equal Python number (`fmax=np.float64(0.25)` and `fmax=0.25` both give `_fmax-0-25`), and an integral float the same as the integer (`fs=1.0` and `fs=1` both give `_fs-1`), so a config built in Python and the same config in YAML share table columns and checkpoints.
+  A float is rounded to 12 significant digits in the identifier, so a value computed in Python names the same SPI as the number written in YAML (`fmax=np.arange(0.1, 0.31, 0.1)[2]`, which is 0.30000000000000004, gives `_fmax-0-3`), and a float's identifier has a bounded length.
+  Two values that agree to 12 significant digits name one SPI, so a config that holds both is refused as a duplicate when it is loaded.
   No bundled identifier changes.
 - **Importing pyspi reseeded NumPy's global RNG** (`pyspi.lib.ids` called `np.random.seed(1717)` at import), overriding the caller's seed.
 - **Process names** are coerced to `str` and must be unique; `Data(procnames=...)` was validated and then discarded, so custom names never reached the results table.
@@ -334,6 +336,25 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The multitaper spectral SPIs need at least as many samples as tapers, `floor(2 NW - 1)`, so T ≥ 5 at the default NW = 3.
   For `es_*` and `tailasym_*`, ties (as in integer data) that leave too few samples above the quantile or none in a tail have a reason of their own.
 - **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
+- **`gpfit_DotProduct` is fitted in O(T).**
+  Its kernel matrix is a multiple of the identity plus a rank-2 term, so pyspi maximises the same marginal likelihood as scikit-learn's `GaussianProcessRegressor` (same start, bounds and L-BFGS-B call) from a thin QR of the predictor, without forming the T x T matrix.
+  A pair takes 1.8 ms instead of 111 ms at T = 250, 1.9 ms instead of 1.77 s at T = 1000, and 2.1 ms instead of 12.1 s at T = 2000.
+  **Values change.**
+  On z-scored data (the default), most pairs agree with scikit-learn's fit to about 1e-12 relative, and pairs that it fits almost exactly (a series and its copy, an exact linear pair) by up to about 1e-6 relative on values near zero.
+  Without z-scoring, on badly scaled data, values differ by up to about 10%, and pairs on which scikit-learn's Cholesky factorisation fails have a value.
+  There the closed form is the more accurate: checked in exact rational arithmetic, its value is the leave-one-out error at the parameters it fits, and those parameters reach a marginal likelihood at least as high as scikit-learn's.
+- **`gpfit_RBF` is fitted with a cheaper likelihood gradient.**
+  The fit is scikit-learn's (same kernel matrix, Cholesky factor, likelihood, start, bounds and L-BFGS-B call) with a cheaper gradient: `K^-1` from LAPACK `potri` instead of two triangular solves against the identity, and no (T, T, 3) gradient tensor.
+  A pair takes 9.2 ms instead of 20.4 ms at T = 100, 1.57 s instead of 3.12 s at T = 1000, and 8.6 s instead of 18.6 s at T = 2000.
+  **Values change slightly**, since the gradient differs from scikit-learn's in the last bits.
+  Most pairs agree with scikit-learn's fit to about 1e-12 relative, and near-interpolating pairs (such as a series and its copy), whose likelihood is flat near its optimum, by up to about 5e-5 relative.
+  The drift baselines of `gpfit_DotProduct` and `gpfit_RBF` are regenerated.
+- **`dcorr`, `dcorr_biased` and `dcorrx_*` use an O(T log T) algorithm from 800 samples.**
+  From 800 samples, where it becomes the faster of the two, `dcorr`, `dcorr_biased` and each lagged term of `dcorrx` use hyppo's O(T log T) algorithm for scalar samples (Chaudhuri & Hu 2019) instead of the T x T matrices, with O(T) memory.
+  At M=16, `dcorr` takes 0.17 s instead of 0.52 s at T=1000 and 0.81 s instead of 40.1 s at T=4000, and `dcorrx_maxlag-10` takes 3.7 s instead of 9.2 s at T=1000 and 17.8 s instead of 760 s at T=4000.
+  Each series is first shifted to a median of zero, which leaves distance correlation unchanged and keeps the algorithm accurate on data far from zero.
+  On z-scored data the values differ from those of the T x T matrices by rounding only, not bit for bit: in tests by at most 2.3e-12 for `dcorr` and `dcorrx`, and 1.3e-10 for `dcorr_biased` on sparse binary series, where the square root enlarges the rounding error of a value near zero.
+  Shorter series are unchanged.
 - **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.
 - **Multitaper phase slope index follows Nolte et al. (2008), applies its band, and gains power with the length of the series.**
@@ -357,6 +378,17 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`anm` pins its Gaussian-process kernel** to a fixed `ConstantKernel(1.0)*RBF(1.0)` with no optimiser, where it had relied on scikit-learn's default, which in 1.9 became an optimised kernel and shifted values by up to 7.6.
   Values are unchanged under scikit-learn <= 1.8.
   The kernel matrix is ill-conditioned, so `anm` varies by about 1e-4 relative across platforms.
+- **`ccm_*` and `lccm_*` share tied neighbours, and find simplex neighbours without a KD-tree per random library.**
+  Library points tied with a point's k-th nearest neighbour share the remaining neighbour places: with j library points strictly nearer and m tied, each tied point is weighted by (k - j)/m, which makes the prediction the mean of the simplex prediction over every way of breaking the tie.
+  So a value does not depend on the order in which the library is stored, the sign of the series or z-scoring.
+  This is the tie rule of cppEDM, which pyEDM 1.x used; pyEDM 2.5 takes whichever tied point its KD-tree returns.
+  Without tied distances every `ccm_*` and `lccm_*` value agrees with a KD-tree search per random library (pyEDM 2.5's CCM) to rounding, below 1e-15 on z-scored data, and `lccm_E-None_k-5_tp` is identical.
+  **With tied distances (integer, count or coarsely rounded data) values change.**
+  At M=8, T=1000 on data with 16 levels, `ccm_E-1_mean` changes by up to 0.19, `ccm_E-1_convergence` by up to 0.31, `ccm_E-None_*` by up to 0.12, `lccm_E-None_k-5_skill` by up to 0.10, `lccm_E-None_k-5_tp` by up to 10 lags and `ccm_E-10_*` by under 0.01; on two-valued data `ccm_E-1_convergence` changes by up to 0.44.
+  If you computed `ccm_*` or `lccm_*` on data with tied values using the release candidate 3.0.0rc1, recompute those SPIs, since a checkpoint holding them resumes with the earlier values.
+  Each library variable's nearest points are tabulated once; a random library's k nearest members are read off that table, or found by a pass over a small library, in a numba kernel that also forms the predictions and correlations.
+  On continuous data the eleven `ccm_*` and `lccm_*` SPIs of `full` together take 21.7 s instead of 187 s at M=8, T=1000.
+  On tied data `ccm_E-1_*` is slower: 3.12 s instead of 1.64 s for one library variable and three targets at T=1000 on data with 16 levels.
 - **Labels describe each SPI as computed.**
   The labels a bundled config writes for an SPI agree with the SPI: its sign with `issigned()`, its directedness with the class trait, and its linearity with the class where the class sets one; where these vary by variant (`lagcorr_*`, `coint_*`, `es_*`, `pec_*`), the labels are set per config entry.
   When a config's labels are merged with a class's, the class's directedness trait, its `linear`/`nonlinear`, its `issigned()` and its `timing` or `profile` win, and any remaining contradictory pair raises.
@@ -377,13 +409,25 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **Distance correlation and the Kraskov estimators.**
   `dcorr` and `dcorr_biased` evaluate only the retained order of each pair (2.0x at M=8, T=5000).
   Kraskov MI, time-lagged MI and transfer entropy count marginal neighbours with one batched tree query, less the temporally excluded neighbours, in O(N) memory (3-10x at T=5000, more with `dyn_corr_excl`).
+- **`je_*` and `ce_*` of one estimator run in one parallel task.**
+  `ce_*` reads the joint entropy `je_*` caches on the data, so under `compute(n_jobs > 1)` each pair's joint entropy is built once.
 - **The five directed spectral measures share one spectral factorisation per pair.**
   `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which is now computed once per ordered pair, and the five classes form one scheduling task.
   7.6x faster on those measures (184 s to 24 s at M=40, T=1000), with about 40% less memory held per pair.
+- **`mgc` and `mgcx_*` compute each series' share of the MGC map once.**
+  scipy's MGC, which hyppo calls, ranks and centres both distance matrices and builds three local covariance maps for every pair, of which only one depends on the pair.
+  pyspi keeps each series' ranks, centring and local variances (per lag for `mgcx_*`, at most 256 MB at a time) and calls scipy's own steps for the rest; values are bit-identical to hyppo's.
+  At M=16, `mgc` is 6.1x faster at T=500, 5.4x at T=1000 and 2.6x at T=2000 (94.9 s to 36.7 s).
+  The speedup is smaller on long series, where the 256 MB cap limits how many series are held at once.
+  `mgcx_maxlag-10` is 3.7x faster at M=16, T=1000 (470 s to 127 s).
 - **Itakura-constrained DTW.**
   pyspi builds tslearn's Itakura mask with NumPy and runs tslearn's recursion over each row's admitted columns only, in a numba kernel cached on disk; values are bit-identical to tslearn's.
   At M=16, T=800 the SPI takes 0.05 s instead of 0.23 s, and 0.14 s instead of 1.8 s in a new process.
   `lcss_constraint-itakura` uses the same mask.
+- **Constrained LCSS.**
+  `lcss_constraint-sakoe-chiba` and `lcss_constraint-itakura` run the LCSS recursion over each row's band only, in a numba kernel cached on disk, with O(T) memory instead of a T x T match matrix; values are bit-identical.
+  At M=16, `lcss_constraint-sakoe-chiba` takes 0.003 s instead of 1.4-2.4 s at T=1000, and 0.008 s instead of about 15 s at T=4000.
+  `lcss_constraint-itakura` takes 0.12 s instead of 1.7-2.6 s at T=1000, and 1.9 s instead of about 18 s at T=4000.
 - **Constrained soft-DTW.**
   `softdtw_constraint-sakoe-chiba` and `softdtw_constraint-itakura` run tslearn's soft-DTW recursion over each row's admitted columns only, in a numba kernel cached on disk, without tslearn's T x T mask and cost matrix; values are bit-identical to tslearn's.
   A series with several replications is passed to tslearn.
@@ -393,10 +437,14 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
   pyspi applies hyppo's final step itself, with the same values as hyppo 0.5.2.
-- `hhg` in O(n^2 log n) (about 9x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
+- `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 - **Undirected SPIs evaluate each unordered pair once** and mirror the value and any failure (`phi_*` 1.9x faster).
   For the distance SPIs among them (`hsic*`, `hhg`, `dcorr*`, `mgc`, `lcss*`, `softdtw*`, `gwtau`), a pair that raises is NaN with a warning, as for every other SPI, instead of failing the SPI.
   A direct `bivariate(data, i=i, j=j)` call with `i < j` on a fresh `Data` can differ in the last bit for `xcorr_*`, `je_*` and `ce_*`.
+- **`hhg` in O(T^2 log T), ranking each series once.**
+  The statistic is computed from row-wise ranks and 2-D dominance counts instead of hyppo's O(T^3) loop (about 9x), with values bit-identical to hyppo's.
+  The ranks of each series' distance matrix are computed once for all its pairs and the dominance counts run in a numba kernel, a further 5.8x, 7.9x and 7.8x in CPU time at M=16 and T=500, 1000 and 2000 (72.8 s to 9.2 s at T=1000), and 3.8x, 4.1x and 3.2x at M=4.
+  The cached ranks take at most 256 MB, or two series' ranks (16 T^2 bytes) when T is above 4096.
 
 ### Added
 
@@ -521,6 +569,7 @@ Definitions the corrected measures are checked against:
 - Gao, W., Oh, S. & Viswanath, P. (2018). Demystifying fixed k-nearest neighbor information estimators. *IEEE Trans. Inf. Theory* 64, 5629–5661. — why the KSG error is not O(1/√N) in general.
 - Vlachos, M., Kollios, G. & Gunopulos, D. (2002). Discovering similar multidimensional trajectories. *Proc. ICDE*, 673–684. — LCSS with a band that limits which pairs may match, as `lcss_constraint-*` now computes.
 - Shen, C., Chung, J., Mehta, R., Xu, T. & Vogelstein, J. T. (2024). Independence testing for temporal data. *Trans. Mach. Learn. Res.* — the lagged sum behind `dcorrx` and `mgcx`, `sum_l (n - l)/n * S(target[l:], source[:n-l])`.
+- Chaudhuri, A. & Hu, W. (2019). A fast algorithm for computing distance correlation. *Comput. Stat. Data Anal.* 135, 15–24. — the O(T log T) distance covariance of scalar samples that `dcorr` and `dcorrx` use from 800 samples.
 - Gretton, A., Bousquet, O., Smola, A. & Schölkopf, B. (2005). Measuring statistical dependence with Hilbert-Schmidt norms. *ALT*, LNCS 3734, 63–77. — HSIC.
 - Gretton, A., Fukumizu, K., Teo, C. H., Song, L., Schölkopf, B. & Smola, A. J. (2007). A kernel statistical test of independence. *NIPS* 20, 585–592. — the median-heuristic kernel width, which `hsic` sets per variable.
 - Vinck, M., Oostenveld, R., van Wingerden, M., Battaglia, F. & Pennartz, C. (2011). An improved index of phase-synchronization for electrophysiological data in the presence of volume-conduction, noise and sample-size bias. *NeuroImage* 55, 1548–1565. — the debiased squared PLI and wPLI as means over taper pairs.

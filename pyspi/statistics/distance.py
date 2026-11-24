@@ -3,9 +3,9 @@ import os
 import warnings
 
 from hyppo.independence import MGC
-# hyppo's compiled centring and sum; pyspi applies the final step itself
-# (`_dcorr_centred`), so the value does not depend on the hyppo version.
-from hyppo.independence.dcorr import _center_distmat, _dcov
+# hyppo's compiled centring, sums and fast one-dimensional dCov; pyspi applies
+# the final step itself (`_dcorr_final`), independent of the hyppo version.
+from hyppo.independence.dcorr import _center_distmat, _dcov, _fast_1d_dcov
 import numba
 import numpy as np
 from scipy.stats import rankdata
@@ -29,6 +29,17 @@ from pyspi.base import (
     parse_multivariate,
 )
 from pyspi.utils import fmt_param, require_int, require_positive_float
+
+# A guarded import (absent before scipy 1.14), so it follows the sorted groups.
+try:
+    # The steps of scipy's `multiscale_graphcorr`, which hyppo's MGC calls,
+    # taken separately so that each series' share is computed once
+    # (`_mgc_parts`). Private: if a scipy release moves them, MGC and MGCX
+    # fall back to hyppo for every pair.
+    from scipy.stats._mgc import _smooth_mgc_map, _threshold_mgc_map
+    from scipy.stats._stats import _center_distance_matrix, _local_covariance
+except ImportError:  # pragma: no cover
+    _local_covariance = None
 
 
 # ---------------------------------------------------------------------------
@@ -240,9 +251,9 @@ def _centred(dist, bias):
     return C, _dcov(C, C, bias, False)
 
 
-def _dcorr_centred(cx, cy, bias):
+def _dcorr_final(covar, vx, vy, bias):
     """
-    hyppo 0.5.2's ``_dcorr`` on two `_centred` results, bit for bit.
+    hyppo 0.5.2's final step of ``_dcorr``, bit for bit.
 
     0 when a variance is not positive, or (biased only) the covariance is
     not; the biased ratio is square-rooted (dCor), the unbiased one is the
@@ -250,12 +261,57 @@ def _dcorr_centred(cx, cy, bias):
     differ in this final step, so it is applied here rather than taken from
     the installed hyppo.
     """
-    (x, vx), (y, vy) = cx, cy
-    covar = _dcov(x, y, bias, False)
     if vx <= 0 or vy <= 0 or (covar <= 0 and bias):
         return 0.0
     stat = covar / np.sqrt(np.real(vx * vy))
     return np.sqrt(stat) if bias else stat
+
+
+def _dcorr_centred(cx, cy, bias):
+    """hyppo 0.5.2's ``_dcorr`` on two `_centred` results, bit for bit."""
+    (x, vx), (y, vy) = cx, cy
+    return _dcorr_final(_dcov(x, y, bias, False), vx, vy, bias)
+
+
+# hyppo's O(n log n) dCov of two scalar samples (Chaudhuri & Hu 2019). Below
+# about 800 samples the cached O(n^2) matrices are faster; their values equal
+# hyppo 0.5.2's ``Dcorr`` statistic bit for bit, the fast route's to rounding.
+_FAST_DCOV_MIN_SAMPLES = 800
+
+
+def _is_fast_dcov(v):
+    """Whether a series of shape ``(T,)`` or ``(T, R)`` takes the fast route."""
+    return (v.shape[0] >= _FAST_DCOV_MIN_SAMPLES
+            and (v.ndim == 1 or v.shape[1] == 1))
+
+
+def _dcov_prepared(v, bias):
+    """
+    One series for `_dcorr_prepared`: ``(column, variance)`` on the fast
+    route, else the `_centred` Euclidean distance matrix.
+    """
+    if not _is_fast_dcov(v):
+        return _centred(_euclidean_distance(v.reshape(v.shape[0], -1)), bias)
+    c = np.ascontiguousarray(v, dtype=np.float64).reshape(-1, 1)
+    # dcorr is translation invariant; centring keeps the fast sums accurate.
+    c = c - np.median(c)
+    return c, _fast_1d_dcov(c, c, bias)
+
+
+def _dcov_prepared_bytes(v):
+    """Memory of one `_dcov_prepared` result, for `_cached_pairs`."""
+    T = v.shape[0]
+    return 8 * T if _is_fast_dcov(v) else 8 * T * T
+
+
+def _dcorr_prepared(cx, cy, bias):
+    """Distance correlation of two `_dcov_prepared` series of equal shape."""
+    (x, vx), (y, vy) = cx, cy
+    if x.shape[1] == 1 and x.shape[0] > 1:  # columns, not matrices
+        covar = _fast_1d_dcov(x, y, bias)
+    else:
+        covar = _dcov(x, y, bias, False)
+    return _dcorr_final(covar, vx, vy, bias)
 
 
 def _cached_pairs(identifier, M, prepare, combine, item_bytes, directed=False):
@@ -389,71 +445,83 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
         return _dcorr_spi_matrix(self, data, _median_gaussian_distance)
 
 
-def _row_dominance_counts(rx, ry):
+@numba.njit(cache=True, nogil=True)
+def _row_dominance_counts(rx, order, ry):
     """
     ``c[i, j] = #{k : rx[i, k] <= rx[i, j] and ry[i, k] <= ry[i, j]}``.
 
-    ``rx`` and ``ry`` are row-wise max-ranks (1..n). Offline 2-D dominance
-    counting with one Fenwick tree per row, all rows at once: because ranks
-    are max-ranks, the ``k`` with ``rx[i, k] <= rx[i, j]`` are exactly the first
-    ``rx[i, j]`` entries of row ``i`` in ``rx`` order, so ``j``'s query is
-    answered once that many entries have been inserted. O(n log n) per row.
+    ``rx`` and ``ry`` are row-wise max-ranks (1..n) and ``order[i]`` sorts
+    row ``i`` of ``rx``. Offline 2-D dominance counting with a Fenwick tree
+    per row: because ranks are max-ranks, the ``k`` with
+    ``rx[i, k] <= rx[i, j]`` are exactly the entries of row ``i`` up to and
+    including ``j``'s tie group in ``rx`` order, so ``j``'s query is answered
+    once that group has been inserted. O(n log n) per row.
     """
     n_rows, n = rx.shape
-    n_bits = n.bit_length()
-    rows = np.arange(n_rows)
-    ry_in_rx_order = np.take_along_axis(
-        ry, np.argsort(rx, axis=1, kind="stable"), axis=1)
-    # Queries grouped by the prefix length p = rx at which they are answered.
-    q_order = np.argsort(rx, axis=None, kind="stable")
-    bounds = np.searchsorted(rx.ravel()[q_order], np.arange(1, n + 2))
-    q_rows = q_order // n
-    q_vals = ry.ravel()[q_order]
-    # Column n + 1 absorbs updates that run past the end of the tree.
-    tree = np.zeros((n_rows, n + 2), dtype=np.int64)
-    out = np.zeros(n_rows * n, dtype=np.int64)
-    for p in range(1, n + 1):
-        idx = ry_in_rx_order[:, p - 1].copy()
-        for _ in range(n_bits):
-            tree[rows, idx] += 1
-            idx += idx & -idx
-            np.minimum(idx, n + 1, out=idx)
-        lo, hi = bounds[p - 1], bounds[p]
-        if hi > lo:
-            q_r = q_rows[lo:hi]
-            idx = q_vals[lo:hi].copy()
-            acc = np.zeros(hi - lo, dtype=np.int64)
-            for _ in range(n_bits):
-                acc += tree[q_r, idx]  # tree[:, 0] stays 0
-                idx -= idx & -idx
-            out[q_order[lo:hi]] = acc
-    return out.reshape(n_rows, n)
+    out = np.empty((n_rows, n), dtype=np.int64)
+    tree = np.zeros(n + 1, dtype=np.int64)
+    for i in range(n_rows):
+        tree[:] = 0
+        p = 0
+        while p < n:
+            q = p
+            v = rx[i, order[i, p]]
+            while q < n and rx[i, order[i, q]] == v:
+                idx = ry[i, order[i, q]]
+                while idx <= n:
+                    tree[idx] += 1
+                    idx += idx & -idx
+                q += 1
+            for t in range(p, q):
+                j = order[i, t]
+                idx = ry[i, j]
+                acc = 0
+                while idx > 0:
+                    acc += tree[idx]
+                    idx -= idx & -idx
+                out[i, j] = acc
+            p = q
+    return out
 
 
 _HHG_CHUNK_ENTRIES = 2**22
 
 
-def _hhg_statistic(x, y):
+def _hhg_ranks(x):
     """
-    hyppo's ``HHG().statistic(x, y)`` in O(n^2 log n) rather than O(n^3).
+    The part of `_hhg_statistic` that depends on one series alone.
 
-    The sum over ``i != j`` of Pearson's chi-square for the 2x2 table that
-    splits the other samples by ``d_x(i, .) <= d_x(i, j)`` and
-    ``d_y(i, .) <= d_y(i, j)`` (Heller, Heller & Gorfine 2013). The table
-    counts are row-wise ranks and 2-D dominance counts.
+    Row-wise max-ranks of its Euclidean distance matrix,
+    ``#{k : d[i, k] <= d[i, j]}`` (counting ``k = i`` and ``k = j``
+    themselves), and the order that sorts each row of them.
     """
-    distx = pairwise_distances(x, metric="euclidean")
-    disty = pairwise_distances(y, metric="euclidean")
-    n = distx.shape[0]
+    d = pairwise_distances(x, metric="euclidean")
+    n = d.shape[0]
+    ranks = np.empty((n, n), dtype=np.int32)
+    order = np.empty((n, n), dtype=np.int32)
+    # Rows are independent; bound the float64 and int64 temporaries' size.
+    step = max(1, _HHG_CHUNK_ENTRIES // n)
+    for start in range(0, n, step):
+        stop = min(n, start + step)
+        ranks[start:stop] = rankdata(d[start:stop], method="max", axis=1)
+        order[start:stop] = np.argsort(ranks[start:stop], axis=1,
+                                       kind="stable")
+    return ranks, order
+
+
+def _hhg_from_ranks(rank_x, rank_y):
+    """`_hhg_statistic` from the two series' `_hhg_ranks`."""
+    (rx, order), (ry, _) = rank_x, rank_y
+    n = rx.shape[0]
     S = np.zeros((n, n))
     # Rows are independent; bound the int64 work arrays' size.
     step = max(1, _HHG_CHUNK_ENTRIES // n)
     for start in range(0, n, step):
         stop = min(n, start + step)
-        # #{k : d[i, k] <= d[i, j]}, which counts k = i and k = j themselves.
-        na = rankdata(distx[start:stop], method="max", axis=1).astype(np.int64)
-        nb = rankdata(disty[start:stop], method="max", axis=1).astype(np.int64)
-        nab = _row_dominance_counts(na, nb)
+        na = rx[start:stop].astype(np.int64)
+        nb = ry[start:stop].astype(np.int64)
+        nab = _row_dominance_counts(rx[start:stop], order[start:stop],
+                                    ry[start:stop])
         t11 = nab - 2
         t12 = na - nab
         t21 = nb - nab
@@ -470,6 +538,19 @@ def _hhg_statistic(x, y):
     return np.sum(S[mask])
 
 
+def _hhg_statistic(x, y):
+    """
+    hyppo's ``HHG().statistic(x, y)`` in O(n^2 log n) rather than O(n^3).
+
+    The sum over ``i != j`` of Pearson's chi-square for the 2x2 table that
+    splits the other samples by ``d_x(i, .) <= d_x(i, j)`` and
+    ``d_y(i, .) <= d_y(i, j)`` (Heller, Heller & Gorfine 2013). The table
+    counts are row-wise ranks (`_hhg_ranks`, one series at a time) and 2-D
+    dominance counts.
+    """
+    return _hhg_from_ranks(_hhg_ranks(x), _hhg_ranks(y))
+
+
 class HellerHellerGorfine(Undirected, Unsigned):
     """
     Heller-Heller-Gorfine independence statistic [1]_.
@@ -481,6 +562,7 @@ class HellerHellerGorfine(Undirected, Unsigned):
     sample of ``T`` scalar observations, so time order is ignored. The value
     equals hyppo's ``HHG().statistic``, computed in ``O(T^2 log T)`` from
     row-wise ranks and dominance counts instead of hyppo's ``O(T^3)`` loop.
+    Each series' ranks are computed once for all its pairs.
 
     Undirected and unsigned (``hhg(x, y) == hhg(y, x)`` exactly). The sum is
     not normalised, so it grows with ``T``.
@@ -501,23 +583,43 @@ class HellerHellerGorfine(Undirected, Unsigned):
         x, y = data.to_numpy()[[i, j]]
         return _hhg_statistic(x, y)
 
+    @parse_multivariate
+    def multivariate(self, data):
+        # Each series' ranks (8 T^2 bytes) are computed once, not once per
+        # pair. The cache holds at most 256 MB of them, or two series'
+        # (16 T^2 bytes) when T > 4096.
+        z = data.to_numpy()
+        T = z.shape[1]
+        return _cached_pairs(self.identifier, z.shape[0],
+                             lambda s: _hhg_ranks(z[s]), _hhg_from_ranks,
+                             item_bytes=8 * T * T)
+
 
 class DistanceCorrelation(Undirected, Unsigned):
     """
     Distance correlation [1]_.
 
     The distance correlation of two series, each treated as one sample of
-    ``T`` scalar observations (time order is ignored), from their ``T x T``
-    Euclidean distance matrices. It is zero in the population if and only if
-    the two are independent, so it detects nonlinear as well as linear
-    dependence.
+    ``T`` scalar observations (time order is ignored), with Euclidean
+    distances. It is zero in the population if and only if the two are
+    independent, so it detects nonlinear as well as linear dependence.
 
     With ``biased=False`` the value is the unbiased (U-centred) estimate of
     the squared distance correlation [2]_, which can be slightly negative
     under independence. With ``biased=True`` it is the square root of the
     double-centred (V-statistic) ratio of [1]_, in ``[0, 1]``. The two are
-    on different scales. Values match hyppo's ``Dcorr`` (0.5.2) statistic.
-    Undirected and unsigned.
+    on different scales. Values match hyppo's ``Dcorr`` (0.5.2) statistic up
+    to rounding. Undirected and unsigned.
+
+    For scalar observations and ``T >= 800`` the distance covariances are
+    computed in ``O(T log T)`` time and ``O(T)`` memory by the sorting
+    algorithm of [3]_, as implemented in hyppo, without forming the distance
+    matrices. Shorter series, where that is slower, and series with several
+    values per sample use each series' ``T x T`` centred distance matrix.
+    The value is 0 when a distance variance is not positive. The unbiased
+    variance is exactly zero for a series whose samples are all equal but
+    one, at any length, and rounding then decides between 0 and an
+    arbitrary value.
 
     References
     ----------
@@ -527,6 +629,9 @@ class DistanceCorrelation(Undirected, Unsigned):
     .. [2] G. J. Székely, M. L. Rizzo, "Partial distance correlation with
            methods for dissimilarities", Annals of Statistics 42(6),
            2382-2412 (2014).
+    .. [3] A. Chaudhuri, W. Hu, "A fast algorithm for computing distance
+           correlation", Computational Statistics & Data Analysis 135,
+           15-24 (2019).
 
     Parameters
     ----------
@@ -547,13 +652,17 @@ class DistanceCorrelation(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        return _dcorr_centred(_centred(_euclidean_distance(x), self._biased),
-                              _centred(_euclidean_distance(y), self._biased),
-                              self._biased)
+        return _dcorr_prepared(_dcov_prepared(x, self._biased),
+                               _dcov_prepared(y, self._biased), self._biased)
 
     @parse_multivariate
     def multivariate(self, data):
-        return _dcorr_spi_matrix(self, data, _euclidean_distance)
+        z = data.to_numpy()
+        return _cached_pairs(
+            self.identifier, z.shape[0],
+            lambda s: _dcov_prepared(z[s], self._biased),
+            lambda a, b: _dcorr_prepared(a, b, self._biased),
+            item_bytes=_dcov_prepared_bytes(z[0]))
 
 
 class MultiscaleGraphCorrelation(Undirected, Unsigned):
@@ -567,7 +676,11 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     all ``(k, l)``, and reports a smoothed maximum, so it is sensitive to
     nonlinear dependence that the global distance correlation dilutes.
     Undirected. MGC needs at least 5 samples; a shorter series is not
-    appropriate (``NotAppropriate``, NaN in a Calculator table).
+    appropriate (``NotAppropriate``, NaN in a Calculator table). The value is
+    hyppo's, bit for bit; each series' share of the MGC map (its ranks,
+    centring and local variances) is computed once, not once per pair. This
+    needs scipy 1.14 or later; with an older scipy the SPI calls hyppo's
+    ``MGC`` for every pair, with the same values.
 
     References
     ----------
@@ -583,12 +696,66 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     @parse_bivariate
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
-        if x.shape[0] < _MGC_MIN_SAMPLES:
-            raise NotAppropriate(
-                f"Multiscale graph correlation needs T >= {_MGC_MIN_SAMPLES} "
-                f"samples; got T = {x.shape[0]}.")
-        stat = MGC().statistic(x, y)
-        return stat
+        _require_mgc_samples(x.shape[0])
+        if _local_covariance is None:
+            return MGC().statistic(x, y)
+        return _mgc_from_parts(_mgc_parts(_euclidean_distance(x)),
+                               _mgc_parts(_euclidean_distance(y)))
+
+    @parse_multivariate
+    def multivariate(self, data):
+        z = data.to_numpy()
+        _require_mgc_samples(z.shape[1])
+        if _local_covariance is None:
+            return super().multivariate(data)
+        return _cached_pairs(
+            self.identifier, z.shape[0],
+            lambda s: _mgc_parts(_euclidean_distance(z[s])), _mgc_from_parts,
+            item_bytes=16 * z.shape[1] ** 2)
+
+
+def _require_mgc_samples(T):
+    """Refuse unless ``T`` reaches MGC's minimum, ``_MGC_MIN_SAMPLES`` samples."""
+    if T < _MGC_MIN_SAMPLES:
+        raise NotAppropriate(
+            f"Multiscale graph correlation needs T >= {_MGC_MIN_SAMPLES} "
+            f"samples; got T = {T}.")
+
+
+def _mgc_parts(dist):
+    """
+    The share of scipy's MGC map that depends on one distance matrix.
+
+    Its MGC-centred distances, their column ranks and its local variances
+    (the diagonal of its local covariance with itself), as scipy's
+    ``_local_correlations`` computes them for each of the two inputs.
+    """
+    cent, rank = _center_distance_matrix(dist, "mgc", True)
+    var = _local_covariance(cent, cent.T, rank, rank.T).diagonal()
+    return cent, rank, var
+
+
+def _mgc_from_parts(px, py):
+    """
+    hyppo's ``MGC().statistic`` from the `_mgc_parts` of its two inputs.
+
+    scipy's ``_local_correlations`` (the local covariance of the pair over
+    the local variances, clipped at 1 and zero where a variance is not
+    positive) followed by ``_mgc_stat``'s thresholding and smoothing, with
+    scipy's own functions in the same order, so the value is bit-identical.
+    """
+    (cx, rx, vx), (cy, ry, vy) = px, py
+    cov = _local_covariance(cx, cy.T, rx, ry.T)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        corr = cov / np.sqrt(vx.reshape(-1, 1) @ vy.reshape(-1, 1).T).real
+        corr[corr > 1] = 1
+    corr[vx <= 0, :] = 0
+    corr[:, vy <= 0] = 0
+    n, m = corr.shape
+    if m == 1 or n == 1:
+        return corr[m - 1][n - 1]
+    sig_connect = _threshold_mgc_map(corr, cx.shape[0] - 1)
+    return _smooth_mgc_map(sig_connect, corr)[0]
 
 
 # Fewest samples of one term: with 3 samples the U-centred distance matrices
@@ -640,8 +807,10 @@ class CrossDistanceCorrelation(Directed, Unsigned):
     This is the statistic as hyppo's ``DcorrX`` docstring defines it, with
     the distance matrix of ``x_j[l:]`` taken as the block ``D[l:, l:]`` of
     the full one. hyppo 0.5.2's own lagged terms treat rows of the distance
-    matrices as points, so its implementation is not used. Each series'
-    centred distance matrices are computed once per lag, not once per pair.
+    matrices as points, so its implementation is not used. Each lagged term
+    is computed as in `DistanceCorrelation` (by the ``O(T log T)`` algorithm
+    for at least 800 samples), and each series' distance variances once per
+    lag, not once per pair.
 
     With 3 samples the U-centred distance matrices are identically zero, so
     the unbiased statistic is 0/0 and every lagged term needs ``n >= 4``
@@ -671,19 +840,25 @@ class CrossDistanceCorrelation(Directed, Unsigned):
 
     def _prepare(self, z, lag):
         """
-        Centred distances of ``z[lag:]`` (as target) and ``z[:n - lag]``
-        (as source), the blocks `_lagged_sum` crops.
+        `_dcov_prepared` ``z[lag:]`` (as target) and ``z[:n - lag]`` (as
+        source), whose distance matrices are the blocks `_lagged_sum` crops.
         """
-        d = _euclidean_distance(z)
+        m = z.shape[0] - lag
+        if _is_fast_dcov(z[:m]):
+            if lag == 0:
+                c = _dcov_prepared(z, False)
+                return c, c
+            return _dcov_prepared(z[lag:], False), _dcov_prepared(z[:m], False)
+        d = _euclidean_distance(z)  # one matrix, cropped for both
         if lag == 0:
             c = _centred(d, False)
             return c, c
-        m = d.shape[0] - lag
         return _centred(d[lag:, lag:], False), _centred(d[:m, :m], False)
 
     @staticmethod
     def _weighted_sum(stats, n):
-        # `_lagged_sum`'s terms and summation, so the value is bit-identical.
+        # `_lagged_sum`'s weights and summation, so from the same lagged terms
+        # the sum equals `_lagged_sum`'s bit for bit.
         return np.sum([stats[0]] + [(n - lag) * stats[lag] / n
                                     for lag in range(1, len(stats))])
 
@@ -696,8 +871,8 @@ class CrossDistanceCorrelation(Directed, Unsigned):
         # Source i, target j: the target's present against the source's past.
         z = data.to_numpy()
         self._require_samples(z.shape[1])
-        stats = [_dcorr_centred(self._prepare(z[j], lag)[0],
-                                self._prepare(z[i], lag)[1], False)
+        stats = [_dcorr_prepared(self._prepare(z[j], lag)[0],
+                                 self._prepare(z[i], lag)[1], False)
                  for lag in range(self._max_lag + 1)]
         return self._weighted_sum(stats, z.shape[1])
 
@@ -708,8 +883,9 @@ class CrossDistanceCorrelation(Directed, Unsigned):
         self._require_samples(n)
         S = [_cached_pairs(self.identifier, M,
                            lambda s, lag=lag: self._prepare(z[s], lag),
-                           lambda src, tgt: _dcorr_centred(tgt[0], src[1], False),
-                           item_bytes=16 * (n - lag) ** 2, directed=True)
+                           lambda src, tgt: _dcorr_prepared(tgt[0], src[1], False),
+                           item_bytes=2 * _dcov_prepared_bytes(z[0, lag:]),
+                           directed=True)
              for lag in range(self._max_lag + 1)]
         A = np.full((M, M), np.nan)
         for i in range(M):
@@ -729,7 +905,10 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     Row = source, column = target; hyppo's ``MGCX`` implementation is not
     used, for the same reason. MGC needs at least 5 samples, so every lagged
     term does, and the SPI is not appropriate (``NotAppropriate``, NaN in a
-    Calculator table) when ``T < max_lag + 5``.
+    Calculator table) when ``T < max_lag + 5``. Each series' share of each
+    lagged MGC map is computed once per lag, not once per pair. This needs
+    scipy 1.14 or later; with an older scipy the SPI calls hyppo's ``MGC``
+    for every pair and lag, with the same values.
 
     References
     ----------
@@ -755,11 +934,52 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     def bivariate(self, data, i=None, j=None):
         # As in CrossDistanceCorrelation: source i goes second.
         z = data.to_numpy()
-        _require_lagged_samples(z.shape[1], self._max_lag, _MGC_MIN_SAMPLES,
+        self._require_samples(z.shape[1])
+        if _local_covariance is None:
+            return _lagged_sum(MGC(compute_distance=None), z[j], z[i],
+                               self._max_lag)
+        stats = [_mgc_from_parts(self._prepare(z[j], lag)[0],
+                                 self._prepare(z[i], lag)[1])
+                 for lag in range(self._max_lag + 1)]
+        return CrossDistanceCorrelation._weighted_sum(stats, z.shape[1])
+
+    @parse_multivariate
+    def multivariate(self, data):
+        z = data.to_numpy()
+        M, n = z.shape[0], z.shape[1]
+        self._require_samples(n)
+        if _local_covariance is None:
+            return super().multivariate(data)
+        S = [_cached_pairs(self.identifier, M,
+                           lambda s, lag=lag: self._prepare(z[s], lag),
+                           lambda src, tgt: _mgc_from_parts(tgt[0], src[1]),
+                           item_bytes=32 * (n - lag) ** 2, directed=True)
+             for lag in range(self._max_lag + 1)]
+        A = np.full((M, M), np.nan)
+        for i in range(M):
+            for j in range(M):
+                if i != j:
+                    A[i, j] = CrossDistanceCorrelation._weighted_sum(
+                        [s[i, j] for s in S], n)
+        return A
+
+    def _require_samples(self, T):
+        _require_lagged_samples(T, self._max_lag, _MGC_MIN_SAMPLES,
                                 "The cross-multiscale graph correlation")
-        x = z[j]
-        y = z[i]
-        return _lagged_sum(MGC(compute_distance=None), x, y, self._max_lag)
+
+    @staticmethod
+    def _prepare(z, lag):
+        """
+        `_mgc_parts` of ``z[lag:]`` (as target) and ``z[:n - lag]`` (as
+        source), the blocks of the distance matrix `_lagged_sum` crops.
+        """
+        d = _euclidean_distance(z)
+        if lag == 0:
+            p = _mgc_parts(d)
+            return p, p
+        m = d.shape[0] - lag
+        return (_mgc_parts(np.ascontiguousarray(d[lag:, lag:])),
+                _mgc_parts(np.ascontiguousarray(d[:m, :m])))
 
 
 class TimeWarping(Undirected, Unsigned):
@@ -1004,6 +1224,38 @@ class DynamicTimeWarping(TimeWarping):
             return A
 
 
+@numba.njit(cache=True, nogil=True)
+def _banded_lcss_count(x, y, lo, hi, eps):
+    """
+    Length of the LCSS when only row ``i``'s columns ``lo[i]:hi[i]`` may match.
+
+    ``a`` holds one row of the LCSS table and is updated in place inside the
+    band only. Left of the band a row equals the row above (no matches, and
+    the table is non-decreasing along rows and columns), so those entries are
+    already right. Right of the band a row is constant at its last in-band
+    value (no row so far has a match there), so only the columns the next row
+    reads, up to ``hi[i + 1]``, are filled with it. This needs ``hi``
+    non-decreasing, as it is for both bands.
+    """
+    n = x.shape[0]
+    a = np.zeros(y.shape[0] + 1, dtype=np.int64)
+    for i in range(n):
+        diag = a[lo[i]]
+        left = diag
+        for j in range(lo[i], hi[i]):
+            up = a[j + 1]
+            if abs(x[i] - y[j]) <= eps:
+                v = diag + 1
+            else:
+                v = max(up, left)
+            diag = up
+            a[j + 1] = v
+            left = v
+        if i + 1 < n:
+            a[hi[i] + 1:hi[i + 1] + 1] = left
+    return a[hi[n - 1]]
+
+
 def _banded_lcss(x, y, global_constraint=None, eps=1.0):
     """
     LCSS similarity in which only pairs inside the global band may match.
@@ -1015,27 +1267,22 @@ def _banded_lcss(x, y, global_constraint=None, eps=1.0):
     which for the Itakura parallelogram (a single cell at each end) scores
     any pair whose last samples differ by more than `eps` as exactly 0.
 
-    A row of the LCSS table is non-decreasing, and a match cell's
-    `A[i-1, j-1] + 1` is never below its left or upper neighbour, so each row
-    is the running maximum of its candidates, computed in one vectorised pass.
+    Outside the band the table is determined by its in-band cells, so the
+    recursion runs over each row's admitted columns only, in O(T * band) time
+    and O(T) memory (`_banded_lcss_count`). The count is an exact integer.
     """
     if global_constraint is None:
         return tslearn.metrics.lcss(x, y, eps=eps)
-    x = np.asarray(x, dtype=float).ravel()
-    y = np.asarray(y, dtype=float).ravel()
+    x = np.ascontiguousarray(x, dtype=float).ravel()
+    y = np.ascontiguousarray(y, dtype=float).ravel()
     n, m = len(x), len(y)
     if global_constraint == "sakoe_chiba":
-        band = tslearn.metrics.sakoe_chiba_mask(n, m)
+        lo, hi = _sakoe_chiba_rows(n, m)
     elif global_constraint == "itakura":
-        band = _itakura_mask(n, m)
+        lo, hi = _itakura_rows(n, m)
     else:
         raise ValueError(f"Unknown LCSS global constraint: {global_constraint}")
-    match = np.asarray(band, dtype=bool) & (np.abs(x[:, None] - y[None, :]) <= eps)
-    prev = np.zeros(m + 1)
-    for i in range(n):
-        cand = np.where(match[i], prev[:-1] + 1, prev[1:])
-        prev = np.concatenate(([0.0], np.maximum.accumulate(cand)))
-    return prev[-1] / min(n, m)
+    return np.float64(_banded_lcss_count(x, y, lo, hi, float(eps))) / min(n, m)
 
 
 class LongestCommonSubsequence(TimeWarping):

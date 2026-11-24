@@ -36,6 +36,11 @@ from pyspi.statistics.causal import (
 
 X, Y = 0, 1
 
+# The compiled cross-map sums in a different order from NumPy/BLAS (and from
+# pyEDM), so skills agree with a per-library KD-tree reference to rounding;
+# measured differences are below 1e-16.
+_ROUNDING = 1e-14
+
 
 def _logistic(T, bxy=0.02, byx=0.1, d=0, burn=300):
     """Sugihara et al.'s (2012) two-species coupled logistic maps, with delay d.
@@ -255,27 +260,105 @@ def _unshifted_cross_map_skill(library, targets, E, lib_sizes, sample=100, seed=
 @pytest.mark.parametrize("N", [40, 133])
 def test_cross_map_skill_at_tp0_matches_unshifted_reference(E, N):
     """At ``tp=0`` (default or explicit) the skill equals the unshifted
-    reference cross-map bit for bit, with and without tied distances."""
+    reference cross-map (a KD-tree per library) to rounding, including a
+    quantised target (ties in the target do not touch the neighbours)."""
     rng = np.random.default_rng(E * 1000 + N)
     z = rng.standard_normal((3, N))
     z[1] += 0.5 * np.roll(z[0], 1)
-    z[2] = np.round(z[2] * 2) / 2            # quantised: tied distances too
+    z[2] = np.round(z[2] * 2) / 2
     lib_sizes = _ccm_library_sizes(N, E)
     ref = _unshifted_cross_map_skill(z[0], [z[1], z[2]], E, lib_sizes,
                                      sample=12, seed=7)
     for kwargs in ({}, {"tp": 0}, {"tp": np.int64(0)}):
         got = _cross_map_skill(z[0], [z[1], z[2]], E, lib_sizes,
                                sample=12, seed=7, **kwargs)
-        assert np.array_equal(ref, got, equal_nan=True)
-    quantised = _unshifted_cross_map_skill(z[2], [z[0]], E, lib_sizes, sample=12)
-    assert np.array_equal(
-        quantised, _cross_map_skill(z[2], [z[0]], E, lib_sizes, sample=12),
-        equal_nan=True)
+        np.testing.assert_allclose(got, ref, rtol=0, atol=_ROUNDING)
+
+
+def _tie_averaged_skill(library, target, E, L, sample, seed=42):
+    """Cross-map skill at library size L, each prediction averaged over every
+    way of filling the k neighbour places from points tied at the k-th distance.
+
+    Brute force: all distances, then itertools over the tied points. Distances
+    within a relative 1e-12 of the k-th count as tied, so distances equal in
+    exact arithmetic but rounded differently are tied too. Needs small
+    libraries.
+    """
+    from itertools import combinations
+
+    embed = np.column_stack([library[E - 1 - lag:len(library) - lag]
+                             for lag in range(E)])
+    actual = target[E - 1:]
+    n = len(embed)
+    k = min(E + 1, L - 1)
+    rng = np.random.default_rng(np.random.SeedSequence(seed))
+    rhos = []
+    for _ in range(sample):
+        lib = rng.choice(n, size=L, replace=False)
+        pred = np.empty(n)
+        for r in range(n):
+            cand = lib[lib != r]
+            d = np.sqrt(((embed[cand] - embed[r]) ** 2).sum(axis=1))
+            dk = np.sort(d)[k - 1]
+            tie = np.abs(d - dk) <= 1e-12 * dk
+            nearer, tied = cand[(d < dk) & ~tie], cand[tie]
+            preds = []
+            for chosen in combinations(tied, k - len(nearer)):
+                nn = np.concatenate([nearer, chosen]).astype(int)
+                dn = np.sqrt(((embed[nn] - embed[r]) ** 2).sum(axis=1))
+                w = (np.exp(-dn / dn.min()) if dn.min() > 0
+                     else (dn == 0).astype(float))
+                preds.append(np.dot(w / w.sum(), actual[nn]))
+            pred[r] = np.mean(preds)
+        rhos.append(_pearson(pred, actual))
+    return np.nanmean(rhos)
+
+
+@pytest.mark.parametrize("E", [1, 2, 4])
+def test_tied_neighbours_share_the_remaining_places(E):
+    """With ties at the k-th distance the skill is that of the prediction
+    averaged over every choice of tied neighbours, so it does not depend on
+    how a search tree breaks ties."""
+    rng = np.random.default_rng(E)
+    N = 48
+    z = rng.standard_normal((2, N))
+    z[1] += np.roll(z[0], 1)
+    z[0] = np.round(z[0] * 2) / 2
+    for L in _ccm_library_sizes(N, E)[::7]:
+        got = _cross_map_skill(z[0], [z[1]], E, [L], sample=4)[0, 0]
+        dense = _cross_map_skill_dense(z[0], [z[1]], E, L, sample=4)[0]
+        ref = _tie_averaged_skill(z[0], z[1], E, L, sample=4)
+        np.testing.assert_allclose(got, ref, rtol=0, atol=1e-12, err_msg=str(L))
+        np.testing.assert_allclose(dense, ref, rtol=0, atol=1e-12, err_msg=str(L))
+
+
+@pytest.mark.parametrize("grid", ["z-scored integers", "steps of 0.3"])
+@pytest.mark.parametrize("E", [1, 2, 3])
+def test_tied_neighbours_include_distances_equal_up_to_rounding(E, grid):
+    """Distances equal in exact arithmetic differ in their last bits on a
+    z-scored integer series or a grid of 0.3 steps (0.6 - 0.3 != 0.9 - 0.6 in
+    floating point); they still count as tied and share the remaining places."""
+    rng = np.random.default_rng(E)
+    N = 40
+    z = rng.standard_normal((2, N))
+    if grid == "z-scored integers":
+        x = rng.integers(0, 4, N).astype(float)
+        x = (x - x.mean()) / x.std()
+    else:
+        x = rng.integers(0, 5, N) * 0.3
+    z[0] = x
+    z[1] += np.roll(x, 1)
+    for L in _ccm_library_sizes(N, E)[::7]:
+        got = _cross_map_skill(z[0], [z[1]], E, [L], sample=4)[0, 0]
+        dense = _cross_map_skill_dense(z[0], [z[1]], E, L, sample=4)[0]
+        ref = _tie_averaged_skill(z[0], z[1], E, L, sample=4)
+        np.testing.assert_allclose(got, ref, rtol=0, atol=1e-12, err_msg=str(L))
+        np.testing.assert_allclose(dense, ref, rtol=0, atol=1e-12, err_msg=str(L))
 
 
 @pytest.mark.parametrize("E", [1, 3])
 def test_cross_map_skill_tp_is_pyedms_tp(E):
-    """``tp`` shifts the target as pyEDM's ``Tp`` does, bit for bit, both ways.
+    """``tp`` shifts the target as pyEDM's ``Tp`` does, both ways.
 
     Includes a horizon further back than the embedding reaches (-5 < -(E-1)),
     where rows at the start are dropped, and forward horizons, where rows at
@@ -294,8 +377,10 @@ def test_cross_map_skill_tp_is_pyedms_tp(E):
                         libSizes=sizes, sample=10, seed=42, parallel=False)
         ab = _cross_map_skill(z[0], [z[1]], E, sizes, sample=10, tp=tp)[0]
         ba = _cross_map_skill(z[1], [z[0]], E, sizes, sample=10, tp=tp)[0]
-        assert np.array_equal(ab, ref["a:b"].to_numpy()), tp
-        assert np.array_equal(ba, ref["b:a"].to_numpy()), tp
+        np.testing.assert_allclose(ab, ref["a:b"].to_numpy(), rtol=0,
+                                   atol=_ROUNDING, err_msg=str(tp))
+        np.testing.assert_allclose(ba, ref["b:a"].to_numpy(), rtol=0,
+                                   atol=_ROUNDING, err_msg=str(tp))
 
 
 def test_cross_map_skill_rejects_a_non_integer_horizon():
@@ -308,11 +393,8 @@ def test_cross_map_skill_rejects_a_non_integer_horizon():
 @pytest.mark.parametrize("E", [1, 2, 5, 10])
 @pytest.mark.parametrize("quantised", [False, True])
 def test_dense_top_library_equals_the_per_library_tree(E, quantised):
-    """One whole-manifold query reproduces a KD-tree per random library.
-
-    Tied distances (quantised data) fall back to the per-library tree, so
-    the equality is exact in both cases.
-    """
+    """One whole-manifold query reproduces a KD-tree per random library,
+    with tied neighbours (quantised data) shared alike in both."""
     rng = np.random.default_rng(E)
     N = 160
     z = rng.standard_normal((3, N))
@@ -323,7 +405,8 @@ def test_dense_top_library_equals_the_per_library_tree(E, quantised):
     for tp in (-4, 0, 3):
         plain = _cross_map_skill(z[0], [z[1], z[2]], E, [L], sample=15, tp=tp)[:, 0]
         dense = _cross_map_skill_dense(z[0], [z[1], z[2]], E, L, sample=15, tp=tp)
-        assert np.array_equal(plain, dense, equal_nan=True), tp
+        np.testing.assert_allclose(dense, plain, rtol=0, atol=_ROUNDING,
+                                   err_msg=str(tp))
 
 
 # ---------------------------------------------------------------------------
@@ -358,7 +441,8 @@ def test_lagged_ccm_matches_pyedm_tp_at_the_top_library():
 
     tp = LaggedConvergentCrossMapping("tp", E, max_lag=k).multivariate(data)
     skill = LaggedConvergentCrossMapping("skill", E, max_lag=k).multivariate(data)
-    assert np.array_equal(data.ccm[("lagged", E, k)], ref, equal_nan=True)
+    np.testing.assert_allclose(data.ccm[("lagged", E, k)], ref, rtol=0,
+                               atol=_ROUNDING)
     off = _off(M)
     np.testing.assert_array_equal(tp[off], np.argmax(ref, axis=2)[off] - k)
     np.testing.assert_allclose(skill[off], np.max(ref, axis=2)[off], atol=1e-12)
