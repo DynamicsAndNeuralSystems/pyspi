@@ -217,6 +217,7 @@
   "pdist_braycurtis",
   "dcorr",
   "dcorr_biased",
+  "hsic",
   "dcorrx_maxlag-1",
   "dtw",
   "dtw_constraint-itakura",

@@ -1,13 +1,13 @@
 # benchmarked_p90: about the cheapest 90% of the 231 SPIs in `full`, ranked by
 # amortized cost (SPIs that share a cache split its cost) at M = 16, T = 1000
 # on one core, with cache groups kept whole.
-# Current set: 206 SPIs (of the 231 in `full`).
+# Current set: 207 SPIs (of the 231 in `full`).
 # Placed by hand (see bench/README.md):
 #   in, above the cutoff: te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1 and cds (coverage; cost
 #     grows slowly with T).
-#   out, below the cutoff: hsic and softdtw_constraint-itakura (p95; cost grows about as T^2
-#     or faster); lcss and hsic_biased (p99; lcss_constraint-itakura and hsic track them).
-#   kept although its cost grows about as T^2: anm (no other SPI tracks it).
+#   out, below the cutoff: softdtw_constraint-itakura (p95; cost grows about as T^2 or
+#     faster); lcss and hsic_biased (p99; lcss_constraint-itakura and hsic track them).
+#   kept although their cost grows about as T^2: anm and hsic (no other SPI tracks them closely).
 #
 .statistics.basic:
   Covariance:
@@ -167,6 +167,17 @@
     configs:
     - biased: false
     - biased: true
+
+  HilbertSchmidtIndependenceCriterion:
+    labels:
+      - undirected
+      - nonlinear
+      - bivariate
+      - contemporaneous
+      - M14
+    dependencies:
+    configs:
+    - biased: false
 
   CrossDistanceCorrelation:
     labels:

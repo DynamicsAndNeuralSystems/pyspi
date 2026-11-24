@@ -145,8 +145,8 @@ name or a path to your own YAML:
 | `"full"` (default) | 231 | You want everything and can afford it. |
 | `"fast"` | 138 | General use; drops the slowest SPIs. |
 | `"benchmarked_p99"` | 229 | Everything except `bary_softdtw_corr` and `gpfit_RBF`, which cost more than the other 229 together. |
-| `"benchmarked_p95"` | 213 | p90 plus costlier settings of its methods (`ccm_E-10`, `dcorrx_maxlag-10`, `cce_kozachenko`, Itakura soft-DTW) and `hsic`. |
-| `"benchmarked_p90"` | 206 | Large batches. |
+| `"benchmarked_p95"` | 213 | p90 plus costlier settings of its methods (`ccm_E-10`, `dcorrx_maxlag-10`, `cce_kozachenko`, Itakura soft-DTW). |
+| `"benchmarked_p90"` | 207 | Large batches. |
 | `"benchmarked_p80"` | 185 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14); M07 has no bundled SPI, so M14 has two. |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |

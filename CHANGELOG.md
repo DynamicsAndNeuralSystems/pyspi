@@ -576,7 +576,7 @@ The delta below was computed by instantiating `Calculator(subset="all")` under 2
 Other bundled sets: `fast` goes from 217 SPIs (2.0.2 `fast_config.yaml`) to 138.
 `fabfour` keeps its 4, with `spearmanr` in place of `spearmanr-sq` (no squared rank correlation is bundled).
 `sonnet` keeps its 14, with two substitutions (`pli_multitaper_max_fs-1_fmin-0_fmax-0-5` becomes the band `mean`, and `bary_dtw_mean` becomes `bary_dtw_corr`) and three renamed identifiers.
-The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (229, 213, 206 and 185 SPIs), ranked by single-core cost at M = 16, T = 1000 over all of `full`, with a few SPIs placed by hand (listed in each config's header).
+The cost-pruned `benchmarked_p99`, `p95`, `p90` and `p80` sets are new in 3.0 (229, 213, 207 and 185 SPIs), ranked by single-core cost at M = 16, T = 1000 over all of `full`, with a few SPIs placed by hand (listed in each config's header).
 The complete added, removed and renamed identifier lists are in [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
 
 Every removal except `phase_multitaper_max_*` and `te_symbolic_k-1_kt-1_l-1_lt-1` is from the bundled configs only: the classes accept those parameters, so each SPI can still be computed from a custom config.
