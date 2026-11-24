@@ -168,6 +168,9 @@ def _mgc_test_data():
     z[1] = np.tanh(2 * z[0]) + 0.3 * z[1]
     z[2] = np.round(z[2])  # ties
     z[3] = np.r_[0.0, z[0][:-1] ** 2] + 0.2 * z[3]
+    # An affine copy: its local correlations with z[0] round to just above 1,
+    # which scipy clips to 1.
+    z = np.vstack([z, 2 * z[0] + 1])
     return Data(z, dim_order="ps")
 
 
@@ -189,8 +192,9 @@ def test_mgc_matrix_with_cached_parts_is_bit_identical_to_hyppo(monkeypatch,
     x = data.to_numpy()
     spi = distance.MultiscaleGraphCorrelation()
     A = spi.multivariate(data)
-    for i in range(5):
-        for j in range(i + 1, 5):
+    M = x.shape[0]
+    for i in range(M):
+        for j in range(i + 1, M):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 ref = MGC().statistic(x[i], x[j])
@@ -213,8 +217,9 @@ def test_mgcx_matrix_with_cached_parts_is_bit_identical_to_hyppo(
     z = data.to_numpy()
     spi = distance.CrossMultiscaleGraphCorrelation(max_lag=max_lag)
     A = spi.multivariate(data)
-    for i in range(5):
-        for j in range(5):
+    M = z.shape[0]
+    for i in range(M):
+        for j in range(M):
             if i == j:
                 continue
             with warnings.catch_warnings():
@@ -223,6 +228,31 @@ def test_mgcx_matrix_with_cached_parts_is_bit_identical_to_hyppo(
                                            z[i], max_lag)
             assert A[i, j] == ref, (i, j)
             assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
+
+
+def test_mgc_with_cached_parts_at_a_local_optimal_scale_is_bit_identical_to_hyppo():
+    """A pair whose MGC is taken at a local scale, so the value depends on
+    scipy's thresholding of the map at the sample size, not only on the
+    global-scale correlation."""
+    import warnings
+    import pyspi.statistics.distance as distance
+    from hyppo.independence import MGC
+    from scipy.stats import multiscale_graphcorr
+
+    rng = np.random.default_rng(314)
+    x = rng.standard_normal(40)
+    data = Data(np.vstack([x, np.abs(x) + 0.6 * rng.standard_normal(40)]),
+                dim_order="ps")
+    z = data.to_numpy()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        opt_scale = multiscale_graphcorr(z[0], z[1], reps=0).mgc_dict["opt_scale"]
+        ref = MGC().statistic(z[0], z[1])
+    assert list(opt_scale) != [40, 40]
+    spi = distance.MultiscaleGraphCorrelation()
+    A = spi.multivariate(data)
+    assert A[0, 1] == A[1, 0] == ref
+    assert spi.bivariate(data, i=0, j=1) == ref
 
 
 # --------------------------------------------------------------------------
