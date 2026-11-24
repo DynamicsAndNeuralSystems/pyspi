@@ -594,7 +594,7 @@ SCHEMA_VERSION = 1
 # results that differ only by implementation. It is the release number at a
 # release, and `<release>.r<revision>` for each later change that alters
 # values, each logged here in one line; only equality is ever tested.
-# 3.0.0.r1: ccm_*, lccm_*: neighbours tied at the k-th distance share its place.
+# 3.0.0.r1: ccm_*/lccm_* tie rule; dcorr*/dcorrx_* at T >= 800; gpfit_*.
 COMPUTATION_VERSION = "3.0.0.r1"
 
 
