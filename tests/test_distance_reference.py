@@ -263,6 +263,30 @@ def test_dcorr_with_several_values_per_sample_uses_euclidean_distances(dcorr_rou
     assert A[0, 1] == pytest.approx(ref, abs=1e-12)
 
 
+@pytest.mark.parametrize("offset", [1e6, 1e7])
+@pytest.mark.parametrize("spi_name", ["dcorr", "dcorr_biased", "dcorrx_maxlag-1",
+                                      "dcorrx_maxlag-10"])
+def test_dcorr_on_the_fast_route_ignores_a_large_offset(spi_name, offset):
+    """Distance correlation is translation invariant, so a series far from
+    zero (not z-scored) gives the value of the same series around zero."""
+    from pyspi.statistics.distance import (CrossDistanceCorrelation,
+                                           DistanceCorrelation)
+
+    spi = {"dcorr": DistanceCorrelation(biased=False),
+           "dcorr_biased": DistanceCorrelation(biased=True),
+           "dcorrx_maxlag-1": CrossDistanceCorrelation(max_lag=1),
+           "dcorrx_maxlag-10": CrossDistanceCorrelation(max_lag=10)}[spi_name]
+    rng = np.random.default_rng(15)
+    x = rng.standard_normal(1000)
+    series = np.stack([x, x + rng.standard_normal(1000),
+                       rng.standard_normal(1000)])
+    ref = spi.multivariate(Data(series, dim_order="ps", zscore=False))
+    A = spi.multivariate(Data(series + offset, dim_order="ps", zscore=False))
+    off_diagonal = ~np.eye(3, dtype=bool)
+    np.testing.assert_allclose(A[off_diagonal], ref[off_diagonal],
+                               rtol=0, atol=1e-8)
+
+
 # --------------------------------------------------------------------------
 # HSIC
 # --------------------------------------------------------------------------

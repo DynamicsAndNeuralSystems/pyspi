@@ -222,6 +222,8 @@ def _dcov_prepared(v, bias):
     if not _is_fast_dcov(v):
         return _centred(_euclidean_distance(v.reshape(v.shape[0], -1)), bias)
     c = np.ascontiguousarray(v, dtype=np.float64).reshape(-1, 1)
+    # dcorr is translation invariant; centring keeps the fast sums accurate.
+    c = c - np.median(c)
     return c, _fast_1d_dcov(c, c, bias)
 
 
