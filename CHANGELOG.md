@@ -388,13 +388,14 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
   pyspi applies hyppo's final step itself, with the same values as hyppo 0.5.2.
-- `hhg` in O(n^2 log n) (about 9x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
+- `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 - **Undirected SPIs evaluate each unordered pair once** and mirror the value and any failure (`phi_*` 1.9x faster).
   For the distance SPIs among them (`hsic*`, `hhg`, `dcorr*`, `mgc`, `lcss*`, `softdtw*`, `gwtau`), a pair that raises is NaN with a warning, as for every other SPI, instead of failing the SPI.
   A direct `bivariate(data, i=i, j=j)` call with `i < j` on a fresh `Data` can differ in the last bit for `xcorr_*`, `je_*` and `ce_*`.
-- **`hhg` ranks each series once.**
-  The row-wise ranks of a series' distance matrix are computed once for all its pairs (at most 256 MB at a time), and the dominance counts run in a numba kernel; values are bit-identical to hyppo's.
-  11x faster at M=16, T=1000 (5.5-15.5x for M from 4 to 32 and T from 500 to 2000).
+- **`hhg` in O(T^2 log T), ranking each series once.**
+  The statistic is computed from row-wise ranks and 2-D dominance counts instead of hyppo's O(T^3) loop (about 9x), with values bit-identical to hyppo's.
+  The ranks of each series' distance matrix are computed once for all its pairs and the dominance counts run in a numba kernel, a further 5.8x, 7.9x and 7.8x in CPU time at M=16 and T=500, 1000 and 2000 (72.8 s to 9.2 s at T=1000), and 3.8x, 4.1x and 3.2x at M=4.
+  The cached ranks take at most 256 MB, or two series' ranks (16 T^2 bytes) when T is above 4096.
 
 ### Added
 
