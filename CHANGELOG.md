@@ -386,7 +386,8 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `lcss_constraint-itakura` uses the same mask.
 - **Constrained LCSS.**
   `lcss_constraint-sakoe-chiba` and `lcss_constraint-itakura` run the LCSS recursion over each row's band only, in a numba kernel cached on disk, with O(T) memory instead of a T x T match matrix; values are bit-identical.
-  At M=16 the two SPIs take 0.54 s instead of 18 s at T=4000, and 0.035 s instead of 1.4 s at T=1000.
+  At M=16, `lcss_constraint-sakoe-chiba` takes 0.003 s instead of 1.4-2.4 s at T=1000, and 0.008 s instead of about 15 s at T=4000.
+  `lcss_constraint-itakura` takes 0.12 s instead of 1.7-2.6 s at T=1000, and 1.9 s instead of about 18 s at T=4000.
 - **The distance-correlation family centres each series once.**
   `dcorr`, `hsic` and `dcorrx` share each series' centred distance matrix (one per lag for `dcorrx`) across its pairs, holding at most 256 MB of matrices at a time.
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
