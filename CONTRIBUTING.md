@@ -152,6 +152,7 @@ Comments in a config are one or two lines per class.
 - **Change to a computed value:** say so in the pull request.
   Regenerate exactly the affected baseline arrays.
   Increment the revision of `COMPUTATION_VERSION` in `pyspi/_parallel.py`, with a one-line entry in the log above it.
+  Changes made before a release is published keep that release's number without a suffix; the revision is incremented only for value changes after the release.
 - **Test names** describe what they test (`test_spectral_phase_reference.py`), not the work that prompted them.
 
 ## CHANGELOG
