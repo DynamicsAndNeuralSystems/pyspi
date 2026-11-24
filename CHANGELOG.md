@@ -378,7 +378,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `dcorr` and `dcorr_biased` evaluate only the retained order of each pair (2.0x at M=8, T=5000).
   Kraskov MI, time-lagged MI and transfer entropy count marginal neighbours with one batched tree query, less the temporally excluded neighbours, in O(N) memory (3-10x at T=5000, more with `dyn_corr_excl`).
 - **`je_*` and `ce_*` of one estimator run in one parallel task.**
-  `ce_*` reads the joint entropy `je_*` caches on the data, so under `compute(n_jobs > 1)` it is now built once per pair rather than once on each of two workers.
+  `ce_*` reads the joint entropy `je_*` caches on the data, so under `compute(n_jobs > 1)` each pair's joint entropy is built once.
 - **The five directed spectral measures share one spectral factorisation per pair.**
   `dtf`, `dcoh`, `pdcoh`, `gpdcoh` and `ddtf` are all read off the Wilson minimum-phase factor of a pair's cross-spectrum, which is now computed once per ordered pair, and the five classes form one scheduling task.
   7.6x faster on those measures (184 s to 24 s at M=40, T=1000), with about 40% less memory held per pair.
