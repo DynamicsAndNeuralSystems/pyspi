@@ -89,14 +89,16 @@ Dropped SPIs are left out of the YAML and listed with their cost on stderr.
 Pass `--preserve-dropped` to keep them as commented-out blocks instead.
 SPIs of the source config that the JSON did not time are left out.
 
-**The shipped cuts carry hand edits.**
-`xi_tau-{0,1}`, the six `pcorr_<estimator>`, `te_symbolic_k-3` and the three kernel `_DCE-AUTO` SPIs were timed separately on the same protocol (M=16, T=800, one core) and placed in each set by that cost.
-`te_kraskov_NN-4_DCE-AUTO_k-{1,2}_kt-1_l-1_lt-1` are in `benchmarked_p90` for coverage, although they cost more than its cutoff.
+**The shipped cuts (3.0.0) carry hand edits.**
+They rank all 231 SPIs of `full` by amortized cost on one Gadi core (Xeon 8274) at M=16, T=1000 on white noise, taking the fastest of the seeds, with cache groups kept whole.
+The timing cells are not in the repository.
+A p90 or p95 SPI whose cost grows from T=1000 to T=4000 by 12x or more (about T^1.8) moves to the next set: `hsic` and `softdtw_constraint-itakura` to p95, and `softdtw` and `bary_dtw_corr` to p99.
+`anm` (15x) stays in p90, since no other SPI tracks it.
+An SPI that a cheaper SPI tracks (Spearman |rho| of the off-diagonal entries >= 0.95 on most datasets) goes to p99: `lcss` (tracked by `lcss_constraint-itakura`) and `hsic_biased` (by `hsic`).
+`lccm_E-None_k-5_{skill,tp}` are in p99 only, since `ccm_*` covers the method.
+`cds` and `te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1` are in p90 for coverage, although they cost more than its cutoff.
 Re-running `cut_config` drops these edits, so re-apply them by hand afterwards.
-
-**SPIs added to `full` after the benchmark are in no `benchmarked_p*` set**, whatever their cost.
-These are the 45 SPIs of the `cgc`, `cpdc`, `cgpdc`, `cddtf`, `pcohmag`, `liang`, `edge`, `es`, `tailasym`, `nli`, `wtc`, `pac`, `lccm`, `ccm_*_convergence`, `di_kraskov`, `phasealigned` and `ppc_hilbert_adaptive` families.
-Placing one in the sets needs its cost on the same protocol.
+A new SPI goes into the set its cost on the same protocol places it in.
 
 ## Analyse
 

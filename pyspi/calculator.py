@@ -873,9 +873,9 @@ class Calculator:
           (M01-M14) except M07, which has no bundled SPI, and two from M14.
         - ``"fabfour"``: 4 SPIs: covariance, Spearman's correlation, directed
           information and power-envelope correlation.
-        - ``"benchmarked_p80"``, ``"_p90"``, ``"_p95"``, ``"_p99"``: the
-          SPIs below the 80th, 90th, 95th or 99th percentile of measured
-          compute cost; SPIs without a measured cost are in none of them.
+        - ``"benchmarked_p80"``, ``"_p90"``, ``"_p95"``, ``"_p99"``: about
+          the cheapest 80, 90, 95 or 99% of ``full`` by measured compute
+          cost, with a few SPIs placed by hand (listed in each config).
     detrend : bool, optional
         Remove the least-squares line from each process. Default: False.
     zscore : bool or None, optional
