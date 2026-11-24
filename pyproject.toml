@@ -75,8 +75,8 @@ dependencies = [
     # 2.3.12 is the first release whose C library builds on Python 3.11 with
     # NumPy 2; earlier source distributions fail to build or build without it.
     "dtaidistance>=2.3.12",
-    # ConvergentCrossMapping reproduces pyEDM 2.5's CCM, including its random
-    # libraries and their seeding.
+    # ConvergentCrossMapping agrees with pyEDM 2.5's CCM to rounding where no
+    # distances are tied, with the same random libraries and seeding.
     "pyEDM>=2.5",
     "pyyaml>=6.0",
     "tqdm>=4.65",

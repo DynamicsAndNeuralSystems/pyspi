@@ -359,6 +359,17 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`anm` pins its Gaussian-process kernel** to a fixed `ConstantKernel(1.0)*RBF(1.0)` with no optimiser, where it had relied on scikit-learn's default, which in 1.9 became an optimised kernel and shifted values by up to 7.6.
   Values are unchanged under scikit-learn <= 1.8.
   The kernel matrix is ill-conditioned, so `anm` varies by about 1e-4 relative across platforms.
+- **`ccm_*` and `lccm_*` share tied neighbours, and find simplex neighbours without a KD-tree per random library.**
+  Library points tied with a point's k-th nearest neighbour share the remaining neighbour places: with j library points strictly nearer and m tied, each tied point is weighted by (k - j)/m, which makes the prediction the mean of the simplex prediction over every way of breaking the tie.
+  So a value does not depend on the order in which the library is stored, the sign of the series or z-scoring.
+  This is the tie rule of cppEDM, which pyEDM 1.x used; pyEDM 2.5 takes whichever tied point its KD-tree returns.
+  Without tied distances every `ccm_*` and `lccm_*` value agrees with a KD-tree search per random library (pyEDM 2.5's CCM) to rounding, below 1e-15 on z-scored data, and `lccm_E-None_k-5_tp` is identical.
+  **With tied distances (integer, count or coarsely rounded data) values change.**
+  At M=8, T=1000 on data with 16 levels, `ccm_E-1_mean` changes by up to 0.19, `ccm_E-1_convergence` by up to 0.31, `ccm_E-None_*` by up to 0.12, `lccm_E-None_k-5_skill` by up to 0.10, `lccm_E-None_k-5_tp` by up to 10 lags and `ccm_E-10_*` by under 0.01; on two-valued data `ccm_E-1_convergence` changes by up to 0.44.
+  If you computed `ccm_*` or `lccm_*` on data with tied values using the release candidate 3.0.0rc1, recompute those SPIs, since a checkpoint holding them resumes with the earlier values.
+  Each library variable's nearest points are tabulated once; a random library's k nearest members are read off that table, or found by a pass over a small library, in a numba kernel that also forms the predictions and correlations.
+  On continuous data the eleven `ccm_*` and `lccm_*` SPIs of `full` together take 21.7 s instead of 187 s at M=8, T=1000.
+  On tied data `ccm_E-1_*` is slower: 3.12 s instead of 1.64 s for one library variable and three targets at T=1000 on data with 16 levels.
 - **Labels describe each SPI as computed.**
   The labels a bundled config writes for an SPI agree with the SPI: its sign with `issigned()`, its directedness with the class trait, and its linearity with the class where the class sets one; where these vary by variant (`lagcorr_*`, `coint_*`, `es_*`, `pec_*`), the labels are set per config entry.
   When a config's labels are merged with a class's, the class's directedness trait, its `linear`/`nonlinear`, its `issigned()` and its `timing` or `profile` win, and any remaining contradictory pair raises.
