@@ -341,71 +341,83 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
         return _dcorr_spi_matrix(self, data, _median_gaussian_distance)
 
 
-def _row_dominance_counts(rx, ry):
+@numba.njit(cache=True, nogil=True)
+def _row_dominance_counts(rx, order, ry):
     """
     ``c[i, j] = #{k : rx[i, k] <= rx[i, j] and ry[i, k] <= ry[i, j]}``.
 
-    ``rx`` and ``ry`` are row-wise max-ranks (1..n). Offline 2-D dominance
-    counting with one Fenwick tree per row, all rows at once: because ranks
-    are max-ranks, the ``k`` with ``rx[i, k] <= rx[i, j]`` are exactly the first
-    ``rx[i, j]`` entries of row ``i`` in ``rx`` order, so ``j``'s query is
-    answered once that many entries have been inserted. O(n log n) per row.
+    ``rx`` and ``ry`` are row-wise max-ranks (1..n) and ``order[i]`` sorts
+    row ``i`` of ``rx``. Offline 2-D dominance counting with a Fenwick tree
+    per row: because ranks are max-ranks, the ``k`` with
+    ``rx[i, k] <= rx[i, j]`` are exactly the entries of row ``i`` up to and
+    including ``j``'s tie group in ``rx`` order, so ``j``'s query is answered
+    once that group has been inserted. O(n log n) per row.
     """
     n_rows, n = rx.shape
-    n_bits = n.bit_length()
-    rows = np.arange(n_rows)
-    ry_in_rx_order = np.take_along_axis(
-        ry, np.argsort(rx, axis=1, kind="stable"), axis=1)
-    # Queries grouped by the prefix length p = rx at which they are answered.
-    q_order = np.argsort(rx, axis=None, kind="stable")
-    bounds = np.searchsorted(rx.ravel()[q_order], np.arange(1, n + 2))
-    q_rows = q_order // n
-    q_vals = ry.ravel()[q_order]
-    # Column n + 1 absorbs updates that run past the end of the tree.
-    tree = np.zeros((n_rows, n + 2), dtype=np.int64)
-    out = np.zeros(n_rows * n, dtype=np.int64)
-    for p in range(1, n + 1):
-        idx = ry_in_rx_order[:, p - 1].copy()
-        for _ in range(n_bits):
-            tree[rows, idx] += 1
-            idx += idx & -idx
-            np.minimum(idx, n + 1, out=idx)
-        lo, hi = bounds[p - 1], bounds[p]
-        if hi > lo:
-            q_r = q_rows[lo:hi]
-            idx = q_vals[lo:hi].copy()
-            acc = np.zeros(hi - lo, dtype=np.int64)
-            for _ in range(n_bits):
-                acc += tree[q_r, idx]  # tree[:, 0] stays 0
-                idx -= idx & -idx
-            out[q_order[lo:hi]] = acc
-    return out.reshape(n_rows, n)
+    out = np.empty((n_rows, n), dtype=np.int64)
+    tree = np.zeros(n + 1, dtype=np.int64)
+    for i in range(n_rows):
+        tree[:] = 0
+        p = 0
+        while p < n:
+            q = p
+            v = rx[i, order[i, p]]
+            while q < n and rx[i, order[i, q]] == v:
+                idx = ry[i, order[i, q]]
+                while idx <= n:
+                    tree[idx] += 1
+                    idx += idx & -idx
+                q += 1
+            for t in range(p, q):
+                j = order[i, t]
+                idx = ry[i, j]
+                acc = 0
+                while idx > 0:
+                    acc += tree[idx]
+                    idx -= idx & -idx
+                out[i, j] = acc
+            p = q
+    return out
 
 
 _HHG_CHUNK_ENTRIES = 2**22
 
 
-def _hhg_statistic(x, y):
+def _hhg_ranks(x):
     """
-    hyppo's ``HHG().statistic(x, y)`` in O(n^2 log n) rather than O(n^3).
+    The part of `_hhg_statistic` that depends on one series alone.
 
-    The sum over ``i != j`` of Pearson's chi-square for the 2x2 table that
-    splits the other samples by ``d_x(i, .) <= d_x(i, j)`` and
-    ``d_y(i, .) <= d_y(i, j)`` (Heller, Heller & Gorfine 2013). The table
-    counts are row-wise ranks and 2-D dominance counts.
+    Row-wise max-ranks of its Euclidean distance matrix,
+    ``#{k : d[i, k] <= d[i, j]}`` (counting ``k = i`` and ``k = j``
+    themselves), and the order that sorts each row of them.
     """
-    distx = pairwise_distances(x, metric="euclidean")
-    disty = pairwise_distances(y, metric="euclidean")
-    n = distx.shape[0]
+    d = pairwise_distances(x, metric="euclidean")
+    n = d.shape[0]
+    ranks = np.empty((n, n), dtype=np.int32)
+    order = np.empty((n, n), dtype=np.int32)
+    # Rows are independent; bound the float64 and int64 temporaries' size.
+    step = max(1, _HHG_CHUNK_ENTRIES // n)
+    for start in range(0, n, step):
+        stop = min(n, start + step)
+        ranks[start:stop] = rankdata(d[start:stop], method="max", axis=1)
+        order[start:stop] = np.argsort(ranks[start:stop], axis=1,
+                                       kind="stable")
+    return ranks, order
+
+
+def _hhg_from_ranks(rank_x, rank_y):
+    """`_hhg_statistic` from the two series' `_hhg_ranks`."""
+    (rx, order), (ry, _) = rank_x, rank_y
+    n = rx.shape[0]
     S = np.zeros((n, n))
     # Rows are independent; bound the int64 work arrays' size.
     step = max(1, _HHG_CHUNK_ENTRIES // n)
     for start in range(0, n, step):
         stop = min(n, start + step)
-        # #{k : d[i, k] <= d[i, j]}, which counts k = i and k = j themselves.
-        na = rankdata(distx[start:stop], method="max", axis=1).astype(np.int64)
-        nb = rankdata(disty[start:stop], method="max", axis=1).astype(np.int64)
-        nab = _row_dominance_counts(na, nb)
+        na = rx[start:stop].astype(np.int64)
+        nb = ry[start:stop].astype(np.int64)
+        nab = _row_dominance_counts(rx[start:stop], order[start:stop],
+                                    ry[start:stop])
         t11 = nab - 2
         t12 = na - nab
         t21 = nb - nab
@@ -422,6 +434,19 @@ def _hhg_statistic(x, y):
     return np.sum(S[mask])
 
 
+def _hhg_statistic(x, y):
+    """
+    hyppo's ``HHG().statistic(x, y)`` in O(n^2 log n) rather than O(n^3).
+
+    The sum over ``i != j`` of Pearson's chi-square for the 2x2 table that
+    splits the other samples by ``d_x(i, .) <= d_x(i, j)`` and
+    ``d_y(i, .) <= d_y(i, j)`` (Heller, Heller & Gorfine 2013). The table
+    counts are row-wise ranks (`_hhg_ranks`, one series at a time) and 2-D
+    dominance counts.
+    """
+    return _hhg_from_ranks(_hhg_ranks(x), _hhg_ranks(y))
+
+
 class HellerHellerGorfine(Undirected, Unsigned):
     """
     Heller-Heller-Gorfine independence statistic [1]_.
@@ -433,6 +458,7 @@ class HellerHellerGorfine(Undirected, Unsigned):
     sample of ``T`` scalar observations, so time order is ignored. The value
     equals hyppo's ``HHG().statistic``, computed in ``O(T^2 log T)`` from
     row-wise ranks and dominance counts instead of hyppo's ``O(T^3)`` loop.
+    Each series' ranks are computed once for all its pairs.
 
     Undirected and unsigned (``hhg(x, y) == hhg(y, x)`` exactly). The sum is
     not normalised, so it grows with ``T``.
@@ -452,6 +478,17 @@ class HellerHellerGorfine(Undirected, Unsigned):
     def bivariate(self, data, i=None, j=None):
         x, y = data.to_numpy()[[i, j]]
         return _hhg_statistic(x, y)
+
+    @parse_multivariate
+    def multivariate(self, data):
+        # Each series' ranks (8 T^2 bytes) are computed once, not once per
+        # pair. The cache holds at most 256 MB of them, or two series'
+        # (16 T^2 bytes) when T > 4096.
+        z = data.to_numpy()
+        T = z.shape[1]
+        return _cached_pairs(self.identifier, z.shape[0],
+                             lambda s: _hhg_ranks(z[s]), _hhg_from_ranks,
+                             item_bytes=8 * T * T)
 
 
 class DistanceCorrelation(Undirected, Unsigned):

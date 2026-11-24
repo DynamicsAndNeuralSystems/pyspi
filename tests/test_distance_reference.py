@@ -415,6 +415,79 @@ def test_hhg_statistic_is_bit_identical_to_hyppo(monkeypatch, chunk_rows):
             assert distance._hhg_statistic(a, b) == ref, (n, name)
 
 
+def test_hhg_ranks_are_computed_in_row_chunks(monkeypatch):
+    """`_hhg_ranks` holds the distance matrix, its int32 ranks and order,
+    and one chunk of rows' temporaries, not full-size float64 and int64
+    copies; the chunked ranks equal unchunked ones."""
+    import tracemalloc
+    from scipy.stats import rankdata
+    import pyspi.statistics.distance as distance
+
+    n = 600
+    x = np.random.default_rng(5).standard_normal((n, 1))
+    full = rankdata(distance.pairwise_distances(x), method="max", axis=1)
+    monkeypatch.setattr(distance, "_HHG_CHUNK_ENTRIES", 10 * n)
+
+    pairwise_distances = distance.pairwise_distances
+
+    def distances_then_reset_peak(*args, **kwargs):
+        d = pairwise_distances(*args, **kwargs)
+        tracemalloc.reset_peak()
+        return d
+
+    monkeypatch.setattr(distance, "pairwise_distances",
+                        distances_then_reset_peak)
+    tracemalloc.start()
+    try:
+        ranks, order = distance._hhg_ranks(x)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    # The float64 distances plus the int32 ranks and order take 16 n^2
+    # bytes; ranking all rows at once peaks above 50 n^2.
+    assert peak < 1.25 * 16 * n * n, peak / (8 * n * n)
+    assert ranks.dtype == order.dtype == np.int32
+    assert np.array_equal(ranks, full)
+    assert np.array_equal(order, np.argsort(full, axis=1, kind="stable"))
+
+
+def test_hhg_dominance_kernel_releases_the_gil():
+    """The numba dominance kernel runs without the GIL, as `_banded_dtw`
+    does, so threaded callers are not serialised on it."""
+    import pyspi.statistics.distance as distance
+
+    assert distance._row_dominance_counts.targetoptions.get("nogil")
+
+
+@pytest.mark.parametrize("budget", [None, 1])
+def test_hhg_matrix_with_cached_ranks_is_bit_identical_to_hyppo(monkeypatch,
+                                                                budget):
+    """`multivariate` ranks each series once (or once per block, with a
+    one-byte cache budget) and still gives hyppo's statistic exactly, as
+    `bivariate` does."""
+    import warnings
+    import pyspi.statistics.distance as distance
+    from hyppo.independence import HHG
+
+    if budget is not None:
+        monkeypatch.setattr(distance, "_DCORR_CACHE_BYTES", budget)
+    rng = np.random.default_rng(4)
+    z = rng.standard_normal((5, 40))
+    z[1] = np.tanh(z[0]) + 0.3 * z[1]
+    z[2] = np.round(z[2])  # ties
+    data = Data(z, dim_order="ps")
+    x = data.to_numpy()
+    spi = distance.HellerHellerGorfine()
+    A = spi.multivariate(data)
+    for i in range(5):
+        for j in range(i + 1, 5):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ref = HHG().statistic(x[i], x[j])
+            assert A[i, j] == A[j, i] == ref, (i, j)
+            assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
+
+
 # --------------------------------------------------------------------------
 # GW_tau: the intrinsic-distance vector includes the trajectory's start
 # --------------------------------------------------------------------------
