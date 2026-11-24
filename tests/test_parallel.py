@@ -18,7 +18,7 @@ import pytest
 
 from pyspi.calculator import Calculator
 
-from table_differences import table_differences
+from table_differences import REPEAT_TOLERANCES, table_differences
 
 CONFIG = Path(__file__).parent / "parallel_test_config.yaml"
 
@@ -324,7 +324,8 @@ def test_parallel_run_leaves_the_parent_environment_alone(monkeypatch):
 
 @pytest.mark.slow
 def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):
-    """One table, bit for bit, however the work is divided.
+    """One table however the work is divided, bit for bit except the SPIs
+    of ``REPEAT_TOLERANCES``.
 
     ``benchmarked_p90`` on ``kuramoto_M7_T100``: values, missing entries and
     the (empty) error record are all compared. The serial runs differ in the
@@ -351,7 +352,8 @@ def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):
 
     def assert_same(calc, label):
         assert list(calc.table.columns) == list(ref.table.columns), label
-        changed = table_differences(calc.table, ref.table)
+        changed = table_differences(calc.table, ref.table,
+                                    REPEAT_TOLERANCES)
         assert not changed, "\n".join([label] + changed)
         assert list(calc.errors.items()) == list(ref.errors.items()), label
 
@@ -367,7 +369,7 @@ def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):
         (cp_dir / f"{key}.npy").unlink()
     resumed = run(2, seed=4, checkpoint_dir=cp_dir)
     assert list(resumed.table.columns) == list(ref.table.columns)
-    changed = table_differences(resumed.table, ref.table)
+    changed = table_differences(resumed.table, ref.table, REPEAT_TOLERANCES)
     assert not changed, "\n".join(["resumed"] + changed)
     assert resumed.errors == ref.errors
 

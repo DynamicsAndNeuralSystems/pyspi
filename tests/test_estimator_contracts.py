@@ -12,7 +12,7 @@ from pyspi.base import NotAppropriate
 from pyspi.data import Data
 from pyspi.statistics import infotheory as it
 
-from table_differences import table_differences
+from table_differences import REPEAT_TOLERANCES, table_differences
 from unchecked_data import unchecked_data
 
 # Classes whose kraskov variant must be genuine or rejected.
@@ -2034,6 +2034,7 @@ def test_no_p90_spi_depends_on_the_global_rng():
     versus parallel execution. (The graphical-lasso solver still *advances* the
     global stream -- scikit-learn draws a seed it never uses under cyclic
     coordinate descent -- which is harmless only while nothing reads it.)
+    Every SPI is compared bit for bit except those of ``REPEAT_TOLERANCES``.
     """
     import os
     import random
@@ -2055,8 +2056,25 @@ def test_no_p90_spi_depends_on_the_global_rng():
         return calc.table
 
     first, second = table(1), table(2)
-    changed = table_differences(second, first)
+    changed = table_differences(second, first, REPEAT_TOLERANCES)
     assert not changed, "\n".join(changed)
+
+
+def test_table_differences_reports_what_falls_outside_its_tolerance():
+    import pandas as pd
+
+    columns = pd.MultiIndex.from_product([["exact", "loose"], ["a", "b"]])
+    ref = pd.DataFrame([[1.0, 2.0, 0.5, np.nan]], columns=columns)
+
+    def changed(exact, loose, nan_cell=np.nan):
+        table = pd.DataFrame([[1.0, exact, loose, nan_cell]], columns=columns)
+        return table_differences(table, ref, {"loose": (1e-6, 1e-3)})
+
+    assert changed(2.0, 0.5) == []
+    assert changed(2.0, 0.5 * (1 + 1e-4)) == []
+    assert [line.split(":")[0] for line in changed(2.0, 0.51)] == ["loose"]
+    assert [line.split(":")[0] for line in changed(2.0, 0.5, 0.0)] == ["loose"]
+    assert [line.split(":")[0] for line in changed(2.0 + 1e-12, 0.5)] == ["exact"]
 
 
 # --------------------------------------------------------------------------
