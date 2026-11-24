@@ -98,7 +98,8 @@ A p90 or p95 SPI whose cost grows from T=1000 to T=4000 by 12x or more (about T^
 An SPI that a cheaper SPI tracks (Spearman |rho| of the off-diagonal entries >= 0.95 on most datasets) goes to p99: `lcss` (tracked by `lcss_constraint-itakura`) and `hsic_biased` (by `hsic`).
 `lccm_E-None_k-5_{skill,tp}` are in p99 only, since `ccm_*` covers the method.
 `cds` and `te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1` are in p90 for coverage, although they cost more than its cutoff.
-Re-running `cut_config` drops these edits, so re-apply them by hand afterwards.
+In all, 11 SPIs are placed by hand: `te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1`, `cds`, `anm` and `hsic` in p90 and up; `softdtw_constraint-itakura` in p95 and up; `softdtw`, `bary_dtw_corr`, `lcss`, `hsic_biased` and `lccm_E-None_k-5_{skill,tp}` in p99 only.
+`cut_config` does not apply them: fed the T=1000 costs of `tiers_3_0.csv` as a per-cell JSON, it writes `benchmarked_p80` as shipped and the other three without these placements and without the header notes on them, so re-apply both by hand after a re-cut.
 A new SPI goes into the set its cost on the same protocol places it in.
 
 ## Analyse

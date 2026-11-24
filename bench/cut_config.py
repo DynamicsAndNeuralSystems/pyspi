@@ -17,6 +17,18 @@ Cost model — two modes:
              The shared computation is built once and reused, so blaming its
              full cost to one variant overcounts. Ungrouped SPIs use raw time.
 
+The shipped 3.0.0 sets are this script's cut of the costs in
+``bench/results/analysis/tiers_3_0.csv``, followed by 11 hand placements that
+the script does not apply. Re-apply them after a re-cut, and keep each config's
+header note on them (see ``bench/README.md``):
+
+    in benchmarked_p90 and up:  te_kraskov_NN-4_DCE-AUTO_k-2_kt-1_l-1_lt-1, cds
+                                (above the cutoff), anm, hsic (kept although
+                                their cost grows about as T^2)
+    in benchmarked_p95 and up:  softdtw_constraint-itakura
+    in benchmarked_p99 only:    softdtw, bary_dtw_corr, lcss, hsic_biased,
+                                lccm_E-None_k-5_skill, lccm_E-None_k-5_tp
+
 Usage:
     python -m bench.cut_config --bench-json bench/results/cells/pbs_config_M16_T800_n1.json --keep 90
     python -m bench.cut_config --bench-json <path> --keep 80 --mode raw
@@ -271,17 +283,18 @@ def main(argv=None) -> int:
     cost_note = ("amortized cost (SPIs that share a cache split its cost)"
                  if args.mode == "amortized" else "measured cost")
     cores = "on one core" if n_jobs == 1 else f"with n_jobs = {n_jobs}"
+    whole = ", with cache groups kept whole" if args.mode == "amortized" else ""
+    src = source_config.stem
+    ranked_from = (f"the {len(ids)} SPIs in `{src}`" if not missing
+                   else f"the {len(ranked)} SPIs of `{src}` that the benchmark timed")
     header = (
-        f"# {Path(output).stem}: the fastest {args.keep}% of the SPIs timed in pyspi's compute-cost\n"
-        f"# benchmark, ranked by {cost_note}\n"
-        f"# at M = {M}, T = {T} {cores}.\n"
-        f"# Current set: {len(kept)} SPIs (of the {len(ids)} in `{source_config.stem}`).\n"
+        f"# {Path(output).stem}: about the cheapest {args.keep}% of {ranked_from}, ranked by\n"
+        f"# {cost_note} at M = {M}, T = {T}\n"
+        f"# {cores}{whole}.\n"
+        f"# Current set: {len(kept)} SPIs (of the {len(ids)} in `{src}`).\n"
     )
     if missing:
-        header += (
-            f"# SPIs of `{source_config.stem}` that the benchmark did not time are in no benchmarked_p* set,\n"
-            "# whatever their cost; use `full` for them.\n"
-        )
+        header += f"# The {len(missing)} SPIs of `{src}` that the benchmark did not time are left out.\n"
     header += "#\n"
     text = emit_config(source_config, records, kept, header,
                        preserve_dropped=args.preserve_dropped)
