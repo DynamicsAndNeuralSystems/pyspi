@@ -241,8 +241,24 @@ def _banded_soft_dtw(x, y, lo, hi, gamma):
 # ---------------------------------------------------------------------------
 # Distance correlation from per-series centred distance matrices
 # ---------------------------------------------------------------------------
-# Upper bound on the centred matrices one SPI call holds at a time.
-_DCORR_CACHE_BYTES = 2**28
+def _dcorr_cache_bytes():
+    """``PYSPI_DCORR_CACHE_BYTES`` as a whole number of bytes; 2 GiB unset."""
+    raw = os.getenv("PYSPI_DCORR_CACHE_BYTES", str(2**31))
+    try:
+        value = int(raw)
+    except ValueError:
+        value = -1
+    if value < 0:
+        raise ValueError(
+            "PYSPI_DCORR_CACHE_BYTES must be a whole number of bytes "
+            f"(such as 2147483648 for 2 GiB), got {raw!r}."
+        )
+    return value
+
+
+# Cap on what one `_cached_pairs` call holds (2 GiB), per SPI, per worker
+# process: n_jobs workers can hold n_jobs times it in total.
+_DCORR_CACHE_BYTES = _dcorr_cache_bytes()
 
 
 def _centred(dist, bias):
@@ -318,13 +334,16 @@ def _cached_pairs(identifier, M, prepare, combine, item_bytes, directed=False):
     """
     `fill_pairwise` of ``combine(prepare(i), prepare(j))`` over every pair.
 
-    Each series is prepared once per block of series it is paired within,
-    and at most two blocks (about `_DCORR_CACHE_BYTES`) are held at a time.
-    When every series fits in one block, each is prepared once and the
-    pairs are visited in `Undirected.multivariate`'s order. Undirected:
-    ``i < j``, mirrored.
+    When all ``M`` items fit in `_DCORR_CACHE_BYTES`, each series is
+    prepared once and the pairs are visited in `Undirected.multivariate`'s
+    order. Otherwise each series is prepared once per block of series it is
+    paired within, and at most two blocks (about `_DCORR_CACHE_BYTES`) are
+    held at a time. Undirected: ``i < j``, mirrored.
     """
-    b = int(max(1, _DCORR_CACHE_BYTES // (2 * item_bytes)))
+    if M * item_bytes <= _DCORR_CACHE_BYTES:
+        b = M
+    else:
+        b = int(max(1, _DCORR_CACHE_BYTES // (2 * item_bytes)))
     blocks = [range(s, min(s + b, M)) for s in range(0, M, b)]
     pairs = []
     for p, P in enumerate(blocks):
@@ -402,6 +421,15 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
     estimate of the squared statistic and can be slightly negative under
     independence; with ``biased=True`` it is the square root of the
     V-statistic ratio, in ``[0, 1]``. The two are on different scales.
+
+    Each series' centred ``T x T`` matrix (``8 T^2`` bytes) is computed once
+    and shared across its pairs while all ``M`` fit in 2 GiB; beyond that,
+    some series are centred more than once so that at most 2 GiB is held.
+    The 2 GiB applies per SPI, per worker process, and is released when the
+    SPI returns, so ``n_jobs`` workers running such SPIs at once can hold up
+    to ``n_jobs`` times it. The environment variable
+    ``PYSPI_DCORR_CACHE_BYTES`` (a whole number of bytes, read once per
+    process) changes the 2 GiB.
 
     References
     ----------
@@ -586,8 +614,7 @@ class HellerHellerGorfine(Undirected, Unsigned):
     @parse_multivariate
     def multivariate(self, data):
         # Each series' ranks (8 T^2 bytes) are computed once, not once per
-        # pair. The cache holds at most 256 MB of them, or two series'
-        # (16 T^2 bytes) when T > 4096.
+        # pair, within `_DCORR_CACHE_BYTES` (or two series' when that is less).
         z = data.to_numpy()
         T = z.shape[1]
         return _cached_pairs(self.identifier, z.shape[0],
@@ -615,11 +642,12 @@ class DistanceCorrelation(Undirected, Unsigned):
     computed in ``O(T log T)`` time and ``O(T)`` memory by the sorting
     algorithm of [3]_, as implemented in hyppo, without forming the distance
     matrices. Shorter series, where that is slower, and series with several
-    values per sample use each series' ``T x T`` centred distance matrix.
-    The value is 0 when a distance variance is not positive. The unbiased
-    variance is exactly zero for a series whose samples are all equal but
-    one, at any length, and rounding then decides between 0 and an
-    arbitrary value.
+    values per sample use each series' ``T x T`` centred distance matrix,
+    shared across its pairs within the 2 GiB cache described in
+    `HilbertSchmidtIndependenceCriterion`. The value is 0 when a distance
+    variance is not positive. The unbiased variance is exactly zero for a
+    series whose samples are all equal but one, at any length, and rounding
+    then decides between 0 and an arbitrary value.
 
     References
     ----------
@@ -817,6 +845,10 @@ class CrossDistanceCorrelation(Directed, Unsigned):
     samples: the SPI is not appropriate
     (``NotAppropriate``, NaN in a Calculator table) when
     ``T < max_lag + 4``.
+
+    Below 800 samples, the centred matrices of one lag are shared across
+    pairs within the 2 GiB cache described in
+    `HilbertSchmidtIndependenceCriterion`.
 
     References
     ----------

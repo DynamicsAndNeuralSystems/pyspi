@@ -2192,6 +2192,58 @@ def test_distance_correlation_centres_each_series_once(monkeypatch):
     assert len(calls) == 6
 
 
+@pytest.mark.parametrize("value, expected", [(None, 2**31), ("0", 0),
+                                             ("268435456", 2**28)])
+def test_dcorr_cache_bytes_reads_a_whole_number_of_bytes(value, expected,
+                                                         monkeypatch):
+    from pyspi.statistics import distance as D
+
+    if value is None:
+        monkeypatch.delenv("PYSPI_DCORR_CACHE_BYTES", raising=False)
+    else:
+        monkeypatch.setenv("PYSPI_DCORR_CACHE_BYTES", value)
+    assert D._dcorr_cache_bytes() == expected
+
+
+@pytest.mark.parametrize("value", ["2GB", "1e9", "-1", ""])
+def test_bad_dcorr_cache_bytes_names_the_variable_on_import(value):
+    """The module reads the variable on import, so a bad value stops any
+    config with a distance SPI from loading; the error says why."""
+    import os
+    import subprocess
+    import sys
+
+    env = dict(os.environ, PYSPI_DCORR_CACHE_BYTES=value)
+    run = subprocess.run(
+        [sys.executable, "-c", "import pyspi.statistics.distance"],
+        env=env, capture_output=True, text=True)
+    assert run.returncode != 0
+    last = run.stderr.strip().splitlines()[-1]
+    assert last.startswith("ValueError: PYSPI_DCORR_CACHE_BYTES")
+    assert "whole number of bytes" in last and repr(value) in last
+
+
+@pytest.mark.parametrize("m, budget, centrings",
+                         [(5, 5, 5), (7, 7, 7), (6, 6, 6), (6, 5, 10)])
+def test_distance_correlation_centres_once_when_all_series_fit(m, budget,
+                                                               centrings,
+                                                               monkeypatch):
+    """A budget of exactly M items holds them all, so each series is centred
+    once. With odd M, blocks of half the budget would split the series
+    unevenly and centre some again (8 for M = 5, 11 for M = 7). One item
+    less than M = 6 falls back to blocks {0,1}, {2,3}, {4,5}, where series
+    2-5 are centred again after an eviction (6 + 4)."""
+    from pyspi.statistics import distance as D
+
+    calls = []
+    inner = D._centred
+    monkeypatch.setattr(D, "_centred",
+                        lambda dist, bias: calls.append(1) or inner(dist, bias))
+    monkeypatch.setattr(D, "_DCORR_CACHE_BYTES", budget * 8 * 40 * 40)
+    D.DistanceCorrelation().multivariate(_data(m=m, t=40))
+    assert len(calls) == centrings
+
+
 @pytest.mark.parametrize("biased", [False, True])
 def test_distance_correlation_matches_the_double_centring_definition(biased):
     """Szekely's sample statistic written out from distance matrices.
