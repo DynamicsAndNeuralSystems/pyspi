@@ -255,6 +255,39 @@ def test_mgc_with_cached_parts_at_a_local_optimal_scale_is_bit_identical_to_hypp
     assert spi.bivariate(data, i=0, j=1) == ref
 
 
+def test_mgc_and_mgcx_without_scipys_mgc_steps_call_hyppo_with_the_same_values(
+        monkeypatch):
+    """With a scipy that lacks the private MGC steps (older than 1.14), both
+    SPIs call hyppo for every pair: the same matrices and the same refusals."""
+    import pyspi.statistics.distance as distance
+    from pyspi.base import NotAppropriate
+
+    z = np.random.default_rng(5).integers(0, 4, (4, 30)) * 1.0
+    data = Data(z, dim_order="ps", zscore=False)
+    spis = [distance.MultiscaleGraphCorrelation(),
+            distance.CrossMultiscaleGraphCorrelation(max_lag=2)]
+    short = [Data(np.random.default_rng(1).standard_normal((3, T)),
+                  dim_order="ps", zscore=False) for T in (4, 6)]
+
+    def run():
+        out = []
+        for spi, d in zip(spis, short):
+            with pytest.raises(NotAppropriate) as refusal:
+                spi.multivariate(d)
+            out.append((spi.multivariate(data),
+                        spi.bivariate(data, i=2, j=1), str(refusal.value)))
+        return out
+
+    with np.errstate(all="ignore"):
+        fast = run()
+        monkeypatch.setattr(distance, "_local_covariance", None)
+        slow = run()
+    for (A, b, msg), (A0, b0, msg0) in zip(fast, slow):
+        np.testing.assert_array_equal(A, A0)
+        assert b == b0
+        assert msg == msg0
+
+
 # --------------------------------------------------------------------------
 # HSIC
 # --------------------------------------------------------------------------

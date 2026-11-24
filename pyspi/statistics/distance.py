@@ -29,6 +29,8 @@ from pyspi.base import (
     parse_multivariate,
 )
 from pyspi.utils import fmt_param, require_int, require_positive_float
+
+# A guarded import (absent before scipy 1.14), so it follows the sorted groups.
 try:
     # The steps of scipy's `multiscale_graphcorr`, which hyppo's MGC calls,
     # taken separately so that each series' share is computed once
@@ -519,7 +521,9 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     Undirected. MGC needs at least 5 samples; a shorter series is not
     appropriate (``NotAppropriate``, NaN in a Calculator table). The value is
     hyppo's, bit for bit; each series' share of the MGC map (its ranks,
-    centring and local variances) is computed once, not once per pair.
+    centring and local variances) is computed once, not once per pair. This
+    needs scipy 1.14 or later; with an older scipy the SPI calls hyppo's
+    ``MGC`` for every pair, with the same values.
 
     References
     ----------
@@ -735,7 +739,9 @@ class CrossMultiscaleGraphCorrelation(Directed, Unsigned):
     used, for the same reason. MGC needs at least 5 samples, so every lagged
     term does, and the SPI is not appropriate (``NotAppropriate``, NaN in a
     Calculator table) when ``T < max_lag + 5``. Each series' share of each
-    lagged MGC map is computed once per lag, not once per pair.
+    lagged MGC map is computed once per lag, not once per pair. This needs
+    scipy 1.14 or later; with an older scipy the SPI calls hyppo's ``MGC``
+    for every pair and lag, with the same values.
 
     References
     ----------
