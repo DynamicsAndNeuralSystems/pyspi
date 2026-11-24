@@ -920,6 +920,80 @@ def test_itakura_dtw_is_bitwise_tslearns(T):
             assert A[i, j] == A[j, i] == ref
 
 
+def test_sakoe_chiba_rows_are_tslearns_mask():
+    """`_sakoe_chiba_rows` is tslearn's mask, square or not, radius 1 or 3."""
+    import tslearn.metrics
+    from pyspi.statistics.distance import _sakoe_chiba_rows
+
+    sizes = [(n, m) for n in range(1, 40) for m in range(1, 40)]
+    sizes += [(1000, 1000), (1001, 1000)]
+    for n, m in sizes:
+        for radius in (1, 3):
+            ref = np.asarray(tslearn.metrics.sakoe_chiba_mask(n, m, radius),
+                             dtype=bool)
+            lo, hi = _sakoe_chiba_rows(n, m, radius)
+            cols = np.arange(m)
+            assert np.array_equal(
+                ref, (cols >= lo[:, None]) & (cols < hi[:, None])), (n, m, radius)
+
+
+@pytest.mark.parametrize("constraint", ["sakoe_chiba", "itakura"])
+@pytest.mark.parametrize("T", [3, 4, 10, 101, 257])
+def test_constrained_soft_dtw_is_bitwise_tslearns(constraint, T):
+    """`softdtw_constraint-*` equals `tslearn.metrics.soft_dtw` exactly.
+
+    Noise, a persistent AR(1) and a quantised series with many ties.
+    """
+    import tslearn.metrics
+    from pyspi.statistics.distance import SoftDynamicTimeWarping
+
+    rng = np.random.default_rng(T)
+    z = rng.standard_normal((4, T))
+    for t in range(1, T):
+        z[1, t] = 0.95 * z[1, t - 1] + z[1, t]
+    z[2] = np.round(z[2])
+    data = Data(data=z, dim_order="ps")
+    x = data.to_numpy(squeeze=True)
+    spi = SoftDynamicTimeWarping(global_constraint=constraint)
+    for i in range(4):
+        for j in range(i + 1, 4):
+            ref = tslearn.metrics.soft_dtw(x[i], x[j], global_constraint=constraint)
+            assert spi.bivariate(data, i=i, j=j) == ref
+
+
+def test_constrained_soft_dtw_with_replications_is_tslearns(tmp_path):
+    """With several replications each series is multivariate: tslearn's value.
+
+    Through a Calculator, both constraints give exactly
+    `tslearn.metrics.soft_dtw` on the (T, R) series, with no SPI error.
+    """
+    import tslearn.metrics
+    from pyspi.calculator import Calculator
+
+    config = tmp_path / "softdtw.yaml"
+    config.write_text(
+        ".statistics.distance:\n"
+        "  SoftDynamicTimeWarping:\n"
+        "    labels: [distance]\n"
+        "    configs:\n"
+        "      - global_constraint: sakoe_chiba\n"
+        "      - global_constraint: itakura\n"
+    )
+    rng = np.random.default_rng(3)
+    data = Data(data=rng.standard_normal((3, 50, 2)), dim_order="psr")
+    calc = Calculator(dataset=data, config=str(config))
+    calc.compute(n_jobs=1)
+
+    assert not calc.errors
+    x = data.to_numpy(squeeze=True)
+    for constraint in ("sakoe_chiba", "itakura"):
+        A = calc.table[f"softdtw_constraint-{constraint.replace('_', '-')}"].to_numpy()
+        for i in range(3):
+            for j in range(i + 1, 3):
+                ref = tslearn.metrics.soft_dtw(x[i], x[j], global_constraint=constraint)
+                assert A[i, j] == A[j, i] == ref
+
+
 def _lcss_cell_by_cell(x, y, band, eps=1.0):
     """Textbook constrained LCSS: the band limits matches, not the recursion."""
     A = np.zeros((len(x) + 1, len(y) + 1))
@@ -962,6 +1036,29 @@ def test_constrained_lcss_applies_its_band_and_only_its_band(constraint):
         assert 0 < value <= plain.bivariate(data, i=0, j=1)
         n_below += value < plain.bivariate(data, i=0, j=1)
     assert n_below > 0
+
+
+@pytest.mark.parametrize("constraint", ["sakoe_chiba", "itakura"])
+def test_banded_lcss_equals_the_full_table_on_edge_cases(constraint):
+    """Computing only the band gives the full table's count exactly.
+
+    Ties (rounded data, differences of exactly eps), identical series,
+    lengths down to 2 and unequal lengths, against `_lcss_cell_by_cell`.
+    """
+    import tslearn.metrics
+    from pyspi.statistics.distance import _banded_lcss
+
+    mask_fn = {"sakoe_chiba": tslearn.metrics.sakoe_chiba_mask,
+               "itakura": tslearn.metrics.itakura_mask}[constraint]
+    rng = np.random.default_rng(1)
+    sizes = [(T, T) for T in (2, 3, 10, 41)] + [(17, 11), (11, 17), (30, 20)]
+    for n, m in sizes:
+        band = np.asarray(mask_fn(n, m), dtype=bool)
+        a, b = rng.standard_normal(n), rng.standard_normal(m)
+        cases = [(a, b), (np.round(a), np.round(b)),
+                 (np.zeros(n), np.ones(m)), (a, np.resize(a, m))]
+        for x, y in cases:
+            assert _banded_lcss(x, y, constraint) == _lcss_cell_by_cell(x, y, band)
 
 
 @pytest.mark.parametrize("kwargs,exc", [

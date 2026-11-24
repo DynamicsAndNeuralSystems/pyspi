@@ -272,6 +272,22 @@ def test_build_tasks_splits_namespaces_into_the_caches_they_actually_share():
     )
 
 
+def test_joint_and_conditional_entropy_share_a_task():
+    """`ce_<est>` reads the joint entropy `je_<est>` caches on the Data.
+
+    On separate workers both would compute it; in one task it is built once.
+    """
+    from pyspi._parallel import build_tasks
+    from pyspi.calculator import load_spis_from_yaml, resolve_config
+
+    spis = load_spis_from_yaml(resolve_config("full"), quiet=True)
+    task_of = {k: n for n, t in enumerate(build_tasks(list(spis), spis)) for k in t}
+    pairs = [(k, "je" + k[2:]) for k in spis if k.startswith("ce_")]
+    assert pairs
+    for ce, je in pairs:
+        assert task_of[ce] == task_of[je], (ce, je)
+
+
 def test_build_tasks_starts_with_the_expensive_buckets():
     """Ordering is by estimated cost, not member count.
 

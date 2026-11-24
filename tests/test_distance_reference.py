@@ -123,7 +123,8 @@ def _mgc(a, b):
     ("CrossMultiscaleGraphCorrelation", _mgc),
 ])
 @pytest.mark.parametrize("max_lag", [1, 3])
-def test_cross_distance_statistics_sum_the_lagged_statistic(cls_name, stat, max_lag):
+def test_cross_distance_statistics_sum_the_lagged_statistic(cls_name, stat, max_lag,
+                                                            dcorr_route):
     """Mehta et al. (2020), as hyppo's own docstring states it:
     sum_{l=0}^{L} (n - l)/n * S(target[l:], source[:n - l]).
 
@@ -160,6 +161,313 @@ def test_cross_distance_statistics_at_lag_zero_are_the_plain_statistic(cross, pl
     # Not bit-identical: the cross statistic is evaluated as S(target, source)
     # and the plain one as S(i, j); MGC is symmetric only to rounding.
     np.testing.assert_allclose(a, b, rtol=1e-12, atol=1e-15)
+
+
+def _mgc_test_data():
+    rng = np.random.default_rng(4)
+    z = rng.standard_normal((5, 40))
+    z[1] = np.tanh(2 * z[0]) + 0.3 * z[1]
+    z[2] = np.round(z[2])  # ties
+    z[3] = np.r_[0.0, z[0][:-1] ** 2] + 0.2 * z[3]
+    # An affine copy: its local correlations with z[0] round to just above 1,
+    # which scipy clips to 1.
+    z = np.vstack([z, 2 * z[0] + 1])
+    return Data(z, dim_order="ps")
+
+
+@pytest.mark.parametrize("budget", [None, 1])
+def test_mgc_matrix_with_cached_parts_is_bit_identical_to_hyppo(monkeypatch,
+                                                               budget):
+    """Each series' ranks, centring and local variances are computed once
+    (or once per block, with a one-byte cache budget); every pair still
+    equals hyppo's `MGC().statistic` exactly, from `multivariate` and from
+    `bivariate`."""
+    import warnings
+    import pyspi.statistics.distance as distance
+    from hyppo.independence import MGC
+
+    import scipy
+    if tuple(int(v) for v in scipy.__version__.split(".")[:2]) < (1, 14):
+        pytest.skip("the per-series path needs scipy 1.14 or later")
+    assert distance._local_covariance is not None, "scipy's MGC steps moved"
+    if budget is not None:
+        monkeypatch.setattr(distance, "_DCORR_CACHE_BYTES", budget)
+    data = _mgc_test_data()
+    x = data.to_numpy()
+    spi = distance.MultiscaleGraphCorrelation()
+    A = spi.multivariate(data)
+    M = x.shape[0]
+    for i in range(M):
+        for j in range(i + 1, M):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ref = MGC().statistic(x[i], x[j])
+            assert A[i, j] == A[j, i] == ref, (i, j)
+            assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
+
+
+@pytest.mark.parametrize("budget", [None, 1])
+@pytest.mark.parametrize("max_lag", [0, 2])
+def test_mgcx_matrix_with_cached_parts_is_bit_identical_to_hyppo(
+        monkeypatch, budget, max_lag):
+    """As for MGC, per lag: `_lagged_sum` of hyppo's MGC, exactly."""
+    import warnings
+    import pyspi.statistics.distance as distance
+    from hyppo.independence import MGC
+
+    if budget is not None:
+        monkeypatch.setattr(distance, "_DCORR_CACHE_BYTES", budget)
+    data = _mgc_test_data()
+    z = data.to_numpy()
+    spi = distance.CrossMultiscaleGraphCorrelation(max_lag=max_lag)
+    A = spi.multivariate(data)
+    M = z.shape[0]
+    for i in range(M):
+        for j in range(M):
+            if i == j:
+                continue
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ref = distance._lagged_sum(MGC(compute_distance=None), z[j],
+                                           z[i], max_lag)
+            assert A[i, j] == ref, (i, j)
+            assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
+
+
+def test_mgc_with_cached_parts_at_a_local_optimal_scale_is_bit_identical_to_hyppo():
+    """A pair whose MGC is taken at a local scale, so the value depends on
+    scipy's thresholding of the map at the sample size, not only on the
+    global-scale correlation."""
+    import warnings
+    import pyspi.statistics.distance as distance
+    from hyppo.independence import MGC
+    from scipy.stats import multiscale_graphcorr
+
+    rng = np.random.default_rng(314)
+    x = rng.standard_normal(40)
+    data = Data(np.vstack([x, np.abs(x) + 0.6 * rng.standard_normal(40)]),
+                dim_order="ps")
+    z = data.to_numpy()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        opt_scale = multiscale_graphcorr(z[0], z[1], reps=0).mgc_dict["opt_scale"]
+        ref = MGC().statistic(z[0], z[1])
+    assert list(opt_scale) != [40, 40]
+    spi = distance.MultiscaleGraphCorrelation()
+    A = spi.multivariate(data)
+    assert A[0, 1] == A[1, 0] == ref
+    assert spi.bivariate(data, i=0, j=1) == ref
+
+
+def test_mgc_and_mgcx_without_scipys_mgc_steps_call_hyppo_with_the_same_values(
+        monkeypatch):
+    """With a scipy that lacks the private MGC steps (older than 1.14), both
+    SPIs call hyppo for every pair: the same matrices and the same refusals."""
+    import pyspi.statistics.distance as distance
+    from pyspi.base import NotAppropriate
+
+    z = np.random.default_rng(5).integers(0, 4, (4, 30)) * 1.0
+    data = Data(z, dim_order="ps", zscore=False)
+    spis = [distance.MultiscaleGraphCorrelation(),
+            distance.CrossMultiscaleGraphCorrelation(max_lag=2)]
+    short = [Data(np.random.default_rng(1).standard_normal((3, T)),
+                  dim_order="ps", zscore=False) for T in (4, 6)]
+
+    def run():
+        out = []
+        for spi, d in zip(spis, short):
+            with pytest.raises(NotAppropriate) as refusal:
+                spi.multivariate(d)
+            out.append((spi.multivariate(data),
+                        spi.bivariate(data, i=2, j=1), str(refusal.value)))
+        return out
+
+    with np.errstate(all="ignore"):
+        fast = run()
+        monkeypatch.setattr(distance, "_local_covariance", None)
+        slow = run()
+    for (A, b, msg), (A0, b0, msg0) in zip(fast, slow):
+        np.testing.assert_array_equal(A, A0)
+        assert b == b0
+        assert msg == msg0
+
+
+# --------------------------------------------------------------------------
+# Distance correlation
+# --------------------------------------------------------------------------
+
+def _dcorr_from_matrices(a, b, biased):
+    """dcorr from the T x T distance matrices (Szekely et al. 2007; 2014)."""
+    if not biased:
+        return _unbiased_dcorr(a, b)
+
+    def centred(v):
+        d = np.abs(v[:, None] - v[None, :])
+        return d - d.mean(0) - d.mean(1)[:, None] + d.mean()
+    A, B = centred(a), centred(b)
+    return np.sqrt((A * B).sum() / np.sqrt((A * A).sum() * (B * B).sum()))
+
+
+def _dcorr_cases():
+    rng = np.random.default_rng(8)
+    for T in (4, 5, 9, 200):
+        x = rng.standard_normal(T)
+        yield f"T{T}-normal", np.stack([x, x ** 2 + 0.3 * rng.standard_normal(T),
+                                        rng.standard_normal(T)])
+    x = rng.standard_normal(150)
+    # Ties in both series, so the sort in the fast algorithm meets equal keys.
+    yield "ties", np.stack([np.round(x), np.round(2 * x + rng.standard_normal(150)),
+                            rng.integers(0, 4, 150).astype(float)])
+
+
+@pytest.fixture(params=["fast", "matrix"])
+def dcorr_route(request, monkeypatch):
+    """Force the O(T log T) route at any length, or the matrices at all."""
+    from pyspi.statistics import distance
+    monkeypatch.setattr(distance, "_FAST_DCOV_MIN_SAMPLES",
+                        4 if request.param == "fast" else 10**9)
+    return request.param
+
+
+@pytest.mark.parametrize("biased", [False, True])
+@pytest.mark.parametrize("name,series", list(_dcorr_cases()))
+def test_dcorr_matches_the_distance_matrix_definition(name, series, biased,
+                                                       dcorr_route):
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    data = Data(series, dim_order="ps", zscore=False)
+    z = data.to_numpy(squeeze=True)
+    spi = DistanceCorrelation(biased=biased)
+    A = spi.multivariate(data)
+    for i, j in [(0, 1), (0, 2), (1, 2)]:
+        ref = _dcorr_from_matrices(z[i], z[j], biased)
+        assert A[i, j] == pytest.approx(ref, abs=1e-12), (i, j)
+        assert A[j, i] == A[i, j]
+        assert spi.bivariate(data, i=i, j=j) == pytest.approx(A[i, j], abs=1e-12)
+
+
+@pytest.mark.parametrize("biased", [False, True])
+def test_dcorr_of_an_affine_copy_is_one(biased, dcorr_route):
+    """dcorr is invariant to shifting and rescaling, including sign flips."""
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    x = np.random.default_rng(9).standard_normal(300)
+    data = Data(np.stack([x, 3 * x + 7, -0.5 * x]), dim_order="ps", zscore=False)
+    A = DistanceCorrelation(biased=biased).multivariate(data)
+    np.testing.assert_allclose(A[~np.eye(3, dtype=bool)], 1.0, atol=1e-12)
+
+
+def test_dcorr_separates_dependent_from_independent_series(dcorr_route):
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    rng = np.random.default_rng(10)
+    x = rng.standard_normal(500)
+    data = Data(np.stack([x, np.cos(2 * x) + 0.2 * rng.standard_normal(500),
+                          rng.standard_normal(500)]), dim_order="ps")
+    A = DistanceCorrelation().multivariate(data)
+    assert A[0, 1] > 0.2
+    assert abs(A[0, 2]) < 0.02 and abs(A[1, 2]) < 0.02
+
+
+def test_dcorr_with_several_values_per_sample_uses_euclidean_distances(dcorr_route):
+    """With realisations, each sample is a point in R^R: the matrix route."""
+    from pyspi.statistics.distance import DistanceCorrelation, _euclidean_distance
+
+    rng = np.random.default_rng(12)
+    series = rng.standard_normal((3, 40, 2))
+    series[1] += 0.8 * series[0]
+    data = Data(series, dim_order="psr", zscore=False)
+    z = data.to_numpy()
+    A = DistanceCorrelation().multivariate(data)
+
+    def u_centred(p):
+        d = _euclidean_distance(p)
+        n = d.shape[0]
+        u = (d - d.sum(0) / (n - 2) - d.sum(1)[:, None] / (n - 2)
+             + d.sum() / ((n - 1) * (n - 2)))
+        np.fill_diagonal(u, 0)
+        return u
+    U, V = u_centred(z[0]), u_centred(z[1])
+    ref = (U * V).sum() / np.sqrt((U * U).sum() * (V * V).sum())
+    assert A[0, 1] == pytest.approx(ref, abs=1e-12)
+
+
+def _fast_route_lengths(monkeypatch):
+    """Record the length of every series hyppo's fast routine receives."""
+    from pyspi.statistics import distance
+
+    lengths = set()
+    fast = distance._fast_1d_dcov
+
+    def spy(x, y, bias):
+        lengths.add(x.shape[0])
+        return fast(x, y, bias)
+    monkeypatch.setattr(distance, "_fast_1d_dcov", spy)
+    return lengths
+
+
+@pytest.mark.parametrize("T,fast", [(799, False), (800, True)])
+def test_dcorr_takes_the_fast_route_from_800_samples(T, fast, monkeypatch):
+    from pyspi.statistics.distance import DistanceCorrelation
+
+    lengths = _fast_route_lengths(monkeypatch)
+    data = Data(np.random.default_rng(13).standard_normal((2, T)), dim_order="ps")
+    spi = DistanceCorrelation()
+    spi.multivariate(data)
+    spi.bivariate(data, i=0, j=1)
+    assert lengths == ({T} if fast else set())
+
+
+def test_dcorrx_with_lags_on_both_routes_sums_the_lagged_statistic(monkeypatch):
+    """At T = 805, lags 0-5 leave at least 800 samples (fast route) and lags
+    6-10 fewer (matrix route); the sum is the same either way."""
+    from pyspi.statistics import distance
+    from pyspi.statistics.distance import CrossDistanceCorrelation
+
+    rng = np.random.default_rng(14)
+    n, max_lag = 805, 10
+    src = rng.standard_normal(n)
+    tgt = np.r_[0.0, np.tanh(2 * src[:-1])] + 0.5 * rng.standard_normal(n)
+    data = Data(np.vstack([src, tgt]), dim_order="ps")
+    z = data.to_numpy(squeeze=True)
+
+    lengths = _fast_route_lengths(monkeypatch)
+    spi = CrossDistanceCorrelation(max_lag=max_lag)
+    A = spi.multivariate(data)
+    assert lengths == set(range(800, 806))
+    assert spi.bivariate(data, i=0, j=1) == pytest.approx(A[0, 1], abs=1e-12)
+    for i, j in [(0, 1), (1, 0)]:
+        x, y = z[j], z[i]  # target, source
+        ref = sum((n - l) / n * _unbiased_dcorr(x[l:], y[:n - l])
+                  for l in range(max_lag + 1))
+        assert A[i, j] == pytest.approx(ref, abs=1e-12), (i, j)
+
+    monkeypatch.setattr(distance, "_FAST_DCOV_MIN_SAMPLES", 10**9)
+    np.testing.assert_allclose(spi.multivariate(data), A, rtol=0, atol=1e-12)
+
+
+@pytest.mark.parametrize("offset", [1e6, 1e7])
+@pytest.mark.parametrize("spi_name", ["dcorr", "dcorr_biased", "dcorrx_maxlag-1",
+                                      "dcorrx_maxlag-10"])
+def test_dcorr_on_the_fast_route_ignores_a_large_offset(spi_name, offset):
+    """Distance correlation is translation invariant, so a series far from
+    zero (not z-scored) gives the value of the same series around zero."""
+    from pyspi.statistics.distance import (CrossDistanceCorrelation,
+                                           DistanceCorrelation)
+
+    spi = {"dcorr": DistanceCorrelation(biased=False),
+           "dcorr_biased": DistanceCorrelation(biased=True),
+           "dcorrx_maxlag-1": CrossDistanceCorrelation(max_lag=1),
+           "dcorrx_maxlag-10": CrossDistanceCorrelation(max_lag=10)}[spi_name]
+    rng = np.random.default_rng(15)
+    x = rng.standard_normal(1000)
+    series = np.stack([x, x + rng.standard_normal(1000),
+                       rng.standard_normal(1000)])
+    ref = spi.multivariate(Data(series, dim_order="ps", zscore=False))
+    A = spi.multivariate(Data(series + offset, dim_order="ps", zscore=False))
+    off_diagonal = ~np.eye(3, dtype=bool)
+    np.testing.assert_allclose(A[off_diagonal], ref[off_diagonal],
+                               rtol=0, atol=1e-8)
 
 
 # --------------------------------------------------------------------------
@@ -284,6 +592,79 @@ def test_hhg_statistic_is_bit_identical_to_hyppo(monkeypatch, chunk_rows):
                 warnings.simplefilter("ignore")
                 ref = HHG().statistic(a, b)
             assert distance._hhg_statistic(a, b) == ref, (n, name)
+
+
+def test_hhg_ranks_are_computed_in_row_chunks(monkeypatch):
+    """`_hhg_ranks` holds the distance matrix, its int32 ranks and order,
+    and one chunk of rows' temporaries, not full-size float64 and int64
+    copies; the chunked ranks equal unchunked ones."""
+    import tracemalloc
+    from scipy.stats import rankdata
+    import pyspi.statistics.distance as distance
+
+    n = 600
+    x = np.random.default_rng(5).standard_normal((n, 1))
+    full = rankdata(distance.pairwise_distances(x), method="max", axis=1)
+    monkeypatch.setattr(distance, "_HHG_CHUNK_ENTRIES", 10 * n)
+
+    pairwise_distances = distance.pairwise_distances
+
+    def distances_then_reset_peak(*args, **kwargs):
+        d = pairwise_distances(*args, **kwargs)
+        tracemalloc.reset_peak()
+        return d
+
+    monkeypatch.setattr(distance, "pairwise_distances",
+                        distances_then_reset_peak)
+    tracemalloc.start()
+    try:
+        ranks, order = distance._hhg_ranks(x)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    # The float64 distances plus the int32 ranks and order take 16 n^2
+    # bytes; ranking all rows at once peaks above 50 n^2.
+    assert peak < 1.25 * 16 * n * n, peak / (8 * n * n)
+    assert ranks.dtype == order.dtype == np.int32
+    assert np.array_equal(ranks, full)
+    assert np.array_equal(order, np.argsort(full, axis=1, kind="stable"))
+
+
+def test_hhg_dominance_kernel_releases_the_gil():
+    """The numba dominance kernel runs without the GIL, as `_banded_dtw`
+    does, so threaded callers are not serialised on it."""
+    import pyspi.statistics.distance as distance
+
+    assert distance._row_dominance_counts.targetoptions.get("nogil")
+
+
+@pytest.mark.parametrize("budget", [None, 1])
+def test_hhg_matrix_with_cached_ranks_is_bit_identical_to_hyppo(monkeypatch,
+                                                                budget):
+    """`multivariate` ranks each series once (or once per block, with a
+    one-byte cache budget) and still gives hyppo's statistic exactly, as
+    `bivariate` does."""
+    import warnings
+    import pyspi.statistics.distance as distance
+    from hyppo.independence import HHG
+
+    if budget is not None:
+        monkeypatch.setattr(distance, "_DCORR_CACHE_BYTES", budget)
+    rng = np.random.default_rng(4)
+    z = rng.standard_normal((5, 40))
+    z[1] = np.tanh(z[0]) + 0.3 * z[1]
+    z[2] = np.round(z[2])  # ties
+    data = Data(z, dim_order="ps")
+    x = data.to_numpy()
+    spi = distance.HellerHellerGorfine()
+    A = spi.multivariate(data)
+    for i in range(5):
+        for j in range(i + 1, 5):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ref = HHG().statistic(x[i], x[j])
+            assert A[i, j] == A[j, i] == ref, (i, j)
+            assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
 
 
 # --------------------------------------------------------------------------
