@@ -322,6 +322,14 @@ def test_hhg_ranks_are_computed_in_row_chunks(monkeypatch):
     assert np.array_equal(order, np.argsort(full, axis=1, kind="stable"))
 
 
+def test_hhg_dominance_kernel_releases_the_gil():
+    """The numba dominance kernel runs without the GIL, as `_banded_dtw`
+    does, so threaded callers are not serialised on it."""
+    import pyspi.statistics.distance as distance
+
+    assert distance._row_dominance_counts.targetoptions.get("nogil")
+
+
 @pytest.mark.parametrize("budget", [None, 1])
 def test_hhg_matrix_with_cached_ranks_is_bit_identical_to_hyppo(monkeypatch,
                                                                 budget):

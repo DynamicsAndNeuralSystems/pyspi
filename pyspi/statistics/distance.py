@@ -330,7 +330,7 @@ class HilbertSchmidtIndependenceCriterion(Undirected, Unsigned):
         return _dcorr_spi_matrix(self, data, _median_gaussian_distance)
 
 
-@numba.njit(cache=True)
+@numba.njit(cache=True, nogil=True)
 def _row_dominance_counts(rx, order, ry):
     """
     ``c[i, j] = #{k : rx[i, k] <= rx[i, j] and ry[i, k] <= ry[i, j]}``.
