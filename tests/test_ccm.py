@@ -279,8 +279,10 @@ def _tie_averaged_skill(library, target, E, L, sample, seed=42):
     """Cross-map skill at library size L, each prediction averaged over every
     way of filling the k neighbour places from points tied at the k-th distance.
 
-    Brute force: all distances, then itertools over the tied points. Needs
-    exact ties (values on a binary grid) and small libraries.
+    Brute force: all distances, then itertools over the tied points. Distances
+    within a relative 1e-12 of the k-th count as tied, so distances equal in
+    exact arithmetic but rounded differently are tied too. Needs small
+    libraries.
     """
     from itertools import combinations
 
@@ -298,7 +300,8 @@ def _tie_averaged_skill(library, target, E, L, sample, seed=42):
             cand = lib[lib != r]
             d = np.sqrt(((embed[cand] - embed[r]) ** 2).sum(axis=1))
             dk = np.sort(d)[k - 1]
-            nearer, tied = cand[d < dk], cand[d == dk]
+            tie = np.abs(d - dk) <= 1e-12 * dk
+            nearer, tied = cand[(d < dk) & ~tie], cand[tie]
             preds = []
             for chosen in combinations(tied, k - len(nearer)):
                 nn = np.concatenate([nearer, chosen]).astype(int)
@@ -321,6 +324,30 @@ def test_tied_neighbours_share_the_remaining_places(E):
     z = rng.standard_normal((2, N))
     z[1] += np.roll(z[0], 1)
     z[0] = np.round(z[0] * 2) / 2
+    for L in _ccm_library_sizes(N, E)[::7]:
+        got = _cross_map_skill(z[0], [z[1]], E, [L], sample=4)[0, 0]
+        dense = _cross_map_skill_dense(z[0], [z[1]], E, L, sample=4)[0]
+        ref = _tie_averaged_skill(z[0], z[1], E, L, sample=4)
+        np.testing.assert_allclose(got, ref, rtol=0, atol=1e-12, err_msg=str(L))
+        np.testing.assert_allclose(dense, ref, rtol=0, atol=1e-12, err_msg=str(L))
+
+
+@pytest.mark.parametrize("grid", ["z-scored integers", "steps of 0.3"])
+@pytest.mark.parametrize("E", [1, 2, 3])
+def test_tied_neighbours_include_distances_equal_up_to_rounding(E, grid):
+    """Distances equal in exact arithmetic differ in their last bits on a
+    z-scored integer series or a grid of 0.3 steps (0.6 - 0.3 != 0.9 - 0.6 in
+    floating point); they still count as tied and share the remaining places."""
+    rng = np.random.default_rng(E)
+    N = 40
+    z = rng.standard_normal((2, N))
+    if grid == "z-scored integers":
+        x = rng.integers(0, 4, N).astype(float)
+        x = (x - x.mean()) / x.std()
+    else:
+        x = rng.integers(0, 5, N) * 0.3
+    z[0] = x
+    z[1] += np.roll(x, 1)
     for L in _ccm_library_sizes(N, E)[::7]:
         got = _cross_map_skill(z[0], [z[1]], E, [L], sample=4)[0, 0]
         dense = _cross_map_skill_dense(z[0], [z[1]], E, L, sample=4)[0]
