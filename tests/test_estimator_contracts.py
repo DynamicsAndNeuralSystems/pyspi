@@ -2127,11 +2127,15 @@ def test_bad_dcorr_cache_bytes_names_the_variable_on_import(value):
     assert "whole number of bytes" in last and repr(value) in last
 
 
-@pytest.mark.parametrize("budget, centrings", [(6, 6), (5, 10)])
-def test_distance_correlation_centres_once_when_all_series_fit(budget, centrings,
+@pytest.mark.parametrize("m, budget, centrings",
+                         [(5, 5, 5), (7, 7, 7), (6, 6, 6), (6, 5, 10)])
+def test_distance_correlation_centres_once_when_all_series_fit(m, budget,
+                                                               centrings,
                                                                monkeypatch):
-    """A budget of exactly M items holds them all. One item less falls back
-    to blocks of half the budget: blocks {0,1}, {2,3}, {4,5}, where series
+    """A budget of exactly M items holds them all, so each series is centred
+    once. With odd M, blocks of half the budget would split the series
+    unevenly and centre some again (8 for M = 5, 11 for M = 7). One item
+    less than M = 6 falls back to blocks {0,1}, {2,3}, {4,5}, where series
     2-5 are centred again after an eviction (6 + 4)."""
     from pyspi.statistics import distance as D
 
@@ -2140,7 +2144,7 @@ def test_distance_correlation_centres_once_when_all_series_fit(budget, centrings
     monkeypatch.setattr(D, "_centred",
                         lambda dist, bias: calls.append(1) or inner(dist, bias))
     monkeypatch.setattr(D, "_DCORR_CACHE_BYTES", budget * 8 * 40 * 40)
-    D.DistanceCorrelation().multivariate(_data(m=6, t=40))
+    D.DistanceCorrelation().multivariate(_data(m=m, t=40))
     assert len(calls) == centrings
 
 
