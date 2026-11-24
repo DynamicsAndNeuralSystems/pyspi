@@ -334,6 +334,18 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The multitaper spectral SPIs need at least as many samples as tapers, `floor(2 NW - 1)`, so T ≥ 5 at the default NW = 3.
   For `es_*` and `tailasym_*`, ties (as in integer data) that leave too few samples above the quantile or none in a tail have a reason of their own.
 - **`gpfit_*` is the leave-one-out mean squared error** of the fitted Gaussian process (Rasmussen & Williams 2006, eq. 5.12), not the in-sample error, which the RBF fit can drive to zero on unrelated pairs.
+- **`gpfit_DotProduct` is fitted in O(T).**
+  Its kernel matrix is a multiple of the identity plus a rank-2 term, so pyspi maximises the same marginal likelihood as scikit-learn's `GaussianProcessRegressor` (same start, bounds and L-BFGS-B call) from a thin QR of the predictor, without forming the T x T matrix.
+  A pair takes 1.8 ms instead of 111 ms at T = 250, 1.9 ms instead of 1.77 s at T = 1000, and 2.1 ms instead of 12.1 s at T = 2000.
+  **Values change.**
+  On z-scored data (the default), most pairs agree with scikit-learn's fit to about 1e-12 relative, and pairs that it fits almost exactly (a series and its copy, an exact linear pair) by up to about 1e-6 relative on values near zero.
+  Without z-scoring, on badly scaled data, values differ by up to about 10%, and pairs on which scikit-learn's Cholesky factorisation fails have a value.
+  There the closed form is the more accurate: checked in exact rational arithmetic, its value is the leave-one-out error at the parameters it fits, and those parameters reach a marginal likelihood at least as high as scikit-learn's.
+- **`gpfit_RBF` is fitted with a cheaper likelihood gradient.**
+  The fit is scikit-learn's (same kernel matrix, Cholesky factor, likelihood, start, bounds and L-BFGS-B call) with a cheaper gradient: `K^-1` from LAPACK `potri` instead of two triangular solves against the identity, and no (T, T, 3) gradient tensor.
+  A pair takes 9.2 ms instead of 20.4 ms at T = 100, 1.57 s instead of 3.12 s at T = 1000, and 8.6 s instead of 18.6 s at T = 2000.
+  **Values change slightly**, since the gradient differs from scikit-learn's in the last bits.
+  Most pairs agree with scikit-learn's fit to about 1e-12 relative, and near-interpolating pairs (such as a series and its copy), whose likelihood is flat near its optimum, by up to about 5e-5 relative.
 - **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.
 - **Multitaper phase slope index follows Nolte et al. (2008), applies its band, and gains power with the length of the series.**
@@ -374,12 +386,6 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 
 **Faster, with identical values.**
 
-- **`gpfit_DotProduct` in O(T).**
-  Its kernel matrix is a multiple of the identity plus a rank-2 term, so pyspi maximises the same marginal likelihood as scikit-learn's `GaussianProcessRegressor` (same start, bounds and L-BFGS-B call) from a thin QR of the predictor, without forming the T x T matrix.
-  About 400x faster at T=1000 (0.43 s to 1 ms per pair), growing with T; values equal scikit-learn's to rounding (at most 4e-14 apart).
-- **`gpfit_RBF` about 2.4x faster.**
-  The fit is scikit-learn's (same kernel matrix, Cholesky factor, likelihood, start, bounds and L-BFGS-B call) with a cheaper gradient: `K^-1` from LAPACK `potri` instead of two triangular solves against the identity, and no (T, T, 3) gradient tensor.
-  Values match scikit-learn's to about 1e-9 relative or better. Near-interpolating pairs (leave-one-out MSE ~1e-6) differ more, up to ~1e-3 relative (~1e-9 absolute); scikit-learn's own value moves by the same amount when those samples are only reordered.
 - **Distance correlation and the Kraskov estimators.**
   `dcorr` and `dcorr_biased` evaluate only the retained order of each pair (2.0x at M=8, T=5000).
   Kraskov MI, time-lagged MI and transfer entropy count marginal neighbours with one batched tree query, less the temporally excluded neighbours, in O(N) memory (3-10x at T=5000, more with `dyn_corr_excl`).
