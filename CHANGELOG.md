@@ -389,8 +389,10 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   At T=800, `dcorr` is 7x faster, `hsic` 11x and `dcorrx_maxlag-1`/`-10` 5x and 4x.
   pyspi applies hyppo's final step itself, with the same values as hyppo 0.5.2.
   From 800 samples, where it becomes the faster of the two, `dcorr`, `dcorr_biased` and each lagged term of `dcorrx` use hyppo's O(T log T) algorithm for scalar samples (Chaudhuri & Hu 2019) instead of the T x T matrices, with O(T) memory.
-  At M=16, T=4000 that makes `dcorr` 25x faster and `dcorrx_maxlag-1`/`-10` 20x and 23x (`dcorrx_maxlag-10` takes 14 s instead of 5 minutes).
-  Those values equal hyppo's to rounding (about 1e-13), not bit for bit; shorter series are unchanged.
+  At M=16, `dcorr` takes 0.17 s instead of 0.52 s at T=1000 and 0.81 s instead of 40.1 s at T=4000, and `dcorrx_maxlag-10` takes 3.7 s instead of 9.2 s at T=1000 and 17.8 s instead of 760 s at T=4000.
+  Each series is first shifted to a median of zero, which leaves distance correlation unchanged and keeps the algorithm accurate on data far from zero.
+  On z-scored data the values differ from those of the T x T matrices by rounding only, not bit for bit: in tests by at most 2.3e-12 for `dcorr` and `dcorrx`, and 1.3e-10 for `dcorr_biased` on sparse binary series, where the square root enlarges the rounding error of a value near zero.
+  Shorter series are unchanged.
 - `hhg` in O(n^2 log n) (about 9x); `corr_kendall_*` (2.2x); `si_*`, `mi_kernel_*` and `xme_*` cache per-process entropies (2-3.7x); the directed spectral measures cache their tapers (1.6x); `ccm_*` (6-7x) and `anm` (6.9x) share each cause's work across its targets.
 - **Undirected SPIs evaluate each unordered pair once** and mirror the value and any failure (`phi_*` 1.9x faster).
   For the distance SPIs among them (`hsic*`, `hhg`, `dcorr*`, `mgc`, `lcss*`, `softdtw*`, `gwtau`), a pair that raises is NaN with a warning, as for every other SPI, instead of failing the SPI.
@@ -519,6 +521,7 @@ Definitions the corrected measures are checked against:
 - Gao, W., Oh, S. & Viswanath, P. (2018). Demystifying fixed k-nearest neighbor information estimators. *IEEE Trans. Inf. Theory* 64, 5629–5661. — why the KSG error is not O(1/√N) in general.
 - Vlachos, M., Kollios, G. & Gunopulos, D. (2002). Discovering similar multidimensional trajectories. *Proc. ICDE*, 673–684. — LCSS with a band that limits which pairs may match, as `lcss_constraint-*` now computes.
 - Shen, C., Chung, J., Mehta, R., Xu, T. & Vogelstein, J. T. (2024). Independence testing for temporal data. *Trans. Mach. Learn. Res.* — the lagged sum behind `dcorrx` and `mgcx`, `sum_l (n - l)/n * S(target[l:], source[:n-l])`.
+- Chaudhuri, A. & Hu, W. (2019). A fast algorithm for computing distance correlation. *Comput. Stat. Data Anal.* 135, 15–24. — the O(T log T) distance covariance of scalar samples that `dcorr` and `dcorrx` use from 800 samples.
 - Gretton, A., Bousquet, O., Smola, A. & Schölkopf, B. (2005). Measuring statistical dependence with Hilbert-Schmidt norms. *ALT*, LNCS 3734, 63–77. — HSIC.
 - Gretton, A., Fukumizu, K., Teo, C. H., Song, L., Schölkopf, B. & Smola, A. J. (2007). A kernel statistical test of independence. *NIPS* 20, 585–592. — the median-heuristic kernel width, which `hsic` sets per variable.
 - Vinck, M., Oostenveld, R., van Wingerden, M., Battaglia, F. & Pennartz, C. (2011). An improved index of phase-synchronization for electrophysiological data in the presence of volume-conduction, noise and sample-size bias. *NeuroImage* 55, 1548–1565. — the debiased squared PLI and wPLI as means over taper pairs.
