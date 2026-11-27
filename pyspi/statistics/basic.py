@@ -40,9 +40,9 @@ class Estimators(Undirected, Signed):
     lasso is converged to ``tol=1e-8``, so the fit is reproducible. When
     cross-validation selects an ``alpha`` near 0, ``GraphicalLassoCV`` may not
     converge (silently, as fit warnings are suppressed); on data with a dense
-    precision matrix, prefer ``GraphicalLasso`` or ``LedoitWolf``. A graphical
-    lasso fit that scikit-learn abandons as too ill-conditioned (strongly
-    collinear processes) raises ``NotAppropriate`` for every SPI of that fit.
+    precision matrix, prefer ``GraphicalLasso`` or ``LedoitWolf``.
+    scikit-learn's graphical lasso solver can fail on strongly correlated
+    processes; every SPI of that fit is then an error (``FloatingPointError``).
     """
 
     name = "Covariance"
@@ -88,19 +88,16 @@ class Estimators(Undirected, Signed):
                     mycov = estimator(**kwargs).fit(z)
                 except FloatingPointError as err:
                     # The graphical lasso's coordinate descent raises this
-                    # when its iterate stops being positive definite, as on
-                    # strongly collinear processes: the solver returns no
-                    # estimate.
+                    # when its iterate stops being positive definite.
                     if self._estimator not in ("GraphicalLasso",
                                                "GraphicalLassoCV"):
                         raise
-                    cond = np.linalg.cond(np.cov(z, rowvar=False, ddof=0))
-                    raise NotAppropriate(
-                        f"The {self._estimator} fit failed: the empirical "
-                        f"covariance (condition number {cond:.3g}) is too "
-                        f"ill-conditioned for the graphical lasso solver, as "
-                        f"with strongly collinear processes, so "
-                        f"{self.identifier} is undefined."
+                    raise FloatingPointError(
+                        f"scikit-learn's graphical lasso solver failed on the "
+                        f"{self._estimator} fit, as it can on strongly "
+                        f"correlated processes, so {self.identifier} was not "
+                        f"computed. This is a limitation of the solver: "
+                        f"another estimator (e.g. LedoitWolf) may succeed."
                     ) from err
             try:
                 data.covariance[self._estimator] = mycov

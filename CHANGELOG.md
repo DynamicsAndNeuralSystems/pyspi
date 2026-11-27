@@ -246,7 +246,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Undefined values.**
   `cds` returned 0, its strongest evidence for `i -> j`, when undefined, and `anm`, `cds` and `xcorr_*` returned 0 or an arbitrary number for a pair with a constant series; all are now NaN.
   `prec_*` and `pcorr_*` reported a pseudo-inverse when the covariance estimate is singular; for `EmpiricalCovariance` and `MinCovDet` they are now NaN, labelled not appropriate, with the rank in the reason.
-  A `GraphicalLasso` or `GraphicalLassoCV` fit that scikit-learn abandons as too ill-conditioned (`FloatingPointError`, as on strongly collinear processes) made every `cov_`, `prec_` and `pcorr_` SPI of that estimator an error; they are now NaN, labelled not appropriate, with the condition number in the reason.
+  A `GraphicalLasso` or `GraphicalLassoCV` fit on which scikit-learn's solver fails (`FloatingPointError`, as on strongly correlated processes) is still an error for every `cov_`, `prec_` and `pcorr_` SPI of that estimator, since the estimate exists and only the solver failed; the message now says so, and that another estimator may succeed.
 - **Integer parameters** (`ConvergentCrossMapping(embedding_dimension=2.7)`, a fractional `max_tau`) were truncated after the identifier was built; they must now be integers.
 - **SPI metadata (no value changes).**
   `InterDependenceScore` left `terms`, `pnorm` and `bandwidth` out of its identifier, and `SpectralGrangerCausality` left out `max_order` (when the order is selected), `ignore_nan` and `nan_threshold`, so two parameterisations could share a table column; non-default values are now appended (e.g. `ids_bw-0-25`), and every bundled identifier is unchanged.

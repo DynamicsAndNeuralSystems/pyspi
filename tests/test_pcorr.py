@@ -324,20 +324,31 @@ def test_the_fit_reproduces_scikit_learns_ill_conditioned_failure():
 
 
 @pytest.mark.parametrize("cls", [Covariance, Precision, PartialCorrelation])
-def test_an_ill_conditioned_graphical_lasso_fit_is_not_appropriate(cls):
+def test_a_failed_graphical_lasso_fit_is_an_error_that_names_the_solver(cls):
+    """The estimate exists but the solver fails: an error, not NotAppropriate."""
     spi = cls(estimator="GraphicalLasso")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(NotAppropriate) as refused:
+        with pytest.raises(FloatingPointError) as failed:
             spi.multivariate(_data(_shared_drift()))
-    reason = str(refused.value)
-    assert "GraphicalLasso fit failed" in reason
-    assert "too ill-conditioned for the graphical lasso solver" in reason
-    assert spi.identifier in reason
-    assert isinstance(refused.value.__cause__, FloatingPointError)
+    assert not isinstance(failed.value, NotAppropriate)
+    message = str(failed.value)
+    assert "graphical lasso solver failed on the GraphicalLasso fit" in message
+    assert "limitation of the solver" in message
+    assert spi.identifier in message
+    assert isinstance(failed.value.__cause__, FloatingPointError)
 
 
-def test_an_ill_conditioned_graphical_lasso_fit_in_the_calculator(tmp_path):
+def test_a_floating_point_error_from_another_estimator_is_not_reworded(monkeypatch):
+    def fail(self, X, y=None):
+        raise FloatingPointError("unrelated")
+
+    monkeypatch.setattr(sklearn.covariance.LedoitWolf, "fit", fail)
+    with pytest.raises(FloatingPointError, match="^unrelated$"):
+        Covariance(estimator="LedoitWolf").multivariate(_data(_shared_drift()))
+
+
+def test_a_failed_graphical_lasso_fit_in_the_calculator(tmp_path):
     from pyspi.quality import Quality
 
     cfg = {".statistics.basic": {
@@ -346,7 +357,7 @@ def test_an_ill_conditioned_graphical_lasso_fit_in_the_calculator(tmp_path):
                "dependencies": None,
                "configs": [{"estimator": "GraphicalLasso"},
                            {"estimator": "LedoitWolf"}]}
-        for name in ("Covariance", "PartialCorrelation")}}
+        for name in ("Covariance", "Precision", "PartialCorrelation")}}
     path = tmp_path / "glasso.yaml"
     path.write_text(yaml.safe_dump(cfg))
     calc = Calculator(dataset=_data(_shared_drift()), config=str(path))
@@ -354,11 +365,12 @@ def test_an_ill_conditioned_graphical_lasso_fit_in_the_calculator(tmp_path):
         warnings.simplefilter("ignore")
         calc.compute(progress=False)
     off = ~np.eye(8, dtype=bool)
-    assert not calc.errors
-    for key in ("cov_GraphicalLasso", "pcorr_GraphicalLasso"):
+    for kind in ("cov", "prec", "pcorr"):
+        key = f"{kind}_GraphicalLasso"
         assert np.isnan(calc.table[key].to_numpy(dtype=float)).all()
-        assert (calc.quality[key].to_numpy()[off] == Quality.NAN).all()
-        assert "too ill-conditioned" in calc.not_appropriate[key]
-    for key in ("cov_LedoitWolf", "pcorr_LedoitWolf"):
-        assert np.isfinite(calc.table[key].to_numpy(dtype=float)[off]).all()
+        assert (calc.quality[key].to_numpy()[off] == Quality.ERROR).all()
+        assert "graphical lasso solver failed" in str(calc.errors[key])
         assert key not in calc.not_appropriate
+        key = f"{kind}_LedoitWolf"
+        assert np.isfinite(calc.table[key].to_numpy(dtype=float)[off]).all()
+        assert key not in calc.errors and key not in calc.not_appropriate
