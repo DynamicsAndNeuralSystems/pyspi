@@ -2,9 +2,10 @@
 The band statistic of a cell that is NaN at every in-band frequency.
 
 Such a cell is NaN. NumPy's NaN-ignoring mean and max warn on an all-NaN
-slice ("Mean of empty slice", "All-NaN slice encountered"), so before this
-check spectral Granger causality and the other band-reduced spectral SPIs
-emitted a RuntimeWarning for a value they already label not appropriate.
+slice ("Mean of empty slice", "All-NaN slice encountered"), so the band
+statistic leaves those cells out of the reduction, and spectral Granger
+causality and the other band-reduced spectral SPIs emit no RuntimeWarning
+for them.
 """
 
 import warnings
@@ -35,7 +36,7 @@ def test_all_nan_cell_is_nan_without_a_warning(statistic):
 
 @pytest.mark.parametrize("method", ["nonparametric", "parametric"])
 @pytest.mark.parametrize("statistic", ["mean", "max"])
-def test_spectral_gc_all_nan_pair_has_a_reason_and_no_runtime_warning(
+def test_spectral_gc_all_nan_pair_is_nan_without_a_runtime_warning(
         method, statistic):
     rng = np.random.default_rng(0)
     X = rng.standard_normal((3, 200))

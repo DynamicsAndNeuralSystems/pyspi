@@ -234,7 +234,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
   Neither warns now; for spectral GC `fmin=0` means a band from `fs / 1e5`, as its identifier states.
-  Nor does an off-diagonal cell that is NaN at every in-band frequency (for example a spectral GC pair the backend returns as NaN): it is NaN, with its reason, without numpy's "Mean of empty slice" or "All-NaN slice encountered".
+  Nor does an off-diagonal cell that is NaN at every in-band frequency (for example a spectral GC pair the backend returns as NaN): it is NaN, without numpy's "Mean of empty slice" or "All-NaN slice encountered".
+  For spectral GC that cell is labelled not appropriate, with its reason; for the multitaper SPIs it is NaN with no reason.
 - **Debiased squared PLI (`dspli_*`) was wrong where the cross-spectrum is real.**
   It is now the mean of taper-pair sign products (Vinck et al. 2011).
 - **Cross-correlation (`CrossCorrelation`) was wrong four ways.**
