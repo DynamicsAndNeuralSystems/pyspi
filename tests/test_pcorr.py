@@ -305,3 +305,60 @@ def test_singular_covariance_in_the_calculator(tmp_path):
         assert np.isfinite(calc.table[key].to_numpy()[off]).all()
         assert (calc.quality[key].to_numpy()[off] == Quality.GOOD).all()
         assert key not in calc.errors and key not in calc.not_appropriate
+
+
+def _shared_drift(M=8, T=500, seed=0):
+    """M copies of one random walk plus small independent noise: strongly collinear."""
+    rng = np.random.default_rng(seed)
+    drift = np.cumsum(rng.standard_normal(T))
+    return np.vstack([drift + 0.05 * rng.standard_normal(T) for _ in range(M)])
+
+
+def test_the_fit_reproduces_scikit_learns_ill_conditioned_failure():
+    """Guards the premise: on this data the graphical lasso itself raises."""
+    z = _data(_shared_drift()).to_numpy(squeeze=True).T
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(FloatingPointError, match="ill-conditioned"):
+            sklearn.covariance.GraphicalLasso(tol=1e-8, enet_tol=1e-8).fit(z)
+
+
+@pytest.mark.parametrize("cls", [Covariance, Precision, PartialCorrelation])
+def test_an_ill_conditioned_graphical_lasso_fit_is_not_appropriate(cls):
+    spi = cls(estimator="GraphicalLasso")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(NotAppropriate) as refused:
+            spi.multivariate(_data(_shared_drift()))
+    reason = str(refused.value)
+    assert "GraphicalLasso fit failed" in reason
+    assert "too ill-conditioned for the graphical lasso solver" in reason
+    assert spi.identifier in reason
+    assert isinstance(refused.value.__cause__, FloatingPointError)
+
+
+def test_an_ill_conditioned_graphical_lasso_fit_in_the_calculator(tmp_path):
+    from pyspi.quality import Quality
+
+    cfg = {".statistics.basic": {
+        name: {"labels": ["undirected", "linear", "signed", "multivariate",
+                          "contemporaneous", "M14"],
+               "dependencies": None,
+               "configs": [{"estimator": "GraphicalLasso"},
+                           {"estimator": "LedoitWolf"}]}
+        for name in ("Covariance", "PartialCorrelation")}}
+    path = tmp_path / "glasso.yaml"
+    path.write_text(yaml.safe_dump(cfg))
+    calc = Calculator(dataset=_data(_shared_drift()), config=str(path))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        calc.compute(progress=False)
+    off = ~np.eye(8, dtype=bool)
+    assert not calc.errors
+    for key in ("cov_GraphicalLasso", "pcorr_GraphicalLasso"):
+        assert np.isnan(calc.table[key].to_numpy(dtype=float)).all()
+        assert (calc.quality[key].to_numpy()[off] == Quality.NAN).all()
+        assert "too ill-conditioned" in calc.not_appropriate[key]
+    for key in ("cov_LedoitWolf", "pcorr_LedoitWolf"):
+        assert np.isfinite(calc.table[key].to_numpy(dtype=float)[off]).all()
+        assert key not in calc.not_appropriate
