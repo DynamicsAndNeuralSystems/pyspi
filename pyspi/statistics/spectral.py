@@ -469,12 +469,20 @@ class NonparametricSpectral(Unsigned):
 
         The diagonal is NaN: several backend measures are NaN there at every
         frequency, and a NaN-ignoring statistic of an all-NaN column would
-        warn on every call.
+        warn on every call. An off-diagonal cell that is NaN at every in-band
+        frequency is NaN for the same reason, without the statistic's
+        warning.
         """
         n = spectra.shape[-1]
         off = ~np.eye(n, dtype=bool)
-        values = self._statfn(spectra[:, off], axis=0)
-        adj = np.full((n, n), np.nan, dtype=np.result_type(values, float))
+        cols = spectra[:, off]
+        has_value = ~np.all(np.isnan(cols), axis=0)
+        kept = self._statfn(cols[:, has_value], axis=0) if has_value.any() else None
+        adj = np.full((n, n), np.nan,
+                      dtype=float if kept is None else np.result_type(kept, float))
+        values = np.full(cols.shape[1], np.nan, dtype=adj.dtype)
+        if kept is not None:
+            values[has_value] = kept
         adj[off] = values
         return adj
 

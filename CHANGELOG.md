@@ -60,8 +60,13 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 **Behavior of the API itself.**
 
 - **New since 2.0.2: parallel computation.** `Calculator.compute(n_jobs=...)` follows the joblib convention: `-1` is all cores, `-2` all but one, and `n_jobs=0` raises (`PYSPI_N_JOBS` sets the default). 2.0.2 had no `n_jobs`.
+  A worker that dies (a segfault, or the OOM killer) costs only the SPI that killed it: the SPIs that finished or had not started when the pool broke are recovered (from their checkpoints when there are any, otherwise recomputed), each SPI that was running is run again alone, and only one that kills its worker by itself is reported as `worker died`.
+  Recovery stops at the third broken pool in one run, and the SPIs still lost are then reported as `worker died`.
+  A task that raises in a live worker (a checkpoint that cannot be written, say) is reported as `worker failed` and is not run again.
 - `import pyspi` no longer replaces `sys.stdout`/`sys.stderr`. `Calculator(verbose=False)` no longer touches logging; `verbose=True` adds one handler, idempotently.
 - The `OMP_NUM_THREADS` `setdefault` at import is removed. It ran after numpy had loaded, so it had no in-process effect, and it altered the environment of every importing program. Thread pinning for workers stays in `_parallel`.
+- `Calculator.compute()` releases the statistic caches it built on the dataset when it finishes, so a Calculator kept after its run (in a `CalculatorFrame` or a list) no longer holds them; they grow as about M² (about 100 MiB at M=32, T=1000).
+  Values are unchanged; a second `compute()` on the same Calculator rebuilds them.
 - **New since 2.0.2: a command line.**
   `python -m pyspi compute` and a `pyspi` console command (2.0.2 had neither).
   The output directory, suffix and `n_jobs` are validated before computing, and `PYSPI_N_JOBS` is honoured.
@@ -100,6 +105,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `Data` now raises `ValueError` naming each constant process, including one that is exactly linear when `detrend=True`, whatever `zscore` is.
   `python -m pyspi compute` prints such input errors and exits 1, without a traceback.
 - **`CalculatorFrame.compute()` accepted no arguments**; it now forwards to `Calculator.compute`.
+  With `checkpoint_dir=d` each calculator checkpoints to its own subdirectory, `d/0`, `d/1`, ... by position in the frame, so a frame of several datasets checkpoints and resumes; one shared directory refused the second dataset as a different run.
+  A frame's checkpoints written directly in `d` by an earlier 3.0 release candidate are not resumed.
 - **`CorrelationFrame` reported invalid p-values.**
   It used each time series' length as the F-test sample size, but the observations are edges, and edges sharing a node are dependent.
   `get_pvalues()`, `compute_significant_values()` and `get_average_correlation(remove_insig=True)` now raise, directing users to a network-preserving permutation (QAP) analysis.
@@ -234,6 +241,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
   Neither warns now; for spectral GC `fmin=0` means a band from `fs / 1e5`, as its identifier states.
+  Nor does an off-diagonal cell that is NaN at every in-band frequency (for example a spectral GC pair the backend returns as NaN): it is NaN, without numpy's "Mean of empty slice" or "All-NaN slice encountered".
+  For spectral GC that cell is labelled not appropriate, with its reason; for the multitaper SPIs it is NaN with no reason.
 - **Debiased squared PLI (`dspli_*`) was wrong where the cross-spectrum is real.**
   It is now the mean of taper-pair sign products (Vinck et al. 2011).
 - **Cross-correlation (`CrossCorrelation`) was wrong four ways.**
@@ -329,6 +338,8 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   The test is on the covariance each estimator inverts or factorises, scaled to unit diagonal: the pair is refused when its smallest/largest eigenvalue is at most 1e-12, or at most the rounding error of the computation that produced it (`eps` times its condition number), which includes an indefinite matrix.
   That covariance is the zero-lag covariance of the multitaper spectrum for nonparametric `sgc` and the Wilson-derived SPIs, the Yule-Walker equations and the fitted innovation covariance for parametric `sgc` (its BIC search selects among the orders below the first that cannot be fitted, and refuses only when order 1 cannot), and the two residual covariances the test inverts for `coint_johansen_*`, which also refuses a pair for which statsmodels finds one singular or whose test eigenvalues are not all in [0, 1) (a negative or non-finite statistic).
   So a series and a nearly exact copy are refused too where the estimate would be set by rounding error; the check bounds that error from above, so near the boundary it is conservative by a small factor.
+  `coint_aeg_*` refuses an orientation whose regression fits exactly to rounding level (a residual RMS at most 1e-12 of the regressed series'), where statsmodels warns of collinearity and returns a t-statistic of `-inf`, which was stored as NaN with no reason.
+  statsmodels returns `-inf` without computing the statistic whenever the regression's R^2 is within 100 sqrt(eps) of 1, so a near-collinear orientation whose residual is above rounding level is a pair error, in `calc.pair_errors`, whose message says the library declined to compute it.
   A copy delayed by one sample is not refused by `sgc_*` or `dcoh_*`, whose values for it are finite estimates of an infinite quantity, and is refused by six of the eight bundled `coint_johansen_*` SPIs: with `det_order=1` and `k_ar_diff=1` each series is detrended separately, which leaves a residual between the copy and the lagged original, and the test returns a finite statistic.
   2.0.2 had no such check: parametric `sgc` caught the `LinAlgError` of a dependent pair as a `ValueError` and returned NaN for every pair, or, where rounding let the fit through, values set by rounding error; `coint_johansen_*` raised `LinAlgError`, which set the whole SPI to NaN.
   Each SPI in the list above checks its own requirement before it runs; at the bundled parameters the requirements are as follows.

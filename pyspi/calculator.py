@@ -1457,7 +1457,8 @@ class Calculator:
         :attr:`errors` and :attr:`pair_errors`, the SPIs and pairs that are
         not appropriate for the dataset in :attr:`not_appropriate` and
         :attr:`pair_not_appropriate`, and times in :attr:`timings`.
-        A failed SPI does not stop the run.
+        A failed SPI does not stop the run. The statistic caches built on the
+        dataset are released when it finishes.
 
         With ``n_jobs > 1`` each worker pins its BLAS and OpenMP pools to one
         thread so the workers do not oversubscribe the cores. macOS's
@@ -1551,6 +1552,7 @@ class Calculator:
 
         if not spi_keys:
             logger.info("All SPIs already cached; nothing to compute.")
+            self._dataset._invalidate_caches()
             if self._verbose:
                 inspect_calc_results(self)
             return
@@ -1574,6 +1576,9 @@ class Calculator:
             for key, res in results.items():
                 self._record(key, res)
 
+        # The results do not need the statistic caches, which grow as about
+        # M**2 and would otherwise stay with every Calculator kept after its run.
+        self._dataset._invalidate_caches()
         elapsed = time.perf_counter() - t_start
         logger.info("Calculation complete. Time taken: %.4fs", elapsed)
         if self._verbose:
@@ -2030,13 +2035,22 @@ class CalculatorFrame:
         ----------
         **kwargs
             Arguments of :meth:`Calculator.compute`, so ``n_jobs=4``
-            parallelises within each dataset.
+            parallelises within each dataset. With ``checkpoint_dir=d``, each
+            calculator checkpoints to its own subdirectory of ``d``, named by
+            its position in the frame (``d/0``, ``d/1``, ...), so the same
+            frame resumes from ``d``.
         """
         if not hasattr(self, "_calculators"):
             raise AttributeError("No calculators in frame yet. Initialise before computing.")
+        checkpoint_dir = kwargs.pop("checkpoint_dir", None)
+        position = 0
         for i in self._calculators.index:
             for calc in self._calculators.loc[i]:
-                calc.compute(**kwargs)
+                # A checkpoint directory belongs to one run, so one per dataset.
+                own = (None if checkpoint_dir is None
+                       else Path(checkpoint_dir) / str(position))
+                calc.compute(checkpoint_dir=own, **kwargs)
+                position += 1
 
     @property
     def groups(self):
