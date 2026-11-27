@@ -31,17 +31,34 @@ T = 2000
 SEED = 0
 
 
-@pytest.fixture(scope="module")
-def driven_pair():
-    """Data where process 0 unambiguously drives process 1."""
+def _driven(rho):
+    """Process 0 drives process 1; their innovations correlate by ``rho`` at lag 0."""
     rng = np.random.default_rng(SEED)
     x = np.zeros(T)
     y = np.zeros(T)
-    ex, ey = rng.standard_normal(T), rng.standard_normal(T)
+    ex, ez = rng.standard_normal(T), rng.standard_normal(T)
+    ey = rho * ex + np.sqrt(1 - rho ** 2) * ez
     for t in range(1, T):
         x[t] = 0.5 * x[t - 1] + ex[t]
         y[t] = 0.5 * y[t - 1] + 0.8 * x[t - 1] + ey[t]
     return Data(np.vstack([x, y]))
+
+
+@pytest.fixture(scope="module")
+def driven_pair():
+    """Data where process 0 unambiguously drives process 1."""
+    return _driven(0.0)
+
+
+@pytest.fixture(scope="module", params=[0.0, 0.5], ids=["independent", "correlated"])
+def driven_pair_any_noise(request):
+    """``driven_pair``, and the same with innovations correlated at lag 0.
+
+    A zero-lag covariance that is not diagonal is where a wrong start of
+    Wilson's factorisation shows, so the Wilson-derived SPIs are checked on
+    both.
+    """
+    return _driven(request.param)
 
 
 def _spi(module, cls_name, **kwargs):
@@ -65,13 +82,23 @@ DIRECTED = [
 ]
 
 
+# Read off the transfer function alone, without the innovation covariance.
+NOISE_COVARIANCE_BLIND = {"PartialDirectedCoherence", "DirectedTransferFunction",
+                          "DirectDirectedTransferFunction"}
+
+
 @pytest.mark.parametrize("module, cls_name, kwargs", DIRECTED,
                          ids=[f"{c}{'-' + str(k.get('method')) if k.get('method') else ''}"
                               for _, c, k in DIRECTED])
-def test_directed_spi_is_source_by_target(module, cls_name, kwargs, driven_pair):
+def test_directed_spi_is_source_by_target(module, cls_name, kwargs,
+                                          driven_pair_any_noise, request):
     """A[0, 1] (0 -> 1, the true direction) must exceed A[1, 0]."""
+    if (cls_name in NOISE_COVARIANCE_BLIND
+            and request.node.callspec.params["driven_pair_any_noise"]):
+        pytest.skip(f"{cls_name} ignores the innovation covariance, so "
+                    f"innovations correlated at lag 0 read as flow both ways")
     spi = _spi(module, cls_name, **kwargs)
-    A = np.asarray(spi.multivariate(driven_pair), dtype=float)
+    A = np.asarray(spi.multivariate(driven_pair_any_noise), dtype=float)
 
     assert A.shape == (2, 2)
     if np.isnan(A[0, 1]) or np.isnan(A[1, 0]):
@@ -613,23 +640,31 @@ def _pair_multitaper(seed=0, T=400):
 @pytest.mark.parametrize("order", [DIRECTED_MEASURES, DIRECTED_MEASURES[::-1]])
 def test_factored_connectivity_gives_the_backend_values_from_one_factorisation(
         order, monkeypatch):
-    """Bit-identical to a plain ``Connectivity``, whatever is asked for first."""
+    """
+    Bit-identical to a plain ``Connectivity`` given pyspi's factor, whatever is asked for first.
+    """
     import spectral_connectivity as sc
-    import spectral_connectivity.connectivity as backend
 
+    from pyspi.statistics import spectral
     from pyspi.statistics.spectral import _FactoredConnectivity
 
     for private in ("_minimum_phase_factor", "_transfer_function",
                     "_noise_covariance", "_MVAR_Fourier_coefficients"):
         assert isinstance(getattr(sc.Connectivity, private, None), property), private
 
-    plain = sc.Connectivity.from_multitaper(_pair_multitaper())
+    class Plain(sc.Connectivity):
+        @property
+        def _minimum_phase_factor(self):
+            return spectral._minimum_phase_factor(
+                self._expectation_cross_spectral_matrix())
+
+    plain = Plain.from_multitaper(_pair_multitaper())
     expected = {name: getattr(plain, name)() for name in DIRECTED_MEASURES}
     noise, transfer = plain._noise_covariance, plain._transfer_function
 
     calls = []
-    inner = backend.minimum_phase_decomposition
-    monkeypatch.setattr(backend, "minimum_phase_decomposition",
+    inner = spectral.minimum_phase_decomposition
+    monkeypatch.setattr(spectral, "minimum_phase_decomposition",
                         lambda *a, **k: calls.append(1) or inner(*a, **k))
     factored = _FactoredConnectivity.from_multitaper(_pair_multitaper())
     for name in order + order:
@@ -642,8 +677,6 @@ def test_factored_connectivity_gives_the_backend_values_from_one_factorisation(
 
 
 def test_directed_spectral_spis_share_one_task_and_one_factorisation_per_pair(monkeypatch):
-    import spectral_connectivity.connectivity as backend
-
     from pyspi import _parallel
     from pyspi.calculator import Calculator
     from pyspi.statistics import spectral
@@ -656,8 +689,8 @@ def test_directed_spectral_spis_share_one_task_and_one_factorisation_per_pair(mo
     assert len(keys) == 6 and _parallel.build_tasks(keys, calc.spis) == [keys]
 
     calls = []
-    inner = backend.minimum_phase_decomposition
-    monkeypatch.setattr(backend, "minimum_phase_decomposition",
+    inner = spectral.minimum_phase_decomposition
+    monkeypatch.setattr(spectral, "minimum_phase_decomposition",
                         lambda *a, **k: calls.append(1) or inner(*a, **k))
     for key in keys:
         res = _parallel.execute_spi(calc.spis[key], calc.dataset, key, 3)

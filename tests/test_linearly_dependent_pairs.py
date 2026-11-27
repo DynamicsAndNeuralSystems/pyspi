@@ -143,9 +143,10 @@ def test_a_strongly_correlated_pair_keeps_its_value(tmp_path):
     lambda: DirectedCoherence(fmin=0, fmax=0.5),
 ], ids=["sgc_nonparametric", "dcoh"])
 def test_values_do_not_depend_on_the_global_random_state(make):
-    """The backend draws a random Wilson start from the global stream when its
-    Cholesky start fails, as it does for this nearly identical pair; the pair
-    is refused first, so neither the values nor the caller's stream change."""
+    """spectral_connectivity draws a random Wilson start from the global stream
+    when its Cholesky start fails, as it would for this nearly identical pair;
+    the pair is refused first, so neither the values nor the caller's stream
+    change."""
     X = _with_copy("near")
     results = []
     for seed in (1, 2, 3):
