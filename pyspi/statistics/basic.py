@@ -41,6 +41,8 @@ class Estimators(Undirected, Signed):
     cross-validation selects an ``alpha`` near 0, ``GraphicalLassoCV`` may not
     converge (silently, as fit warnings are suppressed); on data with a dense
     precision matrix, prefer ``GraphicalLasso`` or ``LedoitWolf``.
+    scikit-learn's graphical lasso solver can fail on strongly correlated
+    processes; every SPI of that fit is then an error (``FloatingPointError``).
     """
 
     name = "Covariance"
@@ -82,7 +84,21 @@ class Estimators(Undirected, Signed):
                 kwargs.update(tol=1e-8, enet_tol=1e-8)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                mycov = estimator(**kwargs).fit(z)
+                try:
+                    mycov = estimator(**kwargs).fit(z)
+                except FloatingPointError as err:
+                    # The graphical lasso's coordinate descent raises this
+                    # when its iterate stops being positive definite.
+                    if self._estimator not in ("GraphicalLasso",
+                                               "GraphicalLassoCV"):
+                        raise
+                    raise FloatingPointError(
+                        f"scikit-learn's graphical lasso solver failed on the "
+                        f"{self._estimator} fit, as it can on strongly "
+                        f"correlated processes, so {self.identifier} was not "
+                        f"computed. This is a limitation of the solver: "
+                        f"another estimator (e.g. LedoitWolf) may succeed."
+                    ) from err
             try:
                 data.covariance[self._estimator] = mycov
             except AttributeError:

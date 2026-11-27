@@ -12,7 +12,15 @@ import numpy as np
 import spectral_connectivity as sc
 from scipy import signal
 from scipy.fft import ifft
-from spectral_connectivity.connectivity import _estimate_spectral_granger_prediction
+from spectral_connectivity.connectivity import (
+    _estimate_noise_covariance,
+    _estimate_predictive_power,
+    _estimate_transfer_function,
+    _remove_instantaneous_causality,
+)
+from spectral_connectivity.minimum_phase_decomposition import (
+    minimum_phase_decomposition,
+)
 from spectral_connectivity.transforms import prepare_time_series
 
 from pyspi.base import (
@@ -109,14 +117,13 @@ def _dependent_spectrum_error(csm, i, j):
     The ``NotAppropriate`` for a pair whose spectrum cannot be factorised, or None.
 
     ``csm`` is the pair's ``2 x 2`` cross-spectral matrix at every frequency.
-    The backend starts Wilson's iteration from the Cholesky factor of the
-    zero-lag covariance, the real part of the inverse FFT of ``csm`` at lag 0,
-    and draws a random start from NumPy's global stream when that Cholesky
-    fails. That covariance is formed directly from the spectrum, and the pair
-    is refused when it is singular by ``pyspi.utils.SINGULAR_RCOND``
-    (``singular_covariance_error``). At that tolerance the Cholesky of every
-    pair that is kept succeeds, so the random start is never reached. The
-    real part is the backend's: the inverse FFT of a Hermitian spectrum is
+    Wilson's iteration starts from a square root of the zero-lag covariance,
+    the real part of the inverse FFT of ``csm`` at lag 0
+    (``_minimum_phase_factor``). That covariance is formed directly from the
+    spectrum, and the pair is refused when it is singular by
+    ``pyspi.utils.SINGULAR_RCOND`` (``singular_covariance_error``). At that
+    tolerance the Cholesky factorisation of every pair that is kept succeeds.
+    The real part is the backend's: the inverse FFT of a Hermitian spectrum is
     real up to rounding.
     """
     lag0 = ifft(csm, axis=-3)[..., 0, :, :].real.reshape(2, 2)
@@ -124,6 +131,68 @@ def _dependent_spectrum_error(csm, i, j):
         "Wilson's spectral factorisation", i, j, lag0,
         "their cross-spectral matrix is singular and has no spectral factor",
         of="their zero-lag covariance")
+
+
+def _minimum_phase_factor(csm):
+    """
+    Wilson's minimum-phase factor ``G`` of ``csm``, with ``G G^H = csm``.
+
+    ``csm`` has shape ``(..., n_fft_samples, n, n)``, two-sided. Wilson's
+    iteration must start from a square root ``U`` of the zero-lag covariance
+    ``R0`` (``U U^T = R0``). spectral_connectivity 2.x starts from the
+    transposed Cholesky factor ``L^T`` of ``R0 = L L^T``, a matrix whose
+    product with its own transpose is ``L^T L``, which is not ``R0``. Unless
+    ``R0`` is diagonal the iteration can then converge
+    to a factor that is not minimum phase, with no warning, and every
+    measure read from it is wrong. Its most likely victims are slowly
+    varying series whose innovations are correlated at lag zero.
+
+    Here ``U`` is the upper-triangular square root, the Cholesky factor of
+    ``R0`` with the order of the signals reversed. The backend factorises
+    ``U^-1 csm U^-T``, whose zero-lag covariance is the identity, so its own
+    start is the identity, and the factor is multiplied back by ``U``. Each
+    iterate is then ``U`` times the backend's, the trajectory of Wilson's
+    iteration started from ``U``, the start that spectral_connectivity
+    adopted after 2.0.1 (its pull request 142). ``U`` is constant in
+    frequency, so the product is minimum phase whenever the backend's factor
+    is.
+    """
+    lag0 = ifft(csm, axis=-3)[..., 0:1, :, :].real
+    root = np.linalg.cholesky(lag0[..., ::-1, ::-1])[..., ::-1, ::-1]
+    inverse = np.linalg.inv(root)
+    whitened = inverse @ csm @ np.swapaxes(inverse, -1, -2)
+    return root @ minimum_phase_decomposition(whitened)
+
+
+def _pairwise_spectral_granger(total_power, csm, pairs):
+    """
+    Spectral GC of each pair, ``F[..., f, target, source]``, NaN elsewhere.
+
+    The computation of spectral_connectivity 2.x's
+    ``_estimate_spectral_granger_prediction``, from the same backend helpers,
+    except that each pair is factorised by ``_minimum_phase_factor``.
+    ``total_power`` is the power of every signal, ``(..., n_fft_samples,
+    n_signals)``, and the result keeps its non-negative frequencies.
+    """
+    non_neg = np.arange(total_power.shape[-2] // 2 + 1)
+    total_power = np.take(total_power, non_neg, axis=-2)
+    shape = list(csm.shape)
+    shape[-3] = non_neg.size
+    predictive_power = np.full(shape, np.nan)
+    for pair in pairs:
+        idx = np.array(pair)[:, np.newaxis]
+        try:
+            factor = _minimum_phase_factor(csm[..., idx, idx.T])
+            transfer = _estimate_transfer_function(factor)[..., non_neg, :, :]
+            covariance = _remove_instantaneous_causality(
+                _estimate_noise_covariance(factor))
+            predictive_power[..., idx, idx.T] = _estimate_predictive_power(
+                total_power[..., idx[:, 0]], covariance, transfer)
+        except np.linalg.LinAlgError:
+            predictive_power[..., idx, idx.T] = np.nan
+    diagonal = np.diag_indices(csm.shape[-1])
+    predictive_power[..., diagonal[0], diagonal[1]] = np.nan
+    return predictive_power
 
 
 def _ensure_time_series_3d(z):
@@ -545,7 +614,7 @@ class _FactoredConnectivity(sc.Connectivity):
 
     @functools.cached_property
     def _minimum_phase_factor(self):
-        return super()._minimum_phase_factor
+        return _minimum_phase_factor(self._expectation_cross_spectral_matrix())
 
     def _factorise(self):
         held = vars(self)
@@ -2089,9 +2158,10 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     copy of a series delayed by a lag is refused by neither: its spectral GC
     is infinite in theory, and both methods return a large finite value set
     by the estimator. Every other NaN cell is also not appropriate,
-    with the fraction of its in-band frequencies that are NaN: a cell is
-    NaN when more than ``nan_threshold`` of them are, or when any is and
-    ``ignore_nan`` is False.
+    with the fraction of its in-band frequencies that are non-finite (NaN
+    or +/-Inf, both treated as missing): a cell is NaN when more than
+    ``nan_threshold`` of them are, or when any is and ``ignore_nan`` is
+    False.
 
     With ``method='nonparametric'``, where
     Wilson's factorisation of a pair reaches its iteration cap, the value
@@ -2141,13 +2211,13 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band. Default: ``'mean'``.
     ignore_nan : bool, optional
-        Ignore NaN frequencies in the band statistic; False lets a NaN
-        frequency make the value NaN, and appends ``_ignorenan-False`` to the
-        identifier. Default: True.
+        Ignore non-finite (NaN or +/-Inf) frequencies in the band statistic;
+        False lets one make the value NaN, and appends ``_ignorenan-False``
+        to the identifier. Default: True.
     nan_threshold : float, optional
-        Largest fraction of NaN in-band frequencies a cell may have before it
-        is set to NaN; a value other than 0.5 is appended to the identifier
-        as ``_nanthr-<x>``. Default: 0.5.
+        Largest fraction of non-finite in-band frequencies a cell may have
+        before it is set to NaN; a value other than 0.5 is appended to the
+        identifier as ``_nanthr-<x>``. Default: 0.5.
     time_halfbandwidth_product : float, optional
         Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5,
         for ``method='nonparametric'`` (see ``NonparametricSpectral``); the
@@ -2280,7 +2350,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
             else:
                 refused[(i, j)] = refused[(j, i)] = str(err)
         with _collect_backend_log() as log:
-            F = _estimate_spectral_granger_prediction(conn._power, csm, pairs)
+            F = _pairwise_spectral_granger(conn._power, csm, pairs)
         return np.asarray(F), conn.frequencies, refused, tuple(log)
 
     def _parametric_gc(self, data):
@@ -2362,7 +2432,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         cached = getattr(data, "spectral_gc", {}).get(self._getkey(), {})
         refused = cached.get("refused", {})
         freq_id = self._band(freq)
+        # A non-finite value (nitime's parametric log ratio is unguarded, so
+        # a zero denominator gives +/-Inf) is missing, like NaN: the
+        # threshold, `ignore_nan` and the reasons below all see it.
         spectra = F[0, freq_id, :, :]
+        spectra = np.where(np.isfinite(spectra), spectra, np.nan)
         M = data.n_processes
         dependent = np.zeros((M, M), dtype=bool)
         for i, j in refused:
@@ -2381,7 +2455,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         np.fill_diagonal(nan_pct, 0.0)
 
         # A cell that is NaN and not refused for its pair takes its reason
-        # from the NaN frequencies of its spectrum.
+        # from the non-finite frequencies of its spectrum.
         reasons = dict(refused)
         n_band = spectra.shape[0]
         result[nan_pct > self.nan_threshold] = np.nan
@@ -2394,7 +2468,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                    else "so the band statistic is undefined")
             reasons[(i, j)] = (
                 f"Spectral GC: {nan_pct[i, j]:.0%} of the {n_band} in-band "
-                f"frequencies of ({i}, {j}) give NaN values, {why}; the "
+                f"frequencies of ({i}, {j}) give non-finite values, {why}; the "
                 f"measure is undefined at those frequencies.")
 
         if reasons:
