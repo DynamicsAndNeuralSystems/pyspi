@@ -188,6 +188,14 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Wilson's algorithm logs non-convergence through `logging` and returns the unconverged factor, so every Wilson-derived measure (`dcoh`, `dtf`, `ddtf`, `pdcoh`, `gpdcoh`, nonparametric `sgc`) reached the table silently.
   Every SPI that reads a factorisation that did not converge now warns, naming the ordered pairs (for nonparametric `sgc`, the number of pairs), and the Calculator attributes the warning to that SPI.
   The value is still returned; non-convergence is a warning, not an error.
+- **Wilson's spectral factorisation starts from a square root of the zero-lag covariance.**
+  spectral_connectivity (every release to 2.0.1, so pyspi 2.x as well) starts Wilson's iteration from the transposed Cholesky factor of the zero-lag covariance, which is not a square root of that covariance unless the two series are uncorrelated at lag zero.
+  For a pair of slowly varying series with a long memory relative to the record and with correlated innovations, the iteration could then converge without a warning to a factor that is not minimum phase.
+  Every value read from that factor was then wrong too, including the reported direction of flow.
+  On the exact spectrum of such a pair, mean spectral GC was 0.145 from 0 to 1 and 0.034 from 1 to 0, where the true values are 0.022 and 0.
+  pyspi now whitens each pair's spectrum by the upper-triangular square root of its zero-lag covariance before the backend factorises it, which gives the start spectral_connectivity adopted after 2.0.1 (its pull request 142).
+  **The 12 bundled `dcoh_multitaper_*` and `sgc_nonparametric_*` SPIs change value**, as do the unbundled `dtf`, `ddtf`, `pdcoh` and `gpdcoh` classes: typical pairs move by about 1e-4, while slowly varying pairs, and pairs whose factorisation does not converge, move by more.
+  Parametric `sgc_parametric_*` fits a VAR and does not change.
 - **Group delay (`GroupDelay`) returned no finite value on any input**: the backend's one-sample coherence test takes the square root of a negative number.
   pyspi computes the standard one-sample test `(arctanh|C| − b)/sqrt(b)`, `b = 1/(2n − 2)` (Enochson & Goodman 1965; Bokil et al. 2007), applies Benjamini-Hochberg over the band, thins the longest significant run to one point per multitaper bandwidth, and fits the unwrapped phase against frequency.
   The delay is in samples (it was in seconds), and `rvalue` is `|r|`, undirected and not signed.
