@@ -623,6 +623,16 @@ def write_manifest(checkpoint_dir: Path, digest: str, spec: dict) -> None:
     os.replace(tmp, path)
 
 
+def _version_changes(old_spec: dict, spec: dict):
+    """``"name old -> new"`` for pyspi and each dependency whose version differs."""
+    old_deps = old_spec.get("dependency_versions") or {}
+    new_deps = spec.get("dependency_versions") or {}
+    pairs = [("pyspi", old_spec.get("pyspi_version"), spec.get("pyspi_version"))]
+    pairs += [(name, old_deps.get(name), new_deps.get(name))
+              for name in sorted(set(old_deps) | set(new_deps))]
+    return [f"{name} {old} -> {new}" for name, old, new in pairs if old != new]
+
+
 def checkpoint_owner_matches(checkpoint_dir: Path, digest: str):
     """
     Return (matches, reason). A directory with no manifest is unowned.
@@ -648,6 +658,22 @@ def checkpoint_owner_matches(checkpoint_dir: Path, digest: str):
     if manifest.get("digest") != digest:
         return False, "checkpoint was written by a different run"
     return True, None
+
+
+def checkpoint_version_changes(checkpoint_dir: Path, spec: dict):
+    """
+    Package versions that differ between a checkpoint and the run resuming it.
+
+    Returns ``"name old -> new"`` for pyspi and each dependency whose version
+    in the directory's manifest differs from ``spec`` (the resuming run's
+    ``run_spec``), and an empty list for a directory with no manifest. A
+    dependency upgrade can change values without a change to
+    ``COMPUTATION_VERSION``, so a table resumed across one would mix the two.
+    """
+    manifest = read_manifest(checkpoint_dir)
+    if manifest is None:
+        return []
+    return _version_changes(manifest.get("spec") or {}, spec)
 
 
 def _read_checkpoint_quality(checkpoint_dir: Path, key, arr, err, M):
