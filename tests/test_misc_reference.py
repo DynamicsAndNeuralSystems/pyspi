@@ -143,6 +143,74 @@ def test_aeg_is_the_engle_granger_tstat_of_the_column_regressed_on_the_row():
         assert A[0, 1] != A[1, 0]
 
 
+def test_aeg_minus_inf_is_an_error_unless_the_fit_is_exact():
+    """statsmodels' ``coint`` returns ``-inf`` when the regression's R^2 is
+    within 100 sqrt(eps) of 1. For a near-collinear pair, whose residual is
+    well defined, that orientation is a pair error; for an exact affine copy,
+    whose residual is rounding error, it is not appropriate, with a reason.
+    The other pairs keep statsmodels' value."""
+    from statsmodels.tsa.stattools import coint
+
+    from pyspi.calculator import Calculator
+    from pyspi.quality import Quality
+
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((4, 150)).cumsum(axis=1)
+    X[1] = X[0] + 1e-7 * rng.standard_normal(150)  # near-collinear with 0
+    X[2] = 2 * X[0] + 3  # an exact affine copy of 0
+    calc = Calculator(dataset=X, dim_order="ps", verbose=False, config="full")
+    key = "coint_aeg_tstat_trend-c_autolag-aic_maxlag-10"
+    calc._spis = {key: calc.spis[key]}
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        calc.compute()
+    assert not [w for w in caught if "colinear" in str(w.message)]
+    assert key not in calc.errors and key not in calc.not_appropriate
+
+    A = calc.table[key].to_numpy()
+    Q = calc.quality[key].to_numpy()
+    p = [f"proc-{k}" for k in range(4)]
+    near = {(p[0], p[1]), (p[1], p[0]), (p[1], p[2]), (p[2], p[1])}
+    exact = {(p[0], p[2]), (p[2], p[0])}
+    errors = calc.pair_errors[key]
+    assert {(i, j) for i, j, _ in errors} == near
+    for i, j, msg in errors:
+        assert msg.startswith("RuntimeError: statsmodels declines")
+        assert f"process {j[-1]} on process {i[-1]}" in msg
+    refused = calc.pair_not_appropriate[key]
+    assert {(i, j) for i, j, _ in refused} == exact
+    assert all("fits exactly to rounding level" in why for *_, why in refused)
+    for i, j in near | exact:
+        a, b = int(i[-1]), int(j[-1])
+        assert np.isnan(A[a, b])
+        assert Q[a, b] == (Quality.ERROR if (i, j) in near else Quality.NAN)
+
+    z = calc.dataset.to_numpy(squeeze=True)
+    for a in range(3):
+        assert A[a, 3] == coint(z[3], z[a], trend="c", autolag="aic",
+                                maxlag=10)[0]
+        assert Q[a, 3] == Quality.GOOD
+
+
+def test_aeg_exact_fit_threshold_separates_copies_from_near_collinear_pairs():
+    """The exact-fit test refuses copies, whose residual is rounding error,
+    and keeps a pair whose residual is far above rounding level, with every
+    trend, including a copy stored with a large offset."""
+    from pyspi.statistics.misc import _aeg_fits_exactly
+
+    rng = np.random.default_rng(1)
+    x = rng.standard_normal(500).cumsum()
+    noise = rng.standard_normal(500)
+    for trend in ("n", "c", "ct", "ctt"):
+        assert _aeg_fits_exactly(x.copy(), x, trend)
+        assert _aeg_fits_exactly(-2.5 * x, x, trend)
+        assert _aeg_fits_exactly(x + 1e-15 * noise, x, trend)
+        assert not _aeg_fits_exactly(x + 1e-9 * noise, x, trend)
+        if trend != "n":
+            assert _aeg_fits_exactly(2 * x + 3, x, trend)
+            assert _aeg_fits_exactly(2 * (x + 1e6) + 3, x + 1e6, trend)
+
+
 def test_aeg_and_lmfit_agree_on_which_index_is_the_regressor():
     """Both directed regression families regress the column on the row.
 
