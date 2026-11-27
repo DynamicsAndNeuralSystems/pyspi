@@ -2160,7 +2160,13 @@ def _hyppo_pair_value(spi, z, i, j):
     if isinstance(spi, D.HilbertSchmidtIndependenceCriterion):
         return Dcorr(bias=spi._biased, compute_distance=None).statistic(
             D._median_gaussian_distance(z[i]), D._median_gaussian_distance(z[j]))
-    return Dcorr(bias=spi._biased).statistic(z[i], z[j])
+    # Exact distances (from the differences), which pyspi uses; hyppo's own
+    # default is scikit-learn's expansion.
+    def exact(v):
+        v = np.asarray(v, dtype=float).reshape(len(v), -1)
+        return np.sqrt(((v[:, None, :] - v[None, :, :]) ** 2).sum(axis=-1))
+    return Dcorr(bias=spi._biased, compute_distance=None).statistic(
+        exact(z[i]), exact(z[j]))
 
 
 @pytest.mark.parametrize("budget", [None, 1])

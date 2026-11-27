@@ -8,8 +8,9 @@ from hyppo.independence import MGC
 from hyppo.independence.dcorr import _center_distmat, _dcov, _fast_1d_dcov
 import numba
 import numpy as np
+from scipy.spatial.distance import pdist, squareform
 from scipy.stats import rankdata
-from sklearn.metrics import pairwise_distances, pairwise_kernels
+from sklearn.metrics import pairwise_distances
 from tslearn.barycenters import (
     euclidean_barycenter,
     dtw_barycenter_averaging,
@@ -291,7 +292,8 @@ def _dcorr_centred(cx, cy, bias):
 
 # hyppo's O(n log n) dCov of two scalar samples (Chaudhuri & Hu 2019). Below
 # about 800 samples the cached O(n^2) matrices are faster; their values equal
-# hyppo 0.5.2's ``Dcorr`` statistic bit for bit, the fast route's to rounding.
+# hyppo 0.5.2's ``Dcorr`` statistic on exact distance matrices
+# (`_euclidean_distance`) bit for bit, the fast route's to rounding.
 _FAST_DCOV_MIN_SAMPLES = 800
 
 
@@ -381,7 +383,21 @@ def _dcorr_spi_matrix(spi, data, distance):
 
 
 def _euclidean_distance(v):
-    return pairwise_distances(v, metric="euclidean")
+    """
+    Euclidean distances between the rows of ``v`` (samples x dimensions).
+
+    From the differences themselves (``|x_s - x_t|`` for one dimension,
+    scipy's ``pdist`` otherwise), not scikit-learn's ``|a|^2 + |b|^2 - 2ab``
+    expansion, which loses precision to cancellation: about 1e-11 absolute
+    on z-scored data, and relative to the square of the offset on data far
+    from zero, and it breaks exact ties between equal distances, which the
+    rank-based `hhg` and `mgc` count.
+    """
+    v = np.asarray(v, dtype=float)
+    v = v.reshape(v.shape[0], -1)
+    if v.shape[1] == 1:
+        return np.abs(v - v.T)
+    return squareform(pdist(v, metric="euclidean"))
 
 
 def _median_gaussian_distance(v):
@@ -393,12 +409,13 @@ def _median_gaussian_distance(v):
     applies ``x``'s width to ``y`` as well, which makes its statistic depend
     on argument order.
     """
-    l2 = pairwise_distances(v, metric="l2")
+    l2 = _euclidean_distance(v)
     n = l2.shape[0]
     med = np.median(l2[~np.eye(n, dtype=bool)])
     # As hyppo: a zero median (mostly tied samples) falls back to width 1.
     med = med if med else 1
-    K = pairwise_kernels(v, metric="rbf", gamma=1.0 / (2 * (med**2)))
+    # hyppo's RBF kernel, from the same exact distances.
+    K = np.exp(-(l2 ** 2) / (2 * (med**2)))
     return 1 - K / np.max(K)
 
 
@@ -523,7 +540,7 @@ def _hhg_ranks(x):
     ``#{k : d[i, k] <= d[i, j]}`` (counting ``k = i`` and ``k = j``
     themselves), and the order that sorts each row of them.
     """
-    d = pairwise_distances(x, metric="euclidean")
+    d = _euclidean_distance(x)
     n = d.shape[0]
     ranks = np.empty((n, n), dtype=np.int32)
     order = np.empty((n, n), dtype=np.int32)
@@ -588,7 +605,8 @@ class HellerHellerGorfine(Undirected, Unsigned):
     and within ``|y_s - y_t|`` of ``y_s``; the statistic is the sum over all
     ``(s, t)`` of Pearson's chi-square for that 2x2 table. Each series is one
     sample of ``T`` scalar observations, so time order is ignored. The value
-    equals hyppo's ``HHG().statistic``, computed in ``O(T^2 log T)`` from
+    equals hyppo's ``HHG`` statistic on exact distance matrices
+    (`_euclidean_distance`), computed in ``O(T^2 log T)`` from
     row-wise ranks and dominance counts instead of hyppo's ``O(T^3)`` loop.
     Each series' ranks are computed once for all its pairs.
 
@@ -635,8 +653,9 @@ class DistanceCorrelation(Undirected, Unsigned):
     the squared distance correlation [2]_, which can be slightly negative
     under independence. With ``biased=True`` it is the square root of the
     double-centred (V-statistic) ratio of [1]_, in ``[0, 1]``. The two are
-    on different scales. Values match hyppo's ``Dcorr`` (0.5.2) statistic up
-    to rounding. Undirected and unsigned.
+    on different scales. Values match hyppo's ``Dcorr`` (0.5.2) statistic on
+    exact distance matrices (`_euclidean_distance`) up to rounding.
+    Undirected and unsigned.
 
     For scalar observations and ``T >= 800`` the distance covariances are
     computed in ``O(T log T)`` time and ``O(T)`` memory by the sorting
@@ -705,7 +724,8 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
     nonlinear dependence that the global distance correlation dilutes.
     Undirected. MGC needs at least 5 samples; a shorter series is not
     appropriate (``NotAppropriate``, NaN in a Calculator table). The value is
-    hyppo's, bit for bit; each series' share of the MGC map (its ranks,
+    hyppo's on exact distance matrices (`_euclidean_distance`), bit for bit;
+    each series' share of the MGC map (its ranks,
     centring and local variances) is computed once, not once per pair. This
     needs scipy 1.14 or later; with an older scipy the SPI calls hyppo's
     ``MGC`` for every pair, with the same values.
@@ -726,7 +746,8 @@ class MultiscaleGraphCorrelation(Undirected, Unsigned):
         x, y = data.to_numpy()[[i, j]]
         _require_mgc_samples(x.shape[0])
         if _local_covariance is None:
-            return MGC().statistic(x, y)
+            return MGC(compute_distance=None).statistic(
+                _euclidean_distance(x), _euclidean_distance(y))
         return _mgc_from_parts(_mgc_parts(_euclidean_distance(x)),
                                _mgc_parts(_euclidean_distance(y)))
 
@@ -811,8 +832,8 @@ def _lagged_sum(test, x, y, max_lag):
     ``x[l:]`` is the block ``distx[l:, l:]``. hyppo 0.5.2's own ``l >= 1``
     terms treat rows of the distance matrices as points, so it is not used.
     """
-    distx = pairwise_distances(x, metric="euclidean")
-    disty = pairwise_distances(y, metric="euclidean")
+    distx = _euclidean_distance(x)
+    disty = _euclidean_distance(y)
     n = distx.shape[0]
     dep_lag = [test.statistic(distx, disty)]
     for lag in range(1, max_lag + 1):
