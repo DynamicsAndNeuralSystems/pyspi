@@ -830,3 +830,33 @@ def test_unnamed_datasets_are_named_by_position():
         own = calc._get_correlation_df().stack(future_stack=True)
         col = corr.ddf[name].reindex(own.index)
         assert np.allclose(col.to_numpy(float), own.to_numpy(float), equal_nan=True)
+
+
+def test_frame_checkpoints_each_calculator_and_resumes(tmp_path, monkeypatch):
+    """`CalculatorFrame.compute(checkpoint_dir=d)` checkpoints every dataset.
+
+    One directory holds one run, so each calculator gets its own subdirectory,
+    named by its position in the frame; a fresh frame on the same datasets
+    resumes all of them without recomputing.
+    """
+    from pyspi import _parallel
+
+    rng = np.random.default_rng(5)
+    arrays = [rng.standard_normal((3, 100)) for _ in range(2)]
+
+    def frame():
+        return CalculatorFrame(datasets=[Data(a) for a in arrays], names=["a", "b"],
+                               labels=[[], []], config="fabfour")
+
+    first = frame()
+    first.compute(checkpoint_dir=tmp_path, progress=False)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["0", "1"]
+
+    def no_recompute(*args, **kwargs):
+        raise AssertionError("a checkpointed SPI was recomputed")
+
+    monkeypatch.setattr(_parallel, "execute_spi", no_recompute)
+    resumed = frame()
+    resumed.compute(checkpoint_dir=tmp_path, progress=False)
+    for (old,), (new,) in zip(first.calculators.values, resumed.calculators.values):
+        pd.testing.assert_frame_equal(old.table, new.table)
