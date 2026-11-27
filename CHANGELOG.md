@@ -60,8 +60,13 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 **Behavior of the API itself.**
 
 - **New since 2.0.2: parallel computation.** `Calculator.compute(n_jobs=...)` follows the joblib convention: `-1` is all cores, `-2` all but one, and `n_jobs=0` raises (`PYSPI_N_JOBS` sets the default). 2.0.2 had no `n_jobs`.
+  A worker that dies (a segfault, or the OOM killer) costs only the SPI that killed it: the SPIs that finished or had not started when the pool broke are recovered (from their checkpoints when there are any, otherwise recomputed), each SPI that was running is run again alone, and only one that kills its worker by itself is reported as `worker died`.
+  Recovery stops at the third broken pool in one run, and the SPIs still lost are then reported as `worker died`.
+  A task that raises in a live worker (a checkpoint that cannot be written, say) is reported as `worker failed` and is not run again.
 - `import pyspi` no longer replaces `sys.stdout`/`sys.stderr`. `Calculator(verbose=False)` no longer touches logging; `verbose=True` adds one handler, idempotently.
 - The `OMP_NUM_THREADS` `setdefault` at import is removed. It ran after numpy had loaded, so it had no in-process effect, and it altered the environment of every importing program. Thread pinning for workers stays in `_parallel`.
+- `Calculator.compute()` releases the statistic caches it built on the dataset when it finishes, so a Calculator kept after its run (in a `CalculatorFrame` or a list) no longer holds them; they grow as about M² (about 100 MiB at M=32, T=1000).
+  Values are unchanged; a second `compute()` on the same Calculator rebuilds them.
 - **New since 2.0.2: a command line.**
   `python -m pyspi compute` and a `pyspi` console command (2.0.2 had neither).
   The output directory, suffix and `n_jobs` are validated before computing, and `PYSPI_N_JOBS` is honoured.
@@ -234,6 +239,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Spurious warnings from valid spectral SPIs.**
   The multitaper SPIs emitted numpy's "Mean of empty slice" on every call, from the NaN diagonal, and spectral GC warned that `fmin=0` was overridden.
   Neither warns now; for spectral GC `fmin=0` means a band from `fs / 1e5`, as its identifier states.
+  Nor does an off-diagonal cell that is NaN at every in-band frequency (for example a spectral GC pair the backend returns as NaN): it is NaN, without numpy's "Mean of empty slice" or "All-NaN slice encountered".
+  For spectral GC that cell is labelled not appropriate, with its reason; for the multitaper SPIs it is NaN with no reason.
 - **Debiased squared PLI (`dspli_*`) was wrong where the cross-spectrum is real.**
   It is now the mean of taper-pair sign products (Vinck et al. 2011).
 - **Cross-correlation (`CrossCorrelation`) was wrong four ways.**
