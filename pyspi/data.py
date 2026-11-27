@@ -247,12 +247,14 @@ class Data:
                 self._procnames = _validate_procnames(procnames, self.n_processes)
 
     @classmethod
-    def _from_prepared_array(cls, arr, procnames=None, name=None):
+    def _from_prepared_array(cls, arr, procnames=None, name=None, zscore=False):
         """
         Build a Data around an already-preprocessed array, without copying.
 
         Used by the parallel workers, which attach to a shared-memory block
         holding the parent's preprocessed series and only read it.
+        ``zscore`` records whether the series were z-scored, which an SPI
+        may read (`AdditiveNoiseModel` standardises data that were not).
         """
         if arr.ndim != 3:
             raise ValueError(
@@ -260,7 +262,7 @@ class Data:
                 f"got shape {arr.shape}."
             )
         self = cls.__new__(cls)
-        self.zscore = False
+        self.zscore = bool(zscore)
         self.detrend = False
         self._data = arr
         self.data_type = arr.dtype.type

@@ -400,13 +400,8 @@ def test_ksg_measures_are_invariant_to_per_process_rescaling(name, seed, T):
 def test_causal_scores_are_invariant_to_affine_rescaling(seed):
     """CDS, RECI and IGCI scale their inputs internally, so units must not matter.
 
-    ANM is deliberately excluded because this implementation is scale-
-    dependent: scikit-learn's default `GaussianProcessRegressor` uses a fixed
-    unit ConstantKernel*RBF kernel when no kernel is supplied (both bounds are
-    "fixed"). The fit sees raw values while the later independence score
-    standardises its arguments. This is a pyspi/CDT implementation choice, not
-    a scale-dependence theorem about additive-noise models. pyspi's default
-    z-scoring removes the material dependence in the shipped pipeline.
+    ANM also standardises its inputs, but its kernel matrix is ill-conditioned,
+    so it agrees only to a looser tolerance; it has its own test below.
     """
     import pyspi.statistics.causal as causal
 
@@ -424,11 +419,16 @@ def test_causal_scores_are_invariant_to_affine_rescaling(seed):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_anm_is_scale_dependent_and_z_scoring_is_what_fixes_it(seed):
-    """Recorded, not asserted away.
+def test_anm_does_not_depend_on_units_when_the_data_are_not_z_scored(seed):
+    """With ``zscore=False`` ANM z-scores both series itself before the fit.
 
-    A future change that made ANM scale-free would fail this test, which is the
-    point: the property should change deliberately, not drift.
+    The GP kernel's length scale is fixed at 1, so on raw values the fit would
+    depend on the units of the cause. Standardised, ``Z`` and ``4Z + 3`` give
+    the same table, and so do ``zscore=False`` and the default
+    ``zscore=True``. Not exactly: ``Z`` and ``4Z + 3`` agree only to float
+    precision once z-scored, and the ill-conditioned kernel matrix amplifies
+    that to about 1e-4 relative (the tolerance is the one the repeat tests
+    give ``anm``).
     """
     import pyspi.statistics.causal as causal
 
@@ -438,16 +438,10 @@ def test_anm_is_scale_dependent_and_z_scoring_is_what_fixes_it(seed):
                                            zscore=False)), float)
     moved = np.asarray(anm.multivariate(Data(data=4.0 * Z + 3.0, dim_order="ps",
                                              zscore=False)), float)
-    assert np.nanmax(np.abs(raw - moved)) > 0.01, "ANM became scale-free"
-
-    # With pyspi's default z-scoring the difference collapses from ~0.27 to
-    # ~4e-5. Not to zero: z-scoring `Z` and `4Z + 3` agrees only to float
-    # precision. The point is the four orders of magnitude, which makes the
-    # implementation's scale dependence irrelevant in the default pipeline.
-    a = np.asarray(anm.multivariate(Data(data=Z, dim_order="ps")), float)
-    b = np.asarray(anm.multivariate(Data(data=4.0 * Z + 3.0, dim_order="ps")),
-                   float)
-    assert np.nanmax(np.abs(a - b)) < 1e-3
+    default = np.asarray(anm.multivariate(Data(data=Z, dim_order="ps")), float)
+    assert np.isfinite(raw[~np.eye(len(Z), dtype=bool)]).all()
+    np.testing.assert_allclose(moved, raw, rtol=1e-3, atol=1e-6)
+    np.testing.assert_allclose(raw, default, rtol=1e-3, atol=1e-6)
 
 
 # ---------------------------------------------------------------------------

@@ -388,9 +388,11 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
 - **`anm` pins its Gaussian-process kernel** to a fixed `ConstantKernel(1.0)*RBF(1.0)` with no optimiser, where it had relied on scikit-learn's default, which in 1.9 became an optimised kernel and shifted values by up to 7.6.
   Values are unchanged under scikit-learn <= 1.8.
   The kernel matrix is ill-conditioned, so `anm` varies by about 1e-4 relative across platforms.
-- **`anm` standardises both series before the fit**, as cdt does, so it no longer depends on their units.
-  With `zscore=False` the fixed length scale applied to the raw cause, so rescaling it could reverse the inferred direction (x scaled by 1000: 0.24 to 12.0, against 5.4 the other way), and an effect far from zero swamped the residual with rounding error.
-  With `zscore=False` values change; z-scored values change only by the rounding the kernel amplifies, up to about 5e-4 relative on the test fixtures.
+- **`anm` standardises both series itself when the data are not z-scored** (`zscore=False`), with ddof=1 as `Data` does, so it no longer depends on their units.
+  cdt also standardises both series, with ddof=0.
+  The kernel's length scale is fixed, so on raw data rescaling the cause could reverse the inferred direction (on a cubic pair, scaling x by 1000 moved x -> y from 0.24 to 12.0, against 5.4 for y -> x), and an effect far from zero swamped the residual with rounding error.
+  Values with the default `zscore=True` are unchanged; values with `zscore=False` change, and match those with `zscore=True` up to rounding.
+  A pair whose cause or effect has a NaN or Inf is NaN.
 - **`ccm_*` and `lccm_*` share tied neighbours, and find simplex neighbours without a KD-tree per random library.**
   Library points tied with a point's k-th nearest neighbour share the remaining neighbour places: with j library points strictly nearer and m tied, each tied point is weighted by (k - j)/m, which makes the prediction the mean of the simplex prediction over every way of breaking the tie.
   So a value does not depend on the order in which the library is stored, the sign of the series or z-scoring.
