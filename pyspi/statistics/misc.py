@@ -9,6 +9,7 @@ from scipy.spatial.distance import pdist, squareform
 from sklearn import linear_model
 from sklearn.gaussian_process import GaussianProcessRegressor, kernels
 from sklearn.metrics import mean_squared_error
+from statsmodels.tools.sm_exceptions import CollinearityWarning
 from statsmodels.tsa import stattools
 from statsmodels.tsa.tsatools import lagmat
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
@@ -132,7 +133,9 @@ class Cointegration(Directed, Unsigned):
     as for ``lmfit``) and is the unit-root t-statistic of the residuals. It is
     not symmetric, and each orientation is reported as computed (directed).
     It is unsigned, a strength on an inverted scale: more negative is
-    stronger evidence of cointegration.
+    stronger evidence of cointegration. When the regression fits (almost)
+    exactly, statsmodels returns a t-statistic of ``-inf``; that orientation
+    raises ``NotAppropriate`` instead, with the reason.
 
     Johansen's test inverts two residual covariances: of the differences and
     of the lagged levels, each regressed on the lagged differences. Neither
@@ -259,15 +262,28 @@ class Cointegration(Directed, Unsigned):
                         f"lags, fewer than maxlag = {self._maxlag}, so it "
                         f"needs T >= {2 * (self._maxlag + 1)}.")
                 # statsmodels regresses its first argument on its second.
-                stats = stattools.coint(
-                    z[j],
-                    z[i],
-                    autolag=self._autolag,
-                    maxlag=self._maxlag,
-                    trend=self._trend,
-                )
+                # When that regression's R^2 is within 100 sqrt(eps) of 1 it
+                # warns (CollinearityWarning) and returns a t-statistic of
+                # -inf, which is no test of the residual: refuse the pair.
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", CollinearityWarning)
+                    stats = stattools.coint(
+                        z[j],
+                        z[i],
+                        autolag=self._autolag,
+                        maxlag=self._maxlag,
+                        trend=self._trend,
+                    )
 
-                ci = {"tstat": stats[0]}
+                if np.isfinite(stats[0]):
+                    ci = {"tstat": stats[0]}
+                else:
+                    ci = {"refused": (
+                        f"Engle-Granger cointegration: processes {i} and {j} "
+                        f"are (almost) perfectly collinear: the regression of "
+                        f"{j} on {i} fits with R^2 within 100 sqrt(eps) of 1, "
+                        f"so statsmodels' t-statistic is {stats[0]} and the "
+                        f"unit-root test of its residual is not defined.")}
             else:
                 # The VECM lags the T - 1 differences k_ar_diff times.
                 T = z.shape[-1]

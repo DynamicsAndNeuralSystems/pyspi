@@ -143,6 +143,34 @@ def test_aeg_is_the_engle_granger_tstat_of_the_column_regressed_on_the_row():
         assert A[0, 1] != A[1, 0]
 
 
+def test_aeg_refuses_a_collinear_pair_that_statsmodels_scores_minus_inf():
+    """statsmodels' ``coint`` returns ``-inf`` when the regression fits
+    (almost) exactly; that pair is not appropriate, with a reason, and the
+    others keep statsmodels' value."""
+    from statsmodels.tsa.stattools import coint
+
+    from pyspi.calculator import Calculator
+
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((3, 150))
+    X[1] = X[0] + 1e-7 * rng.standard_normal(150)
+    calc = Calculator(dataset=X, dim_order="ps", verbose=False, config="full")
+    key = "coint_aeg_tstat_trend-c_autolag-aic_maxlag-10"
+    calc._spis = {key: calc.spis[key]}
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        calc.compute()
+    assert not [w for w in caught if "colinear" in str(w.message)]
+    A = calc.table[key].to_numpy()
+    assert np.isnan(A[0, 1]) and np.isnan(A[1, 0])
+    refused = {(i, j) for i, j, _ in calc.pair_not_appropriate[key]}
+    assert refused == {("proc-0", "proc-1"), ("proc-1", "proc-0")}
+    assert all("collinear" in why for *_, why in calc.pair_not_appropriate[key])
+    z = calc.dataset.to_numpy(squeeze=True)
+    assert A[0, 2] == coint(z[2], z[0], trend="c", autolag="aic", maxlag=10)[0]
+    assert key not in calc.errors
+
+
 def test_aeg_and_lmfit_agree_on_which_index_is_the_regressor():
     """Both directed regression families regress the column on the row.
 
