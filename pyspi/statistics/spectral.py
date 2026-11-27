@@ -2081,9 +2081,10 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     copy of a series delayed by a lag is refused by neither: its spectral GC
     is infinite in theory, and both methods return a large finite value set
     by the estimator. Every other NaN cell is also not appropriate,
-    with the fraction of its in-band frequencies that are NaN: a cell is
-    NaN when more than ``nan_threshold`` of them are, or when any is and
-    ``ignore_nan`` is False.
+    with the fraction of its in-band frequencies that are non-finite (NaN
+    or +/-Inf, both treated as missing): a cell is NaN when more than
+    ``nan_threshold`` of them are, or when any is and ``ignore_nan`` is
+    False.
 
     With ``method='nonparametric'``, where
     Wilson's factorisation of a pair reaches its iteration cap, the value
@@ -2133,13 +2134,13 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
     statistic : str, optional
         ``'mean'`` or ``'max'`` over the band. Default: ``'mean'``.
     ignore_nan : bool, optional
-        Ignore NaN frequencies in the band statistic; False lets a NaN
-        frequency make the value NaN, and appends ``_ignorenan-False`` to the
-        identifier. Default: True.
+        Ignore non-finite (NaN or +/-Inf) frequencies in the band statistic;
+        False lets one make the value NaN, and appends ``_ignorenan-False``
+        to the identifier. Default: True.
     nan_threshold : float, optional
-        Largest fraction of NaN in-band frequencies a cell may have before it
-        is set to NaN; a value other than 0.5 is appended to the identifier
-        as ``_nanthr-<x>``. Default: 0.5.
+        Largest fraction of non-finite in-band frequencies a cell may have
+        before it is set to NaN; a value other than 0.5 is appended to the
+        identifier as ``_nanthr-<x>``. Default: 0.5.
     time_halfbandwidth_product : float, optional
         Time-halfbandwidth product ``NW`` of the DPSS tapers, at least 1.5,
         for ``method='nonparametric'`` (see ``NonparametricSpectral``); the
@@ -2354,7 +2355,11 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         cached = getattr(data, "spectral_gc", {}).get(self._getkey(), {})
         refused = cached.get("refused", {})
         freq_id = self._band(freq)
+        # A non-finite value (nitime's parametric log ratio is unguarded, so
+        # a zero denominator gives +/-Inf) is missing, like NaN: the
+        # threshold, `ignore_nan` and the reasons below all see it.
         spectra = F[0, freq_id, :, :]
+        spectra = np.where(np.isfinite(spectra), spectra, np.nan)
         M = data.n_processes
         dependent = np.zeros((M, M), dtype=bool)
         for i, j in refused:
@@ -2373,7 +2378,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
         np.fill_diagonal(nan_pct, 0.0)
 
         # A cell that is NaN and not refused for its pair takes its reason
-        # from the NaN frequencies of its spectrum.
+        # from the non-finite frequencies of its spectrum.
         reasons = dict(refused)
         n_band = spectra.shape[0]
         result[nan_pct > self.nan_threshold] = np.nan
@@ -2386,7 +2391,7 @@ class SpectralGrangerCausality(NonparametricSpectralMultivariate, Directed, Unsi
                    else "so the band statistic is undefined")
             reasons[(i, j)] = (
                 f"Spectral GC: {nan_pct[i, j]:.0%} of the {n_band} in-band "
-                f"frequencies of ({i}, {j}) give NaN values, {why}; the "
+                f"frequencies of ({i}, {j}) give non-finite values, {why}; the "
                 f"measure is undefined at those frequencies.")
 
         if reasons:

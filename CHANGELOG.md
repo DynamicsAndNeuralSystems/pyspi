@@ -204,6 +204,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Its default `fmax` was 0.5 whatever `fs` was, so at `fs=100` the default band was 0 to 0.5 Hz; it is now `fs / 2`, as for every other spectral SPI (no change at `fs=1`).
   An unknown `method` raises `ValueError`; any value other than `"nonparametric"` ran the parametric method.
   A cell with more than `nan_threshold` of its in-band frequencies NaN (or any, with `ignore_nan=False`) is not appropriate, with that fraction as the reason; 2.0.2 set it to NaN with a warning.
+  An infinite in-band value (the parametric method's log ratio has no guard against a zero denominator) counts as missing, like NaN, so it can no longer pass through the band statistic as an unlabelled `inf`.
 - **Parametric spectral Granger causality (`sgc_parametric_*`) was fitted on an indefinite autocovariance.**
   The VAR is now fitted on the Yule-Walker autocovariance, which is positive semidefinite, the band uses the frequencies the model is evaluated at, and the automatic order search terminates.
 - **Directed spectral measures used an open frequency band.**
