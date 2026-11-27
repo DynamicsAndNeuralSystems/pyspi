@@ -378,6 +378,11 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   Each series is first shifted to a median of zero, which leaves distance correlation unchanged and keeps the algorithm accurate on data far from zero.
   On z-scored data the values differ from those of the T x T matrices by rounding only, not bit for bit: in tests by at most 2.3e-12 for `dcorr` and `dcorrx`, and 1.3e-10 for `dcorr_biased` on sparse binary series, where the square root enlarges the rounding error of a value near zero.
   Shorter series are unchanged.
+- **`dcorr*`, `dcorrx_*`, `hsic*`, `hhg`, `mgc` and `mgcx_*` use exact distances.**
+  Each series' distance matrix is computed from the differences, `|x_s - x_t|`, not scikit-learn's `|a|^2 + |b|^2 - 2ab` expansion, which hyppo uses.
+  The expansion loses precision to cancellation (about 1e-11 absolute on z-scored data, 5e-6 relative in `dcorr` for unscaled data offset by 1e6) and breaks exact ties between equal distances.
+  **Values change**: on continuous data by rounding only (up to about 5e-11 relative on the test fixtures); on tied data `hhg`, `mgc` and `mgcx_*` change materially (up to 13%, 1.4% and 37% on z-scored Poisson counts), since their ranks now see the true ties.
+  The values equal hyppo's statistics on exact distance matrices (`compute_distance=None`).
 - **`Barycenter` gains `statistic="corr"`**, `2 mean(b^2) / mean_energy - 1`: Pearson's r for the Euclidean barycenter and an alignment-adjusted correlation for the DTW geometries.
   `bary_dtw_corr` and `bary_softdtw_corr` replace the `mean` SPIs, since the barycenter of two zero-mean series has mean close to zero.
 - **Multitaper phase slope index follows Nolte et al. (2008), applies its band, and gains power with the length of the series.**

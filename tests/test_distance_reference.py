@@ -10,6 +10,14 @@ from scipy.special import logsumexp
 from pyspi.data import Data
 
 
+def _exact_distances(v):
+    """Euclidean distances from the differences, sqrt(sum (u - v)^2): the
+    oracle for hyppo's ``compute_distance=None`` path. hyppo's own default
+    uses scikit-learn's expansion, whose rounding breaks exact ties."""
+    v = np.asarray(v, dtype=float).reshape(len(v), -1)
+    return np.sqrt(((v[:, None, :] - v[None, :, :]) ** 2).sum(axis=-1))
+
+
 # --------------------------------------------------------------------------
 # Soft-DTW
 # --------------------------------------------------------------------------
@@ -201,7 +209,8 @@ def test_mgc_matrix_with_cached_parts_is_bit_identical_to_hyppo(monkeypatch,
         for j in range(i + 1, M):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                ref = MGC().statistic(x[i], x[j])
+                ref = MGC(compute_distance=None).statistic(
+                    _exact_distances(x[i]), _exact_distances(x[j]))
             assert A[i, j] == A[j, i] == ref, (i, j)
             assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
 
@@ -251,7 +260,8 @@ def test_mgc_with_cached_parts_at_a_local_optimal_scale_is_bit_identical_to_hypp
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         opt_scale = multiscale_graphcorr(z[0], z[1], reps=0).mgc_dict["opt_scale"]
-        ref = MGC().statistic(z[0], z[1])
+        ref = MGC(compute_distance=None).statistic(
+            _exact_distances(z[0]), _exact_distances(z[1]))
     assert list(opt_scale) != [40, 40]
     spi = distance.MultiscaleGraphCorrelation()
     A = spi.multivariate(data)
@@ -590,7 +600,8 @@ def test_hhg_statistic_is_bit_identical_to_hyppo(monkeypatch, chunk_rows):
         for name, (a, b) in cases.items():
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                ref = HHG().statistic(a, b)
+                ref = HHG(compute_distance=None).statistic(
+                    _exact_distances(a), _exact_distances(b))
             assert distance._hhg_statistic(a, b) == ref, (n, name)
 
 
@@ -662,7 +673,8 @@ def test_hhg_matrix_with_cached_ranks_is_bit_identical_to_hyppo(monkeypatch,
         for j in range(i + 1, 5):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                ref = HHG().statistic(x[i], x[j])
+                ref = HHG(compute_distance=None).statistic(
+                    _exact_distances(x[i]), _exact_distances(x[j]))
             assert A[i, j] == A[j, i] == ref, (i, j)
             assert spi.bivariate(data, i=i, j=j) == ref, (i, j)
 
