@@ -619,12 +619,25 @@ def write_manifest(checkpoint_dir: Path, digest: str, spec: dict) -> None:
     os.replace(tmp, path)
 
 
-def checkpoint_owner_matches(checkpoint_dir: Path, digest: str):
+def _version_changes(old_spec: dict, spec: dict):
+    """``"name old -> new"`` for pyspi and each dependency whose version differs."""
+    old_deps = old_spec.get("dependency_versions") or {}
+    new_deps = spec.get("dependency_versions") or {}
+    pairs = [("pyspi", old_spec.get("pyspi_version"), spec.get("pyspi_version"))]
+    pairs += [(name, old_deps.get(name), new_deps.get(name))
+              for name in sorted(set(old_deps) | set(new_deps))]
+    return [f"{name} {old} -> {new}" for name, old, new in pairs if old != new]
+
+
+def checkpoint_owner_matches(checkpoint_dir: Path, digest: str, spec: dict = None):
     """
     Return (matches, reason). A directory with no manifest is unowned.
 
     A directory that holds results but no manifest is a mismatch: nothing
-    records which run wrote them.
+    records which run wrote them. Given ``spec`` (the resuming run's
+    ``run_spec``), a manifest whose pyspi or dependency versions differ is a
+    mismatch too: a dependency upgrade can change values without a change to
+    `COMPUTATION_VERSION`, and a resumed table would mix the two.
     """
     manifest = read_manifest(checkpoint_dir)
     if manifest is None:
@@ -643,6 +656,11 @@ def checkpoint_owner_matches(checkpoint_dir: Path, digest: str):
                        f"not {COMPUTATION_VERSION!r}")
     if manifest.get("digest") != digest:
         return False, "checkpoint was written by a different run"
+    if spec is not None:
+        changes = _version_changes(manifest.get("spec") or {}, spec)
+        if changes:
+            return False, ("checkpoint was computed with other package versions: "
+                           + ", ".join(changes))
     return True, None
 
 

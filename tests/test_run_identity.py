@@ -316,9 +316,11 @@ def test_run_spec_records_versions(tmp_path):
 
 
 def test_run_digest_ignores_package_versions(monkeypatch):
-    """An upgrade that changes no computed value must not block a resume.
+    """The digest identifies the computation, not the installed packages.
 
     `COMPUTATION_VERSION` is what keys the algorithm; it is hashed separately.
+    A resume compares package versions against the manifest instead
+    (`test_checkpoint_rejects_different_package_versions`).
     """
     from pyspi import calculator
 
@@ -328,3 +330,34 @@ def test_run_digest_ignores_package_versions(monkeypatch):
                         lambda: ("0.0.0", {"numpy": "0.0"}))
     assert calc.run_spec["pyspi_version"] == "0.0.0"
     assert calc.run_digest == before
+
+
+@pytest.mark.parametrize("field, old, named", [
+    ("dependency_versions", {"scipy": "1.11.0"}, "scipy 1.11.0 -> "),
+    ("pyspi_version", "3.0.0rc0", "pyspi 3.0.0rc0 -> "),
+])
+def test_checkpoint_rejects_different_package_versions(tmp_path, field, old, named):
+    """A resume must not mix results computed under two dependency stacks.
+
+    `run_digest` leaves package versions out, so the manifest's recorded
+    versions are compared on resume. The refusal names what changed and leaves
+    the checkpoint and its manifest as they were.
+    """
+    import json
+    from pyspi import _parallel
+
+    dataset = _data(seed=23)
+    _run(dataset, tmp_path)
+    manifest = tmp_path / _parallel.MANIFEST_NAME
+    payload = json.loads(manifest.read_text())
+    if field == "dependency_versions":
+        payload["spec"][field].update(old)
+    else:
+        payload["spec"][field] = old
+    manifest.write_text(json.dumps(payload))
+    before = manifest.read_bytes()
+
+    import re
+    with pytest.raises(ValueError, match=rf"different run.*{re.escape(named)}"):
+        _run(dataset, tmp_path)
+    assert manifest.read_bytes() == before, "the refused run rewrote the manifest"

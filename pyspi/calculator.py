@@ -275,8 +275,10 @@ def warn_partial_cache_buckets(spis):
 
 # Fields of `run_spec` that say where the run came from rather than what it
 # computes, kept out of the content hash `run_digest`: the same config and
-# data digest the same from any location. `COMPUTATION_VERSION` is hashed
-# separately, so an upgrade that changes no computed value still resumes.
+# data digest the same from any location and package versions.
+# `COMPUTATION_VERSION` is hashed separately. A checkpoint resumes only under
+# the pyspi and dependency versions its manifest records
+# (`_parallel.checkpoint_owner_matches`).
 _DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({
     "config", "configfile", "dataset_name",
     "computation_version", "pyspi_version", "dependency_versions",
@@ -1478,7 +1480,8 @@ class Calculator:
         checkpoint_dir : str or path-like or None, optional
             Directory to which each finished SPI is written as
             ``<identifier>.npy``, so an interrupted run can resume. A
-            directory that belongs to a different run raises ``ValueError``.
+            directory that belongs to a different run, or was written under
+            other pyspi or dependency versions, raises ``ValueError``.
             Default: None.
         resume : bool, optional
             Load and skip the SPIs already in ``checkpoint_dir``.
@@ -1513,7 +1516,8 @@ class Calculator:
         if cp_dir is not None:
             cp_dir.mkdir(parents=True, exist_ok=True)
             digest = self.run_digest
-            owned, reason = _parallel.checkpoint_owner_matches(cp_dir, digest)
+            owned, reason = _parallel.checkpoint_owner_matches(
+                cp_dir, digest, self.run_spec)
             if not owned:
                 # Refuse another run's results, and do not delete them.
                 self._resume_rejected = True
