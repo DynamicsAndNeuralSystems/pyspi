@@ -94,14 +94,14 @@ def _constant_processes(data, detrended):
     return [int(i) for i in finite[flat.any(axis=1)]]
 
 
-def _refuse_non_finite(data, name):
+def _refuse_non_finite(data, name, first_index=0):
     """Raise ``ValueError`` naming the processes of ``data`` with a NaN or inf."""
     # Inf as well as NaN: with zscore=False an Inf would reach the SPIs.
     bad = ~np.isfinite(data)
     if bad.any():
         raise ValueError(
             f"Dataset {name} contains non-finite values (NaN/inf) in "
-            f"processes: {np.unique(np.where(bad)[0])}."
+            f"processes: {np.unique(np.where(bad)[0]) + first_index}."
         )
 
 
@@ -601,8 +601,11 @@ class Data:
 
         # Checked and preprocessed as set_data would.
         block = np.reshape(np.asarray(proc, dtype=float), (1, self.n_observations, 1))
+        dataset_name = getattr(self, "_name", None)
+        _refuse_non_finite(block, dataset_name, first_index=self.n_processes)
         self._refuse_constant(block, [name], first_index=self.n_processes)
         block = self._apply_preprocessing(block)
+        _refuse_non_finite(block, dataset_name, first_index=self.n_processes)
         appended = np.append(self._data, block, axis=0)
         self._set_internal(appended)
         self._reset_data_size()

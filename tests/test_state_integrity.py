@@ -172,6 +172,30 @@ def test_non_finite_input_rejected_without_zscore():
         Data(data=arr, dim_order="ps", zscore=False)
 
 
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("zscore", [True, False])
+def test_add_process_rejects_non_finite_input(bad, zscore):
+    x, y = _mts(m=2)
+    y[5] = bad
+    data = Data(data=x, dim_order="s", zscore=zscore, procnames=["a"])
+    with pytest.raises(ValueError, match=r"non-finite values \(NaN/inf\) in processes: \[1\]"):
+        data.add_process(y)
+    assert data.n_processes == 1
+    assert data.procnames == ["a"]
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf])
+def test_raw_array_apis_reject_non_finite_second_process(bad):
+    from pyspi.statistics.basic import SpearmanR
+
+    x, y = _mts(m=2)
+    y[5] = bad
+    with pytest.raises(ValueError, match="non-finite"):
+        SpearmanR().bivariate(x, y)
+    with pytest.raises(ValueError, match="non-finite"):
+        Covariance().multivariate([x, y])
+
+
 def test_compute_releases_statistic_caches(tmp_path):
     """`compute()` leaves no statistic cache on the dataset.
 
