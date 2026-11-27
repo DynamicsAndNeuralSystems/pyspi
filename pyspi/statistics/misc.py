@@ -60,6 +60,34 @@ def _lagged_difference_condition(endog, det_order, k_ar_diff):
     return np.linalg.cond(z)
 
 
+# Engle-Granger: a cointegrating regression whose residual sum of squares is
+# at most this fraction of the regressed series' (an RMS at most 1e-12 of its
+# RMS) fits exactly to rounding level.
+_AEG_EXACT_FIT = 1e-24
+
+
+def _aeg_fits_exactly(y0, y1, trend):
+    """
+    Whether statsmodels' ``coint`` regression of ``y0`` on ``y1`` fits exactly.
+
+    The regression is that of ``coint``: ``y0`` on ``y1`` and the trend terms.
+    It fits exactly when its residual sum of squares is at most
+    ``_AEG_EXACT_FIT`` times the sum of squares of ``y0``, so the residual is
+    rounding error in the stored values. The trend terms span the same space
+    as statsmodels' ``1, t, t**2``, centred and scaled to [-1, 1] so that the
+    least-squares fit is well conditioned.
+    """
+    if trend == "n":
+        X, b = y1[:, None], y0
+    else:
+        u = np.linspace(-1.0, 1.0, y0.size)
+        X = np.column_stack([y1 - y1.mean()]
+                            + [u ** k for k in range(len(trend))])
+        b = y0 - y0.mean()
+    resid = b - X @ np.linalg.lstsq(X, b, rcond=None)[0]
+    return resid @ resid <= _AEG_EXACT_FIT * (y0 @ y0)
+
+
 def _johansen(endog, det_order, k_ar_diff, pair):
     """
     ``{"max_eig_stat", "trace_stat"}`` of the pair, or ``{"refused": reason}``.
@@ -133,9 +161,14 @@ class Cointegration(Directed, Unsigned):
     as for ``lmfit``) and is the unit-root t-statistic of the residuals. It is
     not symmetric, and each orientation is reported as computed (directed).
     It is unsigned, a strength on an inverted scale: more negative is
-    stronger evidence of cointegration. When the regression fits (almost)
-    exactly, statsmodels returns a t-statistic of ``-inf``; that orientation
-    raises ``NotAppropriate`` instead, with the reason.
+    stronger evidence of cointegration. statsmodels declines to compute the
+    statistic when the regression's R^2 is within ``100 sqrt(eps)`` of 1
+    (near-collinear series): that orientation raises ``RuntimeError``, which
+    the Calculator records as an error for that pair. Where the regression
+    fits exactly to rounding level (its residual RMS is at most 1e-12 of
+    that of the regressed process), the residual is rounding error and has
+    no unit-root test, so that orientation raises ``NotAppropriate``
+    instead, with the reason.
 
     Johansen's test inverts two residual covariances: of the differences and
     of the lagged levels, each regressed on the lagged differences. Neither
@@ -264,7 +297,7 @@ class Cointegration(Directed, Unsigned):
                 # statsmodels regresses its first argument on its second.
                 # When that regression's R^2 is within 100 sqrt(eps) of 1 it
                 # warns (CollinearityWarning) and returns a t-statistic of
-                # -inf, which is no test of the residual: refuse the pair.
+                # -inf instead of computing it.
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", CollinearityWarning)
                     stats = stattools.coint(
@@ -275,15 +308,23 @@ class Cointegration(Directed, Unsigned):
                         trend=self._trend,
                     )
 
-                if np.isfinite(stats[0]):
+                if not np.isneginf(stats[0]):
                     ci = {"tstat": stats[0]}
-                else:
+                elif _aeg_fits_exactly(z[j], z[i], self._trend):
                     ci = {"refused": (
-                        f"Engle-Granger cointegration: processes {i} and {j} "
-                        f"are (almost) perfectly collinear: the regression of "
-                        f"{j} on {i} fits with R^2 within 100 sqrt(eps) of 1, "
-                        f"so statsmodels' t-statistic is {stats[0]} and the "
-                        f"unit-root test of its residual is not defined.")}
+                        f"Engle-Granger cointegration: the regression of "
+                        f"process {j} on process {i} fits exactly to rounding "
+                        f"level (its residual RMS is at most 1e-12 of process "
+                        f"{j}'s), so the residual is rounding error and has "
+                        f"no unit-root test.")}
+                else:
+                    ci = {"error": (
+                        f"statsmodels declines to compute the Engle-Granger "
+                        f"statistic when the regression's R^2 is within "
+                        f"100 sqrt(eps) of 1 (near-collinear series), as it "
+                        f"is for the regression of process {j} on process "
+                        f"{i}. This is a limitation of the library; the "
+                        f"statistic was not computed.")}
             else:
                 # The VECM lags the T - 1 differences k_ar_diff times.
                 T = z.shape[-1]
@@ -314,6 +355,8 @@ class Cointegration(Directed, Unsigned):
         ci = self._from_cache(data, i, j)
         if "refused" in ci:
             raise NotAppropriate(ci["refused"])
+        if "error" in ci:
+            raise RuntimeError(ci["error"])
         return ci[self._statistic]
 
 
