@@ -8,6 +8,8 @@ import pytest
 
 from pyspi.data import Data
 
+from unchecked_data import unchecked_data
+
 
 def _coupled_logistic(T, beta_xy=0.0, beta_yx=0.1, rx=3.8, ry=3.5, burn=300):
     """The coupled logistic maps of Sugihara et al. (2012), SOM.
@@ -194,6 +196,28 @@ def test_ccm_cross_map_skill_equals_pyedm(E):
 # Additive noise model
 # ---------------------------------------------------------------------------
 
+def _anm_by_sklearn(z):
+    """``anm`` for every pair of ``z`` by a per-pair scikit-learn fit, on the
+    series as given."""
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from sklearn.gaussian_process.kernels import ConstantKernel, RBF
+
+    from pyspi.lib.pairwise_causal import normalized_hsic
+
+    M = len(z)
+    expected = np.full((M, M), np.nan)
+    for i in range(M):
+        for j in range(M):
+            if i == j:
+                continue
+            kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(
+                1.0, length_scale_bounds="fixed")
+            gp = GaussianProcessRegressor(kernel=kernel, optimizer=None)
+            y_predict = gp.fit(z[i], z[j]).predict(z[i]).reshape(-1, 1)
+            expected[i, j] = normalized_hsic(y_predict - z[j], z[i])
+    return expected
+
+
 @pytest.mark.parametrize("T", [150, 260])
 def test_anm_shared_factorisation_is_bit_identical_to_sklearn(T):
     """ANM factorises each cause's GP kernel once and reuses it per effect.
@@ -205,10 +229,6 @@ def test_anm_shared_factorisation_is_bit_identical_to_sklearn(T):
     short of the same operations in the same order would show up here as
     drift. T=260 also engages the HSIC's 200-point subsampling.
     """
-    from sklearn.gaussian_process import GaussianProcessRegressor
-    from sklearn.gaussian_process.kernels import ConstantKernel, RBF
-
-    from pyspi.lib.pairwise_causal import normalized_hsic
     from pyspi.statistics.causal import AdditiveNoiseModel
 
     rng = np.random.default_rng(T)
@@ -216,23 +236,75 @@ def test_anm_shared_factorisation_is_bit_identical_to_sklearn(T):
     Z = np.vstack([x, np.tanh(2 * x) + 0.3 * rng.standard_normal(T),
                    rng.standard_normal(T).cumsum(), rng.standard_normal(T)])
     data = Data(Z, dim_order="ps")
-    z = data.to_numpy()
-
-    expected = np.full((4, 4), np.nan)
-    for i in range(4):
-        for j in range(4):
-            if i == j:
-                continue
-            kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(
-                1.0, length_scale_bounds="fixed")
-            gp = GaussianProcessRegressor(kernel=kernel, optimizer=None)
-            y_predict = gp.fit(z[i], z[j]).predict(z[i]).reshape(-1, 1)
-            expected[i, j] = normalized_hsic(y_predict - z[j], z[i])
+    expected = _anm_by_sklearn(data.to_numpy())
 
     got = np.asarray(AdditiveNoiseModel().multivariate(data), float)
     assert np.array_equal(got, expected, equal_nan=True), np.nanmax(
         np.abs(got - expected))
     assert AdditiveNoiseModel().bivariate(data, i=2, j=1) == expected[2, 1]
+
+
+def test_anm_fits_z_scored_integer_data_as_they_are():
+    """With the default ``zscore=True``, ANM fits the series exactly as `Data`
+    z-scored them, so it is the scikit-learn fit on them, bit for bit.
+
+    Integer-valued series with ties make the kernel matrix most
+    ill-conditioned: z-scoring these series a second time would move ``anm``
+    by up to 7% (four levels) and 1% (counts and a rounded random walk).
+    """
+    from pyspi.statistics.causal import AdditiveNoiseModel
+
+    four_levels = np.random.default_rng(0).integers(0, 4, (3, 256))
+    rng = np.random.default_rng(0)
+    counts = np.vstack([rng.poisson(3, 150),
+                        np.round(rng.standard_normal(150).cumsum()),
+                        rng.integers(0, 4, 150)])
+    for Z in (four_levels, counts):
+        data = Data(Z.astype(float), dim_order="ps")
+        expected = _anm_by_sklearn(data.to_numpy())
+        got = np.asarray(AdditiveNoiseModel().multivariate(data), float)
+        assert np.array_equal(got, expected, equal_nan=True), np.nanmax(
+            np.abs(got - expected))
+
+
+def test_anm_does_not_depend_on_the_units_of_either_series():
+    """With ``zscore=False``, rescaling or shifting the cause or the effect
+    leaves ``anm`` unchanged (to the rounding the ill-conditioned kernel
+    allows); the fixed RBF length scale applies to the standardised cause."""
+    from pyspi.statistics.causal import AdditiveNoiseModel
+
+    rng = np.random.default_rng(0)
+    x = rng.uniform(-2, 2, 200)
+    y = x ** 3 + rng.uniform(-1, 1, 200)
+    ref = AdditiveNoiseModel().multivariate(
+        Data(np.vstack([x, y]), dim_order="ps", zscore=False))
+    assert ref[0, 1] < ref[1, 0]   # the true direction, x -> y
+    for a, b in ((1e3, 1.0), (1e-3, 1.0), (1.0, 1e3), (1e3, 1e-2)):
+        A = AdditiveNoiseModel().multivariate(
+            Data(np.vstack([a * x + 5e3, b * y - 7.0]), dim_order="ps",
+                 zscore=False))
+        np.testing.assert_allclose(A, ref, rtol=1e-3, equal_nan=True)
+
+
+@pytest.mark.parametrize("zscore", [False, True])
+@pytest.mark.parametrize("bad", [np.nan, np.inf])
+def test_anm_is_nan_for_a_pair_with_a_nan_or_inf(bad, zscore):
+    """A process with a NaN or Inf has NaN pairs in both directions, and the
+    other pairs keep their values. `Data` refuses such input, so the test
+    builds it unchecked."""
+    from pyspi.statistics.causal import AdditiveNoiseModel
+
+    Z = np.random.default_rng(0).standard_normal((3, 100))
+    ref = unchecked_data(Z)
+    Z[1, 10] = bad
+    data = unchecked_data(Z)
+    ref.zscore = data.zscore = zscore
+    A = np.asarray(AdditiveNoiseModel().multivariate(data), float)
+    expected = np.asarray(AdditiveNoiseModel().multivariate(ref), float)
+    expected[1, :] = expected[:, 1] = np.nan
+    assert np.array_equal(A, expected, equal_nan=True)
+    assert np.isnan(AdditiveNoiseModel().bivariate(data, i=0, j=1))
+    assert np.isnan(AdditiveNoiseModel().bivariate(data, i=1, j=2))
 
 
 # ---------------------------------------------------------------------------

@@ -422,6 +422,29 @@ def test_parallel_run_leaves_the_parent_environment_alone(monkeypatch):
     assert not calc.errors
 
 
+@pytest.mark.parametrize("zscore", [True, False])
+def test_workers_know_whether_the_data_were_z_scored(zscore, tmp_path):
+    """Workers read the parent's preprocessed series from shared memory, and
+    ``anm`` z-scores only data that were not z-scored, so a worker has to
+    know which it holds. On these four-level series a second z-scoring would
+    move ``anm`` by up to 7%."""
+    from pyspi.data import Data
+
+    config = tmp_path / "anm.yaml"
+    config.write_text(".statistics.causal:\n"
+                      "  AdditiveNoiseModel:\n    labels: [x]\n")
+    Z = np.random.default_rng(0).integers(0, 4, (3, 256)).astype(float)
+    tables = []
+    for kwargs in ({"n_jobs": 1}, {"n_jobs": 2, "mp_context": "spawn"}):
+        calc = Calculator(dataset=Data(Z, dim_order="ps", zscore=zscore),
+                          config=str(config), verbose=False)
+        calc.compute(progress=False, **kwargs)
+        assert not calc.errors, calc.errors
+        tables.append(calc.table)
+    changed = table_differences(tables[1], tables[0], REPEAT_TOLERANCES)
+    assert not changed, "\n".join(changed)
+
+
 
 @pytest.mark.slow
 def test_p90_is_identical_for_any_worker_count_repeat_and_resume(tmp_path):

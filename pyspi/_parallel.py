@@ -88,18 +88,20 @@ def refuse_start_while_bootstrapping(mp_context) -> None:
 _WORKER_STATE: dict = {}
 
 
-def _attach_data(shm_name, shape, dtype_str, procnames, name):
+def _attach_data(shm_name, shape, dtype_str, procnames, name, zscore=False):
     """
     Build a Data object that views an existing shared-memory block.
 
     The shared array is the parent's already-normalised/detrended ``_dataset._data``,
     so we bypass Data.__init__ to avoid re-applying those transforms.
+    ``zscore`` is the parent dataset's flag, carried over.
     """
     from pyspi.data import Data
 
     shared = shm.SharedMemory(name=shm_name)
     arr = np.ndarray(shape, dtype=np.dtype(dtype_str), buffer=shared.buf)
-    data = Data._from_prepared_array(arr, procnames=procnames, name=name)
+    data = Data._from_prepared_array(arr, procnames=procnames, name=name,
+                                     zscore=zscore)
     return data, shared
 
 
@@ -255,7 +257,7 @@ def _pin_worker_thread_pools():
 
 
 def _worker_init(shm_name, shape, dtype_str, procnames, ds_name, configfile, progress_q,
-                 config_bytes=None):
+                 config_bytes=None, zscore=False):
     """
     ProcessPoolExecutor initializer. Runs once per worker.
 
@@ -263,7 +265,8 @@ def _worker_init(shm_name, shape, dtype_str, procnames, ds_name, configfile, pro
     ``__init__`` that aren't picklable, so we can't ship instances across the
     process boundary).
     """
-    data, shared = _attach_data(shm_name, shape, dtype_str, procnames, ds_name)
+    data, shared = _attach_data(shm_name, shape, dtype_str, procnames, ds_name,
+                                zscore=zscore)
 
     from pyspi.calculator import load_spis_from_yaml
     # Load from the parent's snapshot, not the path: the file on disk may have
@@ -841,7 +844,7 @@ def run_parallel(
         initargs = (
             shared.name, arr.shape, str(arr.dtype),
             list(dataset.procnames), getattr(dataset, "_name", None),
-            configfile, progress_q, config_bytes,
+            configfile, progress_q, config_bytes, bool(dataset.zscore),
         )
 
         def run_pool(todo, workers):

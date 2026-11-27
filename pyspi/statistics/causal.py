@@ -7,6 +7,7 @@ import pandas as pd
 import pyEDM
 from scipy.linalg import cho_solve, cholesky
 from scipy.spatial import KDTree
+from scipy.stats import zscore
 from sklearn.gaussian_process.kernels import ConstantKernel, RBF
 
 from pyspi.base import (
@@ -27,7 +28,23 @@ _ANM_KERNEL = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(
 _ANM_ALPHA = 1e-10
 
 
-def _anm_scores(x, ys):
+def _anm_series(v, standardise):
+    """
+    ``v`` as the GP fit uses it, or None if it has no defined score.
+
+    None for a series that is constant or has a NaN or Inf. With
+    ``standardise``, ``v`` is z-scored (ddof=1, as `Data` z-scores), and is
+    None if that is not finite.
+    """
+    with np.errstate(over="ignore", invalid="ignore"):
+        if not np.all(np.isfinite(v)) or np.ptp(v) == 0:
+            return None
+        if standardise:
+            v = zscore(v, axis=0, ddof=1)
+    return v if np.all(np.isfinite(v)) else None
+
+
+def _anm_scores(x, ys, standardise):
     """
     ``normalized_hsic(residual, x)`` for the GP regression of each y on x.
 
@@ -36,9 +53,18 @@ def _anm_scores(x, ys):
     inputs (Rasmussen & Williams 2006, Alg. 2.1), computed with the same
     operations as scikit-learn. The kernel matrix and its Cholesky factor
     depend on the cause x alone, so they are built once and shared by every
-    effect. A pair with a constant cause or effect is NaN.
+    effect. A pair whose cause or effect is constant, or has a NaN or Inf, is
+    NaN.
+
+    With ``standardise``, x and each y are z-scored (ddof=1) before the fit,
+    for data that `Data` has not z-scored. The kernel's length scale is fixed
+    at 1, so the fit, and the score, would otherwise depend on the units of
+    the cause; and the kernel matrix is ill-conditioned, so an effect far
+    from zero would swamp the residual with rounding error. Z-scored data
+    are used as they are.
     """
-    if np.ptp(x) == 0:
+    x = _anm_series(x, standardise)
+    if x is None:
         return [np.nan] * len(ys)
     K = _ANM_KERNEL(x)
     K[np.diag_indices_from(K)] += _ANM_ALPHA
@@ -46,7 +72,8 @@ def _anm_scores(x, ys):
     K_trans = _ANM_KERNEL(x, x)
     scores = []
     for y in ys:
-        if np.ptp(y) == 0:
+        y = _anm_series(y, standardise)
+        if y is None:
             scores.append(np.nan)
             continue
         y_predict = K_trans @ cho_solve((L, True), y, check_finite=False)
@@ -67,16 +94,18 @@ class AdditiveNoiseModel(Directed, Unsigned):
     This is the ``anm_score`` of the Causal Discovery Toolbox (cdt) [3]_,
     reimplemented in `pyspi.lib.pairwise_causal`. The regression is the
     posterior mean of a Gaussian process with a fixed (untuned)
-    ``ConstantKernel(1) * RBF(1)`` kernel and ``alpha = 1e-10``. HSIC is
-    cdt's biased statistic ``tr(K H L H) / m`` with Gaussian kernels of
-    median-heuristic width on the standardised variables, on at most 200
-    evenly spaced samples. cdt's ``predict_proba`` reports the difference
-    between the two directions' scores; here each direction is its own
-    entry.
+    ``ConstantKernel(1) * RBF(1)`` kernel and ``alpha = 1e-10``, on
+    standardised series: data that `Data` has not z-scored
+    (``zscore=False``) are z-scored here, as cdt also does, so the value does
+    not depend on the units of either series. HSIC is cdt's biased statistic
+    ``tr(K H L H) / m`` with Gaussian kernels of median-heuristic width on
+    the standardised variables, on at most 200 evenly spaced samples. cdt's
+    ``predict_proba`` reports the difference between the two directions'
+    scores; here each direction is its own entry.
 
     Directed and unsigned. Lower is stronger evidence, as for ``cds`` and
     ``reci``; for ``ccm`` and ``igci`` higher means more. NaN for a pair
-    involving a constant series.
+    involving a constant series, or one with a NaN or Inf.
 
     References
     ----------
@@ -100,7 +129,7 @@ class AdditiveNoiseModel(Directed, Unsigned):
     def bivariate(self, data, i=None, j=None):
         """HSIC between ``x_i`` and the residual of a GP fit of ``x_j`` on ``x_i``."""
         z = data.to_numpy()
-        return _anm_scores(z[i], [z[j]])[0]
+        return _anm_scores(z[i], [z[j]], standardise=not data.zscore)[0]
 
     @parse_multivariate
     def multivariate(self, data):
@@ -110,7 +139,8 @@ class AdditiveNoiseModel(Directed, Unsigned):
         A = np.full((M, M), np.nan)
         for i in range(M):
             effects = [j for j in range(M) if j != i]
-            A[i, effects] = _anm_scores(z[i], [z[j] for j in effects])
+            A[i, effects] = _anm_scores(
+                z[i], [z[j] for j in effects], standardise=not data.zscore)
         return A
 
 
