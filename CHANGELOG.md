@@ -11,7 +11,8 @@ The Java/JIDT dependency is gone, the `Calculator` API is simplified, and severa
 - Python **>= 3.11** (2.0.2: >= 3.8), numpy **>= 2** (2.0.2: `<2`), scikit-learn **>= 1.8**, pyEDM **>= 2.5** (2.0.2: `==1.15.2.0`), mne **>= 1.6** (2.0.2: `==0.23.0`), spectral-connectivity **>= 2.0** (2.0.2: unpinned).
   No Java, `jpype`, `cdt` or `torch`.
   See [Dependencies](#dependencies).
-- The default `full` set goes from **285 SPIs (2.0.2) to 231**: 74 added, 128 removed, 22 renamed (identifier only), 135 unchanged by name.
+- **`Calculator()` and `python -m pyspi compute` default to `config="benchmarked_p90"` (207 SPIs), not every SPI**; pass `config="full"` for all 231.
+- The `full` set goes from **285 SPIs (2.0.2) to 231**: 74 added, 128 removed, 22 renamed (identifier only), 135 unchanged by name.
   The exact lists are in [SPI set changes](#spi-set-changes) and [`docs/spi_changes_2.0.2_to_3.0.0.md`](docs/spi_changes_2.0.2_to_3.0.0.md).
   A change of name or value means results saved under 2.x cannot be joined to 3.0 by identifier without that table.
 - The old `Calculator(subset=, configfile=, normalise=)` spellings still work, with a `DeprecationWarning`, until 4.0.
@@ -45,6 +46,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 
 **Breaking, with no shim:**
 
+- **The default config is `benchmarked_p90`.**
+  `Calculator()` with no `config` (and the CLI with no `--config`) computes the 207 SPIs of `benchmarked_p90`, a subset of `full` that leaves out 24 SPIs placed by measured cost (see "Choosing an SPI set" in the README), among them `bary_softdtw_corr` and `gpfit_RBF`, which together cost more than the other 229; 2.0.2 computed every SPI. Pass `config="full"` to keep the old set.
 - **Every `Calculator` argument after `dataset` is keyword-only.**
   2.x's positional order (`dataset, name, labels, subset, configfile, detrend, normalise`) does not match 3.0's arguments, so a positional call such as `Calculator(X, "name", None, "fast")` raises Python's `TypeError` for too many positional arguments; pass `name=`, `labels=`, `config=`, `detrend=` and `zscore=` as keywords.
   `Data` and `CalculatorFrame` keep their 2.x positional order.
@@ -590,6 +593,7 @@ Definitions the corrected measures are checked against:
 | 2.x | 3.0 |
 |:----|:----|
 | `Calculator(subset="all")` | `Calculator(config="full")` (old form still works, with a `DeprecationWarning`, until 4.0) |
+| `Calculator()` (every SPI) | `Calculator(config="full")`; with no `config`, 3.0 computes `benchmarked_p90` |
 | `Calculator(subset="fast")` (also `fabfour`, `sonnet`) | `Calculator(config="fast")` (other names unchanged) |
 | `Calculator(configfile="my.yaml")` | `Calculator(config="my.yaml")` (deprecated shim as above) |
 | `Calculator(normalise=False)` | `Calculator(zscore=False)` (deprecated shim; also on `Data` and `CalculatorFrame`) |

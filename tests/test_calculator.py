@@ -15,8 +15,15 @@ def test_whether_calculator_instantiates():
     calc = Calculator()
     assert isinstance(calc, Calculator), "Calculator failed to instantiate."
 
+
+def test_default_config_is_benchmarked_p90():
+    """With no config, a Calculator computes the benchmarked default run set."""
+    default = Calculator(verbose=False)
+    assert set(default.spis) == set(Calculator(config="benchmarked_p90", verbose=False).spis)
+    assert default.run_spec["config"] == "benchmarked_p90"
+
 def test_whether_calculator_computes():
-    """The default config must run clean, not merely run.
+    """The full config must run clean, not merely run.
 
     `compute()` catches per-SPI exceptions into `calc.errors` and carries on, so
     this test checks for failed and entirely-NaN columns. Partial NaN is fine
@@ -43,11 +50,11 @@ def test_whether_calculator_computes():
         data[:2, t] = A @ data[:2, t - 1] + rng.standard_normal(2)
     data[2] = 0.3 * rng.standard_normal(T)
     data[2, lag:] += data[0, :-lag]
-    calc = Calculator(dataset=data)
+    calc = Calculator(dataset=data, config="full")
     calc.compute()
 
     assert not calc.errors, (
-        f"{len(calc.errors)} SPI(s) raised on the default config:\n  "
+        f"{len(calc.errors)} SPI(s) raised on the full config:\n  "
         + "\n  ".join(f"{k}: {v}" for k, v in sorted(calc.errors.items()))
     )
     assert not calc.not_appropriate, calc.not_appropriate

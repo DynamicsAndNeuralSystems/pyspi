@@ -244,7 +244,7 @@ def current_tables():
     def get(dataset_name):
         if dataset_name not in cache:
             np.random.seed(SEED)
-            calc = Calculator(dataset=_load_fixture(dataset_name))
+            calc = Calculator(dataset=_load_fixture(dataset_name), config="full")
             calc.compute()
             cache[dataset_name] = (
                 {spi: calc.table[spi].to_numpy() for spi in calc.spis},

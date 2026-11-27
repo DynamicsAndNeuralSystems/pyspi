@@ -76,7 +76,7 @@ from pyspi.calculator import Calculator
 
 dataset = np.random.randn(5, 500)      # 5 processes, 500 observations
 calc = Calculator(dataset=dataset)     # z-scores each process by default
-calc.compute()                         # compute every SPI
+calc.compute()                         # the default set, benchmarked_p90 (207 SPIs)
 
 calc.table                             # rows = processes, columns = (SPI, process)
 calc.table["cov_EmpiricalCovariance"]  # one SPI's 5x5 matrix
@@ -137,16 +137,17 @@ Walkthrough tutorials in the online documentation, written for 2.x:
 ## Choosing an SPI set
 
 Computing all 231 SPIs is expensive, and cost grows steeply in both the number
-of processes *M* and the series length *T*. `config=` takes either a bundled
-name or a path to your own YAML:
+of processes *M* and the series length *T*, so the default is
+`benchmarked_p90`, about the cheapest 90% of them. `config=` takes either a
+bundled name or a path to your own YAML:
 
 | `config=` | SPIs | Use when |
 |:----------|-----:|:---------|
-| `"full"` (default) | 231 | You want everything and can afford it. |
+| `"full"` | 231 | You want everything and can afford it. |
 | `"fast"` | 138 | General use; drops the slowest SPIs. |
 | `"benchmarked_p99"` | 229 | Everything except `bary_softdtw_corr` and `gpfit_RBF`, which cost more than the other 229 together. |
 | `"benchmarked_p95"` | 213 | p90 plus costlier settings of its methods (`ccm_E-10`, `dcorrx_maxlag-10`, `cce_kozachenko`, Itakura soft-DTW). |
-| `"benchmarked_p90"` | 207 | Large batches. |
+| `"benchmarked_p90"` (default) | 207 | The default; large batches. |
 | `"benchmarked_p80"` | 185 | Cost-constrained sweeps. |
 | `"sonnet"` | 14 | One representative SPI per module (M01-M14); M07 has no bundled SPI, so M14 has two. |
 | `"fabfour"` | 4 | Smoke tests and quick sanity checks. |

@@ -8,9 +8,9 @@
         --checkpoint-dir results/
 
 The data file holds one row per process; pass ``--dim-order sp`` for one
-column per process. If ``--config`` is omitted, the bundled ``full`` config
-is used. If ``--output`` is omitted, the result table is written next to the
-data file as ``<data-stem>.spi.npz``. The format follows the extension:
+column per process. If ``--config`` is omitted, the bundled
+``benchmarked_p90`` config is used. If ``--output`` is omitted, the result
+table is written next to the data file as ``<data-stem>.spi.npz``. The format follows the extension:
 ``.npz`` (round-trips via ``pyspi.load_table``) or ``.csv`` (human-readable,
 one-way).
 """
@@ -51,8 +51,8 @@ def main(argv=None) -> int:
                     help="Layout of the data: ps = one row per process, sp = one "
                          "column per process. If omitted, ps is read and a warning "
                          "is given when that makes more processes than observations.")
-    cp.add_argument("--config", default="full",
-                    help="Bundled config name or path to your own YAML (default: full). "
+    cp.add_argument("--config", default="benchmarked_p90",
+                    help="Bundled config name or path to your own YAML (default: benchmarked_p90). "
                          "Bundled: " + ", ".join(bundled_configs()) + ".")
     cp.add_argument("--output", type=Path, default=None,
                     help="Where to write results; format follows the extension "

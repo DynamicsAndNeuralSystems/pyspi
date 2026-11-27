@@ -864,8 +864,8 @@ class Calculator:
         Default: None.
     config : str or path-like or None, optional
         Which SPIs to compute: the name of a bundled config or the path of a
-        YAML file. Default: None, which means ``"full"``. The bundled configs
-        are:
+        YAML file. Default: None, which means ``"benchmarked_p90"``. The
+        bundled configs are:
 
         - ``"full"``: every SPI.
         - ``"fast"``: all but the slowest SPIs.

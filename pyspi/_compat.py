@@ -29,9 +29,9 @@ def resolve_zscore(zscore, normalise, stacklevel=2):
 
 
 def resolve_config_arg(config, subset, configfile, stacklevel=2):
-    """Return the effective ``config`` (default "full") given legacy ``subset``/``configfile``."""
+    """Return the effective ``config`` (default "benchmarked_p90") given legacy ``subset``/``configfile``."""
     if subset is None and configfile is None:
-        return "full" if config is None else config
+        return "benchmarked_p90" if config is None else config
     if config is not None:
         raise TypeError(
             "Pass either 'config' or the deprecated 'subset'/'configfile', not both."
