@@ -100,7 +100,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   `Data` now raises `ValueError` naming each constant process, including one that is exactly linear when `detrend=True`, whatever `zscore` is.
   `python -m pyspi compute` prints such input errors and exits 1, without a traceback.
 - **`CalculatorFrame.compute()` accepted no arguments**; it now forwards to `Calculator.compute`.
-  With `checkpoint_dir=d` each calculator checkpoints to its own subdirectory, `d/0`, `d/1`, ... by position in the frame, so a frame of several datasets checkpoints and resumes; one shared directory refused the second dataset as a different run. A frame's checkpoints written directly in `d` by an earlier 3.0 release candidate are not resumed.
+  With `checkpoint_dir=d` each calculator checkpoints to its own subdirectory, `d/0`, `d/1`, ... by position in the frame, so a frame of several datasets checkpoints and resumes; one shared directory refused the second dataset as a different run.
+  A frame's checkpoints written directly in `d` by an earlier 3.0 release candidate are not resumed.
 - **`CorrelationFrame` reported invalid p-values.**
   It used each time series' length as the F-test sample size, but the observations are edges, and edges sharing a node are dependent.
   `get_pvalues()`, `compute_significant_values()` and `get_average_correlation(remove_insig=True)` now raise, directing users to a network-preserving permutation (QAP) analysis.
