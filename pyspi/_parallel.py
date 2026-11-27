@@ -27,6 +27,7 @@ from __future__ import annotations
 import multiprocessing as mp
 import multiprocessing.shared_memory as shm
 import concurrent.futures as cf
+from concurrent.futures.process import BrokenProcessPool
 import os
 import queue as _queue
 import sys
@@ -354,6 +355,9 @@ NO_FINITE_VALUES = "ValueError: SPI returned no finite off-diagonal values"
 # computation that raised; any other error means the computation failed, so
 # its cells are labelled ERROR.
 _VALUE_ERRORS = (NO_FINITE_VALUES,)
+
+# Worker pools that may break in one run before recovery stops.
+_MAX_BROKEN_POOLS = 3
 
 
 def describes_values(msg) -> bool:
@@ -861,7 +865,8 @@ def run_parallel(
             with cf.ProcessPoolExecutor(max_workers=workers, mp_context=ctx,
                                         initializer=_worker_init,
                                         initargs=initargs) as ex:
-                pending = {ex.submit(_run_task, task, cp_str) for task in todo}
+                pending = {ex.submit(_run_task, task, cp_str): task
+                           for task in todo}
                 while pending:
                     drain()
                     # Harvest finished futures (source of truth for results).
@@ -870,18 +875,28 @@ def run_parallel(
                         try:
                             for key, res in fut.result():
                                 results[key] = res
-                        except Exception as exc:  # worker died (segfault/OOM)
-                            # The pool is broken: every pending future fails.
+                        except BrokenProcessPool as exc:
+                            # A worker died (segfault/OOM): the pool is
+                            # broken and every pending future fails.
                             error = error or exc
-                    pending -= done
+                        except Exception as exc:
+                            # The task raised in a live worker (e.g. a
+                            # checkpoint write failed): the pool is intact,
+                            # and running the task again would fail again.
+                            for key in pending[fut]:
+                                results.setdefault(key, failed(
+                                    f"worker failed: "
+                                    f"{type(exc).__name__}: {exc}"))
+                    for fut in done:
+                        del pending[fut]
                     if pending:
                         time.sleep(0.05)
             drain()
             return error, started, finished
 
-        def died(key, exc):
+        def failed(message):
             return SPIResult(np.full((M, M), np.nan), failed_quality(M),
-                             f"worker died: {exc}", [], [], 0.0)
+                             message, [], [], 0.0)
 
         # A dead worker breaks the whole pool, failing every task not yet
         # returned, so the SPIs it took with it are recovered: those that
@@ -892,12 +907,17 @@ def run_parallel(
         # n_jobs - 1 SPIs that were running on healthy workers: each is
         # recomputed from scratch in a pool of its own (a worker start and a
         # config parse each), which costs time after a crash, not values.
+        # Recovery stops at the `_MAX_BROKEN_POOLS`-th broken pool: workers
+        # that keep dying point to a cause no rerun escapes (e.g. too little
+        # memory for this dataset), and every SPI still lost is reported.
         todo = [list(task) for task in tasks]
         suspects: list = []
+        broken = 0
         while todo:
             error, started, finished = run_pool(todo, min(n_jobs, len(todo)))
             if error is None:
                 break
+            broken += 1
             lost = [key for task in todo for key in task if key not in results]
             if checkpoint_dir is not None:
                 done, _ = load_checkpoints(
@@ -909,7 +929,13 @@ def run_parallel(
                 # Nothing was running (a worker failed to start): no SPI to
                 # isolate, so every lost SPI is reported.
                 for key in lost:
-                    results.setdefault(key, died(key, error))
+                    results.setdefault(key, failed(f"worker died: {error}"))
+                break
+            if broken >= _MAX_BROKEN_POOLS:
+                for key in lost:
+                    results.setdefault(key, failed(
+                        f"worker died: {error} (recovery stopped after "
+                        f"{broken} broken worker pools)"))
                 break
             suspects += running
             todo = [[k for k in task if k not in results and k not in suspects]
@@ -918,7 +944,7 @@ def run_parallel(
         for key in suspects:
             error, _, _ = run_pool([[key]], 1)
             if error is not None:
-                results[key] = died(key, error)
+                results[key] = failed(f"worker died: {error}")
         pbar.n = len(results)
         pbar.refresh()
         pbar.close()
