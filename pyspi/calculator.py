@@ -275,8 +275,10 @@ def warn_partial_cache_buckets(spis):
 
 # Fields of `run_spec` that say where the run came from rather than what it
 # computes, kept out of the content hash `run_digest`: the same config and
-# data digest the same from any location. `COMPUTATION_VERSION` is hashed
-# separately, so an upgrade that changes no computed value still resumes.
+# data digest the same from any location and under any package versions.
+# `COMPUTATION_VERSION` is hashed separately. A checkpoint resumes only under
+# the pyspi and dependency versions its manifest records
+# (`_parallel.checkpoint_version_changes`).
 _DIGEST_EXCLUDED_SPEC_FIELDS = frozenset({
     "config", "configfile", "dataset_name",
     "computation_version", "pyspi_version", "dependency_versions",
@@ -1478,7 +1480,8 @@ class Calculator:
         checkpoint_dir : str or path-like or None, optional
             Directory to which each finished SPI is written as
             ``<identifier>.npy``, so an interrupted run can resume. A
-            directory that belongs to a different run raises ``ValueError``.
+            directory that belongs to a different run, or was written under
+            other pyspi or dependency versions, raises ``ValueError``.
             Default: None.
         resume : bool, optional
             Load and skip the SPIs already in ``checkpoint_dir``.
@@ -1521,6 +1524,18 @@ class Calculator:
                     f"Checkpoint directory {cp_dir} belongs to a different run "
                     f"({reason}). Use a separate directory per run, or remove "
                     f"it yourself if the old results are no longer wanted."
+                )
+            changes = _parallel.checkpoint_version_changes(cp_dir, self.run_spec)
+            if changes:
+                # The same run, but its results so far came from other packages.
+                self._resume_rejected = True
+                raise ValueError(
+                    f"Checkpoint directory {cp_dir} holds results of this run "
+                    f"computed with other package versions (checkpoint -> "
+                    f"installed now: {', '.join(changes)}). To resume, install "
+                    f"the versions recorded in "
+                    f"{cp_dir / _parallel.MANIFEST_NAME}; otherwise use a new "
+                    f"directory."
                 )
             _parallel.write_manifest(cp_dir, digest, self.run_spec)
 

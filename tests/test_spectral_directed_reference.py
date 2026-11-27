@@ -46,13 +46,20 @@ def test_bivariate_band_statistic_covers_the_closed_band(cls_name, measure,
     """``fmin``/``fmax`` are inclusive, as for every other spectral SPI.
 
     The reference is the backend's own spectrum for the ordered pair
-    ``[source, target]`` (read at ``[target, source]``, its convention), reduced
+    ``[source, target]`` (read at ``[target, source]``, its convention), from
+    the factor pyspi computes (``spectral._minimum_phase_factor``), reduced
     over ``fmin <= f <= fmax``, as the multivariate spectral classes, spectral
     GC and the wavelet SPIs select it. On a low-pass process these measures
     peak at the DC bin, so the ``max`` over ``[0, 0.25]`` depends on including
     it.
     """
     from pyspi.statistics import spectral
+
+    class PyspiFactor(sc.Connectivity):
+        @property
+        def _minimum_phase_factor(self):
+            return spectral._minimum_phase_factor(
+                self._expectation_cross_spectral_matrix())
 
     X = _driven_pair()
     data = Data(data=X, dim_order="ps", zscore=False)
@@ -63,7 +70,7 @@ def test_bivariate_band_statistic_covers_the_closed_band(cls_name, measure,
     reduce = {"mean": np.mean, "max": np.max}[statistic]
     for src, tgt in ((0, 1), (1, 0)):
         m = sc.Multitaper(X[[src, tgt]].T[:, np.newaxis, :], sampling_frequency=1)
-        conn = sc.Connectivity.from_multitaper(m)
+        conn = PyspiFactor.from_multitaper(m)
         spectrum = getattr(conn, measure)()[0, :, 1, 0]      # [target, source]
         f = conn.frequencies
         want = reduce(spectrum[(f >= fmin) & (f <= fmax)])

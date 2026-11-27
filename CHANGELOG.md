@@ -189,6 +189,14 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Wilson's algorithm logs non-convergence through `logging` and returns the unconverged factor, so every Wilson-derived measure (`dcoh`, `dtf`, `ddtf`, `pdcoh`, `gpdcoh`, nonparametric `sgc`) reached the table silently.
   Every SPI that reads a factorisation that did not converge now warns, naming the ordered pairs (for nonparametric `sgc`, the number of pairs), and the Calculator attributes the warning to that SPI.
   The value is still returned; non-convergence is a warning, not an error.
+- **Wilson's spectral factorisation starts from a square root of the zero-lag covariance.**
+  spectral_connectivity (every release to 2.0.1, so pyspi 2.x as well) starts Wilson's iteration from the transposed Cholesky factor of the zero-lag covariance, which is not a square root of that covariance unless the two series are uncorrelated at lag zero.
+  For a pair of slowly varying series with a long memory relative to the record and with correlated innovations, the iteration could then converge without a warning to a factor that is not minimum phase.
+  Every value read from that factor was then wrong too, including the reported direction of flow.
+  On the exact spectrum of such a pair, mean spectral GC was 0.145 from 0 to 1 and 0.034 from 1 to 0, where the true values are 0.022 and 0.
+  pyspi now whitens each pair's spectrum by the upper-triangular square root of its zero-lag covariance before the backend factorises it, which gives the start spectral_connectivity adopted after 2.0.1 (its pull request 142).
+  **The 12 bundled `dcoh_multitaper_*` and `sgc_nonparametric_*` SPIs change value**, as do the unbundled `dtf`, `ddtf`, `pdcoh` and `gpdcoh` classes: typical pairs move by about 1e-4, while slowly varying pairs, and pairs whose factorisation does not converge, move by more.
+  Parametric `sgc_parametric_*` fits a VAR and does not change.
 - **Group delay (`GroupDelay`) returned no finite value on any input**: the backend's one-sample coherence test takes the square root of a negative number.
   pyspi computes the standard one-sample test `(arctanh|C| − b)/sqrt(b)`, `b = 1/(2n − 2)` (Enochson & Goodman 1965; Bokil et al. 2007), applies Benjamini-Hochberg over the band, thins the longest significant run to one point per multitaper bandwidth, and fits the unwrapped phase against frequency.
   The delay is in samples (it was in seconds), and `rvalue` is `|r|`, undirected and not signed.
@@ -205,6 +213,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
   Its default `fmax` was 0.5 whatever `fs` was, so at `fs=100` the default band was 0 to 0.5 Hz; it is now `fs / 2`, as for every other spectral SPI (no change at `fs=1`).
   An unknown `method` raises `ValueError`; any value other than `"nonparametric"` ran the parametric method.
   A cell with more than `nan_threshold` of its in-band frequencies NaN (or any, with `ignore_nan=False`) is not appropriate, with that fraction as the reason; 2.0.2 set it to NaN with a warning.
+  An infinite in-band value (the parametric method's log ratio has no guard against a zero denominator) counts as missing, like NaN: it is left out of the band statistic, and past `nan_threshold` the cell is not appropriate, with that fraction as the reason; the cell was previously NaN with an Inf quality code and no reason.
 - **Parametric spectral Granger causality (`sgc_parametric_*`) was fitted on an indefinite autocovariance.**
   The VAR is now fitted on the Yule-Walker autocovariance, which is positive semidefinite, the band uses the frequencies the model is evaluated at, and the automatic order search terminates.
 - **Directed spectral measures used an open frequency band.**
@@ -247,6 +256,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **Undefined values.**
   `cds` returned 0, its strongest evidence for `i -> j`, when undefined, and `anm`, `cds` and `xcorr_*` returned 0 or an arbitrary number for a pair with a constant series; all are now NaN.
   `prec_*` and `pcorr_*` reported a pseudo-inverse when the covariance estimate is singular; for `EmpiricalCovariance` and `MinCovDet` they are now NaN, labelled not appropriate, with the rank in the reason.
+  A `GraphicalLasso` or `GraphicalLassoCV` fit on which scikit-learn's solver fails (`FloatingPointError`, as on strongly correlated processes) is still an error for every `cov_`, `prec_` and `pcorr_` SPI of that estimator, since the estimate exists and only the solver failed; the message now says so, and that another estimator may succeed.
 - **Integer parameters** (`ConvergentCrossMapping(embedding_dimension=2.7)`, a fractional `max_tau`) were truncated after the identifier was built; they must now be integers.
 - **SPI metadata (no value changes).**
   `InterDependenceScore` left `terms`, `pnorm` and `bandwidth` out of its identifier, and `SpectralGrangerCausality` left out `max_order` (when the order is selected), `ignore_nan` and `nan_threshold`, so two parameterisations could share a table column; non-default values are now appended (e.g. `ids_bw-0-25`), and every bundled identifier is unchanged.
@@ -506,6 +516,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `Calculator.compute(n_jobs=...)` follows the joblib convention (see Breaking changes), and `compute(checkpoint_dir=...)` writes each SPI as it finishes and resumes from it.
   Under the spawn start method (the default on macOS and Windows), a script without an `if __name__ == "__main__":` guard, or one read from standard input, raises a `RuntimeError` that says so.
   A checkpoint directory carries a `run.json` manifest bound to `Calculator.run_digest`, which hashes the config contents, the dataset bytes and the computation version, so a different dataset, config, preprocessing or process order is refused rather than reused; failed checkpoints are retried by default.
+  A checkpoint written under other pyspi or dependency versions (as recorded in `run.json`) is refused too, naming each package that changed, since a dependency upgrade can change values and a resumed table would mix the two; the refused run leaves `run.json` as it was.
   Checkpoint files are named after SPI identifiers, so a config with two identifiers that are equal ignoring letter case is refused, as they would share one file on a case-insensitive file system (the macOS and Windows defaults).
 - **Run records.**
   `Calculator.errors`, `Calculator.run_spec`, `Calculator.run_digest`, `Calculator.to_frame()` (long-form results, one row per `(spi, source, target)`), `Calculator.summary()` and a `repr` for `Calculator`.
