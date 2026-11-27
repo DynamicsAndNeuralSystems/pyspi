@@ -1609,7 +1609,7 @@ wheels = [
 
 [[package]]
 name = "pyspi"
-version = "3.0.0"
+version = "3.0.0rc3"
 source = { editable = "." }
 dependencies = [
     { name = "colorama" },

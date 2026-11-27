@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyspi"
-version = "3.0.0"
+version = "3.0.0rc3"
 description = "Library for pairwise analysis of time series data."
 readme = "README.md"
 # PEP 639 SPDX expression. The `{ text = ... }` table is deprecated by
