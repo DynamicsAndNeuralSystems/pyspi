@@ -60,6 +60,7 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 **Behavior of the API itself.**
 
 - **New since 2.0.2: parallel computation.** `Calculator.compute(n_jobs=...)` follows the joblib convention: `-1` is all cores, `-2` all but one, and `n_jobs=0` raises (`PYSPI_N_JOBS` sets the default). 2.0.2 had no `n_jobs`.
+  A worker that dies (a segfault, or the OOM killer) costs only the SPI that killed it: the SPIs that finished or had not started when the pool broke are recovered (from their checkpoints when there are any, otherwise recomputed), each SPI that was running is run again alone, and only one that kills its worker by itself is reported as `worker died`.
 - `import pyspi` no longer replaces `sys.stdout`/`sys.stderr`. `Calculator(verbose=False)` no longer touches logging; `verbose=True` adds one handler, idempotently.
 - The `OMP_NUM_THREADS` `setdefault` at import is removed. It ran after numpy had loaded, so it had no in-process effect, and it altered the environment of every importing program. Thread pinning for workers stays in `_parallel`.
 - **New since 2.0.2: a command line.**

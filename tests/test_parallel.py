@@ -130,6 +130,33 @@ def test_failure_isolation(dataset):
             f"Sibling SPI '{sibling}' has unexpected NaNs after isolated failure."
 
 
+@pytest.mark.parametrize("checkpoint", [False, True])
+def test_a_dead_worker_loses_only_the_spi_that_killed_it(
+        dataset, serial_table, tmp_path, checkpoint):
+    """A worker that dies breaks the pool and fails every pending task. The
+    SPIs that finished before it, in its bucket and in the others, and the
+    SPIs that had not started, are recovered; only the SPI that kills its
+    worker when run alone is reported as "worker died"."""
+    import yaml
+
+    config = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    config["crash_spis"] = {"Finisher": None, "Crasher": None}
+    path = tmp_path / "crash.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    calc = Calculator(dataset=dataset, config=str(path), zscore=False)
+    with pytest.warns(UserWarning, match="worker died"):
+        calc.compute(n_jobs=2, progress=False,
+                     checkpoint_dir=tmp_path / "cp" if checkpoint else None)
+    assert list(calc.errors) == ["crash_test_crasher"]
+    assert calc.errors["crash_test_crasher"].startswith("worker died")
+    M = dataset.shape[0]
+    off = ~np.eye(M, dtype=bool)
+    assert np.isfinite(calc.table["crash_test_finisher"].to_numpy()[off]).all()
+    np.testing.assert_allclose(
+        calc.table[serial_table.columns.get_level_values(0).unique()].to_numpy(),
+        serial_table.to_numpy(), rtol=1e-10, atol=1e-12, equal_nan=True)
+
+
 def test_pin_worker_thread_pools_installs_the_blas_limiter():
     """Worker pinning must reach the BLAS/OpenMP pools.
 
