@@ -2015,13 +2015,22 @@ class CalculatorFrame:
         ----------
         **kwargs
             Arguments of :meth:`Calculator.compute`, so ``n_jobs=4``
-            parallelises within each dataset.
+            parallelises within each dataset. With ``checkpoint_dir=d``, each
+            calculator checkpoints to its own subdirectory of ``d``, named by
+            its position in the frame (``d/0``, ``d/1``, ...), so the same
+            frame resumes from ``d``.
         """
         if not hasattr(self, "_calculators"):
             raise AttributeError("No calculators in frame yet. Initialise before computing.")
+        checkpoint_dir = kwargs.pop("checkpoint_dir", None)
+        position = 0
         for i in self._calculators.index:
             for calc in self._calculators.loc[i]:
-                calc.compute(**kwargs)
+                # A checkpoint directory belongs to one run, so one per dataset.
+                own = (None if checkpoint_dir is None
+                       else Path(checkpoint_dir) / str(position))
+                calc.compute(checkpoint_dir=own, **kwargs)
+                position += 1
 
     @property
     def groups(self):
