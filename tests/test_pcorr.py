@@ -305,3 +305,72 @@ def test_singular_covariance_in_the_calculator(tmp_path):
         assert np.isfinite(calc.table[key].to_numpy()[off]).all()
         assert (calc.quality[key].to_numpy()[off] == Quality.GOOD).all()
         assert key not in calc.errors and key not in calc.not_appropriate
+
+
+def _shared_drift(M=8, T=500, seed=0):
+    """M copies of one random walk plus small independent noise: strongly collinear."""
+    rng = np.random.default_rng(seed)
+    drift = np.cumsum(rng.standard_normal(T))
+    return np.vstack([drift + 0.05 * rng.standard_normal(T) for _ in range(M)])
+
+
+def test_the_fit_reproduces_scikit_learns_ill_conditioned_failure():
+    """Guards the premise: on this data the graphical lasso itself raises."""
+    z = _data(_shared_drift()).to_numpy(squeeze=True).T
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(FloatingPointError, match="ill-conditioned"):
+            sklearn.covariance.GraphicalLasso(tol=1e-8, enet_tol=1e-8).fit(z)
+
+
+@pytest.mark.parametrize("cls", [Covariance, Precision, PartialCorrelation])
+def test_a_failed_graphical_lasso_fit_is_an_error_that_names_the_solver(cls):
+    """The estimate exists but the solver fails: an error, not NotAppropriate."""
+    spi = cls(estimator="GraphicalLasso")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(FloatingPointError) as failed:
+            spi.multivariate(_data(_shared_drift()))
+    assert not isinstance(failed.value, NotAppropriate)
+    message = str(failed.value)
+    assert "graphical lasso solver failed on the GraphicalLasso fit" in message
+    assert "limitation of the solver" in message
+    assert spi.identifier in message
+    assert isinstance(failed.value.__cause__, FloatingPointError)
+
+
+def test_a_floating_point_error_from_another_estimator_is_not_reworded(monkeypatch):
+    def fail(self, X, y=None):
+        raise FloatingPointError("unrelated")
+
+    monkeypatch.setattr(sklearn.covariance.LedoitWolf, "fit", fail)
+    with pytest.raises(FloatingPointError, match="^unrelated$"):
+        Covariance(estimator="LedoitWolf").multivariate(_data(_shared_drift()))
+
+
+def test_a_failed_graphical_lasso_fit_in_the_calculator(tmp_path):
+    from pyspi.quality import Quality
+
+    cfg = {".statistics.basic": {
+        name: {"labels": ["undirected", "linear", "signed", "multivariate",
+                          "contemporaneous", "M14"],
+               "dependencies": None,
+               "configs": [{"estimator": "GraphicalLasso"},
+                           {"estimator": "LedoitWolf"}]}
+        for name in ("Covariance", "Precision", "PartialCorrelation")}}
+    path = tmp_path / "glasso.yaml"
+    path.write_text(yaml.safe_dump(cfg))
+    calc = Calculator(dataset=_data(_shared_drift()), config=str(path))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        calc.compute(progress=False)
+    off = ~np.eye(8, dtype=bool)
+    for kind in ("cov", "prec", "pcorr"):
+        key = f"{kind}_GraphicalLasso"
+        assert np.isnan(calc.table[key].to_numpy(dtype=float)).all()
+        assert (calc.quality[key].to_numpy()[off] == Quality.ERROR).all()
+        assert "graphical lasso solver failed" in str(calc.errors[key])
+        assert key not in calc.not_appropriate
+        key = f"{kind}_LedoitWolf"
+        assert np.isfinite(calc.table[key].to_numpy(dtype=float)[off]).all()
+        assert key not in calc.errors and key not in calc.not_appropriate
