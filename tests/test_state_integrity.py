@@ -170,3 +170,31 @@ def test_non_finite_input_rejected_without_zscore():
     arr[0, 0] = np.inf
     with pytest.raises(ValueError):
         Data(data=arr, dim_order="ps", zscore=False)
+
+
+def test_compute_releases_statistic_caches(tmp_path):
+    """`compute()` leaves no statistic cache on the dataset.
+
+    Otherwise every Calculator kept after its run (in a CalculatorFrame or a
+    list) holds caches of about M**2 spectra or matrices. The results do not
+    need them: the table, `to_frame`, `save` and a second `compute()` are
+    unchanged.
+    """
+    import warnings
+    from pyspi.calculator import Calculator
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        calc = Calculator(dataset=_mts(seed=4, m=4, t=200), config="fabfour",
+                          verbose=False)
+        calc.compute(progress=False)
+    held = [a for a in Data._CACHE_ATTRS if a in calc.dataset.__dict__]
+    assert not held, f"caches kept after compute(): {held}"
+
+    first = calc.table.copy()
+    calc.to_frame()
+    calc.save(tmp_path / "t.npz")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        calc.compute(progress=False)
+    assert first.equals(calc.table), "a second compute() changed the results"

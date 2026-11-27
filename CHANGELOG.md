@@ -62,6 +62,8 @@ The KSG, kernel, Gaussian and symbolic estimators follow, and were validated aga
 - **New since 2.0.2: parallel computation.** `Calculator.compute(n_jobs=...)` follows the joblib convention: `-1` is all cores, `-2` all but one, and `n_jobs=0` raises (`PYSPI_N_JOBS` sets the default). 2.0.2 had no `n_jobs`.
 - `import pyspi` no longer replaces `sys.stdout`/`sys.stderr`. `Calculator(verbose=False)` no longer touches logging; `verbose=True` adds one handler, idempotently.
 - The `OMP_NUM_THREADS` `setdefault` at import is removed. It ran after numpy had loaded, so it had no in-process effect, and it altered the environment of every importing program. Thread pinning for workers stays in `_parallel`.
+- `Calculator.compute()` releases the statistic caches it built on the dataset when it finishes, so a Calculator kept after its run (in a `CalculatorFrame` or a list) no longer holds them; they grow as about M² (about 100 MiB at M=32, T=1000).
+  Values are unchanged; a second `compute()` on the same Calculator rebuilds them.
 - **New since 2.0.2: a command line.**
   `python -m pyspi compute` and a `pyspi` console command (2.0.2 had neither).
   The output directory, suffix and `n_jobs` are validated before computing, and `PYSPI_N_JOBS` is honoured.
