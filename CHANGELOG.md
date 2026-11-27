@@ -385,7 +385,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   Without tied distances every `ccm_*` and `lccm_*` value agrees with a KD-tree search per random library (pyEDM 2.5's CCM) to rounding, below 1e-15 on z-scored data, and `lccm_E-None_k-5_tp` is identical.
   **With tied distances (integer, count or coarsely rounded data) values change.**
   At M=8, T=1000 on data with 16 levels, `ccm_E-1_mean` changes by up to 0.19, `ccm_E-1_convergence` by up to 0.31, `ccm_E-None_*` by up to 0.12, `lccm_E-None_k-5_skill` by up to 0.10, `lccm_E-None_k-5_tp` by up to 10 lags and `ccm_E-10_*` by under 0.01; on two-valued data `ccm_E-1_convergence` changes by up to 0.44.
-  If you computed `ccm_*` or `lccm_*` on data with tied values using the release candidate 3.0.0rc1, recompute those SPIs, since a checkpoint holding them resumes with the earlier values.
+  If you computed `ccm_*` or `lccm_*` on data with tied values using the release candidate 3.0.0rc1, recompute those SPIs.
   Each library variable's nearest points are tabulated once; a random library's k nearest members are read off that table, or found by a pass over a small library, in a numba kernel that also forms the predictions and correlations.
   On continuous data the eleven `ccm_*` and `lccm_*` SPIs of `full` together take 21.7 s instead of 187 s at M=8, T=1000.
   On tied data `ccm_E-1_*` is slower: 3.12 s instead of 1.64 s for one library variable and three targets at T=1000 on data with 16 levels.
@@ -510,6 +510,7 @@ Codes 0-7 are hctsa's `TS_Quality` codes, so results can be compared code for co
   `Calculator.errors`, `Calculator.run_spec`, `Calculator.run_digest`, `Calculator.to_frame()` (long-form results, one row per `(spi, source, target)`), `Calculator.summary()` and a `repr` for `Calculator`.
   `run_spec` records `computation_version`, `pyspi_version` and `dependency_versions`, saved with every `.npz` and returned by `load_table` in `attrs`.
   `pyspi.COMPUTATION_VERSION` is bumped whenever a change can alter a valid SPI output; record it with saved results, and do not pool results computed under different values.
+  It is `3.0.0.r1` in this release: the release candidates 3.0.0rc1 and 3.0.0rc2 report `3.0.0` and computed some values differently (`ccm_*`/`lccm_*` on tied data, `gpfit_*`, `dcorr*` at T ≥ 800, `anm`, and `dcorr*`, `hsic*`, `hhg`, `mgc*` through their distances), so their checkpoints do not resume into 3.0.0 and their saved results are told apart.
 - `ConvergentCrossMapping` has a `bivariate` method.
 
 ### Dependencies

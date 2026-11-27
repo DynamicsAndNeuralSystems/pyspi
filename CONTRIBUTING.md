@@ -153,6 +153,7 @@ Comments in a config are one or two lines per class.
   Regenerate exactly the affected baseline arrays.
   Increment the revision of `COMPUTATION_VERSION` in `pyspi/_parallel.py`, with a one-line entry in the log above it.
   Changes made before a release is published keep that release's number without a suffix; the revision is incremented only for value changes after the release.
+  A release candidate on PyPI counts as published: `3.0.0rc1` and `3.0.0rc2` carry `3.0.0`, so value changes after them increment the revision of `3.0.0`.
 - **Test names** describe what they test (`test_spectral_phase_reference.py`), not the work that prompted them.
 
 ## CHANGELOG

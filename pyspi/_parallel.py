@@ -594,7 +594,8 @@ SCHEMA_VERSION = 1
 # results that differ only by implementation. It is the release number at a
 # release, and `<release>.r<revision>` for each later change that alters
 # values, each logged here in one line; only equality is ever tested.
-COMPUTATION_VERSION = "3.0.0"
+# 3.0.0.r1: after 3.0.0rc2 (rc1 and rc2 on PyPI both say "3.0.0", and differ in ccm/lccm on ties #206, gpfit #203, dcorr at T >= 800 #202); anm standardises its inputs (#220); exact distances in dcorr, hsic, hhg, mgc (#221).
+COMPUTATION_VERSION = "3.0.0.r1"
 
 
 def read_manifest(checkpoint_dir: Path):
