@@ -358,6 +358,10 @@ def test_checkpoint_rejects_different_package_versions(tmp_path, field, old, nam
     before = manifest.read_bytes()
 
     import re
-    with pytest.raises(ValueError, match=rf"different run.*{re.escape(named)}"):
+    with pytest.raises(ValueError) as refused:
         _run(dataset, tmp_path)
+    message = str(refused.value)
+    assert "different run" not in message, "the same run, under other packages"
+    assert re.search(rf"checkpoint -> installed now: .*{re.escape(named)}", message)
+    assert f"install the versions recorded in {manifest}" in message
     assert manifest.read_bytes() == before, "the refused run rewrote the manifest"
