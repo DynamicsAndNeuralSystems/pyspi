@@ -862,7 +862,10 @@ def run_parallel(
         # finished come from their checkpoints or are recomputed, the rest
         # run again in a fresh pool, and each SPI that was running when the
         # pool broke runs alone, so only one that kills its worker by
-        # itself is reported as "worker died".
+        # itself is reported as "worker died". That includes the up to
+        # n_jobs - 1 SPIs that were running on healthy workers: each is
+        # recomputed from scratch in a pool of its own (a worker start and a
+        # config parse each), which costs time after a crash, not values.
         todo = [list(task) for task in tasks]
         suspects: list = []
         while todo:
