@@ -7,6 +7,7 @@ import pandas as pd
 import pyEDM
 from scipy.linalg import cho_solve, cholesky
 from scipy.spatial import KDTree
+from scipy.stats import zscore
 from sklearn.gaussian_process.kernels import ConstantKernel, RBF
 
 from pyspi.base import (
@@ -37,9 +38,16 @@ def _anm_scores(x, ys):
     operations as scikit-learn. The kernel matrix and its Cholesky factor
     depend on the cause x alone, so they are built once and shared by every
     effect. A pair with a constant cause or effect is NaN.
+
+    Both series are standardised first (ddof=1, as `Data` z-scores, so
+    z-scored input is unchanged up to rounding), as cdt does. The kernel's
+    length scale is fixed at 1, so without it the fit, and the score, would
+    depend on the cause's units; and the kernel matrix is ill-conditioned,
+    so an effect far from zero would swamp the residual with rounding error.
     """
     if np.ptp(x) == 0:
         return [np.nan] * len(ys)
+    x = zscore(x, axis=0, ddof=1)
     K = _ANM_KERNEL(x)
     K[np.diag_indices_from(K)] += _ANM_ALPHA
     L = cholesky(K, lower=True, check_finite=False)
@@ -49,6 +57,7 @@ def _anm_scores(x, ys):
         if np.ptp(y) == 0:
             scores.append(np.nan)
             continue
+        y = zscore(y, axis=0, ddof=1)
         y_predict = K_trans @ cho_solve((L, True), y, check_finite=False)
         scores.append(normalized_hsic(y_predict.reshape(-1, 1) - y, x))
     return scores

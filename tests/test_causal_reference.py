@@ -205,6 +205,7 @@ def test_anm_shared_factorisation_is_bit_identical_to_sklearn(T):
     short of the same operations in the same order would show up here as
     drift. T=260 also engages the HSIC's 200-point subsampling.
     """
+    from scipy.stats import zscore
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import ConstantKernel, RBF
 
@@ -226,13 +227,35 @@ def test_anm_shared_factorisation_is_bit_identical_to_sklearn(T):
             kernel = ConstantKernel(1.0, constant_value_bounds="fixed") * RBF(
                 1.0, length_scale_bounds="fixed")
             gp = GaussianProcessRegressor(kernel=kernel, optimizer=None)
-            y_predict = gp.fit(z[i], z[j]).predict(z[i]).reshape(-1, 1)
-            expected[i, j] = normalized_hsic(y_predict - z[j], z[i])
+            # Both series are standardised (ddof=1) before the fit.
+            cause = zscore(z[i], axis=0, ddof=1)
+            effect = zscore(z[j], axis=0, ddof=1)
+            y_predict = gp.fit(cause, effect).predict(cause).reshape(-1, 1)
+            expected[i, j] = normalized_hsic(y_predict - effect, cause)
 
     got = np.asarray(AdditiveNoiseModel().multivariate(data), float)
     assert np.array_equal(got, expected, equal_nan=True), np.nanmax(
         np.abs(got - expected))
     assert AdditiveNoiseModel().bivariate(data, i=2, j=1) == expected[2, 1]
+
+
+def test_anm_does_not_depend_on_the_units_of_either_series():
+    """With ``zscore=False``, rescaling or shifting the cause or the effect
+    leaves ``anm`` unchanged (to the rounding the ill-conditioned kernel
+    allows); the fixed RBF length scale applies to the standardised cause."""
+    from pyspi.statistics.causal import AdditiveNoiseModel
+
+    rng = np.random.default_rng(0)
+    x = rng.uniform(-2, 2, 200)
+    y = x ** 3 + rng.uniform(-1, 1, 200)
+    ref = AdditiveNoiseModel().multivariate(
+        Data(np.vstack([x, y]), dim_order="ps", zscore=False))
+    assert ref[0, 1] < ref[1, 0]   # the true direction, x -> y
+    for a, b in ((1e3, 1.0), (1e-3, 1.0), (1.0, 1e3), (1e3, 1e-2)):
+        A = AdditiveNoiseModel().multivariate(
+            Data(np.vstack([a * x + 5e3, b * y - 7.0]), dim_order="ps",
+                 zscore=False))
+        np.testing.assert_allclose(A, ref, rtol=1e-3, equal_nan=True)
 
 
 # ---------------------------------------------------------------------------
